@@ -1,0 +1,25 @@
+\contentsline {section}{\numberline {1}Notation}{1}{section.1}%
+\contentsline {section}{\numberline {2}Quick Reference}{2}{section.2}%
+\contentsline {section}{\numberline {3}Diversity Definitions}{3}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Dispersion}{3}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Coverage (Facility-Location)}{3}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Combined Objective}{3}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Selection Algorithms}{3}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Top-$k$ by Relevance (Baseline)}{3}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}MMR (Maximal Marginal Relevance)}{3}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}gMMR (Geometric MMR, from DF-RAG)}{4}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}FPS (Farthest Point Sampling)}{4}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}Greedy for Facility-Location Coverage}{4}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Exact Branch-and-Bound for Coverage}{5}{subsection.4.6}%
+\contentsline {section}{\numberline {5}Retrieval Quality Metrics}{5}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Hit Rate ($\mathrm {hit}_b$, $\mathrm {hit}_c$)}{5}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Facility-Location Coverage Score ($\mathrm {fac}$)}{5}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Recall@$K$}{5}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}nDCG@$K$ (Normalized Discounted Cumulative Gain)}{6}{subsection.5.4}%
+\contentsline {subsection}{\numberline {5.5}$F_1$ Score (DF-RAG)}{6}{subsection.5.5}%
+\contentsline {subsection}{\numberline {5.6}DocRec / FactRec (HotpotQA)}{6}{subsection.5.6}%
+\contentsline {subsection}{\numberline {5.7}AvgCos (Average Cosine Similarity)}{6}{subsection.5.7}%
+\contentsline {section}{\numberline {6}Selection Overlap Metrics}{6}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Jaccard Similarity}{6}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Gold-Alias Metrics}{7}{subsection.6.2}%
+\contentsline {section}{\numberline {7}Key Experimental Parameters}{7}{section.7}%

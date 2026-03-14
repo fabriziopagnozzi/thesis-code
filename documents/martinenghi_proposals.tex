@@ -1,0 +1,401 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{geometry}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xurl}
+\usepackage{xcolor}
+\usepackage{titlesec}
+
+\geometry{margin=2cm}
+\hypersetup{colorlinks=true, linkcolor=blue!60!black, urlcolor=blue!60!black}
+
+\titleformat{\section}{\Large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{1.5em}{0.8em}
+
+\newcommand{\priorita}[1]{%
+  \par\smallskip\noindent\textbf{Priorit\`a: #1}\par\smallskip
+}
+
+\title{\textbf{Proposte di Tesi -- Prof.\ Martinenghi}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+%% ----------------------------------------------------------------
+\section{1. Enhancing RAG through Advanced Ranking}
+
+\priorita{ALTA --- Sfrutta direttamente la tua esperienza RAG + pgvector. Deliverable chiaro: prototipo pipeline + benchmark.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ Paolo Papotti (EURECOM, France)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item Ranking: scoring functions and user preferences.
+  \item RAG\@: retrieving, ranking, and feeding contextual knowledge into LLMs via embeddings.
+  \item Ranking (and re-ranking) scoring functions in RAG (Cosine Similarity, Dot Product, Euclidean Distance, BM25, etc.) determine which pieces of evidence are actually seen by the model, and in which order.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Explore ranking techniques using uncertain scoring functions to optimize RAG\@.
+  \item Assess the impact on quality and efficiency of LLM outputs.
+\end{itemize}
+
+\paragraph{Example of thesis outcome.}
+\begin{itemize}[nosep]
+  \item Prototype RAG pipelines with advanced ranking/re-ranking modules.
+  \item Systematic evaluation of the integration of ranking methodologies in RAG\@.
+  \item Guidelines and enhanced/revised performance metrics definition for LLMs in context-rich environments.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Lewis, P.\ et al., \emph{Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks}, NeurIPS 2020.
+  \item Karpukhin, V.\ et al., \emph{Dense Passage Retrieval for Open-Domain Question Answering}, ACL 2020.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{2. LLMs \& DBs}
+
+\priorita{ALTA --- Vicina alla tua esperienza RAG + PostgreSQL. Esplorativa, con libert\`a di scope.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ Paolo Papotti (EURECOM, France)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item RAG\@: embedding, retrieving, and feeding context into LLMs.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Explore innovative query answering tools beyond standard SQL capabilities.
+  \item Experiment with a variety of LLMs, datasets, and queries.
+\end{itemize}
+
+\paragraph{Example of thesis outcome.}
+\begin{itemize}[nosep]
+  \item New insights into the extended possibilities of query answering systems.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Piantanida, S., \emph{Evaluation of LLMs Capabilities for Table Question Answering on Incomplete Structured Data}, Master's Thesis, Politecnico di Milano, 2025.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{3. Fairness \& LLM Guardrailing}
+
+\priorita{ALTA --- Collaborazione con Banca d'Italia (ottimo per CV). Python, LLM, tema attualissimo.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with the Bank of Italy
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item Data Mining or Machine Learning basics.
+  \item Python language.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Elaborate a solution that handles Fairness in LLMs through Guardrailing (i.e., ensuring that the generated content is safe and adheres to specified guidelines).
+\end{itemize}
+
+\paragraph{Example of thesis outcome.}
+\begin{itemize}[nosep]
+  \item A thorough audit of fairness methods in selected, open-source LLMs.
+  \item A formalized methodology for adapting fairness metrics from classification to generative text guardrailing.
+  \item The implementation and evaluation of a novel guardrail model.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item \url{https://dl.acm.org/doi/abs/10.1145/3457607}
+  \item \url{https://arxiv.org/abs/2112.04359}
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{chiara.criscuolo@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{4. Fairness \& Data Quality in ML Classification}
+
+\priorita{MEDIA --- Scope ben definito, pipeline esistente da migliorare. Rischio basso, ma meno stimolante.}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item Data Mining or Machine Learning basics.
+  \item Python language.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Evaluate and improve a solution that handles Fairness and Data Quality based on Approximate Conditional Functional Dependencies (ACFDs).
+\end{itemize}
+
+\paragraph{Example of thesis outcome.}
+\begin{itemize}[nosep]
+  \item Design and implement an enhanced fairness-repair phase for the existing data-preparation pipeline, reducing reliance on deletion-based correction.
+  \item Demonstrate that the new repair strategy improves both fairness metrics and classification performance on multiple ML models.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item \url{https://dl.acm.org/doi/abs/10.1145/3457607}
+  \item \url{https://ceur-ws.org/Vol-3194/paper66.pdf}
+  \item \url{https://www.iris.unisa.it/retrieve/e2915b31-af22-8981-e053-6605fe0a83a3/TKDE-published.pdf}
+  \item Alireza Tahmasebi, \emph{FairDataFlow: a Modern Solution to Ensure Data Quality and Fairness}, Master's Thesis, Politecnico di Milano, 2025.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{chiara.criscuolo@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{5. Fairness Intersectionality in ML Classification}
+
+\priorita{MEDIA --- Python, ML, demo da produrre. Collaborazione con U.~of Michigan. Meno connesso al tuo background LLM/RAG.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ H\,V Jagadish (University of Michigan, USA)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item Data Mining or Machine Learning basics.
+  \item Python language.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Formulate a new approach to solve fairness intersectionality issues in machine learning classification.
+\end{itemize}
+
+\paragraph{Example of thesis outcome.}
+\begin{itemize}[nosep]
+  \item Find heuristics to find discriminated subgroups.
+  \item Elaborate a mitigation strategy to solve fairness issues for discriminated subgroups.
+  \item Produce a demo/code to perform such tasks.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item \url{https://dl.acm.org/doi/pdf/10.1145/3588433}
+  \item \url{https://arxiv.org/pdf/2305.06969}
+  \item \url{https://par.nsf.gov/servlets/purl/10535250}
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{chiara.criscuolo@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{6. Post-hoc Explainability in RAG: Impact on Fairness}
+
+\priorita{BASSA --- Tema interessante ma scope vago e molto research-oriented. Rischio di perdersi.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ Kostas Stefanidis (Tampere University, Finland)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item RAG explainability is often post-hoc, relying on input perturbation or counterfactual retrieval.
+  \item These interventions can change retrieval/generation behavior, potentially shifting both utility and fairness.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Quantify utility/fairness trade-offs.
+  \item Test fairness-aware re-ranking strategies.
+\end{itemize}
+
+\paragraph{Example of thesis outcome.}
+\begin{itemize}[nosep]
+  \item Evaluation protocol + benchmark definition; empirical evidence on when explainability helps/hurts fairness.
+  \item Prototype dashboard and guidelines definition for ``fairness-aware'' explanation settings.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Rorseth, J.\ et al., \emph{RAGE Against the Machine: Retrieval-Augmented LLM Explanations}.
+  \item Zhao, Y.\ et al., \emph{Fairness and explainability: bridging the gap towards fair model explanations}.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{7. ER \& SQL}
+
+\priorita{BASSA --- Implementativo ma non AI/data science. Tool di traduzione ER->SQL, lontano dai tuoi interessi.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ Paolo Ciaccia (University of Bologna, Italy)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item E/R diagrams capture rich semantic constraints (cardinalities, hierarchies, weak entities, etc.).
+  \item The relational schema only enforces a subset of the constraints, while others remain implicit.
+  \item Automatically generating SQL constraints and triggers from E/R features can make schemas more faithful to the conceptual design and easier to maintain.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Formalise how main E/R elements translate into additional SQL constraints and triggers, and design a configurable framework that takes an E/R model as input and automatically generates them.
+  \item Study trade-offs between faithfulness to the conceptual model, readability of the generated schema, and runtime overhead of triggers.
+\end{itemize}
+
+\paragraph{Examples of thesis outcomes.}
+\begin{itemize}[nosep]
+  \item Catalogue of E/R features and corresponding SQL constraint/trigger patterns.
+  \item Prototype tool that parses an E/R specification and generates executable SQL schemas with embedded constraints and triggers.
+  \item Development of a translation tool and evaluation on realistic case studies.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Francesco Moretti, \emph{Traduzione automatica di schemi E/R: relazioni e vincoli}, Tesi di Laurea in Ingegneria Informatica, Universit\`a di Bologna.
+  \item Chenming Zhao, \emph{Translation of E/R Diagrams to SQL Code with Constraints and Triggers: Collapse of Hierarchies}, Master's Thesis, Politecnico di Milano, 2025.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{8. Linear top-k queries}
+
+\priorita{BASSA --- Teoria pura: dimostrazioni, complessit\`a computazionale, gap teorici. L'opposto di quello che cerchi.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ Paolo Ciaccia (University of Bologna, Italy)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item Linear top-k queries rank tuples via a linear scoring function.
+  \item The skyline contains all Pareto-optimal points (i.e., those that are top-1 for some monotonic scoring function, not necessarily a linear one).
+  \item Open question: how well can linear top-k queries cover the skyline, and how hard is it to retrieve all optimal points?
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Compute, for a given $k$, the minimum number $q$ of linear top-$k$ queries needed to retrieve the skyline.
+  \item Compute, for a given $q$, the smallest $k$ for which $q$ linear top-$k$ queries are able to retrieve the skyline.
+  \item Study how to compute these indicators beyond trivial cases and their application as dataset descriptors.
+\end{itemize}
+
+\paragraph{Examples of thesis outcomes.}
+\begin{itemize}[nosep]
+  \item Close theory gaps for simpler cases.
+  \item Devise a general algorithm and evaluate its complexity.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Ciaccia \& Martinenghi, \emph{Directional queries: Making top-k queries more effective in discovering relevant results}, Proc.\ ACM Management of Data, 2024.
+  \item Marco Somaschini, \emph{Measuring and enhancing linear top-k queries' ability to discover the skyline}, Master's Thesis, Politecnico di Milano, 2022.
+  \item Andrea Arbasino, Stefano Fumagalli, \emph{Directional queries: a proposal for enhancing top-k queries}, Master's Thesis, Politecnico di Milano, 2023.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{9. Adding Diversity in Directional Query}
+
+\priorita{BASSA --- Definizioni formali, algoritmi esatti, branch-and-bound. Molto accademico/teorico.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ H\,V Jagadish (University of Michigan, USA)
+\end{itemize}
+
+\paragraph{Background.}
+Directional queries and diversified ranking in high-dimensional spaces.
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Identify application scenarios where directional preferences and diversity requirements naturally arise.
+  \item Study the trade-offs between directional relevance and diversity in ranked result sets.
+  \item Explore modeling choices and algorithmic strategies for combining directional and diversity criteria in a unified query framework.
+\end{itemize}
+
+\paragraph{Examples of thesis outcomes.}
+\begin{itemize}[nosep]
+  \item Formal definition and analysis of directional-diversity problems and their properties.
+  \item Design and implementation of exact and heuristic algorithms (e.g., improved greedy, branch-and-bound, ``diverse neighbors'' variants).
+  \item Experimental evaluation on synthetic/real datasets: trade-offs between proximity to the query, attribute balance, and diversity.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Ciaccia and Martinenghi, \emph{Directional queries: Making top-k queries more effective in discovering relevant results}, Proc.\ ACM Management of Data, 2024.
+  \item Guo et al., \emph{Finding diverse neighbors in high dimensional space}, ICDE 2018.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+
+%% ----------------------------------------------------------------
+\section{10. UF-Skyline}
+
+\priorita{BASSA --- Stessa famiglia teorica delle directional queries. Formalizzazione e algoritmi, poco implementativo.}
+
+\begin{itemize}[nosep]
+  \item \textbf{Collaboration} with Prof.\ Paolo Ciaccia (University of Bologna, Italy)
+\end{itemize}
+
+\paragraph{Background.}
+\begin{itemize}[nosep]
+  \item Top-k queries based only on utility can strongly violate fairness (i.e., unfair group representation).
+  \item The UF-skyline returns all $k$-sets for which no other set has both higher utility and better fairness, thus exposing a full spectrum of utility/fairness trade-offs instead of a single solution.
+\end{itemize}
+
+\paragraph{Project Objectives.}
+\begin{itemize}[nosep]
+  \item Formalise the UF-skyline framework for fair ranking in different settings.
+  \item Understand how different fairness definitions affect the UF frontier and design algorithmic principles to enumerate UF-skyline $k$-sets efficiently, avoiding unnecessary branching and duplicates.
+  \item Explore how UF-skyline results can support the choice among alternative utility/fairness trade-offs.
+\end{itemize}
+
+\paragraph{Examples of thesis outcomes.}
+\begin{itemize}[nosep]
+  \item Implementation and experimental evaluation of UF-skyline algorithms handling different parameter configurations.
+\end{itemize}
+
+\paragraph{Key references.}
+\begin{itemize}[nosep]
+  \item Liu et al., \emph{Fair Top-k Query on Alpha-Fairness}, ICDE 2024.
+  \item Asudeh et al., \emph{Designing Fair Ranking Schemes}, SIGMOD 2019.
+\end{itemize}
+
+\paragraph{Lab member contact.}
+\url{davide.martinenghi@polimi.it}, \url{emilia.lenzi@polimi.it}
+
+\end{document}

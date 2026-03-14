@@ -1,0 +1,33 @@
+{
+  "latex-workshop.formatting.latex": "latexindent",
+  "editor.formatOnSave": true,
+  "workbench.editorAssociations": {
+    "*.ipynb": "jupyter-notebook"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.semanticHighlighting.enabled": true,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports.ruff": "always",
+    }
+  },
+  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.inlayHints.variableTypes": false,
+  "notebook.formatOnSave.enabled": true,
+  "notebook.defaultFormatter": "charliermarsh.ruff",
+  "editor.inlayHints.enabled": "on",
+  "editor.parameterHints.enabled": true,
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/build/*.aux": true,
+    "**/build/*.fls": true,
+    "**/build/*.fdb_latexmk": true,
+    "**/build/*.out": true,
+    "**/build/*.synctex.gz": true,
+    "**/build/*.toc": true,
+  }
+}

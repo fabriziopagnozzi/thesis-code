@@ -1,0 +1,34 @@
+[project]
+name = "thesis"
+version = "0.1.0"
+description = "MSc thesis project"
+requires-python = ">=3.14"
+dependencies = [
+	"numpy",
+	"pandas",
+	"scipy",
+	"scikit-learn",
+	"matplotlib",
+	"seaborn",
+	"jupyter",
+	"tqdm",
+]
+
+[dependency-groups]
+dev = ["ruff", "pytest", "ipykernel", "pandas-stubs", "matplotlib-stubs"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+indent-width = 4
+extend-include = ["*.ipynb"]
+
+[tool.ruff.format]
+quote-style = "single"
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
