@@ -5,9 +5,7 @@ from experiments.experiment import run_experiment, summarize
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description='Coverage vs Dispersion diversity experiments'
-    )
+    p = argparse.ArgumentParser(description='Coverage vs Dispersion diversity experiments')
 
     # Config file (optional — overrides defaults, CLI overrides config)
     p.add_argument('--config', type=str, help='JSON config file path')
@@ -59,9 +57,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--seed', type=int)
 
     # Output control
-    p.add_argument(
-        '--no-summary', action='store_true', help='Skip printing summary table'
-    )
+    p.add_argument('--no-summary', action='store_true', help='Skip printing summary table')
 
     return p.parse_args()
 
@@ -77,9 +73,9 @@ def main() -> None:
 
     if args.dataset is not None and args.dataset_path is None:
         default_paths = {
-            'hotpotqa_distractor': 'datasets/HotpotQA/hotpot_dev_distractor_v1.json',
-            'musique': 'datasets/MuSiQue/data/musique_ans_v1.0_dev.jsonl',
-            '2wikimultihopqa': 'datasets/2WikiMultihopQA/data/dev.json',
+            'hotpotqa_distractor': 'datasets/full-data/HotpotQA/hotpot_dev_distractor_v1.json',
+            'musique': 'datasets/full-data/MuSiQue/data/musique_ans_v1.0_dev.jsonl',
+            '2wikimultihopqa': 'datasets/full-data/2WikiMultihopQA/data/dev.json',
         }
         cfg.dataset_path = default_paths[args.dataset]
 

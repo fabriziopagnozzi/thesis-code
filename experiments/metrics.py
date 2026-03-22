@@ -3,7 +3,7 @@ from collections import Counter
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.data_repr import Chunk
+from datasets.data_repr import Chunk
 
 # ---------------------------------------------------------------------------
 # Document / Fact Recovery (HotpotQA)

@@ -2,8 +2,8 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+from datasets.data_repr import Chunk, QARecord, _build_doc_chunks, _split_sentences
 from experiments.config import DatasetName
-from experiments.data_repr import Chunk, QARecord, _build_doc_chunks, _split_sentences
 
 
 def _load_hotpot_format(
@@ -23,9 +23,7 @@ def _load_hotpot_format(
 
     records: list[QARecord] = []
     for item in raw:
-        gold_facts = [
-            (title, sentence_idx) for title, sentence_idx in item['supporting_facts']
-        ]
+        gold_facts = [(title, sentence_idx) for title, sentence_idx in item['supporting_facts']]
         gold_doc_titles = {title for title, _ in gold_facts}
 
         context = item['context']

@@ -6,9 +6,9 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
+from datasets.data_loaders import load_dataset
+from datasets.data_repr import Chunk, QARecord
 from experiments.config import ExperimentConfig
-from experiments.data_loaders import load_dataset
-from experiments.data_repr import Chunk, QARecord
 from experiments.embedding import Embedder
 from experiments.metrics import compute_metrics, jaccard
 from experiments.query_algorithms import select
@@ -63,9 +63,7 @@ def run_experiment(cfg: ExperimentConfig) -> pl.DataFrame:
             )
             n_chunks = cfg.max_cands
 
-        query_emb, chunk_embs = embedder.encode_record(
-            rec.id, rec.question, chunk_texts
-        )
+        query_emb, chunk_embs = embedder.encode_record(rec.id, rec.question, chunk_texts)
         sim_to_query = chunk_embs @ query_emb  # (n,)
         sim_matrix = chunk_embs @ chunk_embs.T  # (n, n)
 

@@ -4,10 +4,8 @@
 **/cache/
 **/results
 !**/results/**/*stats.txt
-notes/
-documents/scrap
-documents/utils
-papers/
+_notes/
+_documents/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

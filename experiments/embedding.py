@@ -62,16 +62,12 @@ class Embedder:
 
     def _cache_path(self, record_id: str) -> Path:
         assert self.cache_dir is not None
-        model_slug = hashlib.md5(
-            self.model_name.encode(), usedforsecurity=False
-        ).hexdigest()[:8]
+        model_slug = hashlib.md5(self.model_name.encode(), usedforsecurity=False).hexdigest()[:8]
         d = self.cache_dir / model_slug
         d.mkdir(parents=True, exist_ok=True)
         return d / f'{record_id}.npz'
 
-    def _load_cache(
-        self, record_id: str
-    ) -> tuple[NDArray[np.float32], NDArray[np.float32]] | None:
+    def _load_cache(self, record_id: str) -> tuple[NDArray[np.float32], NDArray[np.float32]] | None:
         p = self._cache_path(record_id)
         if p.exists():
             data = np.load(p)

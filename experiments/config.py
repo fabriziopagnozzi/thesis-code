@@ -33,13 +33,9 @@ class ExperimentConfig:
         ]
     )
     k_values: list[int] = field(default_factory=lambda: [5, 10, 20])
-    lambda_values: list[float] = field(
-        default_factory=lambda: [0.2, 0.4, 0.5, 0.7, 0.8]
-    )
+    lambda_values: list[float] = field(default_factory=lambda: [0.2, 0.4, 0.5, 0.7, 0.8])
     mmr_window: int | None = None  # None = all selected (no window)
-    theta: float | None = (
-        None  # sector_coverage: angular threshold in degrees (None = adaptive)
-    )
+    theta: float | None = None  # sector_coverage: angular threshold in degrees (None = adaptive)
 
     chunk_mode: EmbeddingChunkMode = 'sentence'
     # token_window mode
