@@ -1,0 +1,101 @@
+icd_code,icd_version,long_title
+0010,9,Cholera due to vibrio cholerae
+0011,9,Cholera due to vibrio cholerae el tor
+0019,9,"Cholera, unspecified"
+0020,9,Typhoid fever
+0021,9,Paratyphoid fever A
+0022,9,Paratyphoid fever B
+0023,9,Paratyphoid fever C
+0029,9,"Paratyphoid fever, unspecified"
+0030,9,Salmonella gastroenteritis
+0031,9,Salmonella septicemia
+00320,9,"Localized salmonella infection, unspecified"
+00321,9,Salmonella meningitis
+00322,9,Salmonella pneumonia
+00323,9,Salmonella arthritis
+00324,9,Salmonella osteomyelitis
+00329,9,Other localized salmonella infections
+0038,9,Other specified salmonella infections
+0039,9,"Salmonella infection, unspecified"
+0040,9,Shigella dysenteriae
+0041,9,Shigella flexneri
+0042,9,Shigella boydii
+0043,9,Shigella sonnei
+0048,9,Other specified shigella infections
+0049,9,"Shigellosis, unspecified"
+0050,9,Staphylococcal food poisoning
+0051,9,Botulism food poisoning
+0052,9,Food poisoning due to Clostridium perfringens (C. welchii)
+0053,9,Food poisoning due to other Clostridia
+0054,9,Food poisoning due to Vibrio parahaemolyticus
+00581,9,Food poisoning due to Vibrio vulnificus
+00589,9,Other bacterial food poisoning
+0059,9,"Food poisoning, unspecified"
+0060,9,Acute amebic dysentery without mention of abscess
+0061,9,Chronic intestinal amebiasis without mention of abscess
+0062,9,Amebic nondysenteric colitis
+0063,9,Amebic liver abscess
+0064,9,Amebic lung abscess
+0065,9,Amebic brain abscess
+0066,9,Amebic skin ulceration
+0068,9,Amebic infection of other sites
+0069,9,"Amebiasis, unspecified"
+0070,9,Balantidiasis
+0071,9,Giardiasis
+0072,9,Coccidiosis
+0073,9,Intestinal trichomoniasis
+0074,9,Cryptosporidiosis
+0075,9,Cyclosporiasis
+0078,9,Other specified protozoal intestinal diseases
+0079,9,Unspecified protozoal intestinal disease
+00800,9,"Intestinal infection due to E. coli, unspecified"
+00801,9,Intestinal infection due to enteropathogenic E. coli
+00802,9,Intestinal infection due to enterotoxigenic E. coli
+00803,9,Intestinal infection due to enteroinvasive E. coli
+00804,9,Intestinal infection due to enterohemorrhagic E. coli
+00809,9,Intestinal infection due to other intestinal E. coli infections
+0081,9,Intestinal infection due to arizona group of paracolon bacilli
+0082,9,Intestinal infection due to aerobacter aerogenes
+0083,9,Intestinal infection due to proteus (mirabilis) (morganii)
+00841,9,Intestinal infection due to staphylococcus
+00842,9,Intestinal infection due to pseudomonas
+00843,9,Intestinal infection due to campylobacter
+00844,9,Intestinal infection due to yersinia enterocolitica
+00845,9,Intestinal infection due to Clostridium difficile
+00846,9,Intestinal infection due to other anaerobes
+00847,9,Intestinal infection due to other gram-negative bacteria
+00849,9,Intestinal infection due to other organisms
+0085,9,"Bacterial enteritis, unspecified"
+00861,9,Enteritis due to rotavirus
+00862,9,Enteritis due to adenovirus
+00863,9,Enteritis due to norwalk virus
+00864,9,Enteritis due to other small round viruses [SRV's]
+00865,9,Enteritis due to calicivirus
+00866,9,Enteritis due to astrovirus
+00867,9,Enteritis due to enterovirus nec
+00869,9,Enteritis due to other viral enteritis
+0088,9,"Intestinal infection due to other organism, not elsewhere classified"
+0090,9,"Infectious colitis, enteritis, and gastroenteritis"
+0091,9,"Colitis, enteritis, and gastroenteritis of presumed infectious origin"
+0092,9,Infectious diarrhea
+0093,9,Diarrhea of presumed infectious origin
+01000,9,"Primary tuberculous infection, unspecified"
+01001,9,"Primary tuberculous infection, bacteriological or histological examination not done"
+01002,9,"Primary tuberculous infection, bacteriological or histological examination unknown (at present)"
+01003,9,"Primary tuberculous infection, tubercle bacilli found (in sputum) by microscopy"
+01004,9,"Primary tuberculous infection, tubercle bacilli not found (in sputum) by microscopy, but found by bacterial culture"
+01005,9,"Primary tuberculous infection, tubercle bacilli not found by bacteriological examination, but tuberculosis confirmed histologically"
+01006,9,"Primary tuberculous infection, tubercle bacilli not found by bacteriological or histological examination, but tuberculosis confirmed by other methods [inoculation of animals]"
+01010,9,"Tuberculous pleurisy in primary progressive tuberculosis, unspecified"
+01011,9,"Tuberculous pleurisy in primary progressive tuberculosis, bacteriological or histological examination not done"
+01012,9,"Tuberculous pleurisy in primary progressive tuberculosis, bacteriological or histological examination unknown (at present)"
+01013,9,"Tuberculous pleurisy in primary progressive tuberculosis, tubercle bacilli found (in sputum) by microscopy"
+01014,9,"Tuberculous pleurisy in primary progressive tuberculosis, tubercle bacilli not found (in sputum) by microscopy, but found by bacterial culture"
+01015,9,"Tuberculous pleurisy in primary progressive tuberculosis, tubercle bacilli not found by bacteriological examination, but tuberculosis confirmed histologically"
+01016,9,"Tuberculous pleurisy in primary progressive tuberculosis, tubercle bacilli not found by bacteriological or histological examination, but tuberculosis confirmed by other methods [inoculation of animals]"
+01080,9,"Other primary progressive tuberculosis, unspecified"
+01081,9,"Other primary progressive tuberculosis, bacteriological or histological examination not done"
+01082,9,"Other primary progressive tuberculosis, bacteriological or histological examination unknown (at present)"
+01083,9,"Other primary progressive tuberculosis, tubercle bacilli found (in sputum) by microscopy"
+01084,9,"Other primary progressive tuberculosis, tubercle bacilli not found (in sputum) by microscopy, but found by bacterial culture"
+01085,9,"Other primary progressive tuberculosis, tubercle bacilli not found by bacteriological examination, but tuberculosis confirmed histologically"

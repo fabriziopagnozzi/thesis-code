@@ -1,8 +1,9 @@
 {
-  "latex-workshop.formatting.latex": "latexindent",
   "editor.formatOnSave": true,
   "workbench.editorAssociations": {
-    "*.ipynb": "jupyter-notebook"
+    "*.ipynb": "jupyter-notebook",
+    "*.pdf": "pdf.view",
+    "*.md": "vscode.markdown.preview.editor"
   },
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
@@ -13,21 +14,45 @@
       "source.organizeImports.ruff": "always",
     }
   },
+  "python.analysis.extraPaths": [
+    "python"
+  ],
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.functionReturnTypes": true,
   "python.analysis.inlayHints.variableTypes": false,
-  "notebook.formatOnSave.enabled": true,
-  "notebook.defaultFormatter": "charliermarsh.ruff",
+  "python.analysis.exclude": [
+    "**/datasets/**",
+    "**/.venv/**",
+    "**/build/**",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+  ],
   "editor.inlayHints.enabled": "on",
   "editor.parameterHints.enabled": true,
+  "notebook.formatOnSave.enabled": true,
+  "notebook.defaultFormatter": "charliermarsh.ruff",
   "files.exclude": {
     "**/__pycache__": true,
-    "**/build/*.aux": true,
-    "**/build/*.fls": true,
-    "**/build/*.fdb_latexmk": true,
-    "**/build/*.out": true,
-    "**/build/*.synctex.gz": true,
-    "**/build/*.toc": true,
-  }
+    "**/@pdfs/*.aux": true,
+    "**/@pdfs/*.fls": true,
+    "**/@pdfs/*.fdb_latexmk": true,
+    "**/@pdfs/*.out": true,
+    "**/@pdfs/*.synctex.gz": true,
+    "**/@pdfs/*.toc": true,
+    "**/@pdfs/*.log": true,
+  },
+  "latex-workshop.formatting.latex": "latexindent",
+  "latex-workshop.formatting.latexindent.args": [
+    "-c",
+    "%DIR%/",
+    "%TMPFILE%",
+    "-l=../latexindent.yaml",
+    "-m"
+  ],
+  "latex-workshop.latex.outDir": "%DIR%/@pdfs",
+  "latex-workshop.latex.autoBuild.run": "onSave",
+  "latex-workshop.message.badbox.show": "none",
+  "latex-workshop.message.warning.show": false,
 }

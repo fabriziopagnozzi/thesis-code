@@ -1,21 +1,32 @@
 [project]
 name = "thesis"
 version = "0.1.0"
-description = "MSc thesis project"
+description = "MSc thesis project — Coverage vs Dispersion Diversity in RAG Retrieval"
 requires-python = ">=3.14"
 dependencies = [
 	"numpy",
-	"pandas",
+	"polars",
 	"scipy",
 	"scikit-learn",
 	"matplotlib",
 	"seaborn",
 	"jupyter",
 	"tqdm",
+	"huggingface-hub>=1.7.1",
+	"sentence-transformers>=4.1",
+	"torch>=2.0",
+	"ir-datasets>=0.5.11",
+	"langchain>=1.2.13",
+	"langchain-text-splitters>=1.1.1",
+	"ijson>=3.5.0",
 ]
 
+[tool.uv]
+extra-index-url = ["https://download.pytorch.org/whl/cpu"]
+environments = ["sys_platform == 'linux'"]
+
 [dependency-groups]
-dev = ["ruff", "pytest", "ipykernel", "pandas-stubs", "matplotlib-stubs"]
+dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs"]
 
 [tool.ruff]
 target-version = "py314"

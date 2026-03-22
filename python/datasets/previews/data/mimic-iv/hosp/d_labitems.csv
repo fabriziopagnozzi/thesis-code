@@ -1,0 +1,101 @@
+itemid,label,fluid,category
+50801,Alveolar-arterial Gradient,Blood,Blood Gas
+50802,Base Excess,Blood,Blood Gas
+50803,"Calculated Bicarbonate, Whole Blood",Blood,Blood Gas
+50804,Calculated Total CO2,Blood,Blood Gas
+50805,Carboxyhemoglobin,Blood,Blood Gas
+50806,"Chloride, Whole Blood",Blood,Blood Gas
+50808,Free Calcium,Blood,Blood Gas
+50809,Glucose,Blood,Blood Gas
+50810,"Hematocrit, Calculated",Blood,Blood Gas
+50811,Hemoglobin,Blood,Blood Gas
+50812,Intubated,Blood,Blood Gas
+50813,Lactate,Blood,Blood Gas
+50814,Methemoglobin,Blood,Blood Gas
+50815,O2 Flow,Blood,Blood Gas
+50816,Oxygen,Blood,Blood Gas
+50817,Oxygen Saturation,Blood,Blood Gas
+50818,pCO2,Blood,Blood Gas
+50819,PEEP,Blood,Blood Gas
+50820,pH,Blood,Blood Gas
+50821,pO2,Blood,Blood Gas
+50822,"Potassium, Whole Blood",Blood,Blood Gas
+50823,Required O2,Blood,Blood Gas
+50824,"Sodium, Whole Blood",Blood,Blood Gas
+50825,Temperature,Blood,Blood Gas
+50826,Tidal Volume,Blood,Blood Gas
+50827,Ventilation Rate,Blood,Blood Gas
+50828,Ventilator,Blood,Blood Gas
+50829,Fluid Type,Other Body Fluid,Blood Gas
+50830,"pCO2, Body Fluid",Other Body Fluid,Blood Gas
+50831,pH,Other Body Fluid,Blood Gas
+50832,"pO2, Body Fluid",Other Body Fluid,Blood Gas
+50833,Potassium,Other Body Fluid,Blood Gas
+50834,"Sodium, Body Fluid",Other Body Fluid,Blood Gas
+50835,"Albumin, Ascites",Ascites,Chemistry
+50836,"Amylase, Ascites",Ascites,Chemistry
+50837,"Bicarbonate, Ascites",Ascites,Chemistry
+50838,"Bilirubin, Total, Ascites",Ascites,Chemistry
+50839,"Chloride, Ascites",Ascites,Chemistry
+50840,"Cholesterol, Ascites",Ascites,Chemistry
+50841,"Creatinine, Ascites",Ascites,Chemistry
+50842,"Glucose, Ascites",Ascites,Chemistry
+50843,"Lactate Dehydrogenase, Ascites",Ascites,Chemistry
+50844,"Lipase, Ascites",Ascites,Chemistry
+50845,"Miscellaneous, Ascites",Ascites,Chemistry
+50846,"Osmolality, Ascites",Ascites,Chemistry
+50847,"Potassium, Ascites",Ascites,Chemistry
+50848,"Sodium, Ascites",Ascites,Chemistry
+50849,"Total Protein, Ascites",Ascites,Chemistry
+50850,"Triglycerides, Ascites",Ascites,Chemistry
+50851,"Urea Nitrogen, Ascites",Ascites,Chemistry
+50852,% Hemoglobin A1c,Blood,Chemistry
+50853,25-OH Vitamin D,Blood,Chemistry
+50854,Absolute A1c,Blood,Chemistry
+50855,Absolute Hemoglobin,Blood,Chemistry
+50856,Acetaminophen,Blood,Chemistry
+50857,Acetone,Blood,Chemistry
+50858,Acid Phosphatase,Blood,Chemistry
+50859,"Acid Phosphatase, Non-Prostatic",Blood,Chemistry
+50860,"AFP, Maternal Screen",Blood,Chemistry
+50861,Alanine Aminotransferase (ALT),Blood,Chemistry
+50862,Albumin,Blood,Chemistry
+50863,Alkaline Phosphatase,Blood,Chemistry
+50864,Alpha-Fetoprotein,Blood,Chemistry
+50865,Amikacin,Blood,Chemistry
+50866,Ammonia,Blood,Chemistry
+50867,Amylase,Blood,Chemistry
+50868,Anion Gap,Blood,Chemistry
+50869,Anti-DGP (IgA/IgG),Blood,Chemistry
+50870,"Anti-Gliadin Antibody, IgA",Blood,Chemistry
+50871,Anti-Mitochondrial Antibody,Blood,Chemistry
+50872,Anti-Neutrophil Cytoplasmic Antibody,Blood,Chemistry
+50873,Anti-Nuclear Antibody,Blood,Chemistry
+50874,"Anti-Nuclear Antibody, Titer",Blood,Chemistry
+50875,Anti-Parietal Cell Antibody,Blood,Chemistry
+50876,Anti-Smooth Muscle Antibody,Blood,Chemistry
+50877,Anti-Thyroglobulin Antibodies,Blood,Chemistry
+50878,Asparate Aminotransferase (AST),Blood,Chemistry
+50879,Barbiturate Screen,Blood,Chemistry
+50880,Benzodiazepine Screen,Blood,Chemistry
+50881,Beta-2 Microglobulin,Blood,Chemistry
+50882,Bicarbonate,Blood,Chemistry
+50883,"Bilirubin, Direct",Blood,Chemistry
+50884,"Bilirubin, Indirect",Blood,Chemistry
+50885,"Bilirubin, Total",Blood,Chemistry
+50886,Blood Culture Hold,Blood,Chemistry
+50887,Blue Top Hold,Blood,Chemistry
+50888,Blue Top Hold Frozen,Blood,Chemistry
+50889,C-Reactive Protein,Blood,Chemistry
+50890,C3,Blood,Chemistry
+50891,C4,Blood,Chemistry
+50892,CA-125,Blood,Chemistry
+50893,"Calcium, Total",Blood,Chemistry
+50894,Calculated Free Testosterone,Blood,Chemistry
+50895,Calculated TBG,Blood,Chemistry
+50896,Calculated Thyroxine (T4) Index,Blood,Chemistry
+50897,Call,Blood,Chemistry
+50898,Cancer Antigen 27.29,Blood,Chemistry
+50899,Carbamazepine,Blood,Chemistry
+50900,Carcinoembyronic Antigen (CEA),Blood,Chemistry
+50901,Centromere,Blood,Chemistry

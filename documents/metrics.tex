@@ -5,29 +5,28 @@
 \geometry{margin=2cm}
 \usepackage{booktabs}
 \usepackage{tabularx}
-\usepackage{hyperref}
+\usepackage[hidelinks,unicode]{hyperref}
 \usepackage{algorithmic}
 \usepackage{algorithm}
 
-\title{Reference Sheet: Metrics, Algorithms \& Definitions\\for Diversity in RAG Retrieval}
-\author{}
-\date{}
-
 \begin{document}
-\maketitle
+\begin{center}
+	{\large\bfseries Reference Sheet: Metrics, Algorithms \& Definitions\\for Diversity in RAG Retrieval}
+\end{center}
+\vspace{-1em}
 \tableofcontents
 
 \section{Notation}
 
 \begin{tabular}{@{}ll@{}}
-    $D$                      & Full dataset/candidate pool of $n$ items (chunks)    \\
-    $S \subseteq D$          & Selected subset, $|S| = k$                           \\
-    $\mathbf{e}_i$           & Embedding vector of item $i$                         \\
-    $u_i$                    & Utility (relevance) of item $i$ to the query         \\
-    $w_{ij} \geq 0$          & Similarity between items $i$ and $j$                 \\
-    $\cos(a,b)$              & Cosine similarity between vectors $a$ and $b$        \\
-    $\lambda, \alpha, \beta$ & Trade-off parameters between relevance and diversity \\
-    $T_{\max}$               & Context budget (max tokens in selected chunks)       \\
+	$D$ & Full dataset/candidate pool of $n$ items (chunks)\\
+	$S \subseteq D$ & Selected subset, $|S| = k$\\
+	$\mathbf{e}_i$ & Embedding vector of item $i$\\
+	$u_i$ & Utility (relevance) of item $i$ to the query\\
+	$w_{ij} \geq 0$ & Similarity between items $i$ and $j$\\
+	$\cos(a,b)$ & Cosine similarity between vectors $a$ and $b$\\
+	$\lambda, \alpha, \beta$ & Trade-off parameters between relevance and diversity\\
+	$T_{\max}$ & Context budget (max tokens in selected chunks)\\
 \end{tabular}
 
 \section{Quick Reference}
@@ -35,65 +34,63 @@
 \subsection*{Diversity Definitions}
 
 \begin{tabularx}{\textwidth}{@{}l l l X@{}}
-    \toprule
-    \textbf{Concept}             & \textbf{Scope} & \textbf{Approx.\ guarantee} & \textbf{Key property}                           \\
-    \midrule
-    Max-min Dispersion           & Selected only  & None (NP-hard)              & Maximises closest-pair distance in $S$          \\
-    Coverage (Facility-Location) & All of $D$     & $(1-1/e)$ greedy            & Monotone submodular; respects data distribution \\
-    Combined Objective $F$       & All of $D$     & $(1-1/e)$ greedy            & Modular utility $+$ submodular coverage         \\
-    \bottomrule
+	\toprule
+	\textbf{Concept} & \textbf{Scope} & \textbf{Approx.\ guarantee} & \textbf{Key property} \\
+	\midrule
+	Max-min Dispersion & Selected only  & None (NP-hard) & Maximises closest-pair distance in $S$ \\
+	Coverage (Facility-Location) & All of $D$ & $(1-1/e)$ greedy & Monotone submodular; respects data distribution \\
+	Combined Objective $F$ & All of $D$ & $(1-1/e)$ greedy & Modular utility $+$ submodular coverage \\
+	\bottomrule
 \end{tabularx}
 
 \subsection*{Selection Algorithms}
 
 \begin{tabularx}{\textwidth}{@{}X l l l l@{}}
-    \toprule
-    \textbf{Algorithm}       & \textbf{Diversity type}   & \textbf{Relevance} & \textbf{Complexity} & \textbf{Guarantee} \\
-    \midrule
-    Top-$k$                  & None (baseline)           & Yes                & $O(n \log k)$       & —                  \\
-    MMR                      & Dispersion (local window) & Yes                & $O(k n w)$          & —                  \\
-    gMMR                     & Dispersion (centroid)     & Yes                & $O(kn)$             & —                  \\
-    FPS                      & Dispersion (global)       & No                 & $O(kn)$             & —                  \\
-    Greedy Facility-Location & Coverage                  & Yes                & $O(kn)$             & $(1-1/e)$          \\
-    Branch-and-Bound         & Coverage                  & Yes                & Exp.\ in $k$        & Optimal            \\
-    \bottomrule
+	\toprule
+	\textbf{Algorithm} & \textbf{Diversity type}   & \textbf{Relevance} & \textbf{Complexity} & \textbf{Guarantee} \\
+	\midrule
+	Top-$k$ & None (baseline) & Yes & $O(n \log k)$ & — \\
+	MMR & Dispersion (local window) & Yes & $O(k n w)$ & — \\
+	gMMR & Dispersion (centroid) & Yes & $O(kn)$ & — \\
+	FPS & Dispersion (global) & No & $O(kn)$ & — \\
+	Greedy Facility-Location & Coverage & Yes & $O(kn)$ & $(1-1/e)$ \\
+	Branch-and-Bound & Coverage & Yes & Exp.\ in $k$ & Optimal \\
+	\bottomrule
 \end{tabularx}
 
 \subsection*{Retrieval Quality Metrics}
 
 \begin{tabularx}{\textwidth}{@{}l l l X@{}}
-    \toprule
-    \textbf{Metric}                    & \textbf{Range} & \textbf{Requires}   & \textbf{What it measures}                                          \\
-    \midrule
-    Hit Rate ($\mathrm{hit}$)          & $\{0,1\}$      & Gold aliases        & Binary: does context contain the answer?                           \\
-    Facility-Location ($\mathrm{fac}$) & $[0,1]$        & Embeddings          & Average representativeness of $S$ over $D$                         \\
-    Recall@$K$                         & $[0,1]$        & Relevance judgments & relevant retrieved / total relevant                                \\
-    Precision@$K$                      & $[0,1]$        & Relevance judgments & relevant retrieved / (relevant retrieved + non-relevant retrieved) \\
-    nDCG@$K$                           & $[0,1]$        & Graded judgments    & Ranking quality with position discount                             \\
-    $F_1$                              & $[0,1]$        & Ground-truth answer & Token-level precision/recall of generated answer                   \\
-    DocRec                             & $[0,1]$        & Gold documents      & Fraction of supporting documents selected                          \\
-    FactRec                            & $[0,1]$        & Gold facts          & Fraction of supporting sentences selected                          \\
-    AvgCos                             & $[0,1]$        & Embeddings          & Average query–chunk cosine similarity                              \\
-    \bottomrule
+	\toprule
+	\textbf{Metric} & \textbf{Range} & \textbf{Requires}   & \textbf{What it measures} \\
+	\midrule
+	Hit Rate ($\mathrm{hit}$) & $\{0,1\}$ & Gold aliases & Binary: does context contain the answer? \\
+	Facility-Location ($\mathrm{fac}$) & $[0,1]$ & Embeddings & Average representativeness of $S$ over $D$ \\
+	Recall@$K$ & $[0,1]$ & Relevance judgments & relevant retrieved / total relevant \\
+	Precision@$K$ & $[0,1]$ & Relevance judgments & relevant retrieved / (relevant retrieved + non-relevant retrieved) \\
+	nDCG@$K$ & $[0,1]$ & Graded judgments    & Ranking quality with position discount \\
+	$F_1$ & $[0,1]$ & Ground-truth answer & Token-level precision/recall of generated answer \\
+	DocRec & $[0,1]$ & Gold documents & Fraction of supporting documents selected \\
+	FactRec & $[0,1]$ & Gold facts & Fraction of supporting sentences selected \\
+	AvgCos & $[0,1]$ & Embeddings & Average query–chunk cosine similarity \\
+	\bottomrule
 \end{tabularx}
 
 \subsection*{Selection Overlap Metrics}
 
 \begin{tabularx}{\textwidth}{@{}l l X@{}}
-    \toprule
-    \textbf{Metric}    & \textbf{Range} & \textbf{What it measures}                                                                              \\
-    \midrule
-    Jaccard similarity & $[0,1]$        & Set overlap between two selection strategies; $J \approx 1$ means the diversity method changes nothing \\
-    GoldConcat         & $\geq 0$       & Number of distinct answer aliases present in the concatenated context                                  \\
-    Gold/Chunk         & $\geq 0$       & Average answer-alias density per selected chunk                                                        \\
-    \bottomrule
+	\toprule
+	\textbf{Metric}    & \textbf{Range} & \textbf{What it measures} \\
+	\midrule
+	Jaccard similarity & $[0,1]$ & Set overlap between two selection strategies; $J \approx 1$ means the diversity method changes nothing \\
+	GoldConcat & $\geq 0$ & Number of distinct answer aliases present in the concatenated context \\
+	Gold/Chunk & $\geq 0$ & Average answer-alias density per selected chunk \\
+	\bottomrule
 \end{tabularx}
 
 \newpage
 
-%% ============================================================
 \section{Diversity Definitions}
-%% ============================================================
 
 \subsection{Dispersion}
 
@@ -101,7 +98,7 @@ Diversity measured by distances \emph{between selected items only}. Does not con
 
 \textbf{Max-min dispersion:}
 \[
-    \mathrm{Div}(S) = \min_{i \neq j \in S} \mathrm{dist}(i, j)
+	\mathrm{Div}(S) = \min_{i \neq j \in S} \mathrm{dist}(i, j)
 \]
 Maximizing this is NP-hard (the $k$-dispersion problem). No polynomial-time approximation guarantee for the greedy algorithm.
 
@@ -111,15 +108,15 @@ Maximizing this is NP-hard (the $k$-dispersion problem). No polynomial-time appr
 
 Diversity measured by how well $S$ \emph{represents the entire dataset} $D$.
 \[
-    g(S) = \sum_{i \in D} m_i(S), \qquad m_i(S) = \max_{j \in S} w_{ij}
+	g(S) = \sum_{i \in D} m_i(S), \qquad m_i(S) = \max_{j \in S} w_{ij}
 \]
 \begin{itemize}
-    \item $m_i(S)$: how well item $i \in D$ is covered (similarity to its nearest representative in $S$).
-    \item $g(S)$: total coverage over all items in $D$.
+	\item $m_i(S)$: how well item $i \in D$ is covered (similarity to its nearest representative in $S$).
+	\item $g(S)$: total coverage over all items in $D$.
 \end{itemize}
 $g$ is \textbf{monotone submodular}: $A \subseteq B \Rightarrow g(A) \leq g(B)$, and for all $A \subseteq B$, $x \notin B$:
 \[
-    g(A \cup \{x\}) - g(A) \geq g(B \cup \{x\}) - g(B) \qquad \text{(diminishing returns)}
+	g(A \cup \{x\}) - g(A) \geq g(B \cup \{x\}) - g(B) \qquad \text{(diminishing returns)}
 \]
 
 \textbf{Intuition.} Every point in $D$ should have a close representative in $S$. If 90\% of the data clusters in region~A, coverage allocates more representatives there. It respects the data distribution, unlike dispersion which may ignore dense clusters. Key advantage: submodularity gives provable approximation guarantees.
@@ -127,17 +124,15 @@ $g$ is \textbf{monotone submodular}: $A \subseteq B \Rightarrow g(A) \leq g(B)$,
 \subsection{Combined Objective}
 
 \[
-    F(S) = \lambda \sum_{i \in S} u_i + (1-\lambda)\, g(S)
+	F(S) = \lambda \sum_{i \in S} u_i + (1-\lambda)\, g(S)
 \]
 Sum of a modular function (utility) and a submodular function (coverage). $F$ is monotone submodular. Greedy gives a $(1 - 1/e) \approx 0.632$ approximation.
 
 \textbf{Intuition.} Trade off between picking the most relevant chunks ($\lambda = 1$, standard top-$k$) and picking chunks that collectively represent the whole candidate pool ($\lambda = 0$, pure coverage).
 
-%% ============================================================
 \section{Selection Algorithms}
-%% ============================================================
 
-\subsection{Top-$k$ by Relevance (Baseline)}
+\subsection{Top-k by Relevance (Baseline)}
 
 Select $k$ items with highest $u_i = \cos(\mathbf{e}_q, \mathbf{e}_i)$, subject to context budget $T_{\max}$. $O(n \log k)$.
 
@@ -147,12 +142,12 @@ Select $k$ items with highest $u_i = \cos(\mathbf{e}_q, \mathbf{e}_i)$, subject 
 
 Greedy, dispersion-based. At each step, select:
 \[
-    c^* = \arg\max_{i \in R} \Big[ \alpha \cdot \cos(\mathbf{e}_q, \mathbf{e}_i) - (1-\alpha) \cdot \max_{j \in W} \cos(\mathbf{e}_i, \mathbf{e}_j) \Big]
+	c^* = \arg\max_{i \in R} \Big[ \alpha \cdot \cos(\mathbf{e}_q, \mathbf{e}_i) - (1-\alpha) \cdot \max_{j \in W} \cos(\mathbf{e}_i, \mathbf{e}_j) \Big]
 \]
 \begin{itemize}
-    \item $R = C \setminus S$: remaining candidates.
-    \item $W \subseteq S$: context window (last $w$ selected items).
-    \item $\alpha \in [0,1]$: relevance--diversity trade-off.
+	\item $R = C \setminus S$: remaining candidates.
+	\item $W \subseteq S$: context window (last $w$ selected items).
+	\item $\alpha \in [0,1]$: relevance--diversity trade-off.
 \end{itemize}
 First term rewards relevance; second penalizes similarity to already-selected items. $O(k \cdot n \cdot w)$ per query.
 
@@ -162,11 +157,11 @@ First term rewards relevance; second penalizes similarity to already-selected it
 
 Greedy, dispersion-based. Replaces pairwise max with centroid distance, cosine with Euclidean.
 \[
-    \mathrm{gMMR}(c) = \lambda \cdot \cos(\mathbf{e}_q, \mathbf{e}_c) + (1-\lambda) \cdot \sqrt{2 - 2\cos(\mathbf{e}_c, \mathbf{e}_{c_S})}
+	\mathrm{gMMR}(c) = \lambda \cdot \cos(\mathbf{e}_q, \mathbf{e}_c) + (1-\lambda) \cdot \sqrt{2 - 2\cos(\mathbf{e}_c, \mathbf{e}_{c_S})}
 \]
 where the centroid of the selected set is:
 \[
-    \mathbf{e}_{c_S} = \frac{1}{|S|} \sum_{s \in S} \mathbf{e}_s
+	\mathbf{e}_{c_S} = \frac{1}{|S|} \sum_{s \in S} \mathbf{e}_s
 \]
 At each step: $c^* = \arg\max_{c \in C \setminus S} \mathrm{gMMR}(c)$.
 
@@ -176,7 +171,7 @@ At each step: $c^* = \arg\max_{c \in C \setminus S} \mathrm{gMMR}(c)$.
 
 Greedy, pure dispersion (no relevance component).
 \[
-    c^* = \arg\max_{i \in R} \Big[ \max_{j \in S} \mathrm{dist}(i, j) \Big]
+	c^* = \arg\max_{i \in R} \Big[ \max_{j \in S} \mathrm{dist}(i, j) \Big]
 \]
 
 \textbf{Intuition.} At each step, pick the point that is farthest from all already-selected points. Pure space-filling strategy with no relevance signal. From 3D computer vision (point cloud subsampling). Slower than MMR because it uses Euclidean distance over all selected items rather than cosine over a window.
@@ -185,13 +180,13 @@ Greedy, pure dispersion (no relevance component).
 
 Start with $S = \emptyset$. Repeat $k$ times: add $j^* = \arg\max_{j \notin S} \Delta(j \mid S)$, where the marginal gain is:
 \[
-    \Delta(j \mid S) = \lambda \cdot u_j + (1-\lambda) \sum_{i \in D} \max\big(0,\; w_{ij} - m_i(S)\big)
+	\Delta(j \mid S) = \lambda \cdot u_j + (1-\lambda) \sum_{i \in D} \max\big(0,\; w_{ij} - m_i(S)\big)
 \]
 \begin{itemize}
-    \item Second term counts only the \emph{new} coverage $j$ brings.
-    \item $m_i(S) = \max_{s \in S} w_{is}$: current coverage of item $i$.
-    \item $O(kn)$ per query (update $m_i$ array incrementally).
-    \item Provides a $(1-1/e)$ approximation guarantee since $F$ is monotone submodular.
+	\item Second term counts only the \emph{new} coverage $j$ brings.
+	\item $m_i(S) = \max_{s \in S} w_{is}$: current coverage of item $i$.
+	\item $O(kn)$ per query (update $m_i$ array incrementally).
+	\item Provides a $(1-1/e)$ approximation guarantee since $F$ is monotone submodular.
 \end{itemize}
 
 \textbf{Intuition.} Each candidate is evaluated by: (1)~its relevance $u_j$, and (2)~the \emph{new} coverage it adds---only counting items in $D$ that it covers \emph{better} than the current best representative. As $S$ grows, the marginal coverage of each new item diminishes (submodularity), naturally preventing redundant selections.
@@ -201,42 +196,38 @@ Start with $S = \emptyset$. Repeat $k$ times: add $j^* = \arg\max_{j \notin S} \
 Finds the optimal $S^* = \arg\max_{|S|=k} F(S)$ exactly.
 
 \begin{enumerate}
-    \item Nodes are partial sets $S_p$, $|S_p| \leq k$. Priority queue ordered by upper bound.
-    \item \textbf{Upper bound} (exploits submodularity):
-          \[
-              \mathrm{UB}(S_p) = F(S_p) + \sum_{j \in R_{(1:t)}} \Delta(j \mid S_p)
-          \]
-          where $R_{(1:t)}$ are the $t = k - |S_p|$ largest marginals among candidates.
-    \item \textbf{Lower bound}: any feasible completion (e.g., greedy from $S_p$).
-    \item \textbf{Pruning}: if $\mathrm{UB}(S_p) \leq \mathrm{BestValue}$, discard node.
-    \item \textbf{Branching}: expand $S_p$ by adding each candidate $e \in D \setminus S_p$, sorted by descending marginal gain.
+	\item Nodes are partial sets $S_p$, $|S_p| \leq k$. Priority queue ordered by upper bound.
+	\item \textbf{Upper bound} (exploits submodularity):
+	      \[
+		      \mathrm{UB}(S_p) = F(S_p) + \sum_{j \in R_{(1:t)}} \Delta(j \mid S_p)
+	      \]
+	      where $R_{(1:t)}$ are the $t = k - |S_p|$ largest marginals among candidates.
+	\item \textbf{Lower bound}: any feasible completion (e.g., greedy from $S_p$).
+	\item \textbf{Pruning}: if $\mathrm{UB}(S_p) \leq \mathrm{BestValue}$, discard node.
+	\item \textbf{Branching}: expand $S_p$ by adding each candidate $e \in D \setminus S_p$, sorted by descending marginal gain.
 \end{enumerate}
 Worst-case: $O\!\left(\sum_{i=0}^{k} \binom{n}{i} \cdot n^2\right)$. Polynomial in $n$ for fixed $k$, but exponential in $k$. Practical for small $k$ with effective pruning.
 
 \textbf{Intuition.} The greedy solution is near-optimal but not exact. Branch-and-bound explores the combinatorial space of possible selections, using submodularity-derived upper bounds to prune most of the search tree. The key insight: submodularity guarantees that the sum of the $t$ largest single-item marginal gains is an upper bound on the gain from adding \emph{any} $t$ items, because marginal gains can only decrease as the set grows.
 
-
-%% ============================================================
 \section{Retrieval Quality Metrics}
-%% ============================================================
 
-\subsection{Hit Rate ($\mathrm{hit}_b$, $\mathrm{hit}_c$)}
+\subsection{\texorpdfstring{Hit Rate ($\mathrm{hit}_b$, $\mathrm{hit}_c$)}{Hit Rate (hit\_b, hit\_c)}}
 
 \[
-    \mathrm{hit}(q) =
-    \begin{cases}
-        1 & \text{if any gold alias of } q \text{ appears in } \mathrm{concat}(S_q) \\
-        0 & \text{otherwise}
-    \end{cases}
+	\mathrm{hit}(q) =
+	\begin{cases}
+		1 & \text{if any gold alias of } q \text{ appears in } \mathrm{concat}(S_q) \\
+		0 & \text{otherwise}
+	\end{cases}
 \]
 Averaged over queries: $\mathrm{hit}_b$ (baseline), $\mathrm{hit}_c$ (coverage). $\Delta\mathrm{hit} = \mathrm{hit}_c - \mathrm{hit}_b$.
 
 \textbf{Intuition.} Binary pre-LLM recall: did the selected chunks contain the answer at all? If $\mathrm{hit}=0$, no LLM can produce the correct answer from this context.
 
 \subsection{Facility-Location Coverage Score ($\mathrm{fac}$)}
-
 \[
-    \mathrm{fac}(S) = \frac{1}{|D|} \sum_{i \in D} \max_{j \in S} \cos(\mathbf{e}_i, \mathbf{e}_j)
+	\mathrm{fac}(S) = \frac{1}{|D|} \sum_{i \in D} \max_{j \in S} \cos(\mathbf{e}_i, \mathbf{e}_j)
 \]
 $\Delta\mathrm{fac} = \mathrm{fac}_c - \mathrm{fac}_b$.
 
@@ -245,7 +236,7 @@ $\Delta\mathrm{fac} = \mathrm{fac}_c - \mathrm{fac}_b$.
 \subsection{Recall@$K$}
 
 \[
-    \mathrm{Recall@}K(q) = \frac{|\{p \in \text{top-}K : p \text{ is relevant}\}|}{|\{p \in \text{corpus} : p \text{ is relevant}\}|}
+	\mathrm{Recall@}K(q) = \frac{|\{p \in \text{top-}K : p \text{ is relevant}\}|}{|\{p \in \text{corpus} : p \text{ is relevant}\}|}
 \]
 
 \textbf{Intuition.} Fraction of all relevant passages captured in the top-$K$. Used with TREC qrels where human relevance judgments are available.
@@ -253,8 +244,8 @@ $\Delta\mathrm{fac} = \mathrm{fac}_c - \mathrm{fac}_b$.
 \subsection{nDCG@$K$ (Normalized Discounted Cumulative Gain)}
 
 \[
-    \mathrm{DCG@}K = \sum_{i=1}^{K} \frac{2^{\mathrm{rel}_i} - 1}{\log_2(i+1)}, \qquad
-    \mathrm{nDCG@}K = \frac{\mathrm{DCG@}K}{\mathrm{IDCG@}K}
+	\mathrm{DCG@}K = \sum_{i=1}^{K} \frac{2^{\mathrm{rel}_i} - 1}{\log_2(i+1)}, \qquad
+	\mathrm{nDCG@}K = \frac{\mathrm{DCG@}K}{\mathrm{IDCG@}K}
 \]
 $\mathrm{rel}_i$: graded relevance at rank $i$. IDCG: DCG of the ideal ranking.
 
@@ -263,9 +254,9 @@ $\mathrm{rel}_i$: graded relevance at rank $i$. IDCG: DCG of the ideal ranking.
 \subsection{$F_1$ Score (DF-RAG)}
 
 \[
-    P = \frac{|\text{tokens}(\hat{a}) \cap \text{tokens}(a^*)|}{|\text{tokens}(\hat{a})|}, \qquad
-    R = \frac{|\text{tokens}(\hat{a}) \cap \text{tokens}(a^*)|}{|\text{tokens}(a^*)|}, \qquad
-    F_1 = \frac{2 \cdot P \cdot R}{P + R}
+	P = \frac{|\text{tokens}(\hat{a}) \cap \text{tokens}(a^*)|}{|\text{tokens}(\hat{a})|}, \qquad
+	R = \frac{|\text{tokens}(\hat{a}) \cap \text{tokens}(a^*)|}{|\text{tokens}(a^*)|}, \qquad
+	F_1 = \frac{2 \cdot P \cdot R}{P + R}
 \]
 where $\hat{a}$ is the generated answer and $a^*$ is the ground truth; tokens are compared as bags of words.
 
@@ -274,13 +265,13 @@ where $\hat{a}$ is the generated answer and $a^*$ is the ground truth; tokens ar
 \subsection{DocRec / FactRec (HotpotQA)}
 
 \[
-    \mathrm{DocRec}(q) = \frac{|S_q \cap \mathrm{gold\_docs}(q)|}{|\mathrm{gold\_docs}(q)|}
+	\mathrm{DocRec}(q) = \frac{|S_q \cap \mathrm{gold\_docs}(q)|}{|\mathrm{gold\_docs}(q)|}
 \]
 
 \textbf{Intuition.} Did we select chunks from the \emph{right} documents? In HotpotQA (2 gold docs out of 10), $\mathrm{DocRec}=1.0$ means both supporting documents are represented.
 
 \[
-    \mathrm{FactRec}(q) = \frac{|\mathrm{selected\_facts}(q) \cap \mathrm{gold\_facts}(q)|}{|\mathrm{gold\_facts}(q)|}
+	\mathrm{FactRec}(q) = \frac{|\mathrm{selected\_facts}(q) \cap \mathrm{gold\_facts}(q)|}{|\mathrm{gold\_facts}(q)|}
 \]
 
 \textbf{Intuition.} Finer than DocRec: even if the right document is chosen, did we capture the specific \emph{sentences} annotated as supporting facts? This is the most direct measure of whether diversity helps recover complementary evidence.
@@ -288,58 +279,68 @@ where $\hat{a}$ is the generated answer and $a^*$ is the ground truth; tokens ar
 \subsection{AvgCos (Average Cosine Similarity)}
 
 \[
-    \mathrm{AvgCos}(q) = \frac{1}{|S_q|} \sum_{j \in S_q} \cos(\mathbf{e}_q, \mathbf{e}_j)
+	\mathrm{AvgCos}(q) = \frac{1}{|S_q|} \sum_{j \in S_q} \cos(\mathbf{e}_q, \mathbf{e}_j)
 \]
 
 \textbf{Intuition.} Average relevance of selected chunks to the query. Lower AvgCos means the strategy sacrificed relevance to gain diversity. Useful for diagnosing whether a diversity method is ``paying too much'' in relevance.
 
-
-%% ============================================================
 \section{Selection Overlap Metrics}
-%% ============================================================
 
 \subsection{Jaccard Similarity}
 
 \[
-    J(A, B) = \frac{|A \cap B|}{|A \cup B|}
+	J(A, B) = \frac{|A \cap B|}{|A \cup B|}
 \]
 Applied at chunk level ($\mathrm{Jaccard}_{\text{chunks}}$) or document/domain level ($\mathrm{Jaccard}_{\text{domains}}$).
 
 \textbf{Intuition.} Measures agreement between two selection strategies. $J \approx 1$: the diversity method barely changes the selection (no effect). $J \ll 1$: genuinely different selections. The most diagnostic metric for determining whether a diversity method is actually doing something.
 
-\subsection{Gold-Alias Metrics}
+\subsection{Gold-Alias Metrics (TriviaQA)}
 
+In TriviaQA each query $q$ has a set $A(q)$ of \emph{gold aliases}: multiple valid surface forms of the correct answer (e.g., ``teapot dome scandal'', ``teapot dome'', ``tea pot dome affair'', \ldots). The following metrics count how many of these aliases are recovered by the selected context.
+
+\subsubsection{GoldConcat}
+
+For a single query, let $T_q = \mathrm{concat}(S_q)$ be the concatenation of all selected chunks. The per-query score is
 \[
-    \mathrm{GoldConcat}(q) = \big|\{ a \in \mathrm{aliases}(q) : a \in \mathrm{concat}(S_q) \}\big|
+	\mathrm{GoldConcat}(q) = \big|\{ a \in A(q) : a \subseteq T_q \}\big|
+\]
+and the reported metric is the mean over all queries:
+\[
+	\mathrm{GoldConcat} = \frac{1}{|Q|} \sum_{q \in Q} \mathrm{GoldConcat}(q).
 \]
 
-\textbf{Intuition.} How many distinct forms of the answer appear in the selected context. Richer than binary hit rate---captures answer thoroughness.
+\textbf{Intuition.} A finer-grained version of the binary hit rate: instead of asking ``is \emph{any} alias present?''\ it counts \emph{how many distinct} phrasings of the answer appear in the full selected context. $\mathrm{GoldConcat} = 1.47$ means the context contains on average $1.47$ distinct correct phrasings per query. Hit rate $= 1$ and $\mathrm{GoldConcat} = 1$ are both consistent with barely covering the answer once; higher GoldConcat signals richer, more thorough evidence.
 
+\subsubsection{Gold/Chunk}
+
+For a single query, score each selected chunk $j \in S_q$ individually:
 \[
-    \mathrm{Gold/Chunk}(q) = \frac{1}{|S_q|} \sum_{j \in S_q} \big|\{ a \in \mathrm{aliases}(q) : a \in \text{chunk}_j \}\big|
+	\mathrm{Gold/Chunk}(q) = \frac{1}{|S_q|} \sum_{j \in S_q} \big|\{ a \in A(q) : a \subseteq \text{chunk}_j \}\big|
+\]
+and the reported metric is the mean over all queries:
+\[
+	\mathrm{Gold/Chunk} = \frac{1}{|Q|} \sum_{q \in Q} \mathrm{Gold/Chunk}(q).
 \]
 
-\textbf{Intuition.} Average answer density per chunk. High values mean each chunk independently contains answer evidence; low values mean evidence is spread thinly.
+\textbf{Intuition.} Measures \emph{per-chunk} answer density rather than aggregate recall. If $\mathrm{Gold/Chunk} \approx 1$, most selected chunks individually mention the answer; if it is near $0$, the answer is present in the concatenated context but concentrated in a single chunk while the rest are answer-free. Comparing GoldConcat and Gold/Chunk together reveals whether a selection strategy spreads answer evidence across chunks or concentrates it.
 
-
-%% ============================================================
 \section{Key Experimental Parameters}
-%% ============================================================
 
-\begin{tabular}{@{}lp{10cm}@{}}
-    \toprule
-    Parameter            & Description                                                                                     \\
-    \midrule
-    $T_{\max}$           & Context budget in tokens. Tighter budgets force harder selection and amplify diversity effects. \\
-    $\lambda$ / $\alpha$ & Relevance--diversity trade-off.                                                                 \\
-    $w$                  & Context window size (MMR): number of recent selections considered for the diversity penalty.    \\
-    chunk\_tokens        & Chunk size in tokens for document splitting.                                                    \\
-    stride               & Overlap between consecutive chunks (stride $<$ chunk\_tokens implies overlap).                  \\
-    max\_docs            & Number of source documents contributing to the candidate pool.                                  \\
-    max\_cands           & Maximum number of candidate chunks considered by the selection algorithm.                       \\
-    $k$ / $n$            & Number of chunks to select / total candidates.                                                  \\
-    $c_r$                & Compression ratio (Wang et al.): fraction of tokens selected over total.                        \\
-    \bottomrule
+\begin{tabular}{ll}
+	\toprule
+	Parameter & Description\\
+	\midrule
+	$T_{\max}$ & Context budget in tokens. Tighter budgets force harder selection and amplify diversity effects.\\
+	$\lambda$ / $\alpha$ & Relevance--diversity trade-off.\\
+	$w$ & Context window size (MMR): number of recent selections considered for the diversity penalty.\\
+	chunk\_tokens & Chunk size in tokens for document splitting.\\
+	stride & Overlap between consecutive chunks (stride $<$ chunk\_tokens implies overlap).\\
+	max\_docs & Number of source documents contributing to the candidate pool.\\
+	max\_cands & Maximum number of candidate chunks considered by the selection algorithm.\\
+	$k$ / $n$ & Number of chunks to select / total candidates.\\
+	$c_r$ & Compression ratio (Wang et al.): fraction of tokens selected over total.\\
+	\bottomrule
 \end{tabular}
 
 \end{document}

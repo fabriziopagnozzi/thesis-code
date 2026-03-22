@@ -1,0 +1,2765 @@
+note_id,subject_id,hadm_id,note_type,note_seq,charttime,storetime,text
+10000032-RR-14,10000032,22595853,RR,14,2180-05-06 21:19:00,2180-05-06 23:32:00,"EXAMINATION:  CHEST (PA AND LAT)
+
+INDICATION:  ___ with new onset ascites  // eval for infection
+
+TECHNIQUE:  Chest PA and lateral
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+There is no focal consolidation, pleural effusion or pneumothorax.  Bilateral
+nodular opacities that most likely represent nipple shadows. The
+cardiomediastinal silhouette is normal.  Clips project over the left lung,
+potentially within the breast. The imaged upper abdomen is unremarkable.
+Chronic deformity of the posterior left sixth and seventh ribs are noted.
+
+IMPRESSION: 
+
+No acute cardiopulmonary process.
+"
+10000032-RR-15,10000032,22595853,RR,15,2180-05-06 23:00:00,2180-05-06 23:26:00,"EXAMINATION:  LIVER OR GALLBLADDER US (SINGLE ORGAN)
+
+INDICATION:  ___ year-old female with cirrhosis, jaundice.
+
+TECHNIQUE:  Grey scale and color Doppler ultrasound images of the abdomen were
+obtained.
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+LIVER: The liver is coarsened and nodular in echotexture. There is no focal
+liver mass. Main portal vein and its major branches are patent with normal
+hepatopetal flow.  The main hepatic artery shows normal arterial waveform. 
+There is a small amount of ascites.
+
+BILE DUCTS: There is no intrahepatic biliary dilation. The CBD measures 4 mm.
+
+GALLBLADDER: The gallbladder is contracted with a shadowing gallstone.
+
+PANCREAS: Imaged portion of the pancreas appears within normal limits, without
+masses or pancreatic ductal dilation, with portions of the pancreatic tail
+obscured by overlying bowel gas.
+
+SPLEEN: Normal echogenicity, measuring 13.5 cm.
+
+KIDNEYS: The right kidney measures 12.1 cm. The left kidney measures 13.4 cm.
+Normal cortical echogenicity and corticomedullary differentiation is seen
+bilaterally.
+RETROPERITONEUM: Visualized portions of aorta and IVC are within normal
+limits.
+
+IMPRESSION: 
+
+1. Nodular appearance of the liver compatible with cirrhosis. Signs of portal
+hypertension including small amount of ascites and splenomegaly.
+2.  Cholelithiasis.
+3.  Patent portal veins with normal hepatopetal flow.
+"
+10000032-RR-16,10000032,22595853,RR,16,2180-05-07 09:55:00,2180-05-07 11:15:00,"INDICATION:  ___ HCV cirrhosis c/b ascites, hiv on ART, h/o IVDU, COPD,
+bioplar, PTSD, presented from OSH ED with worsening abd distension over past
+week.  // SBP
+
+TECHNIQUE:  Ultrasound guided diagnostic and therapeutic paracentesis
+
+COMPARISON:  Abdominal ultrasound ___
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 1.5 L of serosanguinous fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.  A sample of the fluid was sent to the lab
+as requested.
+
+Dr. ___ attending radiologist, was present throughout the critical
+portions of the procedure.
+
+IMPRESSION: 
+
+Successful uncomplicated ultrasound guided diagnostic and therapeutic
+paracentesis yielding 1.5 L of serosanguineous fluid from the right lower
+quadrant.  Sample was sent to the lab as requested.
+"
+10000032-RR-18,10000032,,RR,18,2180-06-03 12:46:00,2180-06-03 14:01:00,"EXAMINATION:  Ultrasound-guided paracentesis.
+
+INDICATION:  ___ year old woman with cirrhosis, ascites despite diuretics  //
+Please do LVP with albumin post per protocol
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 1.75 L of clear, straw-coloredfluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ attending radiologist, personally supervised the procedure,
+subsequently reviewing and has agreed with the preliminary findings.
+
+IMPRESSION: 
+
+Uneventful therapeutic paracentesis yielding 1.75 L of clear, straw-colored
+ascitic fluid.
+"
+10000032-RR-20,10000032,,RR,20,2180-07-08 13:18:00,2180-07-08 14:15:00,"EXAMINATION:  Paracentesis
+
+INDICATION:  ___ year old woman with cirrhosis, ascites despite diuretics  //
+Please do LVP with albumin post per protocol
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Paracentesis on ___
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a large
+amount of ascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 4.75 L of slightly cloudy, blood tinged, yellow fluid was
+removed, similar to the prior exam in appearance.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+4.75 L of slightly cloudy, blood tinged fluid was removed from the right lower
+quadrant without complication.
+"
+10000032-RR-21,10000032,,RR,21,2180-06-30 08:16:00,2180-06-30 12:58:00,"EXAMINATION:  ULTRASOUND INTERVENTIONAL PROCEDURE
+
+INDICATION:  ___ year old woman with cirrhosis, ascites despite diuretics  //
+Please do LVP with albumin post per protocol. Please schedule on ___ or
+___
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and existing annual signed consent was reviewed.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 3.0 L of slightly cloudy, blood-tinged, yellow fluid was
+removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Ultrasound-guided therapeutic paracentesis with removal of 3.0 L of ascitic
+fluid.
+"
+10000032-RR-22,10000032,22841357,RR,22,2180-06-26 17:15:00,2180-06-26 19:28:00,"EXAMINATION:  LIVER OR GALLBLADDER US (SINGLE ORGAN)
+
+INDICATION:  History: ___ with cirrhosis, increased abdominal pain
+
+TECHNIQUE:  Grey scale and color Doppler ultrasound images of the right upper
+quadrant were obtained.
+
+COMPARISON:  Abdominal ultrasound from ___
+
+FINDINGS: 
+
+The liver is extremely course and nodular in echotexture similar to the prior
+examination consistent with a history of cirrhosis. Parenchymal heterogeneity
+limits detection focal lesions. Note is made of a dominant nodule measuring
+3.3 x 2.7 cm exerting mass effect on the gallbladder, relatively unchanged
+from the prior examination. There is no intrahepatic biliary dilation. The CBD
+measures 5 mm. Main, right anterior and right posterior portal veins are
+patent with hepatopetal flow. The gallbladder is normal without stones or wall
+thickening. Pancreas is not well evaluated. The spleen measures 11.9 cm in
+length and has homogeneous echotexture. There is moderate ascites throughout
+the abdomen.
+
+IMPRESSION: 
+
+1. Extremely coarse and nodular liver echotexture consistent with cirrhosis.
+
+2.  Moderate ascites.
+
+3.  Patent portal vein.
+"
+10000032-RR-23,10000032,22841357,RR,23,2180-06-26 17:17:00,2180-06-26 17:28:00,"EXAMINATION:  CHEST (PA AND LAT)
+
+INDICATION:  History: ___ with shortness of breath
+
+TECHNIQUE:  Chest PA and lateral
+
+COMPARISON:  ___
+
+FINDINGS: 
+
+The cardiac, mediastinal and hilar contours are normal. Pulmonary vasculature
+is normal.  Lungs are clear. No pleural effusion or pneumothorax is present.
+Multiple clips are again seen projecting over the left breast.  Remote
+left-sided rib fractures are also re- demonstrated.
+
+IMPRESSION: 
+
+No acute cardiopulmonary abnormality.
+"
+10000032-RR-24,10000032,,RR,24,2180-07-22 12:40:00,2180-07-22 18:33:00,"EXAMINATION:  Ultrasound-guided paracentesis.
+
+INDICATION:  A ___ woman with cirrhosis and recurrent ascites
+presenting for therapeutic paracentesis.
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis.
+
+COMPARISON:  Ultrasound-guided paracentesis performed ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and existing annual signed consent was reviewed.
+
+A pre-procedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ ___ catheter was advanced into the largest fluid pocket in the
+right lower quadrant and 1.9 L of cloudy, pink-tinged ascites fluid was
+removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ was present for and personally supervised the entirety of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Uncomplicated ultrasound-guided therapeutic paracentesis via a right lower
+quadrant approach, yielding 1.9 L of cloudy, pink-tinged ascites fluid.
+"
+10000032-RR-27,10000032,,RR,27,2180-07-12 13:35:00,2180-07-12 17:29:00,"EXAMINATION:  Ultrasound-guided paracentesis.
+
+INDICATION:  A ___ woman with cirrhosis recurrent ascites, presenting
+for large-volume paracentesis.
+
+TECHNIQUE:  Ultrasound-guided therapeutic paracentesis.
+
+COMPARISON:  Ultrasound-guided paracentesis performed ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a large
+amount of ascites. A suitable target in the deepest pocket in the right flank
+was selected for paracentesis.
+
+Of note, several transverse images of the right lower quadrant revealed a 1.1
+x 0.9 cm nodular isoechoic structure along the peritoneal surface
+anterolaterally without any apparent vascularity, of indeterminate
+significance.  This is probably unchanged since ultrasound obtained ___. This may represents sequela from prior paracenteses. If clinical concern
+for malignancy exists, CT could be obtained for further evaluation (or
+reference can be made to outside hospital CT or MR examinations if such
+exist).
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and existing annual signed consent was reviewed.
+
+A pre-procedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+flank and 4.3 L of cloudy, pink-tinged straw-colored fluid was removed. Two
+running 0 silk stitches were used to help secure entry site and prevent
+against ascites leak.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION:
+
+
+1. Uncomplicated ultrasound-guided therapeutic paracentesis via a right flank
+approach.
+2. 1.1 x 0.9 cm isoechoic nodule seen on the parietal peritoneal surface
+underlying the right abdominal wall, may relate to sequela from prior
+paracenteses, probably unchanged since ___. If concern for malignancy
+exists, CT may be obtained (or reference can be made to outside hospital CT or
+MR examinations if such exist).
+"
+10000032-RR-28,10000032,,RR,28,2180-07-15 12:47:00,2180-07-15 14:31:00,"EXAMINATION:  ULTRASOUND PARACENTESIS
+
+INDICATION:  ___ year old woman with Cirrhosis and ascites // bi weekly large
+volume paracentesis with albumim post per protocol
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  ___
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and existing annual signed consent was reviewed.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 3.5 L of cloudy, pinkish fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___, attending radiologist, personally supervised the trainee
+during the procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Uncomplicated ultrasound-guided therapeutic paracentesis with removal of 3.5 L
+ascitic fluid.
+"
+10000032-RR-29,10000032,,RR,29,2180-07-19 13:05:00,2180-07-19 14:42:00,"EXAMINATION:  Ultrasound-guided paracentesis.
+
+INDICATION:  A ___ woman with cirrhosis and recurrent ascites,
+presenting for therapeutic paracentesis.
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis.
+
+COMPARISON:  Ultrasound-guided paracentesis performed ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and existing annual signed consent was reviewed.
+
+A pre-procedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ ___ catheter was advanced into the largest fluid pocket in the
+right lower quadrant and 2 L of cloudy, red-tinged fluid was removed.  A 0
+silk suture was placed about the paracentesis site to prevent leakage of
+fluid.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ was present during the entirety of the procedure, and
+supervised the trainee and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Uncomplicated therapeutic paracentesis via a right lower quadrant approach
+yielding 2 L of cloudy, red-tinged ascites fluid.
+"
+10000032-RR-31,10000032,,RR,31,2180-07-30 09:50:00,2180-07-30 11:06:00,"EXAMINATION:  PARACENTESIS
+
+INDICATION:  ___ year old woman with cirrhosis and ascites  // bi weekly large
+volume paracentesis with albumim post per protocol. Q ___ and THurs
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Paracentesis ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a small
+amount ofascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 2.6 L of serosanguinous fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful therapeutic paracentesis by a very lower quadrant approach yielding
+2.6 L of serosanguineous fluid.
+"
+10000032-RR-32,10000032,,RR,32,2180-07-27 09:03:00,2180-07-27 10:24:00,"EXAMINATION:  THERAPEUTIC PARACENTESIS
+
+INDICATION:  ___ year old woman with cirrhosis and ascites  // bi weekly large
+volume paracentesis with albumim post per protocol. Q ___ and ___
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Paracentesis ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a small
+amount ofascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower part and 2.1 L of pink fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful ultrasound-guided therapeutic paracentesis yielding 2.1 L of pink
+fluid.
+"
+10000032-RR-33,10000032,25742920,RR,33,2180-08-06 10:16:00,2180-08-06 11:50:00,"EXAMINATION:  PARACENTESIS
+
+INDICATION:  ___ year old woman with cirrhosis and ascites  // bi weekly large
+volume paracentesis with albumim post per protocol. Q ___ and THurs
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Paracentesis ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a moderate
+amount of ascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 3.5 L of serosanguinous fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful therapeutic ultrasound-guided paracentesis by a right lower
+quadrant approach yielding 3.5 L of serosanguineous ascites.
+"
+10000032-RR-35,10000032,,RR,35,2180-08-13 11:27:00,2180-08-13 12:11:00,"INDICATION:  ___ year old woman with cirrhosis and ascites.
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Ultrasound dated ___
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 2.75 L of serosanguinous fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful therapeutic paracentesis.
+"
+10000032-RR-42,10000032,,RR,42,2180-08-02 10:31:00,2180-08-02 11:36:00,"EXAMINATION:  PARACENTESIS
+
+INDICATION:  ___ year old woman with cirrhosis and ascites  // bi weekly large
+volume paracentesis with albumim post per protocol. Q ___ and ___
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Paracentesis ___
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a small
+amount ofascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 2.5 L of opaque pink fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful therapeutic ultrasound-guided paracentesis via a right lower
+quadrant approach yielding 2.5 L of opaque pink fluid.
+"
+10000032-RR-44,10000032,29079034,RR,44,2180-07-23 06:14:00,2180-07-23 10:46:00,"EXAMINATION:  CT HEAD W/O CONTRAST
+
+INDICATION:  ___ with altered mental status  // acute process?
+
+TECHNIQUE:  Contiguous axial MDCT images were obtained through the brain
+without the administration of IV contrast.  Reformatted coronal, sagittal and
+thin section bone algorithm-reconstructed images were then generated.
+
+DOSE:  DLP:  1003 mGy-cm
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+There is no evidence of acute intracranial hemorrhage, edema, mass effect, or
+large territorial infarction.  The ventricles and sulci are normal in size and
+configuration.  Subcortical and periventricular white matter hypodensities are
+consistent with chronic small vessel ischemic disease.
+The basal cisterns appear patent and there is preservation of gray-white
+matter differentiation.
+
+The left zygomatic arch deformity is probably chronic as there is no
+associated soft tissue swelling. Metallic density is noted left frontal
+process of the maxilla.  The paranasal sinuses, mastoid air cells, and middle
+ear cavities are clear.
+The globes are unremarkable.
+
+IMPRESSION: 
+
+No evidence of acute intracranial process.
+The left zygomatic arch deformity is probably chronic as there is no
+associated soft tissue swelling.
+
+"
+10000032-RR-45,10000032,29079034,RR,45,2180-07-23 08:01:00,2180-07-23 11:31:00,"EXAMINATION:  CHEST (PORTABLE AP)
+
+INDICATION:  ___ with cough  // acute process?
+
+COMPARISON:  Chest radiograph ___
+
+FINDINGS: 
+
+Single frontal view of the chest provided.
+
+There is no focal consolidation, effusion, or pneumothorax. The
+cardiomediastinal silhouette is normal.  Again seen are multiple clips
+projecting over the left breast and remote left-sided rib fractures.  No free
+air below the right hemidiaphragm is seen.
+
+IMPRESSION: 
+
+No acute intrathoracic process.
+"
+10000032-RR-46,10000032,25742920,RR,46,2180-08-05 23:35:00,2180-08-06 03:05:00,"INDICATION:  ___ year old woman with cirrhosis.
+
+TECHNIQUE:  Frontal chest radiographs were obtained with the patient in the
+upright position.
+
+COMPARISON:  Radiographs from ___ and ___.
+
+FINDINGS: 
+
+The lungs are clear of focal consolidation, pleural effusion or pneumothorax. 
+The heart size is normal.  The mediastinal contours are normal. Multiple
+surgical clips project over the left breast, and old left rib fractures are
+noted.
+
+IMPRESSION: 
+
+No acute cardiopulmonary process.
+"
+10000032-RR-47,10000032,25742920,RR,47,2180-08-06 10:15:00,2180-08-06 15:53:00,"EXAMINATION:  LIVER OR GALLBLADDER US (SINGLE ORGAN)
+
+INDICATION:  ___ year old woman with cirrhosis, p/w abd pain as well as
+elevated alk phos  // eval for biliary pathology and PVT
+
+TECHNIQUE:  Grey scale and color Doppler ultrasound images of the right upper
+quadrant were obtained.
+
+COMPARISON:  Abdominal ultrasound ___.
+
+FINDINGS: 
+
+LIVER: The liver is coarsened and nodular in echotexture. The contour of the
+liver is nodular, consistent with cirrhosis.  A solid nodule in the left lobe
+of the liver measuring 2.9 x 2.9 3.6 cm is stable in size and appearance
+compared to the prior ultrasound. Main portal vein is patent with hepatopetal
+flow. There is a moderate volume of
+ ascites.
+
+BILE DUCTS: There is no intrahepatic biliary dilation. The CBD measures 3 mm.
+
+GALLBLADDER: There is no evidence of stones or gallbladder wall thickening.
+
+PANCREAS: Imaged portion of the pancreas appears within normal limits, without
+masses or pancreatic ductal dilation, with portions of the pancreatic tail
+obscured by overlying bowel gas.
+
+KIDNEYS: The visualized portions of the right kidney are normal.
+
+SPLEEN:  The spleen is homogeneous in echotexture and measures 12.6 cm.
+
+RETROPERITONEUM: Visualized portions of aorta and IVC are within normal
+limits.
+
+IMPRESSION: 
+
+Cirrhotic, mild splenomegaly and ascites.  A solid 3cm nodule in the left lobe
+of the liver is stable in size and appearance.
+"
+10000032-RR-48,10000032,,RR,48,2180-08-10 13:08:00,2180-08-10 13:58:00,"EXAMINATION:  PARACENTESIS/US-GUIDED
+
+INDICATION:  ___ year old woman with cirrhosis, ascites
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Ultrasound dated ___
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 3.5 L of serosanguinous fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful therapeutic paracentesis.
+"
+10000032-RR-51,10000032,,RR,51,2180-08-16 11:00:00,2180-08-16 12:56:00,"INDICATION:  ___ year old woman with cirrhosis and ascites.
+
+TECHNIQUE:  Ultrasound guided therapeutic paracentesis
+
+COMPARISON:  Ultrasound dated ___.
+
+FINDINGS: 
+
+Limited grayscale ultrasound imaging of the abdomen demonstrated a small
+amount ofascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for paracentesis.
+
+PROCEDURE:  The procedure, risks, benefits and alternatives were discussed
+with the patient and written informed consent was obtained.
+
+A preprocedure time-out was performed discussing the planned procedure,
+confirming the patient's identity with 3 identifiers, and reviewing a
+checklist per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected and the skin was
+prepped and draped in the usual sterile fashion. 1% lidocaine was instilled
+for local anesthesia.
+
+A 5 ___ catheter was advanced into the largest fluid pocket in the right
+lower quadrant and 1.2 L of serosanguinous fluid was removed.
+
+The patient tolerated the procedure well without immediate complication.
+Estimated blood loss was minimal.
+
+Dr. ___ supervised the trainee during the key components of the
+procedure and reviewed and agrees with the trainee's findings.
+
+IMPRESSION: 
+
+Successful therapeutic paracentesis.
+"
+10000032-RR-54,10000032,,RR,54,2180-08-20 10:49:00,2180-08-20 18:38:00,"INDICATION:  ___ year old woman with cirrhosis, ascites, not a tranpslant
+candidate. Currently getting paracentesis BIW. Is now on hospice care.  //
+Please place pleurex
+
+COMPARISON:  Paracentesis ___.
+
+TECHNIQUE:
+OPERATORS: Dr. ___ radiology fellow) and Dr. ___
+___ radiology attending) performed the procedure.  The attending,
+Dr. ___ was present and supervising throughout the procedure. Dr. ___,
+___ radiologist, personally supervised the trainee during the key
+components of the procedure and reviewed and agreed with the trainee's
+findings.
+ANESTHESIA: Moderate sedation was provided by administrating divided doses of
+50mcg of fentanyl and 1 mg of midazolam throughout the total intra-service
+time of 23 min during which the patient's hemodynamic parameters were
+continuously monitored by an independent trained radiology nurse. 1% lidocaine
+was injected in the skin and subcutaneous tissues overlying the access site.
+MEDICATIONS: Fentanyl, midazolam, lidocaine
+CONTRAST: None ml of Optiray contrast.
+FLUOROSCOPY TIME AND DOSE:  50 seconds, 4 mGy
+
+PROCEDURE:
+1. Limited abdominal ultrasound
+2. Peritoneal PleurX catheter placement
+3. 2 L paracentesis
+
+The procedure, risks, benefits and alternatives were discussed with the
+patient and written informed consent was obtained.  The abdomen was cleaned
+and draped in standard sterile fashion. A pre-procedure time-out was performed
+as per ___ protocol.
+
+Under ultrasound guidance, an entrance site was selected in the right lower
+quadrant. 1% lidocaine was instilled for local anesthesia.  Under direct
+ultrasound guidance, a the puncture needle was advanced into the ascitic
+fluid.  Skin ___ was made and the needle was exchanged for micropuncture
+sheath. A ___ wire was passed through the catheter and crossed to the left
+side of the abdominal cavity. A location for the subcutaneous tunnel was
+chosen and 1% lidocaine was administered at the skin entry site and 1%
+lidocaine with epinephrine was administered along the tunnel tract. A skin
+incision was made and the catheter was tunneled to the peritonotomy site. The
+Edit sheath site was dilated and a peel-away sheath was inserted after
+dilation of the tract. . The wire and inner cannula were removed and the
+PleurX catheter was passed through the peel-away sheath. Final position of the
+catheter was confirmed with fluoroscopy. The catheter was secured to the skin
+with 0 silk suture. The peritoneum entry skin site was closed with ___ Vicryl
+suture and Steri-Strips.  Two L of clear yellow fluid were removed. The
+patient tolerated the procedure well without any immediate postprocedure
+complications.
+
+FINDINGS:
+
+
+
+1. Limited grayscale ultrasound imaging of the abdomen demonstrated
+moderateascites. A suitable target in the deepest pocket in the right lower
+quadrant was selected for PleurX catheter placement.
+2. Spot fluoroscopy confirmed good final position of the catheter which
+crosses the midline to the left lower quadrant.
+
+IMPRESSION: 
+
+Successful peritoneal PleurX catheter placement and removal of 2L clear yellow
+ascites.
+"
+10000084-RR-12,10000084,,RR,12,2160-11-20 22:39:00,2160-11-20 22:50:00,"EXAMINATION:  CHEST (PA AND LAT)
+
+INDICATION:  History: ___ with weakness// ?PNA
+
+TECHNIQUE:  Chest PA and lateral
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+Heart size is mildly enlarged.  The mediastinal and hilar contours are
+unremarkable.  The pulmonary vasculature is normal. Lungs are hyperinflated
+without focal consolidation.  Streaky atelectasis is noted in the lung bases. 
+No pleural effusion or pneumothorax is seen. There are no acute osseous
+abnormalities.  Moderate to severe compression deformity of a low thoracic
+vertebral body is of indeterminate age.
+
+IMPRESSION: 
+
+Mild atelectasis in the lung bases without focal consolidation. 
+Age-indeterminate moderate to severe compression deformity of a low thoracic
+vertebral body.
+"
+10000084-RR-13,10000084,,RR,13,2160-11-20 22:39:00,2160-11-20 23:13:00,"EXAMINATION:  CT HEAD W/O CONTRAST Q111 CT HEAD
+
+INDICATION:  History: ___ with confusion, incontinence, ataxia//
+?hydrocephalus, bleed
+
+TECHNIQUE:  Contiguous axial images of the brain were obtained without
+contrast. Coronal and sagittal reformations as well as bone algorithm
+reconstructions were provided and reviewed.
+
+DOSE:  Acquisition sequence:
+   1) Sequenced Acquisition 16.0 s, 16.0 cm; CTDIvol = 23.4 mGy (Body) DLP =
+375.0 mGy-cm.
+ Total DLP (Body) = 375 mGy-cm.
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+There is no evidence of infarction, hemorrhage, edema, or mass.  There is
+prominence of the ventricles and sulci suggestive of involutional changes.
+
+There is no evidence of fracture.  The visualized portion of the remaining
+paranasal sinuses and middle ear cavities are clear.  The visualized portion
+of the orbits are unremarkable apart from bilateral lens replacements.
+
+IMPRESSION:
+
+
+1. No acute intracranial abnormality.  No hydrocephalus.
+"
+10000084-RR-14,10000084,,RR,14,2160-12-27 20:34:00,2160-12-27 20:50:00,"EXAMINATION:  CHEST (PORTABLE AP)
+
+INDICATION:   ___ with parkinsons, altered, hallucinations// pneumonia
+
+COMPARISON:  Prior study from ___
+
+FINDINGS: 
+
+AP portable upright view of the chest.  Patient's chin obscures the superior
+mediastinum and portions of the lung apices.  The lungs are clear bilaterally
+without consolidation to suggest pneumonia.  No large effusion or
+pneumothorax.  Cardiomediastinal silhouette appears unchanged.  Imaged bony
+structures are intact.
+
+IMPRESSION: 
+
+Limited, negative.
+"
+10000084-RR-15,10000084,29888819,RR,15,2160-12-28 00:06:00,2160-12-28 00:20:00,"EXAMINATION:  CT HEAD W/O CONTRAST Q111 CT HEAD
+
+INDICATION:  History: ___ with parkinsons, hallucinations, weakness//
+hemorrhage s/p fall
+
+TECHNIQUE:  Contiguous axial images of the brain were obtained without
+contrast. Coronal and sagittal reformations as well as bone algorithm
+reconstructions were provided and reviewed.
+
+DOSE:  Acquisition sequence:
+   1) Sequenced Acquisition 16.0 s, 16.0 cm; CTDIvol = 50.2 mGy (Head) DLP =
+802.7 mGy-cm.
+ Total DLP (Head) = 803 mGy-cm.
+
+COMPARISON:  Head CT dated ___.
+
+FINDINGS: 
+
+There is no evidence of infarction,hemorrhage,edema,or mass.  There is
+prominence of the ventricles and sulci suggestive of involutional changes.
+
+There is no evidence of fracture.  The visualized portion of the paranasal
+sinuses, mastoid air cells, and middle ear cavities are clear.  The visualized
+portion of the orbits are unremarkable, with the exception of changes from
+bilateral lens surgery.
+
+IMPRESSION: 
+
+Mild atrophy.
+Otherwise normal study.
+"
+10000102-RR-18,10000102,,RR,18,2136-12-20 13:17:00,2136-12-20 13:53:00,"CHEST PA AND LATERAL.
+
+COMPARISON:  None.
+
+HISTORY:  Cough.
+
+FINDINGS:  Cardiomediastinal and hilar contours are within normal limits.
+Lungs are clear. There is no focal consolidation, effusion, or pneumothorax.
+The osseous structures are grossly unremarkable.
+
+IMPRESSION:  No acute cardiopulmonary process.
+"
+10000108-RR-2,10000108,27250926,RR,2,2163-09-27 20:46:00,2163-09-27 21:39:00,"HISTORY:  ___ male with left buccal abscess and necrotic molar.  
+
+COMPARISON:  None available. 
+
+TECHNIQUE:  CT of the neck was performed after administration of intravenous
+contrast.  Multiplanar reformatted images were reviewed.  
+
+FINDINGS: There is left premaxillary superficial soft tissue swelling and
+fluid with enhancement; this represents a phlegmon/cellulitis.  This process
+extends to the level of the left maxillary molars, which demonstrate
+periapical lucencies, suggestive of an odontogenic origin.  A mandibular
+dental cavity is seen.  The orbits appear normal without CT evidence for
+orbital cellulitis.  No lymphadenopathy is detected.  The salivary glands are
+unremarkable.  The thyroid gland is homogeneous in attenuation.  Visualized
+central arterial and venous vasculature appears patent and normal in caliber. 
+The orbits are unremarkable.  Although the study is not tailored for
+evaluation of intracranial structures, no acute abnormalities are detected in
+the visualized portions of the brain.  The visualized lung fields are clear. 
+There is complete opacification of the right maxillary sinus with expansion of
+the left maxillary ostium.  Mucosal thickening is seen in the left maxillary
+sinus.  The right greater than left ethmoid air cells are partially opacified
+with air fluid levels.  The mastoid air cells appear well aerated.  
+
+IMPRESSION:
+
+1. Left facial soft tissue edema with phlegmon, likely of odontogenic
+infectious origin, with periapical lucenies and dental caries. 
+
+2. Paranasal sinus disease predominantly involving the right maxillary sinus
+and ethmoid air cells with air fluid levels suggestive of an acute component. 
+
+
+Findings discussed with Dr. ___ in person by Dr. ___ at 9:50 p.m. on
+___ at time of initial review. 
+"
+10000117-RR-10,10000117,,RR,10,2175-05-10 10:12:00,2175-05-11 10:37:00,"BILATERAL DIGITAL SCREENING MAMMOGRAM WITH CAD
+
+HISTORY:  Baseline screening.
+
+BILATERAL SCREENING MAMMOGRAM WITH ICAD COMPUTER AIDED DETECTION SOFTWARE
+VERSION 7.2:  There are scattered fibroglandular densities.  There are no
+dominant or spiculated masses, suspicious microcalcifications or areas of
+architectural distortion. There are no prior studies for comparison. If
+outside studies are made available an addendum will be issued.
+
+IMPRESSION:  No evidence of malignancy.  BI-RADS 1-negative.  Routine
+screening mammogram in one year is recommended.
+"
+10000117-RR-11,10000117,,RR,11,2177-05-23 13:18:00,2177-05-23 18:15:00,"INDICATION:  ___ female with right epigastric pain radiating to back,
+rule out gallstones.
+
+COMPARISON:  No previous exam for comparison.
+
+FINDINGS:  The hepatic architecture is unremarkable in appearance.  A small
+round hyperechoic lesion is seen in segment VI of the liver measuring 1.4 x
+1.4 x 1.8 cm.  This lesion is avascular on color Doppler imaging and the
+appearance clear represents a hemangioma.  A small similar appearing lesion is
+seen peripherally in the right lobe of the liver measuring 0.8 x 0.5 x 0.9 cm
+and also likely representing a small hemangioma.
+
+No biliary dilatation is seen and the common duct measures 0.3 cm.  The portal
+vein is patent with hepatopetal flow.  There are no gallstones.  The
+gallbladder is normal in appearance.  The pancreas and spleen are unremarkable
+and the spleen measures 9.7 cm.  No hydronephrosis is seen.  The right kidney
+measures 10.0 cm and the left kidney measures 9.9 cm.  The aorta is of normal
+caliber throughout.  The visualized portion of the IVC is unremarkable.
+
+IMPRESSION:
+1.  No gallstones and no signs of cholecystitis.
+2.  Two small hepatic hemangiomas.
+"
+10000117-RR-12,10000117,,RR,12,2178-08-29 13:39:00,2178-08-29 17:56:00,"CLINICAL HISTORY:  Right upper quadrant pain, evaluate for gallstones.
+
+ABDOMINAL ULTRASOUND:
+
+Comparison scan from ___ shows the presence of two hemangiomas in the liver.
+
+The gallbladder shows no evidence of stones.  The gallbladder wall is not
+thickened.  The common duct is not dilated.  The liver is not enlarged.  Two
+hemangiomas are again seen, unchanged since the prior scan.  Normal hepatic
+portal and venous blood flow was present.
+
+Pancreas is normal.  The aorta and IVC are unremarkable.  Both right and left
+kidneys are normal.  The spleen is not enlarged.
+
+IMPRESSION:  Normal gallbladder.  No gallstones.  Hepatic hemangiomas is
+unchanged.
+"
+10000117-RR-13,10000117,22927623,RR,13,2181-11-15 00:40:00,2181-11-15 07:54:00,"EXAMINATION:   CHEST (PA AND LAT)
+
+INDICATION:  History: ___ with PMH GERD presenting with sensation of foreign
+body in her throat, SOB.  // Foreign body or soft tissue mass in throat?
+
+TECHNIQUE:  Chest PA and lateral
+
+COMPARISON:  Chest radiograph from ___.
+
+FINDINGS: 
+
+Lungs remain hyperinflated, without focal consolidation, pleural effusion, or
+pneumothorax.  On lateral view, the prominent esophagus is identified between
+the posterior heart and anterior aortic arch.  The cardiomediastinal
+silhouette is unremarkable.  The trachea is not deviated.
+
+IMPRESSION: 
+
+Prominent esophagus on lateral view, without air-fluid level.  Given the
+patient's history and radiographic appearance, barium swallow is indicated
+either now or electively.
+"
+10000117-RR-14,10000117,22927623,RR,14,2181-11-15 00:47:00,2181-11-15 01:12:00,"EXAMINATION:   NECK SOFT TISSUES
+
+INDICATION:  ___ woman with dysphasia.  Evaluate for soft tissue mass.
+
+TECHNIQUE:  Frontal and lateral radiograph of the neck.
+
+COMPARISON:  None available.
+
+FINDINGS: 
+
+There is no evidence of prevertebral soft tissue swelling or soft tissue mass,
+within the limitations of plain radiography.  C1 through T2 are imaged.  Mild
+degenerative changes of the cervical spine are most pronounced at C5-C6 and
+C6-C7, were there is disc space narrowing and small osteophyte formation.  No
+evidence of cervical spinal fracture.  Lung apices are grossly clear.
+
+IMPRESSION: 
+
+Within the limitation of plain radiography, no evidence of prevertebral soft
+tissue swelling or soft tissue mass in the neck.
+"
+10000117-RR-15,10000117,,RR,15,2182-05-21 16:39:00,2182-05-21 17:38:00,"EXAMINATION:  LIVER OR GALLBLADDER US (SINGLE ORGAN)
+
+INDICATION:  ___ with pain.
+
+TECHNIQUE:  Grey scale and color Doppler ultrasound images of the abdomen were
+obtained.
+
+COMPARISON:  ___ abdominal ultrasound
+
+FINDINGS: 
+
+LIVER: The hepatic parenchyma appears within normal limits. The contour of the
+liver is smooth. 2 echogenic, well-circumscribed lesions in the right hepatic
+lobe with no dominant internal vascularity appear unchanged.  The larger
+lesion measures 1.6 x 1.5 x 1.7 cm. The smaller lesion measures 0.6 x 1.2 x
+0.6 cm..  The main portal vein is patent with hepatopetal flow. There is no
+ascites.
+
+BILE DUCTS: There is no intrahepatic biliary dilation. The CHD measures 4 mm.
+
+GALLBLADDER: There is no evidence of stones or gallbladder wall thickening.
+
+PANCREAS: The imaged portion of the pancreas appears within normal limits,
+without masses or pancreatic ductal dilation, with portions of the pancreatic
+tail obscured by overlying bowel gas.
+
+SPLEEN:  Normal echogenicity, measuring 9.2 cm.
+
+KIDNEYS:  Limited views of the right kidney show no hydronephrosis.
+
+RETROPERITONEUM:  The visualized portions of aorta and IVC are within normal
+limits.
+
+IMPRESSION:
+
+
+1. No cholelithiasis or cholecystitis.
+2. Unchanged hepatic lesions consistent with hemangiomas.
+"
+10000117-RR-16,10000117,,RR,16,2182-12-22 08:13:00,2182-12-22 10:43:00,"EXAMINATION:  LIVER OR GALLBLADDER US (SINGLE ORGAN)
+
+INDICATION:  ___ year old woman with ruq pain// ? gallstones
+
+TECHNIQUE:  Grey scale and color Doppler ultrasound images of the abdomen were
+obtained.
+
+COMPARISON:  Multiple abdominal ultrasounds dating back to ___
+
+FINDINGS: 
+
+LIVER: The hepatic parenchyma appears within normal limits. The contour of the
+liver is smooth. There is no new or concerning focal liver mass.  Two stable
+homogeneously echogenic and avascular lesions are identified within the right
+lobe measuring 1.7 x 1.7 x 1.7 cm and 0.7 x 0.4 x 0.7 cm.  These are
+sonographically consistent with hemangiomas.  Another echogenic liver lesion
+is partially visualized within the inferior and medial left lobe measuring 1.5
+x 0.7 cm.  Although this was not described on prior ultrasound, in retrospect,
+was present on the ultrasound performed ___ and is stable in size and
+appearance, likely consistent with a hepatic hemangioma.  The main portal vein
+is patent with hepatopetal flow. There is no ascites.
+
+BILE DUCTS: There is no intrahepatic biliary dilation. The CBD measures 1 mm.
+
+GALLBLADDER: There is no evidence of stones or gallbladder wall thickening.
+
+PANCREAS: Head, body and tail of the pancreas are within normal limits,
+without masses or pancreatic ductal dilatation.
+
+SPLEEN: Normal echogenicity, measuring 9.8 cm.
+
+KIDNEYS: The right kidney measures 10.0 cm. The left kidney measures 9.7 cm.
+Normal cortical echogenicity and corticomedullary differentiation is seen
+bilaterally. There is no evidence of masses, stones, or hydronephrosis in the
+kidneys.
+
+RETROPERITONEUM: Visualized portions of aorta and IVC are within normal
+limits.
+
+IMPRESSION: 
+
+No sonographic explanation for abdominal pain identified.  Stable hepatic
+hemangiomas.  Although the left hepatic echogenic lesion was not previously
+described, it was present in retrospect on the ultrasound dated ___
+and is stable in size and appearance.
+
+NOTIFICATION:  The findings were discussed with ___, M.D. by ___
+___, RDMS on the telephone on ___ at 9:07am, 10 minutes after
+discovery of the findings.
+"
+10000117-RR-19,10000117,,RR,19,2183-07-24 13:57:00,2183-07-24 15:59:00,"EXAMINATION:  CT HEAD W/O CONTRAST Q111 CT HEAD
+
+INDICATION:  ___ year old woman with concussion w/ worsening headache,
+dizziness, nausea and nystagmus// r/o bleed
+
+TECHNIQUE:  Contiguous axial images of the brain were obtained without
+contrast.
+
+DOSE:  Acquisition sequence:
+   1) Sequenced Acquisition 14.0 s, 14.4 cm; CTDIvol = 46.8 mGy (Head) DLP =
+672.0 mGy-cm.
+ Total DLP (Head) = 672 mGy-cm.
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+There is no evidence of infarction, hemorrhage, edema, or mass.  The
+ventricles and sulci are normal in size and configuration.
+
+There is no evidence of fracture.  Trace mucosal thickening paranasal sinuses.
+Otherwise, the visualized portion of the paranasal sinuses, mastoid air cells,
+and middle ear cavities are clear.  The visualized portion of the orbits are
+unremarkable.
+
+IMPRESSION: 
+
+Normal intracranial findings.  No hemorrhage.
+"
+10000117-RR-20,10000117,27988844,RR,20,2183-09-18 09:48:00,2183-09-18 11:09:00,"EXAMINATION:  Left hip radiographs, two views, and pelvis radiograph, single
+AP view.
+
+INDICATION:  Status post fall with left hip pain.
+
+COMPARISON:  None available.
+
+FINDINGS: 
+
+There is a slightly displaced subcapital femoral neck fracture on the left. 
+No additional fractures are found.  Each femoral head remains normally
+articulating with its acetabulum.
+
+IMPRESSION: 
+
+Subcapital left femoral neck fracture.
+"
+10000117-RR-21,10000117,27988844,RR,21,2183-09-18 12:29:00,2183-09-18 13:15:00,"EXAMINATION:  Chest radiographs, PA and lateral.
+
+INDICATION:  Preoperative clearance.  Status post fall with hip fracture.
+
+COMPARISON:  Prior study from ___.
+
+FINDINGS: 
+
+Heart is normal in size.  Mediastinal and hilar contours appear within normal
+limits.  There is no pleural effusion or pneumothorax.  Lungs appear clear. 
+Mild loss in height of a lower thoracic vertebral body appears unchanged.  No
+acute displaced rib fracture is found.
+
+IMPRESSION: 
+
+No evidence of acute cardiopulmonary disease
+"
+10000117-RR-22,10000117,27988844,RR,22,2183-09-19 09:38:00,2183-09-19 15:00:00,"EXAMINATION:  HIP NAILING IN OR W/FILMS AND FLUORO LEFT
+
+INDICATION:  LEFT HIP FX.ORIF
+
+IMPRESSION: 
+
+Images from the operating suite show placement of metallic screws across a
+fracture of the neck of the femur.  Further information can be gathered from
+the operative report.
+"
+10000117-RR-23,10000117,,RR,23,2183-10-03 08:26:00,2183-10-03 08:47:00,"INDICATION:  ___ year old woman with L hip fx// assess fx
+
+COMPARISON:  Radiographs from ___
+
+IMPRESSION: 
+
+There has been placement of three cannulated screws fixating a subcapital
+fracture of the left proximal femur.  No hardware related complications are
+seen.  There is foreshortening the femoral head due the impaction at the
+fracture site.  There is mild acetabular spurring.There is normal osseous
+mineralization.
+"
+10000117-RR-24,10000117,,RR,24,2183-11-15 10:19:00,2183-11-15 12:00:00,"EXAMINATION:  HIP UNILAT MIN 2 VIEWS LEFT
+
+INDICATION:  ___ year old woman with left hip fracture.  Assess fracture.
+
+TECHNIQUE:  Frontal and frog-leg lateral views of the left hip.
+
+COMPARISON:  ___.
+
+IMPRESSION: 
+
+There is a healed subcapital fracture of the left femur status post internal
+fixation. No evidence for hardware related complications. Foreshortening of
+the femoral head is again seen due to impaction at the fracture site. Mild
+femoroacetabular osteoarthritis is again noted. Mild left sacroiliac
+osteoarthritis is also again seen.  Visualized portions of the sacrum and
+coccyx are obscured by bowel gas. Please note that the entire pelvis is not
+imaged.
+"
+10000117-RR-25,10000117,,RR,25,2184-01-10 09:32:00,2184-01-10 14:35:00,"EXAMINATION:  HIP UNILAT MIN 2 VIEWS LEFT
+
+INDICATION:  ___ year old woman with L hip fx// assess fx
+
+TECHNIQUE:  Frontal view radiograph of the pelvis with additional frontal and
+frog-leg lateral views of the left hip.
+
+COMPARISON:  Multiple prior hip radiographs, most recently ___
+
+FINDINGS: 
+
+The patient is status post internal fixation of left subcapital femoral
+fracture with 3 cannulated screws unchanged in position.  The fracture is
+unchanged alignment and decreased in conspicuity suggestive of healing,
+possibly complete.  No hardware related complications.  There is no
+dislocation or new fracture.  There are mild degenerative changes about the
+left hip with marginal acetabular osteophytosis and subchondral sclerosis. 
+There is no suspicious lytic or sclerotic lesion.  There is no soft tissue
+calcification or radio-opaque foreign body.
+
+IMPRESSION: 
+
+Status post internal fixation healing left subcapital femoral fracture in
+unchanged alignment.  No hardware related complication.
+"
+10000117-RR-26,10000117,,RR,26,2184-04-17 09:52:00,2184-04-17 14:44:00,"EXAMINATION:  HIP UNILAT MIN 2 VIEWS IN O.R. LEFT
+
+INDICATION:  ___ year old woman with L hip fx// assess fx
+
+TECHNIQUE:  Frontal view radiograph of the pelvis with additional frontal and
+frog-leg lateral views of the left hip.
+
+COMPARISON:  Radiograph from ___
+
+FINDINGS: 
+
+The patient is status post screw fixation of a left subcapital femoral
+fracture with stable foreshortening of the femoral head.  There is no evidence
+of perihardware loosening or periprosthetic fracture.  Mild degenerative
+changes are seen in bilateral hips.  There is no suspicious lytic or sclerotic
+lesion.  There is no soft tissue calcification or radio-opaque foreign body.
+
+IMPRESSION: 
+
+Status post ORIF of a left subcapital femoral fracture in unchanged alignment.
+No evidence of hardware complication.
+"
+10000117-RR-27,10000117,,RR,27,2184-08-11 08:28:00,2184-08-11 09:42:00,"EXAMINATION:  HIP UNILAT MIN 2 VIEWS LEFT
+
+INDICATION:  ___ year old woman with L hip fx  // assess fx
+
+TECHNIQUE:  Frontal view radiograph of the pelvis with additional frontal and
+frog-leg lateral views of left hip
+
+COMPARISON:  Prior radiographs including ___
+
+IMPRESSION: 
+
+Status post internal fixation of the left femoral subcapital fracture with
+foreshortening of the femoral neck, unchanged from prior.  No evidence of
+periprosthetic loosening or fracture.  Mild degenerative changes of the left
+hip.  Minimally increased sclerosis at the left femoral head, likely secondary
+to overlap of osseous structures.
+"
+10000117-RR-8,10000117,,RR,8,2174-08-14 17:29:00,2174-08-14 18:41:00,"CHEST RADIOGRAPH PERFORMED.
+
+COMPARISON:  None.
+
+CLINICAL HISTORY:  ___ woman with sensation of something stuck in her
+throat.  Question mass.
+
+FINDINGS:  PA and lateral views of the chest are obtained.  The lungs are well
+expanded without evidence of pneumonia or CHF.  Rounded nodular opacities
+projecting over the lower lungs bilaterally, most likely correspond with
+nipple shadows.  No pleural effusion or pneumothorax is seen.  Mild pleural
+parenchymal scarring at the lung apices is noted with mild upper lobe lucency
+which may reflect underlying emphysema. The visualized tracheal air column
+appears normal.  No foreign bodies are seen. No pleural effusion or
+pneumothorax is seen.  Cardiomediastinal silhouette is normal.  Osseous
+structures are intact.  No free air is seen below the right hemidiaphragm. 
+Mild degenerative changes in the thoracic spine noted.
+
+
+IMPRESSION:  No acute findings.
+"
+10000117-RR-9,10000117,,RR,9,2175-05-10 10:13:00,2175-05-10 17:37:00,"INDICATION:  ___ female with dysfunctional uterine bleeding.
+
+No prior examinations for comparison.
+
+LMP:  ___.
+
+PELVIC ULTRASOUND:  Transabdominal and transvaginal images were acquired, the
+latter for further characterization of the uterus and adnexa.  The uterus
+measures 6.6 x 3.3 x 3.9 cm.  Multiple fibroids are present, the largest
+measuring 7 x 6 x 6 mm in the fundus. Changes of cesarean section are seen in
+the anterior uterus, with a small amount of fluid and associated scarring. 
+Endometrial stripe measures 6 mm. 
+
+The right ovary has a 2.9 x 2.8 x 2.5 cm simple cyst.  The left ovary is
+congenitally absent.  There is no free fluid in the pelvis.
+
+IMPRESSION:
+1.  Fibroid uterus.
+2.  C-section scar may serve as reservoir for abnormal bleeding.
+"
+10000248-RR-11,10000248,,RR,11,2192-11-29 20:50:00,2192-11-29 21:19:00,"EXAMINATION:  CT OF THE ABDOMEN AND PELVIS
+
+INDICATION:  Expanding right flank hematoma. History of factor VIII
+deficiency.
+
+COMPARISON:  None.
+
+TECHNIQUE:  Multidetector CT images of the abdomen and pelvis were obtained
+with intravenous contrast. Sagittal and coronal reformations were also
+performed.
+
+DOSE:  463.1 mGy-cm.
+
+
+
+FINDINGS: 
+
+There is a small right-sided pleural effusion with minimal associated
+compressive atelectasis.  There is a moderate pectus excavatum deformity.
+
+The gallbladder, liver, pancreas, spleen, and adrenal glands appear within
+normal limits. The left kidney is duplex with entirely separate ureters up to
+the bladder.
+
+The stomach, small and large bowel appear within normal limits.
+
+The prostate, seminal vesicles, distal ureters and bladder appear within
+normal limits. The major arteries and veins appear patent. There is no
+lymphadenopathy or ascites.
+
+Fat stranding is present in subcutaneous tissues along the right flank.  The
+right posterior chest wall musculature is expansile and hyperattenuating
+suggesting hemorrhage with maximal axial ___ of about 6 x 2 cm in axial
+___ but the area of greatest hemorrhage is not necessarily imaged and
+may lie superior. No active extravasation is identified. There is a hypodense
+collection layering along the left iliac wing and gluteus medius musculature
+suggesting sequela of older hematoma including surrounding fat stranding.
+
+No fracture is identified.  An ossification in paraspinal musculature suggests
+myositis ossificans from older injury.  There are no suspicious bone lesions.
+
+IMPRESSION: 
+
+Acute hemorrhage along the right posterior flank musculature associated with
+right posterior chest wall musculature; the entirety of the hematoma is
+probably not imaged.  No definite active acute arterial extravasation seen.
+Probable old hematoma along the left posterior flank.
+"
+10000285-RR-10,10000285,,RR,10,2161-11-08 18:05:00,2161-11-08 19:06:00,"EXAMINATION:  CT ABD AND PELVIS WITH CONTRAST
+
+INDICATION:  ___ with severe generalized abd pain, tender mostly in the
+LLQNO_PO contrast// eval for colitis, diverticulitis, appendicitis
+
+TECHNIQUE:  Single phase contrast: MDCT axial images were acquired through the
+abdomen and pelvis following intravenous contrast administration.
+Oral contrast was administered.
+Coronal and sagittal reformations were performed and reviewed on PACS.
+
+DOSE:  Acquisition sequence:
+   1) Stationary Acquisition 0.5 s, 1.0 cm; CTDIvol = 1.2 mGy (Body) DLP = 1.2
+mGy-cm.
+   2) Stationary Acquisition 9.5 s, 1.0 cm; CTDIvol = 22.0 mGy (Body) DLP =
+22.0 mGy-cm.
+   3) Spiral Acquisition 15.4 s, 52.9 cm; CTDIvol = 16.1 mGy (Body) DLP =
+828.0 mGy-cm.
+ Total DLP (Body) = 865 mGy-cm.
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+LOWER CHEST: Visualized lung fields are within normal limits.  There is no
+evidence of pleural or pericardial effusion.
+
+ABDOMEN:
+
+HEPATOBILIARY: The liver demonstrates homogenous attenuation throughout. 
+There is no evidence of focal lesions. There is no evidence of intrahepatic or
+extrahepatic biliary dilatation.  The gallbladder is within normal limits.
+
+PANCREAS: The pancreas has normal attenuation throughout, without evidence of
+focal lesions or pancreatic ductal dilatation.  There is no peripancreatic
+stranding.
+
+SPLEEN: The spleen shows normal size and attenuation throughout, without
+evidence of focal lesions.
+
+ADRENALS: The right and left adrenal glands are normal in size and shape.
+
+URINARY: The kidneys are of normal and symmetric size with normal nephrogram. 
+There is no evidence of focal renal lesions or hydronephrosis.  There is no
+perinephric abnormality.
+
+GASTROINTESTINAL: The stomach is unremarkable.  Small bowel loops demonstrate
+normal caliber, wall thickness, and enhancement throughout. The colon and
+rectum are within normal limits, aside from minimal diverticulosis of the
+descending colon (05:51).  The appendix is normal (05:54).  7 mm nodule
+adjacent to the diverticuli is likely a lymph node (5:60, 7:26).
+
+PELVIS: The urinary bladder and distal ureters are unremarkable.  There is no
+free fluid in the pelvis.
+
+REPRODUCTIVE ORGANS: The prostate and seminal vesicles are grossly
+unremarkable.  Vasectomy clips are noted.
+
+LYMPH NODES: There is no retroperitoneal or mesenteric lymphadenopathy.  There
+is no pelvic or inguinal lymphadenopathy.
+
+VASCULAR: There is no abdominal aortic aneurysm.  Mild atherosclerotic disease
+is noted.
+
+BONES: There is no evidence of worrisome osseous lesions or acute fracture. 
+Nonaggressive appearing sclerotic focus in the left femoral head and proximal
+femur, bilateral pubic rami, and left iliac bone are likely bone islands.
+
+SOFT TISSUES: An umbilical hernia and left inguinal hernia containing fat are
+noted.
+
+IMPRESSION: 
+
+No acute intra-abdominal or intrapelvic abnormalities to explain patient's
+symptoms.Normal appendix.  No evidence of acute diverticulitis.
+"
+10000473-RR-7,10000473,,RR,7,2138-03-15 21:32:00,2138-03-15 22:44:00,"EXAMINATION:
+Chest:  Frontal and lateral views
+
+INDICATION:  History: ___ with cough and fever// cough
+
+TECHNIQUE:  Chest:  Frontal and Lateral
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+Streaky right base opacity seen on the frontal view, not substantiated on the
+lateral view, is felt to most likely be due to overlap of vascular structures,
+but a subtle consolidation is difficult to exclude in the appropriate clinical
+setting.  No focal consolidation seen elsewhere.  There is no pleural effusion
+or pneumothorax.  Cardiac silhouette is borderline in size.  The aorta is
+somewhat tortuous.
+
+IMPRESSION: 
+
+Streaky right base opacity seen on the frontal view, not substantiated on the
+lateral view, felt to most likely be due to overlap of vascular structures,
+but a subtle consolidation is difficult to exclude in the appropriate clinical
+setting. No focal consolidation seen elsewhere.
+"
+10000560-RR-24,10000560,,RR,24,2189-06-26 14:01:00,2189-06-26 18:22:00,"INDICATION:  ___ woman with lower abdominal pain, constant _____,
+evaluate for diverticulitis.
+
+COMPARISON:  None.
+
+TECHNIQUE:  Multiple MDCT axial images were obtained from the lung bases
+through the proximal thighs after administration of 130 cc of Optiray
+intravenously.  Enteric contrast was not administered.  Sagittal and coronal
+reformations were derived.
+
+FINDINGS:
+
+CT OF THE ABDOMEN WITH INTRAVENOUS CONTRAST:
+
+In the visualized thorax, the lung bases are clear.  There is no pulmonary
+nodule, pneumothorax, or pleural effusion.  The visualized heart is normal.
+There is no pericardial effusion.
+
+In the abdomen, the liver enhances homogeneously.  There is no intra- or
+extra-hepatic bile duct dilatation.  The spleen, adrenals, gallbladder, and
+pancreas appear normal.  The kidneys symmetrically take up and excrete
+contrast with no hydronephrosis.  There is a large complex oval but slightly
+lobulated 2.7 x 3.1 x 3.2 cm hypodense lesion (2:35, 300B:33), although not
+simple fluid density.  On several slices, enhancing internal septation is
+demonstrated ( for examples 2:36, 2:35).  The amorphous appearance of some
+high- density material raises the possibility of hemorrhage within this
+complex cystic structure although there is no layering.  Other small bilateral
+hypodensities are seen (for example 2:33, 2:29), too small to characterize.
+
+Abdominal loops of bowel appear normal.  There is no abdominal free air, free
+fluid, or pathologic lymphadenopathy.  The abdominal vasculature appears
+normal with minor aortic atherosclerotic changes.  The major branches of the
+celiac trunk and SMA are widely patient at their origin.
+
+CT PELVIS WITH INTRAVENOUS CONTRAST:
+
+The bladder and distal ureters are normal.  There is a small 7-mm hyperdense
+focus in the fundus of the uterus (2:70, 301B:35) that may represent a small
+calcified fibroid.  The right adnexa (2:70) and left (2:75) are unremarkable
+with no demonstration of large cysts.  There is no significant free fluid.
+There is sigmoidal diverticulosis without evidence of diverticulitis.  There
+is no pelvic free air or pathologic lymphadenopathy.
+
+MUSCULOSKELETAL:
+
+There is no suspicious osteolytic or osteoblastic lesion.
+
+IMPRESSION:
+
+1.  Right complex septated renal cystic lesion, for which the differential
+includes neoplasm; outpatient MR is recommended.  Hyperdense material within
+this cyst may represent  hemorrhagic foci.
+
+2.  No evidence for diverticulitis or nephrolithiasis (although exam limited
+by contrast).  
+
+"
+10000560-RR-25,10000560,,RR,25,2189-07-16 07:03:00,2189-07-16 20:21:00,"MRI OF THE ABDOMEN FROM ___
+
+HISTORY:  Patient with history of severe abdominal pain.  Also complicated
+right renal lesion.
+
+COMMENT:  Multiplanar T1- and T2-weighted images of the abdomen were acquired
+on a 1.5 Tesla magnet including dynamic 3D imaging prior to, during and after
+IV administration of 15 mL of Magnevist.  Multiplanar 2D  and 3D reformations
+and subtraction images were generated on an independent workstation.
+Comparison is made with CT scan from ___.
+
+FINDINGS:  There is a lesion in the mid right kidney.  This is within the
+parenchyma of the kidney and comes in close proximity to the collecting
+system.  The lesion is heterogeneous on T2-weighted images with predominantly
+increased signal intensity and some areas of decreased signal intensity.  On
+the T1-weighted images, there is a small focus centrally which is of increased
+signal intensity.  On the post-contrast images, there is vague and low level
+internal enhancement.  The lesion is suspicious for a cystic renal cell
+carcinoma.
+
+There is a 5-mm focus in the lower pole of the left kidney, and a 4-mm focus
+in the lower pole of the right kidney.  These probably represent tiny cysts.
+There is no evidence of hydronephrosis.  The bilateral renal veins are patent.
+The patient appears to have two renal arteries bilaterally.  There is no bulky
+retroperitoneal adenopathy.
+
+The left adrenal is minimally thickened and nodular with some signal dropout
+on the out-of-phase images.  Findings are probably due to hyperplasia. The
+right adrenal is unremarkable. There is an accessory hepatic vein in the
+posterior segment of the right lobe of the liver.  
+
+The remainder of the visualized viscera appear unremarkable. 
+
+Multiplanar 2D and 3D reformations delineated the dynamic series with multiple
+perspectives. 
+
+IMPRESSION:
+
+Cystic mass in the mid right kidney with internal enhancement.  This is
+suspicious for cystic renal cell carcinoma.
+
+Critical finding notification was posted in InfoRadiology.
+
+
+"
+10000560-RR-28,10000560,,RR,28,2190-06-05 13:51:00,2190-06-05 14:49:00,"TWO-VIEW CHEST, ___.
+
+INDICATION:  Renal cell carcinoma.  No prior radiographs for comparison.
+
+FINDINGS:  Heart size, mediastinal and hilar contours are normal.  Lungs are
+clear, and there are no pleural effusions or suspicious skeletal lesions.
+
+IMPRESSION:  No conventional radiographic findings to suggest metastatic
+disease.
+"
+10000594-RR-21,10000594,,RR,21,2132-04-16 05:53:00,2132-04-16 10:09:00,"HISTORY:  ___ male status post trauma to the abdomen.  Evaluation for
+bowel contusion or hematoma.
+
+COMPARISON:  None available in the ___ system.
+
+TECHNIQUE:  ___ MDCT-acquired axial images from the lung bases to the pubic
+symphysis were displayed with 5-mm slice thickness.  Intravenous contrast was
+administered.  Coronal and sagittal reformations were prepared.
+
+CT ABDOMEN WITH INTRAVENOUS CONTRAST:  The lung bases are clear.  There is no
+focal consolidation, contusion, or pleural effusion.  The visualized heart and
+pericardium are within normal limits.
+
+The liver demonstrates homogeneous parenchymal enhancement without suspicious
+focal lesion.  Scattered too small to characterize hypodensities are
+identified within the liver and likely represent simple cysts (2:13).  There
+is no liver laceration or evidence of traumatic injury.  The hepatic veins and
+portal venous system are grossly patent.  No intra- or extra-hepatic biliary
+ductal dilatation is identified.  The gallbladder, spleen, and pancreas are
+normal.  The adrenal glands are symmetric without evidence of hemorrhage or
+nodule.  There is symmetric enhancement and excretion of the kidneys without
+focal lesion, laceration or hydronephrosis.  The abdominal aorta and its
+branch vessels are non-aneurysmal and grossly patent.  There is no
+intra-abdominal free fluid or free air.  The stomach and small bowel loops are
+normal in caliber and configuration without evidence of obstruction or
+inflammation.
+
+CT PELVIS WITH INTRAVENOUS CONTRAST:  The rectum and colon are normal in
+caliber and configuration without evidence of obstruction or inflammation. 
+There is no evidence of trauma to the large bowel, and there is no pelvic free
+fluid.  The prostate and seminal vesicles appear within normal limits.  The
+bladder is decompressed but is otherwise unremarkable.
+
+OSSEOUS STRUCTURES:  No bone destructive lesion or acute fracture identified. 
+A probable bone island is visualized within the left femoral head.  The
+muscles and soft tissues of the anterior abdominal wall appear intact without
+intramuscular hematoma.
+
+IMPRESSION:  No acute traumatic pathology within the abdomen or pelvis. 
+Normal appearance of the bowel without evidence of contusion.  No free fluid
+or air.
+"
+10000635-RR-13,10000635,,RR,13,2138-01-23 08:15:00,2138-01-23 09:38:00,"EXAMINATION:  KNEE AP WB, LATERAL AND SUNRISE BILATERAL
+
+INDICATION:  ___ year old woman with bilateral knee pain.  // eval bilateral
+knee      eval bilateral knee                                                 
+eval left knee
+
+IMPRESSION: 
+
+On the right, there is a total knee arthroplasty, which appears well seated
+without evidence of hardware-related complication.  Soft tissue opacification
+adjacent to the medial condyle could relate to previous surgery or possible
+calcification of the medial collateral ligament.
+On the left, there is hypertrophic spurring and compartmental narrowing
+primarily involving the patellofemoral compartment.  Generalized narrowing is
+seen in the medial and lateral compartments.  There is a superior patellar
+spur, but no evidence of joint effusion.
+"
+10000650-RR-16,10000650,,RR,16,2142-08-03 21:59:00,2142-08-04 00:22:00,"INDICATION:  ___ man with fever and cough.
+
+COMPARISONS:  None.
+
+FRONTAL AND LATERAL CHEST RADIOGRAPH: Cardiac and mediastinal contours appear
+unremarkable.  Pulmonary vascularity is within normal limits.  No focal
+consolidation or pleural effusions identified.
+
+IMPRESSION:  No evidence of acute cardiopulmonary processes.
+"
+10000719-RR-16,10000719,,RR,16,2139-09-23 08:14:00,2139-09-23 09:35:00,"EARLY OB LESS THAN 14 WEEKS
+
+HISTORY:  Uncertain LMP, beta HCG 80,000, evaluate dates.
+
+FINDINGS:  LMP unknown.
+
+PRIOR ULTRASOUND:  None.
+
+There is an intrauterine gestational sac, yolk sac, and embryonic pole. 
+Crown-rump length measures 2.9 cm corresponding to gestational age ___ weeks
+four days.  ___ by ultrasound is ___.  There was a normal embryonic heart
+rate of 176 BPM.
+
+Ovaries are normal.  There is no free fluid in pelvis.
+
+IMPRESSION:  Single live intrauterine pregnancy at nine weeks four days by
+current ultrasound with ___ of ___.
+"
+10000764-RR-15,10000764,27897940,RR,15,2132-10-15 09:02:00,2132-10-15 11:48:00,"EXAMINATION:  CHEST (PA AND LAT)
+
+INDICATION:  ___ with hypoxia  // ?pna, aspiration.
+
+COMPARISON:  None
+
+FINDINGS: 
+
+PA and lateral views of the chest provided.   The lungs are adequately
+aerated.
+
+There is a focal consolidation at the left lung base adjacent to the lateral
+hemidiaphragm. There is mild vascular engorgement. There is bilateral apical
+pleural thickening.
+
+The cardiomediastinal silhouette is remarkable for aortic arch calcifications.
+The heart is top normal in size.
+
+IMPRESSION: 
+
+Focal consolidation at the left lung base, possibly representing aspiration or
+pneumonia.
+
+Central vascular engorgement.
+"
+10000826-RR-16,10000826,20032235,RR,16,2146-12-05 13:14:00,2146-12-05 17:49:00,"INDICATION:  New onset of ascites.
+
+No comparison is available.
+
+TECHNIQUE:  Axial MDCT images of the abdomen and pelvis were obtained after
+administration of 130 cc of Optiray intravenously.  Sagittal and coronal
+reformatted images were then acquired.
+
+CT OF THE ABDOMEN WITH IV CONTRAST:  Small bilateral pleural effusion is
+noted.  The remainder of the lung bases clear.  The liver is edematous and
+enlarged measuring 25 cm in a craniocaudad dimension.  The spleen, adrenal
+glands, kidneys, pancreas, gallbladder, stomach, loops of small bowel and
+large bowel have normal appearance.  Large degree of ascites is visualized.
+
+CT OF THE PELVIS WITH IV CONTRAST:  The urinary bladder, distal ureters,
+uterus and adnexa, rectum and sigmoid colon have normal appearance.  No
+pathologically enlarged pelvic, mesenteric, retroperitoneal or inguinal
+lymphadenopathy is noted.
+
+BONE WINDOWS:  No concerning lytic or sclerotic lesions are identified.
+
+IMPRESSION:
+
+1.  Large volume ascites and enlarged edematous liver.  The findings are
+suggestive of acute hepatitis. 
+2.  Small bilateral pleural effusions.
+"
+10000826-RR-17,10000826,20032235,RR,17,2146-12-07 10:49:00,2146-12-07 14:09:00,"
+HISTORY:  New-onset ascites, liver failure, evaluate for portal vein
+thrombosis.
+
+COMPARISON:  CT ___.
+
+FINDINGS:  The liver is diffusely echogenic, compatible with fatty
+infiltration.  No focal hepatic lesion is identified.  There is layering
+sludge within the gallbladder, with mild gallbladder wall thickening, which is
+nonspecific, and can be seen with liver disease, or fluid overload.  There is
+no intra- or extra-hepatic biliary ductal dilatation with the CBD measuring 4
+mm.  There is a small amount of ascites within the right lower quadrant of the
+abdomen.  The spleen is normal in size measuring 11.4 cm.  There is a patent
+periumbilical vein.
+
+Doppler evaluation reveals patent portal venous system, with directionally
+appropriate flow.  The hepatic veins are patent.  The main hepatic artery is
+patent, with sharp systolic upstroke and normal diastolic flow. 
+
+IMPRESSION:
+1.  Diffusely echogenic liver, suggestive of fatty infiltration.  Other forms
+of liver disease and more advanced liver disease including fibrosis and
+cirrhosis cannot be excluded.
+
+2.  Layering sludge within the gallbladder, with mild gallbladder wall
+thickening, which may relate to underlying liver disease.  
+
+3.  Patent portal venous system.
+
+4.  Moderate ascites.
+"
+10000826-RR-18,10000826,20032235,RR,18,2146-12-11 15:40:00,2146-12-11 17:10:00,"HISTORY:  Alcoholic hepatitis. 
+
+US GUIDED PARACENTESIS: Limited ultrasound of the abdomen show moderate amount
+of ascites.  A site for paracentesis was marked under ultrasound guidance in
+the left lower quadrant.  After explanation of the risks and benefits, written
+informed consent was obtained from the patient.  A timeout was performed to
+confirm the procedure and the identity using three parameters.  The patient
+was prepared and draped in the usual sterile manner.  The superficial tissue
+was infiltrated with 1% lidocaine and 8.5% bicarbonate for local anesthesia. 
+A 5 ___ ___ catheter was inserted percutaneously into the peritoneal
+cavity. Samples from the ascitic fluid  were obtained for studies, as
+requested.  Approximately 2.5 liters of clear ascites was removed. The patient
+tolerated well the procedure with no immediate complications.
+
+The attending, Dr. ___, was present and supervising throughout.
+
+IMPRESSION:  Successful diagnostic and therapeutic paracentesis yielding 2.5
+liters of ascitic fluid. 
+"
+10000826-RR-19,10000826,20032235,RR,19,2146-12-12 07:57:00,2146-12-12 09:53:00,"INDICATION:  ___ woman with liver disease, now with fever, please
+evaluate for infection.
+
+TECHNIQUE:
+Single semi-upright portable AP view of the chest was acquired.
+
+FINDINGS:
+Lungs are hyperlucent without hyperinflation.  There is a moderate right
+pleural effusion. No evidence of pneumonia.  Cardiomediastinal silhouette and
+hila are normal.  No pneumothorax.
+
+
+"
+10000826-RR-20,10000826,21086876,RR,20,2146-12-19 08:21:00,2146-12-19 13:09:00,"INDICATION:  ___ female with alcoholic hepatitis, ascites; evaluate
+for patency of portal vein.
+
+COMPARISON:  Liver ultrasound, ___.
+
+FINDINGS:  No focal liver lesion is identified.  No biliary dilatation is
+seen, and the common duct measures 0.4 cm.  There is a minimal amount of
+sludge seen within the lumen of the gallbladder.  No gallstones are
+identified.  The pancreas is unremarkable but is only minimally visualized due
+to overlying bowel.  The spleen is enlarged measuring 12.9 cm.  A moderate
+amount of ascites is seen in the abdomen.
+
+DOPPLER EXAMINATION:  Color Doppler and pulsed wave Doppler images were
+obtained.  There is no flow identified within the extrahepatic main portal
+vein.  Flow within the SMV is appropriate and flow within the splenic vein in
+the midline is reversed.  Flow in the intrahepatic right portal vein is
+reversed and flow in the left portal vein is forward with a patent umbilical
+vein.  Appropriate flow is seen in the IVC, hepatic veins, and hepatic artery.
+
+IMPRESSION:
+1.  Occlusion of the main portal vein with no vascular flow identified in the
+extrahepatic segment.  Flow in the intrahepatic right portal vein is reversed,
+flow in the intrahepatic left portal vein is forward with a patent umbilical
+vein.  Flow in the SMV is forward with flow in the midline segment of the
+splenic vein reversed.
+2.  No focal liver lesion and no biliary dilatation seen.  Small amount of
+sludge in the gallbladder.
+3.  Splenomegaly.
+4.  Ascites.
+"
+10000826-RR-21,10000826,21086876,RR,21,2146-12-19 14:15:00,2146-12-19 14:42:00,"TWO VIEW CHEST ___:
+
+COMPARISON:  ___.
+
+FINDINGS:  Cardiomediastinal contours are normal.  Small bilateral pleural
+effusions are present, right greater than left, which have also been
+demonstrated on prior CT of the abdomen ___.  Right hemidiaphragm
+remains slightly elevated, as demonstrated on prior abdominal CT as well. 
+Focal right basilar lung opacity adjacent to the effusion involving the right
+middle and right lower lobes favors atelectasis.  Remainder of lungs are
+clear, except for minimal linear atelectasis at the left base. 
+Cardiomediastinal contours are within normal limits.  Haziness of upper
+abdomen is likely due to known ascites.
+
+IMPRESSION:  Small pleural effusions, right greater than left, as well as
+basilar atelectasis.  No areas of lung consolidation to suggest the presence
+of pneumonia.
+"
+10000826-RR-22,10000826,21086876,RR,22,2146-12-19 18:21:00,2146-12-19 20:08:00,"INDICATION:  ___ female with liver disease and portal vein thrombosis.
+
+COMPARISON:  CT ___ and ultrasound ___.
+
+TECHNIQUE:  MDCT-acquired axial images were obtained through the abdomen and
+pelvis 60 and 120 seconds after administration of 130 cc IV Optiray contrast. 
+Coronal and sagittal reformats were displayed.
+
+CT ABDOMEN WITH IV CONTRAST:  There is atelectasis at the right lung base and
+moderate right and small left pleural effusions, slightly increased on the
+right from ___.  Left lung base is clear.  There is a tiny hiatal hernia.
+
+Hepatomegaly is again noted with the liver measuring 24 cm.  There is a small
+hypodensity in the left lobe of the liver (2A:17), measuring 8 mm and too
+small to further characterize, but not significantly changed from ___. 
+There is no intra- or extra-hepatic biliary ductal dilatation.  There is a
+large amount of ascites and anasarca, unchanged.  
+
+The gallbladder, pancreas, spleen, and bilateral adrenal glands are normal. 
+The kidneys enhance and excrete contrast symmetrically without evidence of
+hydronephrosis or hydroureter.  The non-opacified stomach and intra-abdominal
+loops of small and large bowel, including the appendix, are normal.  There is
+no free air in the abdomen.  No mesenteric or retroperitoneal lymphadenopathy
+meeting CT criteria for pathologic enlargement is noted.
+
+CTA ABDOMEN:  A replaced right hepatic artery arising from the SMA is noted,
+but the hepatic arterial anatomy is otherwise conventional with normal
+opacification.  There is good opacification of the main portal vein and its
+branches, the SMV and splenic vein, with no evidence of portal vein thrombus. 
+Hepatic veins are well opacified.  Recanalized umbilical vein is noted.
+
+CT PELVIS WITH IV CONTRAST:  There is a large amount of ascites in the pelvis.
+The urinary bladder, uterus, adnexa, sigmoid colon, and rectum are normal.  No
+pelvic or inguinal lymphadenopathy meeting CT criteria for pathologic
+enlargement is noted.
+
+BONE WINDOWS:  No suspicious lytic or sclerotic osseous lesion is identified.
+
+IMPRESSION:
+
+1.  Hepatomegaly and large ascites consistent with stated history of liver
+disease.  No evidence of portal venous thrombosis suggesting that the findings
+on the prior ultrasound may have resulted from extremely slow / undetectable
+flow.  
+
+2.  Moderate right and small left pleural effusions, increased on the right
+with right basilar atelectasis.
+
+3.  Replaced right hepatic artery arising from the SMA, otherwise conventional
+arterial and venous anatomy.
+
+
+"
+10000826-RR-23,10000826,21086876,RR,23,2146-12-21 16:35:00,2146-12-21 18:15:00,"CTA CHEST
+
+CLINICAL INDICATION:  ___ woman with alcoholic hepatitis, now with
+persistent tachycardia.  Rule out PE.
+
+COMPARISON EXAM:  ___.
+
+TECHNIQUE:  Multidetector CT images were acquired through the thorax following
+the administration of intravenous contrast as per PE protocol.
+
+CT CHEST WITH IV CONTRAST:  
+
+Satisfactory opacification of the pulmonary vasculature.  No filling defects
+in the pulmonary vascular to suggest pulmonary embolism.  Pulmonary
+vasculature is within normal limits in caliber.  Aorta shows no abnormalities.
+No pericardial effusion.  The heart shows no gross abnormalities.
+Tracheobronchial tree is patent.  The esophagus is unremarkable.  No
+significant hilar, mediastinal, or axillary lymphadenopathy.
+
+There is stable atelectasis at the right lung base and moderate right and
+small left pleural effusions, unchanged.  Tiny hiatal hernia.  No focal lung
+nodules are seen.  No pneumothorax.  No suspicious osseous lesions are
+identified.
+
+Visualized portions of the upper abdomen demonstrate moderate intra-abdominal
+ascites, hepatomegaly, and heterogeneous appearance to the liver.
+
+IMPRESSION:
+1.  No evidence of pulmonary embolism.
+2.  Stable atelectasis at the right lung base.
+3.  Moderate right and small left pleural effusions, unchanged.
+
+
+"
+10000826-RR-24,10000826,21086876,RR,24,2146-12-24 14:08:00,2146-12-24 15:59:00,"INDICATION:  ___ female with alcoholic hepatitis with worsening
+ascites.
+
+TECHNIQUE:  Diagnostic and therapeutic paracentesis.
+
+PROCEDURE:  Signed informed consent was obtained from the patient following a
+detailed discussion regarding the risks and benefits of the procedure.  The
+patient's identity was verified during a preprocedural timeout using three
+independent markers.  A fluid collection was seen within the right lower
+quadrant, and the site was marked and prepped in the usual sterile fashion. 
+Local anesthesia was achieved using a bicarbonate-lidocaine mixture.  Under
+ultrasound guidance, a 5 ___ ___ catheter was advanced into the peritoneal
+cavity, and 5.1 liters of straw-colored fluid were aspirated.  The patient
+tolerated the procedure well, and there were no immediate post-procedural
+complications.  The attending, Dr. ___, was present throughout the
+entire procedure.
+
+IMPRESSION:  Successful aspiration of 5.1 liters of straw-colored fluid from
+the right lower quadrant.  A small sample of this fluid was sent to the
+laboratory for analysis.
+"
+10000826-RR-25,10000826,,RR,25,2146-12-30 22:45:00,2146-12-31 03:17:00,"HISTORY:  ___ female, with ascites.  Mark largest fluid pocket.
+
+COMPARISON:  None.
+
+Directed ultrasound examination was performed on all four quadrants of the
+abdomen to assess the level of ascites.  There is moderate ascites in all four
+quadrants, with the deepest fluid in the left lower quadrant measuring at
+least 4.7 cm deep.  A site is marked in the left lower quadrant. The limited
+evaluation of the liver reveals a diffusely echogenic hepatic parenchyma,
+compatible with the known alcoholic-related hepatic disease.
+
+IMPRESSION:  Left lower quadrant marked for paracentesis.
+"
+10000826-RR-26,10000826,28289260,RR,26,2146-12-31 18:46:00,2147-01-01 07:51:00,"INDICATION:  ___ man with worsening chronic back pain and fevers.
+
+COMPARISON:  CT abdomen/pelvisdated ___.
+
+TWO VIEWS LUMBAR SPINE:  There are five non-rib-bearing lumbar-type vertebral
+bodies.  There is mild straightening of the normal lumbar lordosis.  The
+vertebral body and disc heights are maintained.  There is no fracture.  The
+visualized sacroiliac joints are unremarkable.  Small os acetabuli are noted
+bilaterally.
+
+IMPRESSION:  Unremarkable radiograph of the lumbar spine without radiographic
+evidence of osteomyelitis.
+"
+10000826-RR-28,10000826,,RR,28,2147-01-07 13:27:00,2147-01-07 16:56:00,"INDICATION:  ___ female with ascites.  Large volume paracentesis is
+requested.
+
+PROCEDURE AND FINDINGS:
+
+After the risks and benefits of procedure were explained to the patient,
+written informed consent was obtained.  Sonographic imaging of four quadrants
+was then performed, demonstrating adequate pocket of ascitic fluid in the
+right lower quadrant.  The site was marked, then prepped and draped in the
+usual sterile fashion.  Local 1% buffered Xylocaine was infiltrated for
+anesthesia.  A 5 ___ ___ catheter was then advanced into the collection,
+and attached to vacuum suction.  3 liters of straw-colored ascitic fluid were
+drained without complication.  The patient tolerated the procedure well.
+
+Dr. ___, the attending radiologist, supervised the procedure.
+
+IMPRESSION:
+
+Ultrasound-guided drainage of 3 liters of straw-colored ascitic fluid from the
+right lower quadrant.
+"
+10000826-RR-29,10000826,,RR,29,2147-01-16 13:47:00,2147-01-16 16:53:00,"INDICATION:  ___ female with alcoholic cirrhosis.  Request for
+ultrasound-guided paracentesis.  
+
+COMPARISON:  Ultrasound from ___.
+
+TECHNIQUE:  
+
+Written informed consent for ultrasound-guided paracentesis was obtained from
+the patient, following a discussion involving the risks, benefits, and
+alternatives to the procedure.  Once consent was obtained, the patient was
+placed in supine position in the ultrasound suite.
+
+Preliminary ultrasound imaging of the abdomen was performed to confirm
+presence of ascites.  A suitable site for aspiration was chosen.  The skin was
+prepped and draped in the usual sterile fashion.  Buffered lidocaine was used
+for cutaneous anesthesia.  A 5 ___ ___ catheter was introduced into the
+right lower quadrant fluid pocket.  A total of 1200 cc of yellow ascites was
+aspirated.  The catheter was then removed and hemostasis was obtained.
+
+The patient tolerated the procedure without any immediate complication.  The
+patient was discharged from the ultrasound suite in stable condition.
+
+Dr. ___ was present for and supervised the entire procedure.
+
+IMPRESSION:
+
+Ultrasound-guided paracentesis as described above, with 1200 cc of ascites
+removed.
+"
+10000826-RR-30,10000826,,RR,30,2148-07-06 11:11:00,2148-07-06 17:46:00,"CLINICAL INDICATION:  ___ woman with alcoholic cirrhosis.  Rule out
+features of cirrhosis.
+
+COMPARISON:  CT abdomen and pelvis ___, ultrasound abdomen ___.
+
+TECHNIQUE:  Multiplanar T1- and T2-weighted images were acquired on a 1.5
+Tesla magnet including dynamic 3D imaging obtained prior to, during, and after
+the uneventful intravenous administration of 0.1 mmol/kg (16 mL) of
+gadolinium-DTPA.
+
+FINDINGS:
+The liver shows decreased enlargedment of the left hepatic lobe compared to
+the prior CT.  Note is made of extension of the right lobe inferiorly
+consistent with ___ lobe.  The liver contour does not show evidence of
+nodularity, and the parenchyma shows normal precontrast signal intensity, no
+evidence of fatty infiltration, and enhances homogeneously. No focal liver
+lesion is identified.  There is no mesenteric, periportal, or retroperitoneal
+lymphadenopathy.  The portal and hepatic veins are patent.  There is
+conventional arterial branching in the abdomen.
+
+The gallbladder is contracted.  There is no intra- or extra-hepatic biliary
+dilation.  The kidneys demonstrate symmetric uptake of contrast.  There is no
+hydronephrosis.  The spleen, adrenal glands, and pancreas are within normal
+limits.  There is no free fluid in the abdomen.  Visualized bowel loops appear
+within normal limits.  Bone marrow signal intensity is within normal limits in
+the visualized osseous structures.
+
+IMPRESSION:
+Normal appearance of the liver on MRI without findings to suggest cirrhosis.
+"
+10000826-RR-31,10000826,,RR,31,2147-11-17 08:04:00,2147-11-17 10:37:00,"GE DIGITAL BILATERAL DIAGNOSTIC MAMMOGRAMS WITH COMPUTER-AIDED DETECTION:
+
+INDICATION:  Single episode of nonspontaneous bilateral nipple discharge. 
+History of DCIS in mother.
+
+Baseline examination.
+
+The breast parenchyma is heterogeneously dense, limiting the sensitivity of
+the examination.  No spiculated mass, suspicious clustered
+microcalcifications, or focal architectural distortion is seen in either
+breast.  No abnormality is seen in either retroareolar regions.  Further
+evaluation was performed with a targeted bilateral breast ultrasound.
+
+BILATERAL BREAST ULTRASOUND:  Targeted ultrasound of both retroareolar regions
+was performed.  No solid or cystic mass is seen.  No dilated duct or
+intraductal abnormality is seen.  No abnormal vascularity is seen.
+
+IMPRESSION:  No abnormality identified at the site of clinical concern.  Final
+disposition should be based on clinical grounds.  No evidence of malignancy.
+
+BI-RADS 1 - negative.
+"
+10000826-RR-32,10000826,,RR,32,2147-11-17 08:04:00,2147-11-17 09:47:00,"BILATERAL BREAST ULTRASOUND:
+
+Please refer to complete report dictated under mammogram clip ___.
+
+BI-RADS 1 - negative.
+"
+10000891-RR-19,10000891,,RR,19,2142-06-24 08:39:00,2142-06-24 09:13:00,"EXAMINATION:  BILATERAL DIGITAL SCREENING MAMMOGRAM INTERPRETED WITH CAD
+
+INDICATION:  Screening.
+
+COMPARISON:  Priors available on PACS.
+
+TECHNIQUE:  Digital CC and MLO views were obtained.  Computer aided detection
+was utilized and assisted with interpretation.
+
+FINDINGS: 
+
+Tissue density: B- There are scattered areas of fibroglandular density.
+There is no dominant mass, unexplained architectural distortion or suspicious
+grouped microcalcifications.  Skin lesion in the slightly outer slightly upper
+right breast is again noted.  There is no significant change.
+
+IMPRESSION: 
+
+No specific evidence of malignancy.
+
+RECOMMENDATION:  Age and risk appropriate screening.
+
+NOTIFICATION:  A summary letter will be sent to the patient with this result.
+
+BI-RADS:  1 Negative.
+
+
+"
+10000891-RR-21,10000891,,RR,21,2143-05-23 18:16:00,2143-05-23 19:26:00,"EXAMINATION:  Bilateral LOWER EXT VEINS
+
+INDICATION:  ___ with BILATERAL CALF PAIN, Elevated D-dimer sent for u/s
+please do bilateral ___.  L calf greater pain.// BILATERAL CALF PAIN, Elevated
+D-dimer sent for u/s please do bilateral ___,
+
+TECHNIQUE:  Grey scale, color, and spectral Doppler evaluation was performed
+on the bilateral lower extremity veins.
+
+COMPARISON:  None.
+
+FINDINGS: 
+
+There is normal compressibility, color flow, and spectral doppler of the
+bilateral common femoral, femoral, and popliteal veins. Normal color flow and
+compressibility are demonstrated in the posterior tibial and peroneal veins.
+
+There is normal respiratory variation in the common femoral veins bilaterally.
+
+No evidence of medial popliteal fossa (___) cyst.
+
+IMPRESSION: 
+
+No evidence of deep venous thrombosis in the right or left lower extremity
+veins.
+"
+10000898-RR-72,10000898,,RR,72,2187-09-27 08:23:00,2187-09-27 09:57:00,"EXAMINATION:  ABDOMEN US (COMPLETE STUDY)
+
+INDICATION:  ___ year old woman with nl exam, has known pancreatic cyst  // ___
+year follow up
+
+TECHNIQUE:  Grey scale and color Doppler ultrasound images of the abdomen were
+obtained.
+
+COMPARISON:  Abdominal ultrasound dated ___
+
+FINDINGS: 
+
+LIVER: The echogenicity of the liver is echogenic. The contour of the liver is
+smooth. There is no focal liver mass. Main portal vein is patent with
+hepatopetal flow. There is no ascites.
+
+BILE DUCTS: There is no intrahepatic biliary dilation. The CBD measures 4 mm.
+
+GALLBLADDER: The patient is status post cholecystectomy
+
+PANCREAS: A cyst in the tail of the pancreas measuring 6 x 6 x 5 mm without
+internal vascularity is unchanged from prior.  The remainder of the pancreas
+is unremarkable.
+
+SPLEEN: Normal echogenicity, measuring 8.8 cm.
+
+KIDNEYS: The right kidney measures 10.1 cm. The left kidney measures 10.2 cm.
+Normal cortical echogenicity and corticomedullary differentiation is seen
+bilaterally. There is no evidence of masses, stones or hydronephrosis in the
+kidneys.
+
+RETROPERITONEUM: Visualized portions of aorta and IVC are within normal
+limits.
+
+IMPRESSION:
+
+
+1. Persistent echogenic liver consistent with steatosis. Other forms of liver
+disease and more advanced liver disease including steatohepatitis or
+significant hepatic fibrosis/cirrhosis cannot be excluded on this study.
+2. Unchanged small subcentimeter cyst or dilated side branch in the tail of
+the pancreas.  Recommend continued imaging followup in ___ year.
+"
+10000898-RR-73,10000898,,RR,73,2187-09-27 08:22:00,2187-10-03 09:28:00,"INDICATION:  Screening, positive family history with sister diagnosed at age
+___.
+
+DIGITAL SCREENING MAMMOGRAPHY WITH ICAD, COMPUTER-AIDED DETECTION SOFTWARE: 
+Breast parenchyma is heterogeneously dense somewhat limiting sensitivity of
+mammography.  There are no dominant masses, areas of architectural distortion
+or suspicious microcalcifications.  There has been no change from ___.
+
+IMPRESSION:  No evidence of malignancy.  Annual screening mammography is
+recommended.
+
+BI-RADS 1 - negative.
+"
+10000898-RR-74,10000898,,RR,74,2187-10-03 11:19:00,2187-10-04 12:09:00,"EXAMINATION:  ___
+
+INDICATION:  ___ year old woman with worsening LBP, pain into both legs // r/o
+worsening spinal stenosis
+
+TECHNIQUE:  Routine ___ nonenhanced MR examination of the lumbar spine, with
+sagittal T2 weighted IDEAL sequence.
+
+COMPARISON:  MRI of lumbar spine from ___.
+
+FINDINGS: 
+
+There are five non-rib-bearing lumbar-type vertebrae, with normal height.
+Again seen is grade 1 anterolisthesis of L4 on L5, unchanged since the prior
+exam. The normal lumbar lordosis is maintained.  The vertebral bodies
+demonstrate overall normal bone marrow signal. There is no pathologic
+paraspinal soft tissue hyperintensity.  The paraspinal soft tissues, including
+the regional musculature, and the limited included retroperitoneum are grossly
+unremarkable, allowing for the non-enhanced acquisition.
+
+The included distal spinal cord is normal in signal and terminates at L1.
+There is a normal distribution of cauda equina nerve roots within the thecal
+sac.
+
+There is multilevel degenerative disease, as follows:
+
+T12-L1: There is no significant canal or neural foraminal narrowing.
+
+L1-2: There is mild facet arthropathy bilaterally without evidence of canal or
+neural foraminal stenosis.
+
+L2-3: There is a diffuse disc bulge with a central protrusion and bilateral
+facet arthropathy causing mild canal stenosis. There is no neural foraminal
+stenosis. This is unchanged since the prior exam
+
+L3-4: There is a broad disc bulge with bilateral facet arthropathy causing
+moderate- severe canal stenosis and mild-moderate left neural foraminal
+stenosis.  , possibly contacting the exiting nerve root on the left. Overall
+this is slightly worsened since the prior exam.
+
+L4-5: There is uncovering of the disc from spondylolisthesis. Severe facet
+arthropathy and a disc bulge causes severe canal stenosis.  With mild-moderate
+right  neural foraminal narrowing. This has slightly worsensed compared to the
+previous exam.
+
+L5-S1: There is mild facet arthropathy without canal or neural foraminal
+narrowing.
+
+
+
+
+
+IMPRESSION:
+
+
+
+1. Multilevel degenerative disc disease as detailed above worst at L4-L5 where
+there is severe canal stenosis and mild to moderate right  neural formainal
+narrowing. Moderate-severe canal stenosis at L3-L4 with mild to moderate left
+neural foraminal narrowing. These findings have slightly worsened since the
+prior exam.
+"
+10000898-RR-75,10000898,,RR,75,2188-01-13 13:58:00,2188-01-13 14:16:00,"EXAMINATION:  Chest radiograph.
+
+INDICATION:  History: ___ with cough and back pain  // evaluate for pneumonia
+
+TECHNIQUE:  Chest PA and lateral
+
+COMPARISON:  Comparison is made to chest radiographs dated ___.
+
+FINDINGS: 
+
+As compared to the prior examination dated ___, there has been no
+significant interval change. There is no evidence of focal consolidation,
+pleural effusion, pneumothorax, or frank pulmonary edema.  The
+cardiomediastinal silhouette is within normal limits.  There is persistent
+thoracic kyphosis with mild wedging of a mid thoracic vertebral body.
+
+IMPRESSION: 
+
+No evidence of acute cardiopulmonary process.
+"
+10000898-RR-76,10000898,,RR,76,2188-03-12 12:33:00,2188-03-12 20:17:00,"EXAMINATION:  CHEST (PA AND LAT)
+
+INDICATION:  ___ with chest pain  // ?pna
+
+COMPARISON:  ___.
+
+FINDINGS: 
+
+PA and lateral views of the chest provided.   Lung volumes are somewhat low.
+There is no focal consolidation, effusion, or pneumothorax. The
+cardiomediastinal silhouette is normal. Imaged osseous structures are intact. 
+No free air below the right hemidiaphragm is seen.
+
+IMPRESSION: 
+
+No acute intrathoracic process.
+"
+10000898-RR-77,10000898,,RR,77,2188-07-21 13:43:00,2188-07-21 16:00:00,"INDICATION:  ___ year old woman with right knee pain  // r/o DJD
+
+FINDINGS:
+
+
+No fracture or dislocation is detected. There are minimal degenerative
+changes, with small marginal spurs and equivocal slight diffuse narrowing of
+the patellofemoral joint. Trace fluid in the suprapatellar recess, without
+frank effusion.
+
+No gross change compared with ___. The joint fluid may be very
+slightly greater.
+
+
+COMPARISON:
+Right knee radiographs from ___
+"
+10000904-RR-19,10000904,,RR,19,2180-10-07 12:18:00,2180-10-07 15:26:00,"CT OF THE NECK PERFORMED ON ___
+
+COMPARISON:  None.
+
+CLINICAL HISTORY:  ___ woman with sore throat, marked tonsillar
+swelling, worse despite antibiotics, question peritonsillar abscess.
+
+TECHNIQUE:  Multidetector CT was used to obtain contiguous axial images
+through the neck following the administration of IV contrast.  Coronal and
+sagittal reformations were provided.
+
+FINDINGS:  There is enlargement of the adenoid and palatine tonsils though
+there is no peritonsillar collection.  The parapharyngeal fat is preserved. 
+Vascular structures are patent.  Parotid glands and submandibular glands are
+normal.  Thyroid gland is unremarkable.
+
+Within the imaged right upper lung, 2 confluent areas of airspace
+consolidation is noted which is compatible with pneumonia.  The imaged left
+upper lung is clear.  There is enlargement of the upper cervical chain lymph
+nodes, likely reactive.  Minimal mucosal thickening in the inferior aspect of
+the right maxillary sinus noted.  The bony structures appear intact.
+
+IMPRESSION:  
+1.  Right upper lobe pneumonia.
+2.  Enlarged adenoids and palatine tonsils with associated prominent likely
+reactive lymph nodes without sign of peritonsillar collection.
+"
+10000935-AR-52,10000935,29541074,AR,52,2183-10-29 21:49:00,2183-10-30 11:31:00,"ADDENDUM: There is bilateral sclerosis in the iliac bones consistent with
+sacroiliitis.
+"
+10000935-RR-43,10000935,,RR,43,2182-05-10 20:19:00,2182-05-11 01:07:00,"CLINICAL HISTORY:  ___ female who presents with a chief complaint of
+left-sided head pulsation and seeing blue spots.  Evaluate for infarct.
+
+COMPARISON:  None.
+
+NON-CONTRAST HEAD CT:  No hemorrhage, hydrocephalus, or shift of normally
+midline structures.  The gray-white matter differentiation is preserved.  No
+major vascular territorial infarct is apparent. No osseous abnormality.  The
+paranasal sinuses and mastoid air cells remain normally aerated.
+
+IMPRESSION:  No hemorrhage.
+"
+10000935-RR-44,10000935,,RR,44,2182-05-11 02:19:00,2182-05-11 12:03:00,"MRI OF THE BRAIN.
+
+CLINICAL INFORMATION:  Patient with question of aneurysm in the suprasellar
+region.
+
+TECHNIQUE:  T1 sagittal and axial and FLAIR T2 susceptibility and diffusion
+axial images were obtained before gadolinium.  T1 axial and coronal images
+were obtained following gadolinium.  Correlation was made with the head CT of
+___.
+
+FINDINGS:  The ventricles and extra-axial spaces are normal in size.  There is
+no evidence of midline shift, mass effect or hydrocephalus.  There are no
+focal signal abnormalities identified.  Following gadolinium, no evidence of
+abnormal parenchymal, vascular or meningeal enhancement identified.  The
+suprasellar region is normal on the sagittal images.  The craniocervical
+junction also appears normal on the sagittal images.  Incidentally noted is a
+small approximately 1.5-cm CSF space at the anterior aspect of the right
+cerebellum with slight indentation indicating a small incidental arachnoid
+cyst.  Incidentally also noted is pneumatization with fluid in the right
+petrous apex air cells.
+
+There is a slight prominence of the nasopharyngeal soft tissues identified.
+This is inappropriate for patient's age and clinical correlation recommended.
+
+
+
+IMPRESSION: (1) Small incidental arachnoid cyst right side of posterior fossa.
+(2) Prominence of nasopharyngeal soft-tissues, in appropriate for patient's
+age. Direct inspection recommended.
+"
+10000935-RR-45,10000935,,RR,45,2182-10-06 11:24:00,2182-10-06 15:20:00,"PA AND LATERAL CHEST, ___
+
+HISTORY:  Status post right lower lobe resection for carcinoid.  Now short of
+breath.
+
+IMPRESSION:  PA and lateral chest compared to ___:
+
+There has been no interval radiographic change.  Lung volumes are small and
+the right hemidiaphragm is moderately elevated.  Pleural thickening joins the
+left lower costal pleural margin, unchanged.  No focal pulmonary abnormality
+is seen.  There is no left pleural effusion.  The right hemidiaphragm remains
+elevated.  Heart size normal.  Upper mediastinum has normal contours. 
+Granulomatous calcifications are seen in hilar nodes.
+
+Periosteal regrowth does not fully bridge surgical fracture of the right
+posterior sixth rib.
+"
+10000935-RR-46,10000935,,RR,46,2182-11-28 10:45:00,2182-11-28 17:23:00,"HISTORY:  ___ female with osteoarthritis of bilateral knees, evaluate
+for progression.
+
+COMPARISON:  ___ and ___. 
+
+LEFT KNEE, THREE VIEWS:  There is no acute fracture or dislocation.  There is
+moderate joint space narrowing of the medial compartment of the knee, with
+associated osteophytes.  There is mild lateral translocation of the tibia
+relative to the femur.  Mild degenerative changes of the lateral and
+patellofemoral compartments are seen, with small spurring.  There is no joint
+effusion.  No soft tissue calcification or radiopaque foreign body identified.
+
+RIGHT KNEE, THREE VIEWS:  There is no acute fracture or dislocation.  There is
+moderate joint space narrowing within the medial compartment of the knee, with
+associated spurs.  There is also mild lateral translocation of the tibia
+relative to the femur.  Mild degenerative changes are also present within the
+lateral and patellofemoral compartments of the knee with small spurs.  There
+is no joint effusion.  No soft tissue calcification or radiopaque foreign body
+identified.
+
+IMPRESSION:  Moderate osteoarthritis of the medial compartment of the knee
+bilaterally.
+"
+10000935-RR-47,10000935,,RR,47,2182-11-28 10:45:00,2182-11-28 17:22:00,"HISTORY:  ___ female with history of herniated C5-6 disc, now with
+continued neck pain.  Evaluate for DJD or disc herniation.
+
+No prior studies for comparison.
+
+C-SPINE, TWO VIEWS:  On the lateral view, C1 through mid T1 is visualized. 
+There is no prevertebral soft tissue swelling.  Cervical lordosis is
+straightened.  There is no acute fracture or acute malalignment.  Multilevel
+degenerative changes are present, most severe at C5-6, with disc height
+narrowing.  Tiny ossific density anterior to the disc space at ___
+represent a calcified anterior longitudinal ligament.  There may be a grade 1
+anterolisthesis of C4 on C5.  Visualized lung apices are clear.
+
+IMPRESSION:  Multilevel degenerative changes, most severe at C5-6.
+"
+10000935-RR-50,10000935,29541074,RR,50,2183-10-28 05:55:00,2183-10-28 10:01:00,"HISTORY:  Epigastric pain and nausea and vomiting.
+
+COMPARISON:  Comparison is made to CT from ___.
+
+TECHNIQUE:  Helical axial CT images were acquired through the abdomen and
+pelvis following administration of 130 cc of intravenous Optiray contrast.
+Coronal and sagittal reformatted images were also reviewed.
+
+CT ABDOMEN WITH CONTRAST:  Lung bases are notable for bibasilar atelectasis,
+and limited visualization of the cardiac apex is unremarkable.  The adrenal
+glands, spleen, gallbladder, pancreas are unremarkable.  The kidneys enhance
+symmetrically.  A 7-mm hypodensity at the upper pole of the right kidney is
+too small to characterize (3:25) and the kidneys are otherwise normal.  The
+liver is unremarkable, though note is made of a small hypodensity at the right
+lobe (3:33) again too small to characterize, likely focal fatty infiltration.
+There is no free gas or fluid in the abdomen.  There is no retroperitoneal or
+mesenteric lymphadenopathy.
+
+The stomach and duodenum are unremarkable.  Note is made of numerous,
+predominantly fluid-filled loops of small bowel throughout the abdomen, which
+appear minimally dilated with a loop in the left lower quadrant measuring 3.1
+cm.  In addition, many of these loops (3:81) demonstrate the 'small-bowel
+feces' sign.  The most distal small bowel, specifically at the terminal ileum
+is collapsed and a possible transition point is noted at the lower pelvis
+(104B:25).  No definite mass or other apparent etiology of obstruction is
+noted.
+
+CT PELVIS WITH CONTRAST:  There is no free fluid in the pelvis.  The rectum
+and colon are primarily collapsed, though small amount of feces is noted in
+the cecum and proximal ascending colon.  The urinary bladder and distal
+ureters are unremarkable.  The uterus and ovaries are not visualized.  Note is
+made of a small fat-containing left inguinal hernia (3:93).  There is no
+pelvic sidewall or inguinal lymphadenopathy.
+
+OSSEOUS FINDINGS: Partially visualized multiple rib deformities involving the
+right ___ ribs (3:4) are post-operative.  Bilateral sclerosis at the
+sacroiliac joints (3:72) is consistent with osteitis condensans ilii.  There
+are no suspicious sclerotic/lytic lesions.
+
+IMPRESSION:
+1.  Slightly dilated loops of small bowel with fecalization of small bowel
+contents and distal collapsed loops, together indicating early complete or
+partial small-bowel obstruction.
+2.  Post-surgical changes noted at the right ribs as detailed above.
+"
+10000935-RR-51,10000935,29541074,RR,51,2183-10-29 10:55:00,2183-10-29 16:04:00,"INDICATION:  ___ female with small-bowel obstruction status post
+hysterectomy.
+
+COMPARISON:  CT dated ___.
+
+SUPINE AND UPRIGHT VIEWS OF THE ABDOMEN:  An NG tube is seen positioned within
+the stomach.  Again noted are multiple dilated loops of small bowel measuring
+up to 4.1 cm.  There are multiple air-fluid levels on the upright views.
+Scattered fecal material is seen in the ascending colon, but there is a
+paucity of air in the descending colon, sigmoid colon and pelvis.  Osseous
+structures and surrounding soft tissues are unremarkable.  Standard changes
+are seen in the bilateral hips, but no suspicious lytic or sclerotic lesions.
+
+IMPRESSION:  Multiple dilated small bowel loops with air-fluid levels on
+upright view, and paucity of air in the descending colon and pelvis, are most
+consistent with persistent small-bowel obstruction.
+"
+10000935-RR-52,10000935,29541074,RR,52,2183-10-29 21:49:00,2183-10-30 11:31:00,"
+CT ABDOMEN AND PELVIS WITH CONTRAST
+
+INDICATION:  Small-bowel obstruction, pain and nausea.
+
+TECHNIQUE:  MDCT-acquired axial images of the abdomen and pelvis were obtained
+with oral and intravenous contrast.  Coronal and sagittal reformats were
+performed.
+
+COMPARISON:  ___.
+
+CT ABDOMEN:  There is atelectasis at the lung bases.  There is calcification
+in the right lung base, likely due to prior resection for carcinoid.
+Evaluation of the liver is slightly limited by streak artifact from the arms.
+The single low-attenuation lesion in the right lobe of the liver measures
+13 mm consistent with focal fatty sparing.  There is probable vicarious
+contrast excretion in the gallbladder. The pancreas, spleen, and adrenals are
+normal. There is a small area of low attenuation in the upper pole of the
+right kidney, most likely a cyst, but too small to full characterize.  The
+kidneys enhance symmetrically and excrete contrast normally.  There are
+multiple dilated loops of small bowel, some of which have fecalization. There
+has been slight interval worsening since prior study. There is an apparent
+transition point in the left mid abdomen (2, 40).  The small bowel loops are
+depressed, more distally.  There is no free air.  There is trace free
+mesenteric fluid. There is no retroperitoneal or mesenteric adenopathy.
+
+CT PELVIS:  The rectum, sigmoid, distal bladder, and ureters are normal. There
+has been prior hysterectomy.  There is no inguinal or pelvic adenopathy. There
+is trace free fluid in the pelvis.
+
+BONE WINDOWS:  There are no suspicious osseous lesions.
+
+IMPRESSION:
+1. Interval worsening of small bowel obstruction.  Transition point in the
+left mid abdomen. (The patient went to the OR on the evening of the study).
+2. Trace free fluid in the pelvis is likely physiologic.   
+"
+10000935-RR-55,10000935,,RR,55,2184-02-26 11:31:00,2184-02-26 14:23:00,"HISTORY:  Foot pain for one month over the dorsum of the foot.
+
+FINDINGS:
+Radiographs of the left foot are reviewed without previous studies for
+comparison.
+
+There is no focal soft tissue swelling, acute fracture, or malalignment. Joint
+spaces are normal.  Very mild degenerative changes are seen at the first
+metatarsophalangeal joint.
+
+IMPRESSION:
+
+No acute fracture or malalignment.
+"
+10000935-RR-56,10000935,,RR,56,2184-03-29 09:48:00,2184-03-29 14:28:00,"HISTORY:  Hand cramping and dorsal hand pain.  Evaluate for degenerative
+changes.
+
+THREE VIEWS OF THE RIGHT HAND
+
+Comparison is made to right wrist radiographs dated ___.  There
+is no evidence of acute fracture, dislocation, or significant osteoarthritic
+changes with mild narrowing at ___ CMC.  No inflammatory arthropathy is noted.
+Soft tissues appear grossly unremarkable.
+
+IMPRESSION:
+
+Right hand radiographs within normal limits.
+"
+10000935-RR-57,10000935,,RR,57,2184-08-23 12:15:00,2184-08-23 13:59:00,"HISTORY:  Low back pain.
+
+LUMBAR SPINE, TWO VIEWS
+
+Assessment of fine bony detail is limited by overlying soft tissues and
+underpenetration.
+
+There is minimal left convex curvature cenetered at L3/4. There are five non-
+rib- bearing vertebral bodies. There is moderate facet arthrosis in the lower
+lumbar spine. There is mild multilevel degenerative change, with slight disc
+space narrowing and marginal osteophytes at multiple levels.  Disc space
+narrowing is most pronounced at L4/5, where there is also minimal
+anterolisthesis.
+
+Subluxation of vertebral segments in the region of the sacrococcygeal junction
+is suggested, for which clinical correlation is requested.
+
+At the periphery of these films, the possibility of very slight anterior
+wedging of the T12 vertebral body is raised. Lspine vertebral body heights
+are preserved.
+
+"
+10000935-RR-58,10000935,,RR,58,2184-11-25 09:27:00,2184-11-25 13:46:00,"INDICATION:  Right knee osteoarthritis.
+
+COMPARISON:  ___.
+
+AP, LATERAL AND SUNRISE VIEWS OF THE RIGHT KNEE:  Moderately severe
+degenerative changes of the medial compartment of the right knee are not
+significantly changed compared to ___.  There is moderate joint space
+narrowing and subchondral sclerosis with small marginal osteophytes.  There is
+milder narrowing of the lateral compartment.  A medial patellar spur is noted
+with mild narrowing at the patellofemoral compartment.  No joint effusion.  No
+loose bodies.
+
+IMPRESSION:  Moderate osteoarthritis, worst in the medial compartment, however
+unchanged compared to ___.
+"
+10000935-RR-59,10000935,,RR,59,2185-03-03 15:30:00,2185-03-04 19:16:00,"BILATERAL DIGITAL SCREENING MAMMOGRAM WITH CAD
+
+CLINICAL INDICATION:  Postmenopausal, nulliparous, family history of breast
+cancer, screening.
+
+Comparison is made to the patient's previous analog studies dated ___
+and ___.
+
+The breast tissues are fatty with a moderately dense fibroglandular and
+fibronodular tissue, predominantly in the anterior breasts which does somewhat
+lower the sensitivity of mammography.  Given differences in technique and
+positioning between studies, there is likely no apparent interval change.  No
+suspicious mass, area of architectural distortion or cluster of suspicious
+microcalcification is appreciated.
+
+This study was interpreted with the aid of the ICAD computer-aided detection
+system.
+
+IMPRESSION:
+
+1.  Moderately dense nodular tissue in the anterior breasts bilaterally.  No
+specific mammographic evidence of malignancy.
+
+BI-RADS 1 - negative.
+"
+10000935-RR-60,10000935,,RR,60,2185-12-24 19:33:00,2185-12-24 20:51:00,"RIGHT ANKLE AND FOOT RADIOGRAPH PERFORMED ON ___.
+
+COMPARISON:  None.
+
+CLINICAL HISTORY:  Pain status post fall, assess fracture or dislocation.
+
+FINDINGS:  AP, lateral, oblique views of the right ankle and foot were
+provided.  There is an acute fracture involving the inferior aspect of the
+lateral malleolus with minimal distraction of the distal fracture fragment. 
+Significant overlying soft tissue swelling is noted.  The ankle mortise is
+symmetric.  Talar dome is smooth.  Soft tissue calcifications are noted in the
+anterior aspect of the right lower leg.  Three views are also obtained of the
+right foot demonstrating no additional fracture or dislocation.  A metallic
+ring overlies a portion of the second toe limiting evaluation at this level. 
+No significant degenerative changes are present.
+
+IMPRESSION:  Lateral malleolar fracture, minimally displaced, significant
+lateral soft tissue swelling at the ankle.
+"
+10000935-RR-62,10000935,,RR,62,2186-02-23 10:57:00,2186-02-23 12:45:00,"STUDY:  Right ankle, ___.
+
+CLINICAL HISTORY:  ___ woman with right malleolar fracture two months
+ago.
+
+FINDINGS:  Comparison is made to prior study from ___.
+
+There is again seen a fracture involving the distal tip of the fibula.  There
+is some increased separation of the fracture fragments since the prior study. 
+There is also persistent soft tissue swelling.  No new fractures are seen.  No
+osteochondral lesions are identified.  There are some dystrophic
+calcifications in the anterior soft tissues.
+"

@@ -1,0 +1,591 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{geometry}
+\geometry{margin=2cm}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{calc}
+\usepackage[width=\textwidth]{caption}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\title{Summary of Experiments \& Datasets}
+\author{Fabrizio Pagnozzi}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\newpage
+
+\section{Dataset Summary Across Approaches}
+
+\begin{small}
+	\begin{longtable}{@{}p{2.5cm}p{0.8cm}p{1.2cm}p{2.4cm}p{2.2cm}p{1.8cm}p{\dimexpr\textwidth-2.5cm-0.8cm-1.2cm-2.4cm-2.2cm-1.8cm-12\tabcolsep\relax}@{}}
+		\caption{\textbf{M} = Martinenghi, \textbf{W} = Wang et al., \textbf{K} = Khan et al.\ (DF-RAG). Embedding abbreviations: \textbf{mpnet} = \texttt{multi-qa-mpnet-base-cos-v1}, \textbf{SB} = SentenceBERT, \textbf{E5} = E5-base.}
+		\label{tab:dataset-summary} \\
+		\toprule
+		\textbf{Dataset} & \textbf{Hops} & \textbf{Used by} & \textbf{Task type} & \textbf{Evaluation} & \textbf{Emb. model} & \textbf{Purpose / why it matters} \\
+		\midrule
+		\endfirsthead
+		\toprule
+		\textbf{Dataset} & \textbf{Hops} & \textbf{Used by} & \textbf{Task type} & \textbf{Evaluation} & \textbf{Emb. model} & \textbf{Purpose / why it matters} \\
+		\midrule
+		\endhead
+		\midrule
+		\endfoot
+		\bottomrule
+		\endlastfoot
+		\textbf{TriviaQA} & 1 & M, W & Factoid QA & Hit rate (M); Pre/post-LLM recall (W) & mpnet (M); SB, E5 (W) & Baseline single-hop benchmark. Diversity shows $\Delta \approx 0$; confirms coverage is irrelevant when the information landscape has one peak. \\
+		\addlinespace
+		\textbf{TREC-DL 2020} & 1 & M & Passage retrieval & nDCG@10, Recall@10 & mpnet & BM25 candidate pool with embedding re-ranking. Marginal coverage gains ($\Delta \leq 0.002$) reinforce single-hop finding. \\
+		\addlinespace
+		\textbf{HotpotQA} & 2 & M, K & Multi-hop QA & DocRec, FactRec, FacCov (M); $F_1$ (K) & mpnet & Core multi-hop benchmark. Martinenghi: Jaccard drops to 0.53, FacCov highest for coverage. DF-RAG: +5.7 $F_1$ over vanilla RAG. \\
+		\addlinespace
+		\textbf{Natural Questions} & 1 & W & Factoid QA & Pre/post-LLM recall & SB, E5 & Google search queries over Wikipedia. MMR gives +4.6\% at aggressive compression ($c_r = 0.05$), showing diversity helps under tight budgets even on single-hop. \\
+		\addlinespace
+		\textbf{SQuAD} & 1 & W & Extractive QA & Pre/post-LLM recall & SB, E5 & Used to compare sentence-level vs.\ chunk-level splitting. Chunk-level + MMR reaches 99\% pre-LLM recall. \\
+		\addlinespace
+		\textbf{Narrative QA} & 1$^*$ & W & Abstractive QA over stories & Pre/post-LLM recall & SB, E5 & Largest diversity gains in Wang et al.\ ($+68\%$ relative). Answers require synthesizing across long narratives. $^*$Single-doc but multi-aspect. \\
+		\addlinespace
+		\textbf{gov\_report} & --- & W & Summarization & ROUGE, LLM-as-Judge & SB & Repetitive government documents. MMR improves LLM-as-Judge win rate from 24\% to 75\%, showing diversity reduces redundancy in extractive content. \\
+		\addlinespace
+		\textbf{legal} & --- & W & Summarization & ROUGE, LLM-as-Judge & SB & Legal documents with boilerplate. Similar to gov\_report: diversity helps when source content is repetitive. \\
+		\addlinespace
+		\textbf{MuSiQue} & 2--4 & K & Compositional multi-hop QA & $F_1$ & mpnet & Hardest multi-hop dataset: each hop depends on the previous answer. Tests whether diversity helps recover all intermediate evidence pieces. \\
+		\addlinespace
+		\textbf{2Wiki\newline MultihopQA} & 2 & K & Structured multi-hop QA & $F_1$ & mpnet & Wikidata-derived, clean annotations. DF-RAG closes up to 91.3\% of the Oracle gap on this dataset (Qwen 2.5 72B). \\
+		\addlinespace
+		\textbf{MultifieldQA} & 1 & K & Long-context QA & $F_1$ & mpnet & Diverse domains (legal, scientific, government). Tests whether diversity helps on non-multi-hop but domain-diverse tasks. DF-RAG: +17.5 $F_1$. \\
+		\addlinespace
+		\textbf{En.QA} & 1 & K & Extreme long-context QA & $F_1$ & mpnet & Average context $>$100k tokens; forces severe compression. Tests diversity under the tightest budget constraints. \\
+	\end{longtable}
+\end{small}
+
+\noindent\textbf{Key takeaways from the table:}
+\begin{itemize}[leftmargin=*]
+	\item \textbf{Single-hop factoid datasets} (TriviaQA, TREC-DL, Natural Questions, SQuAD) consistently show minimal diversity gains, except under aggressive compression. These serve as negative controls.
+	\item \textbf{Multi-hop datasets} (HotpotQA, MuSiQue, 2WikiMultihopQA) show the strongest signal for diversity across all three approaches, confirming that multi-peaked information landscapes are where coverage and dispersion methods diverge from relevance-only baselines.
+	\item \textbf{Long-context and abstractive tasks} (Narrative QA, MultifieldQA, En.QA) occupy a middle ground: not structurally multi-hop, but requiring broad information synthesis, which diversity facilitates.
+	\item \textbf{Summarization} (gov\_report, legal) is the only task family where diversity is evaluated for redundancy reduction rather than information completeness --- a complementary motivation.
+	\item Only HotpotQA appears in more than one approach (Martinenghi and Khan et al.), making it the single direct comparison point. The thesis should ensure all priority datasets are evaluated under both coverage and MMR/gMMR to enable controlled cross-method comparison.
+\end{itemize}
+
+\part{Martinenghi Draft}
+
+\section{Experimental Setup}
+
+\subsection{Task}
+Pre-LLM context selection: given a query $q$ and a pool of candidate text chunks, select a subset $S$ under a token budget $T_{\max}$ that maximizes retrieval quality.
+No LLM generation is involved --- evaluation is purely at retrieval time.
+
+\subsection{Selection Strategies Compared}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{Baseline (relevance-only):} greedily select candidates by descending cosine similarity to the query until the token budget is exhausted.
+	\item \textbf{Coverage (facility-location):} each candidate is scored as a weighted combination of relevance and \emph{marginal coverage} over the candidate pool:
+	      \[
+		      \text{score}(i) = \alpha \cdot r_i + \beta \cdot \Delta\text{cov}(i),
+	      \]
+	      where $\Delta\text{cov}(i) = g(S \cup \{i\}) - g(S)$ is the marginal gain of the facility-location function
+	      $g(S) = \sum_{j \in D} \max_{s \in S} w_{js}$.
+	      Selection is greedy (implied by the ``marginal coverage relative to already selected items'' description, consistent with the $(1-1/e)$ guarantee for monotone submodular functions).
+	\item \textbf{MMR} (added in later experiments, Tables 4--7): standard Maximal Marginal Relevance, selecting the next item by balancing relevance against dissimilarity to already-selected items.
+\end{enumerate}
+
+\subsection{Datasets}
+
+\begin{itemize}[leftmargin=*]
+	\item \textbf{TriviaQA} (primary): QA benchmark, single-hop factoid questions. Documents chunked into overlapping segments. Embedding model: dense encoder (e.g., multi-qa-mpnet). Evaluation via answer string match in selected chunks (``hit rate'').
+	\item \textbf{TREC-DL 2020} (msmarco-passage, trec-dl-2020/judged): passage retrieval with human relevance judgments (qrels). BM25 candidates + embedding-based selection. Evaluated with nDCG@10 and Recall@10.
+	\item \textbf{HotpotQA distractor} (validation): 2-hop multi-hop QA. Each query has 2 gold + 8 distractor documents. Evaluated with DocRec (document recall), FactRec (supporting-fact recall), FacCov, AvgCos.
+\end{itemize}
+
+\subsection{Parameters Varied}
+
+\begin{tabular}{@{}lp{10cm}@{}}
+	\toprule
+	Parameter & Description \\
+	\midrule
+	$\lambda$ (or $\alpha, \beta$) & Trade-off between relevance and coverage weight \\
+	$T_{\max}$ & Token budget for the concatenation of selected chunks \\
+	\texttt{chunk\_tokens} & Size of each chunk (in tokens) \\
+	\texttt{stride} & Overlap between consecutive chunks \\
+	\texttt{max\_docs} & Number of source documents contributing to the candidate pool \\
+	\texttt{max\_cands} & Maximum number of candidate chunks considered by the selection algorithm \\
+	PCA & Whether to apply per-example PCA (128 dims) to the embedding space \\
+	\bottomrule
+\end{tabular}
+
+\section{Results}
+
+\subsection{Phase 1: Varying $\lambda$ on TriviaQA (Table 1, top)}
+
+\begin{itemize}[leftmargin=*]
+	\item $T_{\max} = 2048$, \texttt{chunk\_tokens} = 256, \texttt{stride} = 128.
+	\item $\lambda$ varied from 0.4 to 0.9 (i.e., coverage weight $1-\lambda$ from 0.6 to 0.1).
+	\item \textbf{Result:} no substantial difference between baseline and coverage. $\Delta\text{hit} \leq 0.0025$. Both hit rate and the coverage metric itself remain virtually unchanged.
+	\item \textbf{Interpretation:} the candidate pool under this configuration is too homogeneous for coverage to diverge from relevance-only ranking.
+\end{itemize}
+
+\subsection{Phase 2: Tighter Budget and Chunking (Table 1, middle/bottom)}
+
+\begin{itemize}[leftmargin=*]
+	\item Reduced $T_{\max}$ to 512 and 256, varied \texttt{chunk\_tokens} $\in \{64, 128, 256\}$ and \texttt{stride} $\in \{16, 32, 64, 128\}$.
+	\item \textbf{Result:} absolute hit rates drop as budget shrinks (as expected), but the gap between baseline and coverage remains small. Largest observed: $\Delta\text{hit} = 0.0059$ (at $T_{\max} = 512$). $\Delta\text{fac} \leq 0.006$.
+	\item Some configurations change the effective evaluation set (examples with $<10$ candidates are dropped).
+\end{itemize}
+
+\subsection{Phase 3: Candidate Pool Size (Table 2)}
+
+\begin{itemize}[leftmargin=*]
+	\item Fixed best config from Phase 2: $T_{\max} = 512$, $\lambda = 0.7$, \texttt{chunk\_tokens} = 256, \texttt{stride} = 128.
+	\item Varied \texttt{max\_docs} $\in \{12, 20, 30\}$ and \texttt{max\_cands} $\in \{200, 400, 600\}$.
+	\item \textbf{Result:} $\Delta\text{hit}$ stays constant at 0.0059 regardless of pool size. Jaccard similarity between baseline and coverage selections is very high ($\approx 0.86$ for chunks, $\approx 0.95$ for domains).
+	\item \textbf{Key insight:} the top-relevance chunks dominate the selection even with a much larger pool. Coverage does not ``see'' enough diversity in the candidates to deviate from the baseline.
+\end{itemize}
+
+\subsection{Phase 4: PCA (Table 3)}
+
+\begin{itemize}[leftmargin=*]
+	\item Same TriviaQA setup ($T_{\max} = 512$, $\alpha = 0.7$, bonus $= 0.3$, \texttt{max\_docs} = 20, \texttt{max\_cands} = 200).
+	\item Per-example PCA to 128 dimensions applied vs.\ no PCA.
+	\item \textbf{Without PCA:} $\Delta = +0.0059$, FacCov improves ($0.8736 \to 0.8770$), Jaccard $\approx 0.86/0.95$.
+	\item \textbf{With PCA:} both hit rates \emph{drop} ($0.8190$ vs.\ $0.8397$), $\Delta$ shrinks to $+0.0032$, Jaccard \emph{increases} to $0.96/0.98$, facility coverage collapses ($0.1875 \to 0.1905$).
+	\item \textbf{Interpretation:} PCA compresses the embedding space and kills the diversity signal. Baseline and coverage become nearly identical under PCA.
+\end{itemize}
+
+\subsection{Phase 5: TriviaQA with MMR (Tables 4--5)}
+
+Three methods compared: Baseline, Coverage, MMR. Two budget regimes.
+
+\medskip
+\noindent\textbf{Large budget ($T_{\max} = 10000$):}
+\begin{itemize}[leftmargin=*]
+	\item Hit rates nearly identical ($\approx 0.944$). Coverage selects from more domains (3.75 vs.\ 3.69). MMR is close to baseline.
+	\item Coverage--baseline Jaccard $\approx 0.84$; MMR--baseline Jaccard (Gold/Chunk) $\approx 0.87$.
+\end{itemize}
+
+\noindent\textbf{Small budget ($T_{\max} = 2000$):}
+\begin{itemize}[leftmargin=*]
+	\item $\alpha = 0.70, \beta = 0.30$: Coverage hit = 0.906 (below baseline 0.913), but FacCov improves ($0.884 \to 0.899$) and GoldConcat improves ($2.266 \to 2.335$). Jaccard = 0.393 --- meaning coverage selects \emph{very different} chunks.
+	\item MMR: hit = 0.916, FacCov = 0.887, GoldConcat = 1.890 (lower). Higher Jaccard with baseline.
+	\item \textbf{Observation:} at tighter budgets, coverage diverges more from baseline (low Jaccard) and retrieves more gold aliases overall --- but at the cost of slightly lower hit rate.
+\end{itemize}
+
+\subsection{Phase 6: HotpotQA Distractor (Table 6)}
+
+\begin{itemize}[leftmargin=*]
+	\item 2-hop multi-hop QA. $K = 5$ chunks selected. Chunk sizes $w \in \{100, 200\}$ words.
+	\item Methods: Sim (cosine baseline), MMR, gMMR, Fac (facility-location).
+	\item \textbf{Results ($w = 100$):}
+	      \begin{itemize}
+		      \item DocRec: gMMR best (0.852), Fac lowest (0.766).
+		      \item FactRec: gMMR best (0.839), Fac = 0.740.
+		      \item FacCov: \textbf{Fac best (0.724)}, gMMR = 0.659.
+		      \item Jaccard(Sim, Fac) = 0.527 --- coverage selects very different chunks from baseline.
+	      \end{itemize}
+	\item \textbf{Results ($w = 200$):}
+	      \begin{itemize}
+		      \item DocRec: gMMR best (0.870), Fac = 0.842.
+		      \item FactRec: gMMR best (0.871), \textbf{Fac = 0.843} (close).
+		      \item FacCov: \textbf{Fac best (0.740)}.
+		      \item Jaccard(Sim, Fac) = 0.695.
+	      \end{itemize}
+	\item \textbf{Key finding:} on multi-hop queries, facility-location achieves the highest coverage scores and produces the most divergent selection from baseline. However, gMMR achieves higher DocRec and FactRec. Facility-location trades off per-document recall for broader coverage of the candidate space.
+\end{itemize}
+
+\subsection{Phase 7: TREC-DL (Section 7.5)}
+
+\begin{itemize}[leftmargin=*]
+	\item BM25 candidates, embedding-based selection. 54 judged queries.
+	\item Best result: $T_{\max} = 512$, $N = 200$, $\alpha = 0.7$, bonus $= 0.3$.
+	\item nDCG@10: $0.5662 \to 0.5681$ ($\Delta = +0.0020$).
+	\item Recall@10: $0.1857 \to 0.1871$ ($\Delta = +0.0014$).
+	\item Jaccard = 0.88.
+	\item \textbf{Interpretation:} marginal improvement, consistent with TriviaQA. Single-hop/factoid queries do not benefit meaningfully from coverage.
+\end{itemize}
+
+\section{Summary of Findings}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{On single-hop/factoid benchmarks (TriviaQA, TREC-DL):} coverage $\approx$ baseline. The information landscape has one peak; there is nothing meaningful to ``cover'' beyond the top-relevance cluster. $\Delta\text{hit} \leq 0.006$.
+	\item \textbf{Jaccard analysis:} baseline and coverage select nearly identical chunks on these datasets (Jaccard 0.85--0.96), confirming that coverage does not produce a meaningfully different selection.
+	\item \textbf{PCA hurts:} dimensionality reduction compresses the embedding space and destroys the diversity signal.
+	\item \textbf{Budget tightening helps slightly:} smaller $T_{\max}$ forces harder trade-offs and increases coverage's divergence from baseline, but the effect is still small.
+	\item \textbf{Multi-hop queries (HotpotQA) show the most signal:} coverage selects genuinely different chunks (Jaccard $\approx 0.53$) and achieves the highest facility-location scores. However, gMMR outperforms coverage on DocRec and FactRec in this setup.
+	\item \textbf{Coverage retrieves more gold aliases} (GoldConcat metric) even when hit rate is flat or slightly lower --- it surfaces more diverse answer evidence.
+\end{enumerate}
+
+\newpage
+\part{Related Work}
+
+\section{Wang et al.\ (2025): ``Diversity Enhances an LLM's Performance in RAG and Long-Context Task''}
+
+This paper (arXiv 2502.09017) studies the same core question --- does diversity in pre-LLM content selection improve downstream performance? --- but with a different methodology and scope than Martinenghi's draft. The comparison is instructive.
+
+\subsection{Setup}
+
+\begin{itemize}[leftmargin=*]
+	\item \textbf{Diversity methods:} MMR (cosine-based) and modified FPS (Euclidean-based). No facility-location / coverage objective.
+	\item \textbf{Granularity:} sentence-level (single-doc) and chunk-level (multi-doc, 512 tokens, 50\% overlap).
+	\item \textbf{Embeddings:} SentenceBERT (single-doc) and E5 (multi-doc). PCA applied for multi-doc to reduce dimensionality before approximate search.
+	\item \textbf{Budget control:} compression ratio $c_r = \text{selected tokens} / \text{total tokens}$, tested at $c_r \in \{0.05, 0.1, 0.2\}$ (single-doc) or absolute $T_{\max} \in \{2\text{k}, 5\text{k}, 10\text{k}, 20\text{k}, 50\text{k}, 120\text{k}\}$ (multi-doc).
+	\item \textbf{Hyperparameters:} $\alpha$ (relevance vs.\ diversity weight) and $w$ (context window size for MMR penalty --- only penalizes against the last $w$ selected items, not all).
+	\item \textbf{Evaluation:} both \emph{pre-LLM recall} (is the answer in the selected content?) and \emph{post-LLM recall} (is the answer in the LLM's response?). LLMs: GPT-4 and GPT-3.5.
+\end{itemize}
+
+\subsection{Tasks and Datasets}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{Single-document Q\&A} (sentence-level selection):
+	      \begin{itemize}
+		      \item \textbf{Natural Questions} --- Google search queries with Wikipedia answers.
+		      \item \textbf{TriviaQA} --- trivia factoid questions.
+		      \item \textbf{Narrative QA} --- questions requiring comprehension of full stories/scripts; answers are abstractive.
+	      \end{itemize}
+	\item \textbf{Multi-document Q\&A} (chunk-level selection):
+	      \begin{itemize}
+		      \item Same three datasets, but all documents are pooled and chunked together (up to $\sim$1M chunks). The query must find the answer across the entire corpus.
+	      \end{itemize}
+	\item \textbf{Single-document summarization} (sentence-level selection):
+	      \begin{itemize}
+		      \item \textbf{gov\_report} --- U.S.\ government reports with expert summaries.
+		      \item \textbf{legal} --- legal documents with summaries.
+		      \item Evaluated via ROUGE and LLM-as-a-Judge (GPT-4 win rate).
+	      \end{itemize}
+	\item \textbf{Sentence vs.\ chunk comparison} on \textbf{SQuAD} (multi-doc setting).
+\end{enumerate}
+
+\subsection{Key Results}
+
+\subsubsection{Single-document Q\&A (Table 1)}
+
+\begin{itemize}[leftmargin=*]
+	\item SB+MMR and SB+FPS consistently improve pre-LLM recall over SentenceBERT baseline (SB) by 2--5\%.
+	\item Effect is \textbf{strongest at low compression} ($c_r = 0.05$): SB+MMR reaches 50.88 vs.\ SB 46.28 on Natural Questions (+4.6 absolute).
+	\item At higher $c_r$ the gap narrows (more budget $\Rightarrow$ less pressure to diversify).
+	\item MMR $\approx$ FPS in accuracy, but MMR is faster (cosine vs.\ Euclidean distance).
+\end{itemize}
+
+\subsubsection{Multi-document Q\&A (Table 3)}
+
+\begin{itemize}[leftmargin=*]
+	\item E5+MMR improves pre-LLM recall over E5 across all datasets and all $T_{\max}$ values.
+	\item Narrative QA sees the \textbf{largest gains}: 22.56 vs.\ 13.42 at $T_{\max} = 120\text{k}$ ($+68\%$ relative), 15.85 vs.\ 6.7 at $T_{\max} = 20\text{k}$ ($+136\%$ relative).
+	\item TriviaQA: 88.99 vs.\ 84.62 at $T_{\max} = 120\text{k}$ ($+5\%$ relative).
+	\item Natural Questions: 71.5 vs.\ 70.7 at $T_{\max} = 120\text{k}$ ($+1\%$ relative).
+\end{itemize}
+
+\subsubsection{Post-LLM recall (Tables 4--6)}
+
+\begin{itemize}[leftmargin=*]
+	\item Pre-LLM gains \textbf{partially transfer} to post-LLM recall, but the LLM is the bottleneck.
+	\item TriviaQA post-LLM recall plateaus at $\sim$76\% for GPT-4 regardless of retrieval quality --- the LLM was pretrained on TriviaQA data.
+	\item Narrative QA shows more post-LLM improvement (10.67 $\to$ 12.8 with GPT-4 on NQ).
+	\item Ordering matters: ``index sort'' (original document order) generally outperforms score-based reordering, consistent with ``Lost in the Middle'' findings.
+\end{itemize}
+
+\subsubsection{Summarization (Table 9)}
+
+\begin{itemize}[leftmargin=*]
+	\item SB+MMR improves both ROUGE (17.7 $\to$ 18) and LLM-as-a-Judge win rate (24.24\% $\to$ 75.26\% on gov\_report).
+	\item Diversity is especially beneficial when documents contain repetitive content (emails, logs, legal boilerplate).
+\end{itemize}
+
+\subsubsection{Sentence vs.\ Chunk Splitter (Tables 7--8, SQuAD)}
+
+\begin{itemize}[leftmargin=*]
+	\item Chunk-level outperforms sentence-level, especially at larger chunk sizes.
+	\item SB/E5+MMR with 512-token chunks: 99\% pre-LLM recall at $T_{\max} = 10\text{k}$ on SQuAD (Table 7).
+	\item Post-LLM: chunk-level with MMR reaches 85\% at 512 tokens, $T_{\max} = 5\text{k}$ (Table 8).
+\end{itemize}
+
+\subsection{Comparison: Coverage (Martinenghi) vs.\ MMR/FPS (Wang et al.)}
+
+\subsubsection{Where Wang et al.\ succeed and Martinenghi's draft does not}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{Larger effect sizes.} Wang et al.\ report 2--5\% absolute improvement on pre-LLM recall (up to $+68\%$ relative on Narrative QA). Martinenghi's coverage yields $\Delta\text{hit} \leq 0.006$ on TriviaQA/TREC-DL. This is partly due to dataset choice (see below), but also suggests MMR may be a more effective diversifier in practice.
+	\item \textbf{End-to-end evaluation.} Wang et al.\ measure post-LLM recall, showing that diversity gains in retrieval transfer (partially) to downstream LLM performance. Martinenghi's draft evaluates only at retrieval time.
+	\item \textbf{Broader task coverage.} Summarization and multi-document QA are tested in addition to single-document QA.
+\end{enumerate}
+
+\subsubsection{Where Martinenghi's approach has theoretical advantages}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{Principled objective.} Facility-location is a well-studied submodular function with a $(1 - 1/e)$ approximation guarantee. MMR is a heuristic without global optimality properties --- it greedily penalizes similarity to the \emph{last $w$ items}, not to all selected items. This makes MMR's behavior sensitive to the window parameter $w$ and insertion order.
+	\item \textbf{Coverage vs.\ dispersion.} Facility-location maximizes \emph{coverage} (every candidate in the pool should be ``represented'' by some selected item). MMR maximizes \emph{dispersion} (selected items should be far from each other). These are different objectives:
+	      \begin{itemize}
+		      \item Coverage ensures no region of the candidate space is ignored.
+		      \item Dispersion ensures selected items are spread out, but may leave dense regions underrepresented if those regions happen to be close to other dense regions.
+	      \end{itemize}
+	      For RAG, coverage is arguably the more natural goal: we want to cover all \emph{information aspects} relevant to the query, not just pick maximally dissimilar chunks.
+	\item \textbf{No window parameter.} Facility-location considers all candidates in the pool simultaneously. MMR with context window $w$ only penalizes against the last $w$ selections --- this is an approximation that can miss redundancies with earlier selections.
+\end{enumerate}
+
+\subsubsection{Why the results diverge: dataset and evaluation mismatch}
+
+The apparent superiority of MMR in Wang et al.\ is largely explained by differences in experimental design, not in the intrinsic quality of the methods:
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{Martinenghi tests on single-hop factoid benchmarks} (TriviaQA, TREC-DL) where diversity is irrelevant by construction --- the answer is a single fact in a single passage. Any diversity method will show $\Delta \approx 0$ here. Wang et al.\ also test on these but additionally include Narrative QA (where diversity helps enormously) and multi-document pooling (which creates a much more heterogeneous candidate space).
+	\item \textbf{Martinenghi's HotpotQA results actually show coverage working} --- Jaccard drops to 0.53, FacCov is highest for facility-location. But DocRec/FactRec favor gMMR. This is a metric issue: DocRec/FactRec reward retrieving the ``right'' documents, which may favor methods that stay closer to relevance. FacCov rewards covering the candidate space, which is what coverage optimizes.
+	\item \textbf{The compression regime matters.} Wang et al.'s strongest results are at aggressive compression ($c_r = 0.05$, or $T_{\max} = 2\text{k}$). Martinenghi's early experiments use generous budgets ($T_{\max} = 2048$ tokens with only a handful of candidates), leaving no room for diversity to matter.
+\end{enumerate}
+
+\newpage
+\section{Khan et al.\ (2025): ``DF-RAG: Query-Aware Diversity for Retrieval-Augmented Generation''}
+
+This paper (arXiv 2601.17212) tackles a limitation that both Martinenghi and Wang et al.\ sidestep: the optimal level of diversity is not constant --- it varies \emph{per query}. A factoid question needs high relevance and little diversity; a multi-hop reasoning question needs complementary evidence from different sources. DF-RAG proposes a system that dynamically selects the right diversity parameter $\lambda$ for each query at test time, without any fine-tuning.
+
+\subsection{Setup}
+
+\begin{itemize}[leftmargin=*]
+	\item \textbf{Diversity method:} geometric MMR (gMMR), a variant of MMR where the diversity penalty uses Euclidean distance between normalized embeddings rather than cosine similarity:
+	      \[
+		      \text{gMMR}(c) = \lambda \cos(\vec{q}, \vec{c}) + (1 - \lambda)\sqrt{2 - 2\cos(\vec{c}, \vec{c}_S)},
+	      \]
+	      where $\vec{c}_S$ is the centroid of the already-selected chunks. The diversity term measures distance from the candidate to the \emph{centroid} of the selected set, not to each individual selected item (as in standard MMR). This is cheaper and empirically performs better in their experiments.
+	\item \textbf{Embeddings:} \texttt{multi-qa-mpnet-base-cos-v1} for sentence embeddings.
+	\item \textbf{Chunk selection:} always $k = 5$ chunks selected. Context length varied by changing chunk size $w \in \{100, 200, 300\}$ words (corresponding to 500, 1000, 1500 word contexts).
+	\item \textbf{LLMs:} Qwen 2.5 72B and Llama 3.3 70B. 16-bit precision on 2$\times$ A100 80GB.
+	\item \textbf{Evaluation:} end-to-end $F_1$ score of LLM-generated answers against ground truth. This is purely post-LLM evaluation --- no pre-LLM recall is reported.
+\end{itemize}
+
+\subsection{The Key Innovation: Per-Query $\lambda$ Selection}
+
+The paper tests three regimes of increasing sophistication:
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{$\lambda$-Fixed gMMR:} a single $\lambda$ is applied uniformly to all queries in a dataset. $\lambda$ is varied from 0.1 to 1.0 in steps of 0.1, and the best dataset-level $\lambda$ is reported. This already outperforms vanilla cosine-similarity RAG.
+	\item \textbf{Oracle:} for each query individually, try all $\lambda$ values (0.0 to 1.0 in steps of 0.1) and pick the one that yields the highest $F_1$ against the ground truth. This is a theoretical upper bound --- it tells you how much performance is left on the table by using a fixed $\lambda$.
+	\item \textbf{DF-RAG:} approximate the Oracle without access to ground truth. For each query:
+	      \begin{enumerate}
+		      \item A \textbf{Planner} LLM decomposes the query into reasoning steps (e.g., ``find date of case A'', ``find date of case B'', ``compare dates'').
+		      \item gMMR retrieval runs in parallel at multiple $\lambda$ values, producing one candidate chunk set per $\lambda$.
+		      \item An \textbf{Evaluator} LLM scores each chunk set on how well it supports the plan steps (0--5 per step), computing a \emph{Retrieval Support} score.
+		      \item The $\lambda$ with the highest Retrieval Support is selected; its chunks are passed to the Generator LLM.
+	      \end{enumerate}
+\end{enumerate}
+
+\subsection{Datasets}
+
+Five datasets, chosen specifically for reasoning intensity:
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{HotpotQA} (from LongBench): 2-hop multi-hop QA over Wikipedia. Questions require finding and combining facts from 2 documents. 200 samples. This is the same dataset Martinenghi uses, making direct comparison possible.
+
+	\item \textbf{MuSiQue} (from LongBench): 2--4 hop compositional multi-hop QA. Harder than HotpotQA --- each hop depends on the answer to the previous one (e.g., ``What is the capital of the country where [person born in X] was president?''). 200 samples. The compositional structure means the retrieval system must find \emph{all} intermediate evidence pieces, not just one.
+
+	\item \textbf{2WikiMultihopQA} (from LongBench): 2-hop QA derived from Wikidata triples. Questions have a structured, predictable form (comparison, bridge, inference). 200 samples. Cleaner and more controlled than HotpotQA, useful for isolating retrieval effects from question complexity.
+
+	\item \textbf{MultifieldQA} (from LongBench, English version): long-context, non-multi-hop QA. Documents span diverse domains --- Wikipedia articles, research papers, government reports, legal texts. 150 samples. Questions require reasoning over long context but do not necessarily require multiple documents. Tests whether diversity helps even on single-document, non-multi-hop tasks.
+
+	\item \textbf{En.QA} (from $\infty$Bench): extreme long-context QA with very long input documents (average context exceeds 100k tokens). 351 samples. The full context exceeds even GPT-4's window, so chunk selection is mandatory. Tests diversity under severe compression --- the retrieval system must select a tiny fraction of the total context.
+\end{enumerate}
+
+\medskip
+\noindent\textbf{Why these datasets are well-chosen:} the first three are multi-hop, which is where all prior work (including Martinenghi's) shows diversity matters most. MultifieldQA and En.QA extend the evaluation to non-multi-hop but still reasoning-intensive tasks, testing generality. The domain diversity in MultifieldQA (legal, scientific, government) also tests whether diversity helps across content types, not just Wikipedia. En.QA's extreme length forces aggressive compression, which is exactly the regime where diversity should help most (cf.\ Wang et al.'s result that diversity gains are largest at low $c_r$).
+
+\subsection{Key Results}
+
+\subsubsection{Fixed $\lambda$ gMMR already helps (Section 4.1)}
+
+\begin{itemize}[leftmargin=*]
+	\item RAG with $\lambda$-Fixed gMMR outperforms vanilla RAG (cosine similarity, $\lambda = 1.0$) on all five datasets.
+	\item But the \textbf{optimal $\lambda$ varies across datasets}: for HotpotQA the best fixed $\lambda$ is different from MuSiQue's. This confirms that a single diversity parameter cannot be universally optimal.
+	\item Key $\lambda$-sensitivity finding: a $\Delta\lambda$ of just 0.1 changes $\sim$40\% of the selected chunks (Jaccard analysis, Figure 4). The selection is highly sensitive to $\lambda$, meaning the choice matters enormously.
+\end{itemize}
+
+\subsubsection{Oracle shows large headroom (Section 4.2)}
+
+\begin{itemize}[leftmargin=*]
+	\item The Oracle (per-query optimal $\lambda$) outperforms vanilla RAG by $\sim$7--19\% $F_1$ absolute, with the largest gains on multi-hop datasets.
+	\item It also beats $\lambda$-Fixed gMMR by $\sim$6--16\%, showing that dataset-level tuning leaves substantial performance on the table.
+	\item It outperforms Long Context baselines (feeding the full document to the LLM) by up to 9.2\%, while using only $\sim$15\% of the context. This is a striking result: \textbf{a small, well-chosen, diverse subset outperforms the full document}.
+\end{itemize}
+
+\subsubsection{DF-RAG closes the gap (Section 4.3, Table 1)}
+
+Selected results (Llama 3.3 70B, context length = 1500 words):
+
+\medskip
+\begin{tabular}{@{}lcccccc@{}}
+	\toprule
+	& HotpotQA & MuSiQue & 2WikiMQA & MultifieldQA & En.QA \\
+	\midrule
+	Vanilla RAG & 56.1 & 35.4 & 61.6 & 33.1 & 31.3  \\
+	$\lambda$-Fixed gMMR & 58.1 & 35.9 & 63.4 & 33.2 & 31.5  \\
+	DF-RAG & 59.6 & 37.9 & 63.9 & 50.6 & 33.1  \\
+	DF-RAG + IC & 61.8 & 38.0 & 68.6 & 46.5 & 31.8  \\
+	Oracle & 69.5 & 51.9 & 74.9 & 56.1 & 47.8  \\
+	\midrule
+	LongRAG & 57.4 & 38.1 & 61.7 & 52.9 & 22.9  \\
+	RAPTOR & 54.5 & 34.3 & --- & 48.3 & --- \\
+	HippoRAG & 46.2 & 33.5 & 57.1 & 48.3 & --- \\
+	\bottomrule
+\end{tabular}
+
+\medskip
+\begin{itemize}[leftmargin=*]
+	\item \textbf{DF-RAG vs.\ vanilla RAG:} +3.5 to +17.5 $F_1$ absolute across datasets and context lengths. Largest gains on MultifieldQA (+17.5 at $w=100$, Llama) and 2WikiMQA.
+	\item \textbf{DF-RAG vs.\ $\lambda$-Fixed gMMR:} +2 to +10\% consistently, confirming that per-query $\lambda$ selection adds meaningful value over dataset-level tuning.
+	\item \textbf{DF-RAG vs.\ LongRAG, RAPTOR, HippoRAG:} DF-RAG outperforms all three on most benchmarks at 1500-word context, despite being simpler (no graph construction, no recursive summarization). The exception is MultifieldQA where LongRAG slightly leads DF-RAG (52.9 vs.\ 50.6).
+	\item \textbf{Gap to Oracle:} DF-RAG closes 41.5\% (500w), 32.1\% (1000w), and 47.7\% (1500w) of the gap on multi-hop benchmarks. On 2WikiMQA with Qwen 2.5 72B at 1500w, it closes \textbf{91.3\%} of the gap.
+	\item \textbf{DF-RAG + IC} (incremental context: appending the Planner's plan and Evaluator's short answer to the Generator's prompt) helps on some datasets (2WikiMQA: +4.7 with Llama) but \emph{hurts} on others (MultifieldQA, En.QA). The authors attribute this to ``overthinking'' --- excessive reasoning steps can confuse the LLM on simpler queries.
+\end{itemize}
+
+\subsubsection{Planner and Evaluator effectiveness (Sections 5.4--5.5)}
+
+\begin{itemize}[leftmargin=*]
+	\item The Planner generates 2.71 steps for HotpotQA, 2.81 for MuSiQue, 2.88 for 2WikiMQA --- closely matching the actual number of hops, indicating well-calibrated decomposition.
+	\item The Evaluator's predicted $\lambda$ distribution is smooth and broad (Figure 6), resembling the Oracle's distribution. A bad Evaluator would concentrate predictions on a single $\lambda$ value.
+\end{itemize}
+
+\subsection{Comparison with Martinenghi and Wang et al.}
+
+\subsubsection{What DF-RAG adds to the picture}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{Per-query diversity is the key insight.} Both Martinenghi and Wang et al.\ use a single $\lambda$ for all queries. DF-RAG's Oracle experiment proves this leaves up to 18\% $F_1$ on the table. The optimal $\lambda$ varies not just across datasets but across individual queries within the same dataset.
+	\item \textbf{End-to-end evaluation with modern LLMs.} DF-RAG evaluates with Qwen 2.5 72B and Llama 3.3 70B, which are much stronger than GPT-3.5 (Wang et al.) and more representative of current deployment. The $F_1$ metric is also more informative than hit rate (Martinenghi) or recall (Wang et al.).
+	\item \textbf{Multi-hop is confirmed as the sweet spot.} HotpotQA, MuSiQue, and 2WikiMQA show the largest gains --- consistent with Martinenghi's HotpotQA results and reinforcing the thesis focus on multi-hop datasets.
+\end{enumerate}
+
+\subsubsection{Limitations and opportunities for the thesis}
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{DF-RAG uses MMR (dispersion), not coverage.} The gMMR objective pushes selected chunks away from the centroid of the current selection. This is still a dispersion-based approach. The thesis can test whether \emph{coverage} (facility-location) as the diversity objective, combined with per-query $\lambda$ adaptation, would close the Oracle gap further. Coverage might select a more ``balanced'' set that better represents all reasoning steps.
+	\item \textbf{LLM cost.} DF-RAG requires 3 LLM calls per query (Planner + Evaluator + Generator), plus running gMMR at $\sim$10 different $\lambda$ values. The Evaluator alone processes 10 candidate chunk sets. This is expensive. A coverage-based approach with a single well-chosen $\lambda$ might achieve comparable results at lower cost if coverage is inherently more robust to $\lambda$ choice than MMR (an empirical question).
+	\item \textbf{Small sample sizes.} 150--351 samples per dataset. Results on MuSiQue (200 samples) are noisy --- DF-RAG is occasionally outperformed by $\lambda$-Fixed gMMR. The thesis should use larger evaluation sets where available (HotpotQA full dev = 7.4k, 2WikiMultihopQA full dev = 12.6k).
+	\item \textbf{No pre-LLM evaluation.} DF-RAG only reports post-LLM $F_1$, making it impossible to separate retrieval quality from LLM generation quality. The thesis should report both, as Wang et al.\ do, to isolate the retrieval contribution.
+	\item \textbf{The Oracle is the real contribution.} The Oracle experiment --- showing that per-query $\lambda$ gives up to 18\% absolute gains over vanilla RAG --- is arguably more important than the DF-RAG architecture itself. It establishes a \emph{ceiling} that any diversity-based retrieval system should aim for. The thesis can use this as a benchmark: how close does coverage get to the Oracle, and how does that compare to gMMR?
+\end{enumerate}
+
+\newpage
+\part{Synthesis \& Next Steps}
+
+\section{Expanded Dataset Recommendations}
+
+Based on all three papers' results, the thesis experiments should prioritize datasets where the information landscape is \textbf{multi-peaked} (multiple aspects/documents needed) and the budget is \textbf{tight} (forcing hard selection trade-offs).
+
+\subsection{Tier 1: Multi-Hop QA (highest expected signal)}
+
+\begin{tabular}{@{}lp{3.5cm}p{2cm}p{5cm}@{}}
+	\toprule
+	Dataset & Hops & Size & Why \\
+	\midrule
+	HotpotQA (distractor) & 2 & 7.4k dev & Gold supporting facts annotated. Already in Martinenghi draft. \\
+	MuSiQue & 2--4 & 2.4k dev & Compositional multi-hop; 2--4 gold docs per query. Hardest multi-hop benchmark. \\
+	2WikiMultihopQA & 2 & 12.6k dev & Wikidata-derived, clean structured annotations. Large dev set for statistical power. \\
+	\bottomrule
+\end{tabular}
+
+\medskip
+\noindent\textbf{Rationale:} Martinenghi's own results show HotpotQA is where coverage diverges most from baseline (Jaccard 0.53). MuSiQue with 3--4 hops should amplify this effect. All three datasets provide ground-truth supporting facts for aspect recall evaluation.
+
+\subsection{Tier 2: Long-Document / Abstractive QA (medium expected signal)}
+
+\begin{tabular}{@{}lp{3.5cm}p{2cm}p{5cm}@{}}
+	\toprule
+	Dataset & Type & Size & Why \\
+	\midrule
+	Narrative QA & Abstractive, stories & 10.6k test & Wang et al.'s strongest result ($+68\%$ relative). Answers require synthesizing information across a long narrative. \\
+	QuALITY & Multi-choice, long docs & 2.5k dev & Long-document comprehension (avg 5k tokens). Questions require integrating multiple passages. \\
+	Natural Questions & Factoid, Wikipedia & 3.6k dev & Baseline comparison. Single-hop, but useful to confirm coverage $\approx$ baseline. \\
+	\bottomrule
+\end{tabular}
+
+\medskip
+\noindent\textbf{Rationale:} Narrative QA is the dataset where Wang et al.\ show MMR helps most. Testing coverage (facility-location) on Narrative QA would directly compare the two approaches on the same ground.
+
+\subsection{Tier 3: Summarization (optional, different evaluation)}
+
+\begin{tabular}{@{}lp{3.5cm}p{2cm}p{5cm}@{}}
+	\toprule
+	Dataset & Type & Size & Why \\
+	\midrule
+	gov\_report & Extractive $\to$ LLM & 973 test & Wang et al.\ show diversity helps. Redundancy in government reports makes coverage natural. \\
+	Multi-News & Multi-doc summarization & 5.6k test & Multiple source articles per summary. Coverage should help select from different sources. \\
+	\bottomrule
+\end{tabular}
+
+\medskip
+\noindent\textbf{Rationale:} summarization requires end-to-end LLM evaluation (ROUGE, LLM-as-a-Judge), which is more expensive. Prioritize only if QA experiments show clear coverage advantages.
+
+\subsection{Tier 4: Domain-Specific (low priority, high access cost)}
+
+\begin{tabular}{@{}lp{3.5cm}p{2cm}p{5cm}@{}}
+	\toprule
+	Dataset & Type & Size & Why \\
+	\midrule
+	MIMIC-IV-Note & Clinical notes & $\sim$330k notes & Multi-aspect medical queries; coverage $\leftrightarrow$ fairness angle. Requires PhysioNet access. \\
+	SQuAD 2.0 & Extractive QA & 11.9k dev & Useful for sentence-vs-chunk comparison (replicating Wang et al.\ Table 7--8). Low priority: single-hop. \\
+	\bottomrule
+\end{tabular}
+
+\section{Next Steps: Experiments \& Datasets}
+
+\subsection{Priority 1: Multi-Hop Datasets}
+
+The draft's own results show that multi-hop queries are where coverage diverges most from baseline. The thesis should focus here.
+
+\begin{enumerate}[leftmargin=*]
+	\item \textbf{HotpotQA (full distractor setting):} the draft only uses the validation set. Run on the full dev set with systematic parameter sweeps. The distractor setting (2 gold + 8 distractor docs) is ideal because the ground-truth supporting facts provide a natural measure of ``aspect coverage.''
+	\item \textbf{MuSiQue} (2--4 hops, compositional): harder than HotpotQA, requires chaining information from 2--4 documents. Coverage should have a stronger advantage as the number of required information peaks increases.
+	\item \textbf{2WikiMultihopQA} (2-hop, Wikidata-derived): structured, clean annotations. Good for controlled comparison.
+\end{enumerate}
+
+\subsection{Priority 2: Aspect Recall Metric}
+
+Current metrics (hit rate, DocRec, FactRec) are coarse. Define and implement \textbf{aspect recall}:
+\[
+	\text{AspectRecall}(S) = \frac{|\{\text{supporting facts covered by } S\}|}{|\{\text{all supporting facts for } q\}|}.
+\]
+Multi-hop datasets provide ground-truth supporting facts, making this directly computable. This metric isolates coverage's value: did the selection recover \emph{all} the information pieces needed, not just one?
+
+\subsection{Priority 3: Controlled Comparison Framework}
+
+The draft varies many parameters but not in a fully controlled way. Design a clean comparison:
+\begin{itemize}[leftmargin=*]
+	\item Fix: embedding model, chunking, candidate pool construction.
+	\item Vary \emph{only} the selection strategy: top-$k$ (baseline) vs.\ MMR vs.\ gMMR vs.\ facility-location.
+	\item Measure: hit rate, aspect recall, FacCov, Jaccard divergence, number of distinct source documents selected.
+	\item Report statistical significance (paired bootstrap or permutation test over queries).
+\end{itemize}
+
+\subsection{Priority 4: Diagnosing When Coverage Helps}
+
+Per-query analysis, not just averages:
+\begin{itemize}[leftmargin=*]
+	\item For each query, compute the embedding-space clustering structure of the candidate pool (e.g., number of clusters, silhouette score).
+	\item Correlate with $\Delta\text{AspectRecall}(\text{coverage} - \text{baseline})$.
+	\item \textbf{Hypothesis:} coverage helps when the candidate pool has $\geq 2$ distinct clusters corresponding to different information aspects. When candidates form a single cluster, coverage $\approx$ baseline.
+\end{itemize}
+
+\subsection{Priority 5: Alternative Coverage Formulations}
+
+The draft uses embedding-based facility-location ($w_{ij} = \cos(e_i, e_j)$). Consider:
+\begin{itemize}[leftmargin=*]
+	\item \textbf{Source-aware coverage:} define groups by source document and require coverage across groups, not just across the embedding space. This directly targets the multi-source retrieval problem.
+	\item \textbf{Thresholded coverage:} $w_{ij} = \cos(e_i, e_j) \cdot \mathbf{1}[\cos(e_i, e_j) > \tau]$, ignoring weak similarities. This sharpens the coverage signal by focusing on meaningful representativeness.
+	\item \textbf{Cluster-then-select:} cluster the candidate pool (e.g., $k$-means), then select the best-relevance item from each cluster. Simple, interpretable, no $\lambda$ to tune.
+\end{itemize}
+
+\subsection{Priority 6: MIMIC-IV Medical Dataset (Low Priority)}
+
+\begin{itemize}[leftmargin=*]
+	\item Requires PhysioNet registration + CITI training.
+	\item Use case: clinical notes (MIMIC-IV-Note) as corpus, structured diagnoses for evaluation.
+	\item Queries naturally multi-aspect (treatments across patient subgroups, differential diagnosis).
+	\item Coverage $\leftrightarrow$ fairness angle: ensure retrieval covers different demographic groups or treatment pathways.
+	\item \textbf{Do last}: access overhead is high, and the core experimental methodology should be validated on HotpotQA/MuSiQue first.
+\end{itemize}
+
+\newpage
+
+\end{document}
