@@ -14,7 +14,7 @@ dependencies = [
 	"tqdm",
 	"huggingface-hub>=1.7.1",
 	"sentence-transformers>=4.1",
-	"torch>=2.0",
+	"torch",
 	"ir-datasets>=0.5.11",
 	"langchain>=1.2.13",
 	"langchain-text-splitters>=1.1.1",
@@ -22,7 +22,6 @@ dependencies = [
 ]
 
 [tool.uv]
-extra-index-url = ["https://download.pytorch.org/whl/cpu"]
 environments = ["sys_platform == 'linux'"]
 
 [dependency-groups]
