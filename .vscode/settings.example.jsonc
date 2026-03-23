@@ -11,7 +11,7 @@
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
       "source.fixAll": "explicit",
-      "source.organizeImports.ruff": "always",
+      "source.organizeImports.ruff": "always"
     }
   },
   "python.analysis.extraPaths": [
@@ -42,6 +42,7 @@
     "**/@pdfs/*.synctex.gz": true,
     "**/@pdfs/*.toc": true,
     "**/@pdfs/*.log": true,
+    ".claude": true
   },
   "latex-workshop.formatting.latex": "latexindent",
   "latex-workshop.formatting.latexindent.args": [
@@ -54,5 +55,5 @@
   "latex-workshop.latex.outDir": "%DIR%/@pdfs",
   "latex-workshop.latex.autoBuild.run": "onSave",
   "latex-workshop.message.badbox.show": "none",
-  "latex-workshop.message.warning.show": false,
+  "latex-workshop.message.warning.show": false
 }

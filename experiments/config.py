@@ -22,7 +22,7 @@ Chunking strategy
 @dataclass
 class ExperimentConfig:
     dataset: DatasetName = 'hotpotqa_distractor'
-    dataset_path: str = 'datasets/HotpotQA/hotpot_dev_distractor_v1.json'
+    dataset_path: str = 'datasets/full-data/HotpotQA/hotpot_dev_distractor_v1.json'
     embedding_model: EmbeddingModelName = 'multi-qa-mpnet-base-cos-v1'
 
     scoring_functions: list[ScoringFunction] = field(
@@ -34,23 +34,22 @@ class ExperimentConfig:
     )
     k_values: list[int] = field(default_factory=lambda: [5, 10, 20])
     lambda_values: list[float] = field(default_factory=lambda: [0.2, 0.4, 0.5, 0.7, 0.8])
-    mmr_window: int | None = None  # None = all selected (no window)
-    theta: float | None = None  # sector_coverage: angular threshold in degrees (None = adaptive)
+    mmr_window: int | None = None
+    theta: float | None = None  # sector_coverage
 
     chunk_mode: EmbeddingChunkMode = 'sentence'
     # token_window mode
     chunk_tokens: int = 256
     stride: int = 128
-    t_max: int | None = None  # token budget; None = use k directly
+    t_max: int | None = None
     # word_window mode
-    w: int = 100  # chunk size in words
+    w: int = 100
 
     # Pool limits
     max_docs: int | None = None  # limit source docs per record
     max_cands: int | None = None  # limit total candidate chunks
 
-    # Infrastructure
-    max_records: int | None = None  # limit records (for debugging)
+    max_records: int | None = None  # limit records to read
     cache_dir: str = 'cache'
     output_dir: str = 'results'
     batch_size: int = 256
