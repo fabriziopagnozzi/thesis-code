@@ -14,9 +14,6 @@
       "source.organizeImports.ruff": "always"
     }
   },
-  "python.analysis.extraPaths": [
-    "python"
-  ],
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.functionReturnTypes": true,
@@ -27,7 +24,7 @@
     "**/build/**",
     "**/node_modules",
     "**/__pycache__",
-    "**/.*",
+    "**/.*"
   ],
   "editor.inlayHints.enabled": "on",
   "editor.parameterHints.enabled": true,
@@ -39,10 +36,11 @@
     "**/@pdfs/*.fls": true,
     "**/@pdfs/*.fdb_latexmk": true,
     "**/@pdfs/*.out": true,
+    "**/@pdfs/*.bbl": true,
+    "**/@pdfs/*.blg": true,
     "**/@pdfs/*.synctex.gz": true,
     "**/@pdfs/*.toc": true,
-    "**/@pdfs/*.log": true,
-    ".claude": true
+    "**/@pdfs/*.log": true
   },
   "latex-workshop.formatting.latex": "latexindent",
   "latex-workshop.formatting.latexindent.args": [
@@ -55,5 +53,7 @@
   "latex-workshop.latex.outDir": "%DIR%/@pdfs",
   "latex-workshop.latex.autoBuild.run": "onSave",
   "latex-workshop.message.badbox.show": "none",
-  "latex-workshop.message.warning.show": false
+  "latex-workshop.message.warning.show": false,
+  "latex-workshop.synctex.afterBuild.enabled": true,
+  "latex-workshop.view.pdf.viewer": "tab"
 }

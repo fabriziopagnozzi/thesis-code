@@ -1,5 +1,4 @@
 **/__pycache__
-**/@pdfs/*
 **/datasets/full-data/
 **/cache/
 **/results
@@ -7,6 +6,16 @@
 _notes/
 _documents/
 .vscode/settings.json
+**/@pdfs/*.aux
+**/@pdfs/*.fls
+**/@pdfs/*.fdb_latexmk
+**/@pdfs/*.out
+**/@pdfs/*.bbl
+**/@pdfs/*.blg
+**/@pdfs/*.synctex.gz
+**/@pdfs/*.toc
+**/@pdfs/*.log
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
