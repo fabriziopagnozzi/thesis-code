@@ -1,22 +1,15 @@
-**/__pycache__
-**/datasets/full-data/
-**/cache/
-**/results
-!**/results/**/*stats.txt
+.vscode/settings.json
 _notes/
 _documents/
-.vscode/settings.json
-**/@pdfs/*.aux
-**/@pdfs/*.fls
-**/@pdfs/*.fdb_latexmk
-**/@pdfs/*.out
-**/@pdfs/*.bbl
-**/@pdfs/*.blg
-**/@pdfs/*.synctex.gz
-**/@pdfs/*.toc
-**/@pdfs/*.log
-**/~$*
+datasets/full-data/
+cached_embeddings/
 
+# this is a git repo from MIT
+dataset_utils/mimic/mimic-code/
+
+**/@pdfs/*
+!**/@pdfs/*.pdf
+**/~$*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

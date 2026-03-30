@@ -2,7 +2,12 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from datasets.data_repr import Chunk, QARecord, _build_doc_chunks, _split_sentences
+from dataset_utils.hotpot_musique.data_repr import (
+    Chunk,
+    QARecord,
+    _build_doc_chunks,
+    _split_sentences,
+)
 from experiments.config import DatasetName
 
 

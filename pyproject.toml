@@ -38,6 +38,7 @@ quote-style = "single"
 skip-magic-trailing-comma = false
 
 [tool.ruff.lint]
+ignore = ["E501"]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
