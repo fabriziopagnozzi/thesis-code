@@ -1,7 +1,7 @@
 [project]
 name = "thesis"
 version = "0.1.0"
-description = "MSc thesis project — Coverage vs Dispersion Diversity in RAG Retrieval"
+description = "MSc thesis project: Coverage vs Dispersion Diversity in RAG Retrieval"
 requires-python = ">=3.14"
 dependencies = [
 	"numpy",
@@ -19,13 +19,27 @@ dependencies = [
 	"langchain>=1.2.13",
 	"langchain-text-splitters>=1.1.1",
 	"ijson>=3.5.0",
+	"duckdb>=1.5.1",
 ]
+[dependency-groups]
+dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs", "taskipy"]
+
+# Like NPM scripts
+[tool.taskipy.tasks]
+stats = "python -m dataset_utils.mimic.stats"
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]
 
-[dependency-groups]
-dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+
+[tool.hatch.build.targets.wheel.sources]
+src = ""
 
 [tool.ruff]
 target-version = "py314"

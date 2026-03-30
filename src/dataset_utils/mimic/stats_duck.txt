@@ -1,0 +1,37 @@
+MIMIC-IV v3.1 Statistics
+==================================================
+Unique patients (total):        364,627
+  with hospitalizations:        223,452
+  ED-only (no admission):       141,175
+Hospital admissions:            546,028
+ICU stays:                       94,458
+Unique ICU patients:             65,366
+
+Age at admission (hospital): 59.2 ± 19.1  [median 61]
+Age at admission (ICU):      64.7 ± 16.9  [median 66]
+
+Female admissions (hospital): 284,097 (52.0%)
+Female admissions (ICU):      37,714 (44.2%)
+
+LOS hospital (days):  4.8 ± 7.2  [median 2.8]
+LOS ICU (days):       3.6 ± 5.4  [median 2.0]
+
+In-hospital mortality:  11,801 (2.2%)
+ICU mortality:          9,475 (11.1%)
+One year mortality (hospital): 21,173 (9.5%)
+One year mortality (ICU):      12,155 (18.6%)
+
+Discharge summaries: 331,793 from 145,914 patients
+Radiology reports:   2,321,355
+
+==================================================
+Slide table values:
+==================================================
+["Stays", "546,028", "94,458"],
+["Unique patients", "223,452", "65,366"],
+["Age, mean (SD)", "59.2 (19.1)", "64.7 (16.9)"],
+["Female, n (%)", "284,097 (52.0)", "37,714 (44.2)"],
+["Length of stay, mean (SD)", "4.8 (7.2)", "3.6 (5.4)"],
+["In-hospital mortality, n (%)", "11,801 (2.2)", "9,475 (11.1)"],
+["Discharge summaries", "331,793", "—"],
+["Radiology reports", "2,321,355", "—"],
