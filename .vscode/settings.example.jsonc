@@ -40,7 +40,8 @@
     "**/@pdfs/*.blg": true,
     "**/@pdfs/*.synctex.gz": true,
     "**/@pdfs/*.toc": true,
-    "**/@pdfs/*.log": true
+    "**/@pdfs/*.log": true,
+    "**/~$*": true
   },
   "latex-workshop.formatting.latex": "latexindent",
   "latex-workshop.formatting.latexindent.args": [

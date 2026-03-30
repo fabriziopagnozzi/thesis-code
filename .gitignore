@@ -15,6 +15,7 @@ _documents/
 **/@pdfs/*.synctex.gz
 **/@pdfs/*.toc
 **/@pdfs/*.log
+**/~$*
 
 
 # Byte-compiled / optimized / DLL files
