@@ -50,7 +50,7 @@ class ExperimentConfig:
     max_cands: int | None = None  # limit total candidate chunks
 
     max_records: int | None = None  # limit records to read
-    cache_dir: str = 'cache'
+    cache_dir: str = 'cached_embeddings'
     output_dir: str = 'results'
     batch_size: int = 256
     seed: int = 42

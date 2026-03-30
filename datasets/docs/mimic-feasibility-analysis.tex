@@ -610,5 +610,49 @@ Anisotropy means clusters may reflect frequency or style artifacts (all discharg
 \bibliographystyle{plain}
 \bibliography{mimic-feasibility-analysis}
 
+\appendix
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
+
+\section{Available Analytics from \texttt{mimic-code}}
+\label{sec:mimic-code}
+
+The official \texttt{mimic-code} repository provides SQL concepts, cohort definitions, and mapping tables that we can use.
+
+\begin{center}
+	\small
+	\begin{tabular}{p{4.2cm}p{5.4cm}p{6cm}}
+		Resource                                                       & Location & Role in Our Pipeline \\
+		\mr
+		\textbf{Charlson Comorbidity Index}                            &
+		\field{mimic-iv/concepts/\allowbreak comorbidity/charlson.sql} &
+		Maps ICD-9/10 codes to 16 clinical categories (MI, CHF, stroke, COPD,
+		diabetes, renal, cancer\ldots).  Primary tool for \textbf{condition
+		selection} and \textbf{comorbidity modifier axes}.                                               \\
+		\addlinespace
+		\textbf{CCS hierarchical grouping}                             &
+		\field{mimic-iii/concepts\_postgres/\allowbreak diagnosis/ccs\_dx.sql}
+		+ \field{ccs\_multi\_dx.csv.gz}                                &
+		4-level hierarchical ICD-9 $\to$ clinical category mapping.
+		Useful for building the macrocategory index in hierarchical retrieval
+		(Phase~2).                                                                                       \\
+		\addlinespace
+		\textbf{Concept maps}                                          &
+		\field{mimic-iv/concepts/\allowbreak concept\_map/}            &
+		ICD $\to$ LOINC/OMOP/SNOMED CSVs.  Cross-referencing structured data
+		when building contextual embedding prefixes.                                                     \\
+		\addlinespace
+		\textbf{Age / demographics}                                    &
+		\field{mimic-iv/concepts/\allowbreak demographics/age.sql}     &
+		Age cohort extraction.  Needed for demographic modifier axes.                                    \\
+		\addlinespace
+		\textbf{Severity scores}                                       &
+		\field{mimic-iv/concepts/\allowbreak score/} (SOFA, SAPS-II, LODS,
+		APS-III, OASIS)                                                &
+		Patient acuity signals.  Could serve as additional metadata for
+		contextual embeddings or as a proxy for clinical complexity.                                     \\
+	\end{tabular}
+\end{center}
+
 \end{document}
 

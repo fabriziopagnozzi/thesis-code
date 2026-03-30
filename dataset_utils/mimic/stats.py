@@ -1,20 +1,17 @@
-"""Compute MIMIC-IV v3.1 statistics for the Dataset Overview slide."""
-
 from pathlib import Path
 
 import pandas as pd
 
-MIMIC_IV = Path(__file__).resolve().parent.parent / 'full-data' / 'mimic-iv'
-MIMIC_NOTE = Path(__file__).resolve().parent.parent / 'full-data' / 'mimic-iv-note'
+MIMIC_IV = Path(__file__).resolve().parent.parent.parent / 'datasets' / 'full-data' / 'mimic-iv'
 
 #  Load tables
 patients = pd.read_csv(MIMIC_IV / 'hosp' / 'patients.csv')
 admissions = pd.read_csv(MIMIC_IV / 'hosp' / 'admissions.csv')
 icustays = pd.read_csv(MIMIC_IV / 'icu' / 'icustays.csv')
 discharge = pd.read_csv(
-    MIMIC_NOTE / 'note' / 'discharge.csv', usecols=['note_id', 'subject_id', 'hadm_id']
+    MIMIC_IV / 'note' / 'discharge.csv', usecols=['note_id', 'subject_id', 'hadm_id']
 )
-radiology = pd.read_csv(MIMIC_NOTE / 'note' / 'radiology.csv', usecols=['note_id'])
+radiology = pd.read_csv(MIMIC_IV / 'note' / 'radiology.csv', usecols=['note_id'])
 
 #  Basic counts
 n_patients = patients['subject_id'].nunique()

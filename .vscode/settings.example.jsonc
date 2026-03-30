@@ -14,6 +14,7 @@
       "source.organizeImports.ruff": "always"
     }
   },
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.functionReturnTypes": true,
@@ -40,6 +41,8 @@
     "**/@pdfs/*.blg": true,
     "**/@pdfs/*.synctex.gz": true,
     "**/@pdfs/*.toc": true,
+    "**/@pdfs/*.lof": true,
+    "**/@pdfs/*.lot": true,
     "**/@pdfs/*.log": true,
     "**/~$*": true
   },
