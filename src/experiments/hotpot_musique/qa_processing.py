@@ -1,17 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-
-@dataclass
-class Chunk:
-    """A single candidate chunk for selection."""
-
-    text: str
-    doc_title: str
-    doc_idx: int
-    sentence_idx: int | None = None  # None for document-level chunks
-    is_gold_doc: bool = False
-    is_gold_fact: bool = False
+from helpers.chunks_classes import HotpotChunk
 
 
 @dataclass
@@ -22,7 +12,7 @@ class QARecord:
     question: str
     answer: str
     question_type: str
-    chunks: list[Chunk] = field(default_factory=list)
+    chunks: list[HotpotChunk] = field(default_factory=list)
     gold_doc_titles: set[str] = field(default_factory=set)
     gold_facts: list[tuple[str, int]] = field(default_factory=list)
 
@@ -42,7 +32,7 @@ def _build_word_window_chunks(
     is_gold_doc: bool,
     gold_sent_indices: set[int],
     w: int,
-) -> list[Chunk]:
+) -> list[HotpotChunk]:
     words: list[tuple[str, int]] = []
     for sentence_idx, sent in enumerate(sentences):
         for tok in sent.strip().split():
@@ -52,7 +42,7 @@ def _build_word_window_chunks(
         return []
 
     stride = w // 2
-    chunks: list[Chunk] = []
+    chunks: list[HotpotChunk] = []
     start = 0
     while start < len(words):
         end = min(start + w, len(words))
@@ -63,7 +53,7 @@ def _build_word_window_chunks(
         has_gold = bool(sent_indices_in_window & gold_sent_indices)
 
         chunks.append(
-            Chunk(
+            HotpotChunk(
                 text=text,
                 doc_title=doc_title,
                 doc_idx=doc_idx,
@@ -88,7 +78,7 @@ def _build_token_window_chunks(
     gold_sent_indices: set[int],
     chunk_tokens: int,
     stride: int,
-) -> list[Chunk]:
+) -> list[HotpotChunk]:
     """
     TODO: plug in real tokenizer (e.g. HF AutoTokenizer).
     """
@@ -102,7 +92,7 @@ def _build_token_window_chunks(
     if not tokens:
         return []
 
-    chunks: list[Chunk] = []
+    chunks: list[HotpotChunk] = []
     start = 0
     while start < len(tokens):
         end = min(start + chunk_tokens, len(tokens))
@@ -113,7 +103,7 @@ def _build_token_window_chunks(
         has_gold = bool(sent_indices_in_window & gold_sent_indices)
 
         chunks.append(
-            Chunk(
+            HotpotChunk(
                 text=text,
                 doc_title=doc_title,
                 doc_idx=doc_idx,
@@ -140,11 +130,11 @@ def _build_doc_chunks(
     chunk_tokens: int,
     stride: int,
     w: int,
-) -> list[Chunk]:
+) -> list[HotpotChunk]:
     """Build chunks from a single document's sentences using the given mode."""
     if chunk_mode == 'sentence':
         return [
-            Chunk(
+            HotpotChunk(
                 text=sent.strip(),
                 doc_title=title,
                 doc_idx=doc_idx,
@@ -157,7 +147,7 @@ def _build_doc_chunks(
     elif chunk_mode == 'document':
         full_text = ' '.join(s.strip() for s in sentences)
         return [
-            Chunk(
+            HotpotChunk(
                 text=full_text,
                 doc_title=title,
                 doc_idx=doc_idx,

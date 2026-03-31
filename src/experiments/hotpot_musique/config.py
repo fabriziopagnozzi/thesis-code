@@ -3,9 +3,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Self
 
-type ScoringFunction = Literal[
-    'top_k', 'mmr', 'gmmr', 'fps', 'facility_location', 'sector_coverage'
-]
+from helpers.dir_paths import EMBEDDINGS_CACHE_DIR
+from helpers.query_algorithms import ScoringFunction
+
 type DatasetName = Literal['hotpotqa_distractor', 'musique', '2wikimultihopqa']
 
 type EmbeddingModelName = Literal['multi-qa-mpnet-base-cos-v1']
@@ -50,7 +50,7 @@ class ExperimentConfig:
     max_cands: int | None = None  # limit total candidate chunks
 
     max_records: int | None = None  # limit records to read
-    cache_dir: str = 'cached_embeddings'
+    cache_dir: str = EMBEDDINGS_CACHE_DIR.absolute().as_posix()
     output_dir: str = 'results'
     batch_size: int = 256
     seed: int = 42

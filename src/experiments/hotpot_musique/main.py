@@ -1,7 +1,7 @@
 import argparse
 
-from experiments.config import ExperimentConfig
-from experiments.experiment import run_experiment, summarize
+from .config import ExperimentConfig
+from .experiment import run_experiment, summarize
 
 
 def parse_args() -> argparse.Namespace:

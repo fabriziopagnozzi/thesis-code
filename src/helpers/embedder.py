@@ -4,13 +4,11 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.config import EmbeddingModelName
-
 
 class Embedder:
     def __init__(
         self,
-        model_name: EmbeddingModelName,
+        model_name: str,
         device: str = 'cpu',
         cache_dir: str | Path | None = None,
         batch_size: int = 256,
@@ -29,7 +27,21 @@ class Embedder:
         assert dim is not None
         return dim
 
-    def encode_record(
+    def embed_corpus(
+        self,
+        texts: list[str],
+        normalize: bool = True,
+    ) -> NDArray[np.float32]:
+        embs = self._model.encode(
+            texts,
+            batch_size=self.batch_size,
+            normalize_embeddings=normalize,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+        )
+        return np.asarray(embs, dtype=np.float32)
+
+    def embed_qa_record(
         self,
         record_id: str,
         query: str,

@@ -1,9 +1,3 @@
-"""Analysis of experiment results.
-
-Computes per-configuration means and deltas vs baseline,
-following the reporting style from the Martinenghi draft.
-"""
-
 import json
 from pathlib import Path
 

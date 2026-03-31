@@ -1,17 +1,17 @@
 from collections import Counter
+from collections.abc import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
-from datasets.data_repr import Chunk
+from helpers.chunks_classes import Chunk
+
 
 # ---------------------------------------------------------------------------
 # Document / Fact Recovery (HotpotQA)
-
-
 def doc_rec(
     selected_indices: NDArray[np.intp],
-    chunks: list[Chunk],
+    chunks: Sequence[Chunk],
     gold_doc_titles: set[str],
 ) -> float:
     """Fraction of gold documents that have at least one selected chunk.
@@ -26,7 +26,7 @@ def doc_rec(
 
 def fact_rec(
     selected_indices: NDArray[np.intp],
-    chunks: list[Chunk],
+    chunks: Sequence[Chunk],
     gold_facts: list[tuple[str, int]],
 ) -> float:
     """Fraction of gold supporting facts recovered.
@@ -54,12 +54,9 @@ def fact_rec(
 
 
 # ---------------------------------------------------------------------------
-# Hit Rate
-
-
 def hit_rate(
     selected_indices: NDArray[np.intp],
-    chunks: list[Chunk],
+    chunks: Sequence[Chunk],
     answer: str | list[str],
 ) -> float:
     """1 if any gold alias appears in the concatenated selected context, else 0."""
@@ -70,8 +67,6 @@ def hit_rate(
 
 # ---------------------------------------------------------------------------
 # Embedding-based Metrics
-
-
 def fac_cov_score(
     selected_indices: NDArray[np.intp],
     sim_matrix: NDArray[np.float32],
@@ -95,8 +90,6 @@ def avg_cos(
 
 # ---------------------------------------------------------------------------
 # Recall@K / Precision@K (requires binary relevance judgments per chunk)
-
-
 def recall_at_k(
     selected_indices: NDArray[np.intp],
     relevance: NDArray[np.bool_],
@@ -127,8 +120,6 @@ def precision_at_k(
 
 # ---------------------------------------------------------------------------
 # nDCG@K (requires graded relevance judgments)
-
-
 def ndcg_at_k(
     selected_indices: NDArray[np.intp],
     relevance_grades: NDArray[np.float64],
@@ -180,11 +171,9 @@ def token_f1(prediction: str, ground_truth: str) -> float:
 
 # ---------------------------------------------------------------------------
 # Gold-Alias Metrics (TriviaQA)
-
-
 def gold_concat(
     selected_indices: NDArray[np.intp],
-    chunks: list[Chunk],
+    chunks: Sequence[Chunk],
     aliases: list[str],
 ) -> float:
     """
@@ -199,7 +188,7 @@ def gold_concat(
 
 def gold_per_chunk(
     selected_indices: NDArray[np.intp],
-    chunks: list[Chunk],
+    chunks: Sequence[Chunk],
     aliases: list[str],
 ) -> float:
     """
@@ -229,7 +218,7 @@ def jaccard(
 
 def compute_metrics(
     selected_indices: NDArray[np.intp],
-    chunks: list[Chunk],
+    chunks: Sequence[Chunk],
     answer: str | list[str],
     gold_doc_titles: set[str],
     gold_facts: list[tuple[str, int]],

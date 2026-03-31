@@ -15,6 +15,9 @@
     }
   },
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.analysis.extraPaths": [
+    "src/experiments/mimic/mimic-code"
+  ],
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.functionReturnTypes": true,
@@ -33,6 +36,7 @@
   "notebook.defaultFormatter": "charliermarsh.ruff",
   "files.exclude": {
     "**/__pycache__": true,
+    "**/.ruff_cache": true,
     "**/@pdfs/*.aux": true,
     "**/@pdfs/*.fls": true,
     "**/@pdfs/*.fdb_latexmk": true,

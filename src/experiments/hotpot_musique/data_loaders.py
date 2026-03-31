@@ -2,13 +2,14 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from dataset_utils.hotpot_musique.data_repr import (
-    Chunk,
+from helpers.chunks_classes import HotpotChunk
+
+from .config import DatasetName
+from .qa_processing import (
     QARecord,
     _build_doc_chunks,
     _split_sentences,
 )
-from experiments.config import DatasetName
 
 
 def _load_hotpot_format(
@@ -35,7 +36,7 @@ def _load_hotpot_format(
         if max_docs is not None:
             context = context[:max_docs]
 
-        chunks: list[Chunk] = []
+        chunks: list[HotpotChunk] = []
         for doc_idx, (title, sentences) in enumerate(context):
             is_gold = title in gold_doc_titles
             gold_sents = {si for t, si in gold_facts if t == title}
@@ -97,7 +98,7 @@ def _load_musique(
                     gold_doc_titles.add(para['title'])
                     gold_facts.append((para['title'], para['idx']))
 
-            chunks: list[Chunk] = []
+            chunks: list[HotpotChunk] = []
             for doc_idx, para in enumerate(paragraphs):
                 is_gold = para['is_supporting']
                 sentences = _split_sentences(para['paragraph_text'])
