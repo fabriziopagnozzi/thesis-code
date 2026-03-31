@@ -1,11 +1,11 @@
 .vscode/settings.json
-_notes/
-_documents/
+_*/
+.cached_embeddings/
 datasets/full-data/
-cached_embeddings/
+results/
 
 # this is a git repo from MIT
-dataset_utils/mimic/mimic-code/
+experiments/mimic/mimic-*/
 
 **/@pdfs/*
 !**/@pdfs/*.pdf

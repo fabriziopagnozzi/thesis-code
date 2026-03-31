@@ -2,13 +2,13 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: $0 <dir> [rows] [outdir]" >&2
+    echo "Usage: $0 <dir> <outdir> [rows] " >&2
     exit 1
 fi
 
 DIR="$(realpath "$1")"
+OUT_DIR="$(realpath "$2")"
 ROWS="${2:-100}"
-OUT_DIR="${3:-"$(dirname "$0")/data/$(basename "$DIR")"}"
 
 mkdir -p "$OUT_DIR"
 

@@ -11,11 +11,12 @@ Conventions:
 """
 
 from collections.abc import Callable
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.config import ScoringFunction
+type ScoringFunction = Literal['top_k', 'mmr', 'gmmr', 'fps', 'facility_location']
 
 
 def top_k(
@@ -175,80 +176,12 @@ def facility_location(
     return np.array(selected, dtype=np.intp)
 
 
-def sector_coverage(
-    sim_to_query: NDArray[np.float32],
-    k: int,
-    embeddings: NDArray[np.float32],
-    query_embedding: NDArray[np.float32],
-    lam: float = 0.5,
-    theta: float | None = None,
-    **_kwargs: object,
-) -> NDArray[np.intp]:
-    """
-    Sector-based angular coverage (θ-dominance inspired).
-
-    Instead of soft cosine similarity (which concentrates in high-d),
-    uses hard angular thresholds from Guo, Jagadish et al. (2018):
-    candidate i is "covered" by selected j iff ∠iqj < θ.
-
-    Greedy maximizes fraction of covered candidates, balanced with
-    relevance. Set cover structure → monotone submodular → (1-1/e).
-
-    Args:
-        theta: sector half-width in degrees. None = adaptive (median
-        pairwise angle from the candidate pool).
-    """
-    n = len(sim_to_query)
-    k = min(k, n)
-
-    # Direction vectors from query, normalized
-    directions = embeddings - query_embedding  # (n, d)
-    norms = np.linalg.norm(directions, axis=1, keepdims=True)
-    norms = np.maximum(norms, 1e-10)
-    dir_normed = directions / norms  # (n, d)
-
-    # Cosine of angle at query between every pair
-    ang_cos = dir_normed @ dir_normed.T  # (n, n)
-
-    # Angular threshold
-    if theta is not None:
-        cos_thresh = np.cos(np.radians(theta))
-    else:
-        # Adaptive: median pairwise angular cosine
-        upper_tri = ang_cos[np.triu_indices(n, k=1)]
-        cos_thresh = float(np.median(upper_tri))
-
-    # Binary coverage: covers[i, j] = True iff j covers i
-    covers = ang_cos >= cos_thresh  # (n, n)
-
-    # Greedy set-cover balanced with relevance
-    selected: list[int] = []
-    mask = np.ones(n, dtype=bool)
-    covered = np.zeros(n, dtype=bool)
-
-    for _ in range(k):
-        # How many uncovered candidates each j would newly cover
-        uncovered = ~covered
-        marginal_cov = (covers[uncovered, :]).sum(axis=0).astype(np.float64) / n
-
-        scores = lam * sim_to_query + (1 - lam) * marginal_cov
-        scores[~mask] = -np.inf
-        best = int(np.argmax(scores))
-
-        selected.append(best)
-        mask[best] = False
-        covered |= covers[:, best]
-
-    return np.array(selected, dtype=np.intp)
-
-
 STRATEGIES: dict[ScoringFunction, Callable[..., NDArray[np.intp]]] = {
     'top_k': top_k,
     'mmr': mmr,
     'gmmr': gmmr,
     'fps': fps,
     'facility_location': facility_location,
-    'sector_coverage': sector_coverage,
 }
 
 

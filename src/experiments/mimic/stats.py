@@ -1,16 +1,6 @@
-from pathlib import Path
+from experiments.mimic.duck_db_init import connect
 
-import duckdb
-
-MIMIC_IV = (
-    Path(__file__).resolve().parent.parent.parent.parent / 'datasets' / 'full-data' / 'mimic-iv'
-)
-
-hosp = str(MIMIC_IV / 'hosp')
-icu = str(MIMIC_IV / 'icu')
-note = str(MIMIC_IV / 'note')
-
-con = duckdb.connect()
+con = connect()
 
 
 def q(sql: str) -> tuple:
@@ -20,19 +10,19 @@ def q(sql: str) -> tuple:
 
 
 # Basic counts
-n_patients, n_admissions, n_hosp_patients, n_icu_stays, n_icu_patients, n_radiology = q(f"""
+n_patients, n_admissions, n_hosp_patients, n_icu_stays, n_icu_patients, n_radiology = q("""
     SELECT
-        (SELECT COUNT(DISTINCT subject_id) FROM read_csv_auto('{hosp}/patients.csv'))   AS n_patients,
-        (SELECT COUNT(*)                   FROM read_csv_auto('{hosp}/admissions.csv')) AS n_admissions,
-        (SELECT COUNT(DISTINCT subject_id) FROM read_csv_auto('{hosp}/admissions.csv')) AS n_hosp_patients,
-        (SELECT COUNT(*)                   FROM read_csv_auto('{icu}/icustays.csv'))    AS n_icu_stays,
-        (SELECT COUNT(DISTINCT subject_id) FROM read_csv_auto('{icu}/icustays.csv'))    AS n_icu_patients,
-        (SELECT COUNT(*)                   FROM read_csv_auto('{note}/radiology.csv'))  AS n_radiology,
+        (SELECT COUNT(DISTINCT subject_id) FROM mimiciv_hosp.patients)            AS n_patients,
+        (SELECT COUNT(*)                   FROM mimiciv_hosp.admissions)           AS n_admissions,
+        (SELECT COUNT(DISTINCT subject_id) FROM mimiciv_hosp.admissions)           AS n_hosp_patients,
+        (SELECT COUNT(*)                   FROM mimiciv_icu.icustays)              AS n_icu_stays,
+        (SELECT COUNT(DISTINCT subject_id) FROM mimiciv_icu.icustays)              AS n_icu_patients,
+        (SELECT COUNT(*)                   FROM mimiciv_note.radiology)            AS n_radiology,
 """)
 
-n_discharge, n_discharge_patients = q(f"""
+n_discharge, n_discharge_patients = q("""
     SELECT COUNT(*), COUNT(DISTINCT subject_id)
-    FROM read_csv_auto('{note}/discharge.csv')
+    FROM mimiciv_note.discharge
 """)
 
 print('MIMIC-IV v3.1 Statistics')
@@ -46,16 +36,16 @@ print(f'Unique ICU patients:         {n_icu_patients:>10,}')
 
 # Age at admission
 # anchor_age is patient age at anchor_year; age at admit = anchor_age + (admit_year - anchor_year)
-hosp_age_mean, hosp_age_std, hosp_age_median, icu_age_mean, icu_age_std, icu_age_median = q(f"""
+hosp_age_mean, hosp_age_std, hosp_age_median, icu_age_mean, icu_age_std, icu_age_median = q("""
     WITH ages AS (
         SELECT
-            a.hadm_id,
-            p.anchor_age + (YEAR(a.admittime::TIMESTAMP) - p.anchor_year) AS age_at_admit,
+            mimiciv_hosp.admissions.hadm_id,
+            mimiciv_hosp.patients.anchor_age + (YEAR(mimiciv_hosp.admissions.admittime::TIMESTAMP) - mimiciv_hosp.patients.anchor_year) AS age_at_admit,
             EXISTS (
-                SELECT 1 FROM read_csv_auto('{icu}/icustays.csv') i WHERE i.hadm_id = a.hadm_id
+                SELECT 1 FROM mimiciv_icu.icustays WHERE mimiciv_icu.icustays.hadm_id = mimiciv_hosp.admissions.hadm_id
             ) AS is_icu
-        FROM read_csv_auto('{hosp}/admissions.csv') a
-        JOIN read_csv_auto('{hosp}/patients.csv')   p USING (subject_id)
+        FROM mimiciv_hosp.admissions
+        JOIN mimiciv_hosp.patients USING (subject_id)
     )
     SELECT
         AVG(age_at_admit)                               AS hosp_age_mean,
@@ -75,16 +65,16 @@ print(
 )
 
 # Gender
-n_female_hosp, n_hosp_total, n_female_icu, n_icu_total = q(f"""
+n_female_hosp, n_hosp_total, n_female_icu, n_icu_total = q("""
     SELECT
-        COUNTIF(p.gender = 'F')                             AS n_female_hosp,
-        COUNT(*)                                            AS n_hosp_total,
-        COUNTIF(p.gender = 'F' AND i.hadm_id IS NOT NULL)   AS n_female_icu,
-        COUNT(i.hadm_id)                                    AS n_icu_total,
-    FROM read_csv_auto('{hosp}/admissions.csv') a
-    JOIN read_csv_auto('{hosp}/patients.csv')   p USING (subject_id)
-    LEFT JOIN (SELECT DISTINCT hadm_id FROM read_csv_auto('{icu}/icustays.csv')) i
-        ON a.hadm_id = i.hadm_id
+        COUNTIF(mimiciv_hosp.patients.gender = 'F')                                                  AS n_female_hosp,
+        COUNT(*)                                                                                      AS n_hosp_total,
+        COUNTIF(mimiciv_hosp.patients.gender = 'F' AND mimiciv_icu.icustays.hadm_id IS NOT NULL)      AS n_female_icu,
+        COUNT(mimiciv_icu.icustays.hadm_id)                                                           AS n_icu_total,
+    FROM mimiciv_hosp.admissions
+    JOIN mimiciv_hosp.patients USING (subject_id)
+    LEFT JOIN (SELECT DISTINCT hadm_id FROM mimiciv_icu.icustays) AS mimiciv_icu.icustays
+        ON mimiciv_hosp.admissions.hadm_id = mimiciv_icu.icustays.hadm_id
 """)
 pct_female_hosp = n_female_hosp / n_hosp_total * 100
 pct_female_icu = n_female_icu / n_icu_total * 100
@@ -93,32 +83,32 @@ print(f'\nFemale admissions (hospital): {n_female_hosp:,} ({pct_female_hosp:.1f}
 print(f'Female admissions (ICU):      {n_female_icu:,} ({pct_female_icu:.1f}%)')
 
 # Length of stay
-hosp_los = q(f"""
+hosp_los = q("""
     SELECT
         AVG(epoch(dischtime::TIMESTAMP - admittime::TIMESTAMP) / 86400.0),
         STDDEV_SAMP(epoch(dischtime::TIMESTAMP - admittime::TIMESTAMP) / 86400.0),
         MEDIAN(epoch(dischtime::TIMESTAMP - admittime::TIMESTAMP) / 86400.0),
-    FROM read_csv_auto('{hosp}/admissions.csv')
+    FROM mimiciv_hosp.admissions
 """)
 
-icu_los = q(f"""
+icu_los = q("""
     SELECT AVG(los), STDDEV_SAMP(los), MEDIAN(los)
-    FROM read_csv_auto('{icu}/icustays.csv')
+    FROM mimiciv_icu.icustays
 """)
 
 print(f'\nLOS hospital (days):  {hosp_los[0]:.1f} ± {hosp_los[1]:.1f}  [median {hosp_los[2]:.1f}]')
 print(f'LOS ICU (days):       {icu_los[0]:.1f} ± {icu_los[1]:.1f}  [median {icu_los[2]:.1f}]')
 
 # Mortality
-n_hosp_death, n_hosp_total2, n_icu_death, n_icu_total2 = q(f"""
+n_hosp_death, n_hosp_total2, n_icu_death, n_icu_total2 = q("""
     SELECT
-        SUM(hospital_expire_flag)                                      AS n_hosp_death,
-        COUNT(*)                                                       AS n_hosp_total,
-        SUM(hospital_expire_flag) FILTER (WHERE i.hadm_id IS NOT NULL) AS n_icu_death,
-        COUNT(i.hadm_id)                                               AS n_icu_total,
-    FROM read_csv_auto('{hosp}/admissions.csv') a
-    LEFT JOIN (SELECT DISTINCT hadm_id FROM read_csv_auto('{icu}/icustays.csv')) i
-        ON a.hadm_id = i.hadm_id
+        SUM(mimiciv_hosp.admissions.hospital_expire_flag)                                                        AS n_hosp_death,
+        COUNT(*)                                                                                                  AS n_hosp_total,
+        SUM(mimiciv_hosp.admissions.hospital_expire_flag) FILTER (WHERE icu_distinct.hadm_id IS NOT NULL)         AS n_icu_death,
+        COUNT(icu_distinct.hadm_id)                                                                               AS n_icu_total,
+    FROM mimiciv_hosp.admissions
+    LEFT JOIN (SELECT DISTINCT hadm_id FROM mimiciv_icu.icustays) AS icu_distinct
+        ON mimiciv_hosp.admissions.hadm_id = icu_distinct.hadm_id
 """)
 pct_hosp_death = n_hosp_death / n_hosp_total2 * 100
 pct_icu_death = n_icu_death / n_icu_total2 * 100
@@ -128,24 +118,24 @@ print(f'ICU mortality:          {n_icu_death:,} ({pct_icu_death:.1f}%)')
 
 # One-year mortality
 # dod from patients; one-year = died within 365 days of first admission
-n_1y_hosp_death, n_1y_hosp_total, n_1y_icu_death, n_1y_icu_total = q(f"""
+n_1y_hosp_death, n_1y_hosp_total, n_1y_icu_death, n_1y_icu_total = q("""
     WITH first_admit AS (
         SELECT subject_id, MIN(admittime::TIMESTAMP) AS first_admittime
-        FROM read_csv_auto('{hosp}/admissions.csv')
+        FROM mimiciv_hosp.admissions
         GROUP BY subject_id
     ),
     cohort AS (
         SELECT
-            f.subject_id,
-            f.first_admittime,
-            p.dod::TIMESTAMP AS dod,
+            first_admit.subject_id,
+            first_admit.first_admittime,
+            mimiciv_hosp.patients.dod::TIMESTAMP AS dod,
             dod - first_admittime <= INTERVAL 365 DAYS AS died_1y,
             EXISTS (
-                SELECT 1 FROM read_csv_auto('{icu}/icustays.csv') i
-                WHERE i.subject_id = f.subject_id
+                SELECT 1 FROM mimiciv_icu.icustays
+                WHERE mimiciv_icu.icustays.subject_id = first_admit.subject_id
             ) AS had_icu
-        FROM first_admit f
-        JOIN read_csv_auto('{hosp}/patients.csv') p USING (subject_id)
+        FROM first_admit
+        JOIN mimiciv_hosp.patients USING (subject_id)
     )
     SELECT
         COUNTIF(died_1y)                    AS n_1y_hosp_death,
