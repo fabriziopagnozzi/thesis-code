@@ -1,10 +1,10 @@
 import duckdb
 
-from helpers.dir_paths import BHC_DIR, HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR, RESULTS_DIR
+from helpers.dir_paths import BHC_DIR, HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR
 
 INIT_SQL_PATH = MIMIR_REPO_CODE_DIR.parent / '_mimic_init.sql'
 DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
-MIMIC_RESULTS_DIR = RESULTS_DIR / 'mimic'
+MIMIC_RESULTS_DIR = MIMIR_REPO_CODE_DIR.parent / '_results'
 
 HOSP_TABLES = {
     'admissions',

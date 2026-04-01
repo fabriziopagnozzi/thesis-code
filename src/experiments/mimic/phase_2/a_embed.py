@@ -6,7 +6,7 @@ from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.embedder import Embedder
 
 MODEL_NAME = 'multi-qa-mpnet-base-cos-v1'
-BATCH_SIZE = 512
+BATCH_SIZE = 64
 
 
 def _age_group(age: float | None) -> str:
@@ -84,9 +84,9 @@ def main(device: str = 'cpu'):
 
     print('Writing to LanceDB...')
     lance_df = joined.with_columns(pl.Series('vector', embeddings.tolist()))
-    db = lancedb.connect(MIMIC_RESULTS_DIR / 'lancedb')
+    db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
     db.create_table('chunks', data=lance_df.to_arrow(), mode='overwrite')
-    print(f'Saved {len(lance_df):,} rows to {MIMIC_RESULTS_DIR}/lancedb/chunks')
+    print(f'Saved {len(lance_df):,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
 
 
 if __name__ == '__main__':
