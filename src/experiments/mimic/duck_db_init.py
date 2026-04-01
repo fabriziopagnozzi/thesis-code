@@ -1,6 +1,6 @@
 import duckdb
 
-from helpers.dir_paths import HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR, RESULTS_DIR
+from helpers.dir_paths import BHC_DIR, HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR, RESULTS_DIR
 
 INIT_SQL_PATH = MIMIR_REPO_CODE_DIR.parent / '_mimic_init.sql'
 DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
@@ -81,8 +81,8 @@ def register_result_view(con: duckdb.DuckDBPyConnection, name: str, df) -> None:
     con.register(name, df)
 
 
-def generate_init_sql():
-    if INIT_SQL_PATH.exists():
+def generate_init_sql(force: bool = False):
+    if INIT_SQL_PATH.exists() and not force:
         return
     lines: list[str] = [INIT_SCHEMAS]
     for table in HOSP_TABLES:
@@ -103,6 +103,11 @@ def generate_init_sql():
             lines.append(
                 f"CREATE VIEW IF NOT EXISTS mimiciv_note.{table} AS SELECT * FROM read_csv_auto('{csv}');"
             )
+    bhc_csv = BHC_DIR / 'mimic-iv-bhc.csv'
+    if bhc_csv.exists():
+        lines.append(
+            f"CREATE VIEW IF NOT EXISTS mimiciv_note.bhc AS SELECT * FROM read_csv_auto('{bhc_csv}');"
+        )
     INIT_SQL_PATH.write_text('\n'.join(lines) + '\n')
 
 
