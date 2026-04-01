@@ -6,32 +6,24 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
+from experiments.mimic.duck_db_init import (
+    MIMIC_RESULTS_DIR,
+    connect_mimic_duckdb,
+)
 from helpers.chunks_classes import MimicIVChunk
 
-KNOWN_SECTIONS = {
-    'Service',
-    'Allergies',
-    'Chief Complaint',
-    'Major Surgical or Invasive Procedure',
+KEEP_SECTIONS = {
     'History of Present Illness',
     'Past Medical History',
-    'Social History',
-    'Family History',
     'Physical Exam',
     'Pertinent Results',
     'Brief Hospital Course',
-    'Medications on Admission',
     'Discharge Medications',
     'Discharge Diagnosis',
-    'Discharge Disposition',
-    'Discharge Condition',
-    'Discharge Instructions',
-    'Followup Instructions',
-    'Facility',
-    'Attending',
 }
 # Sections to discard: None-value (deidentified/content-free) + Low-value
 SKIP_SECTIONS = {
+    '_preamble',
     # None
     'Service',
     'Attending',
@@ -49,6 +41,8 @@ SKIP_SECTIONS = {
 }
 METADATA_ONLY_SECTIONS = {'Chief Complaint'}
 
+_ALL_SECTIONS = KEEP_SECTIONS | SKIP_SECTIONS | METADATA_ONLY_SECTIONS
+
 CHUNK_SCHEMA = {
     'chunk_id': pl.Utf8,
     'note_id': pl.Utf8,
@@ -56,7 +50,6 @@ CHUNK_SCHEMA = {
     'hadm_id': pl.Int64,
     'section_name': pl.Utf8,
     'subsection_name': pl.Utf8,
-    'chief_complaint': pl.Utf8,
     'text': pl.Utf8,
     'char_count': pl.Int32,
     'approx_tokens': pl.Int32,
@@ -64,7 +57,7 @@ CHUNK_SCHEMA = {
 
 
 # regex pattern
-_header_pattern = '|'.join(re.escape(h) for h in KNOWN_SECTIONS)
+_header_pattern = '|'.join(re.escape(h) for h in _ALL_SECTIONS)
 SECTION_RE = re.compile(rf'^({_header_pattern})\s*:', re.MULTILINE | re.IGNORECASE)
 
 # Within Brief Hospital Course: # problem markers
@@ -92,7 +85,7 @@ def _split_sections(text: str) -> list[tuple[str, str]]:
     for i, m in enumerate(matches):
         name = m.group(1)
         # Normalize casing to title case
-        name = next((s for s in KNOWN_SECTIONS if s.lower() == name.lower()), name)
+        name = next((s for s in _ALL_SECTIONS if s.lower() == name.lower()), name)
         start = m.end()  # after the colon
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
@@ -191,14 +184,19 @@ def parse_note(note_id: str, subject_id: int, hadm_id: int, text: str) -> Parsed
 
 
 def parse_all_notes(
-    con: duckdb.DuckDBPyConnection, output_path: Path | None = None
+    con: duckdb.DuckDBPyConnection,
+    output_path: Path | None = None,
+    limit: int | None = None,
 ) -> pl.DataFrame:
-    rows = con.execute("""--sql
+    limit_clause = f'LIMIT {limit}' if limit is not None else ''
+
+    rows = con.execute(f"""--sql
         SELECT DISTINCT discharge.note_id, discharge.subject_id, discharge.hadm_id, discharge.text
         FROM discharge
         JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
         JOIN conditions ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions.icd10_3char
         WHERE diagnoses_icd.icd_version = 10
+        {limit_clause}
     """).fetchall()
 
     all_dicts: list[dict] = []
@@ -211,6 +209,8 @@ def parse_all_notes(
             chief_complaints[note_id] = result.chief_complaint
 
     df = pl.DataFrame(all_dicts, schema=CHUNK_SCHEMA)
+
+    print(f'  chief_complaint found in {len(chief_complaints)}/{len(rows)} notes')
 
     # Join chief_complaint onto each chunk via note_id
     cc_df = pl.DataFrame(
@@ -232,8 +232,29 @@ def parse_all_notes(
 
 
 if __name__ == '__main__':
+    import argparse
+
     from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--interactive', action='store_true')
+    args = parser.parse_args()
 
     con = connect_mimic_duckdb()
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks_raw.parquet')
+    output_path = MIMIC_RESULTS_DIR / 'chunks.parquet'
+
+    if args.interactive:
+        while True:
+            try:
+                raw = input('\nLimit (or q to quit): ').strip()
+            except EOFError, KeyboardInterrupt:
+                break
+            if raw.lower() == 'q':
+                break
+            if not raw.isdigit():
+                print('Enter a positive integer.')
+                continue
+            parse_all_notes(con, limit=int(raw))
+    else:
+        parse_all_notes(con, output_path=output_path)

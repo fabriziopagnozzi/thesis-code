@@ -1,5 +1,6 @@
 .vscode/settings.json
 _*/
+**/_*.sql
 .cached_embeddings/
 datasets/full-data/
 results/
