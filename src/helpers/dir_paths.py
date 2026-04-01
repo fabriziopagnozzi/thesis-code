@@ -23,7 +23,7 @@ ICU_DIR = MIMIC_IV_DIR / 'icu'
 NOTE_DIR = MIMIC_IV_DIR / 'note'
 
 # MIT repo
-MIMIC_CODE_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic' / 'mimic_code'
+MIMIR_REPO_CODE_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic' / 'mimic_code'
 
 # Experiment results dir
 RESULTS_DIR = ROOT_DIR / 'results'

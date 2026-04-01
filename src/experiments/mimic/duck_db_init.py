@@ -1,8 +1,9 @@
 import duckdb
 
-from helpers.dir_paths import HOSP_DIR, ICU_DIR, MIMIC_CODE_DIR, NOTE_DIR, RESULTS_DIR
+from helpers.dir_paths import HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR, RESULTS_DIR
 
-DUCKDB_CONCEPTS_DIR = MIMIC_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
+INIT_SQL_PATH = MIMIR_REPO_CODE_DIR.parent / '_mimic_init.sql'
+DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
 MIMIC_RESULTS_DIR = RESULTS_DIR / 'mimic'
 
 HOSP_TABLES = {
@@ -46,42 +47,63 @@ NOTE_TABLES = {'discharge', 'discharge_detail', 'radiology', 'radiology_detail'}
 RESULT_TABLES = {'conditions', 'admissions_metadata', 'chunks'}
 
 
+INIT_SCHEMAS = """--sql
+CREATE SCHEMA IF NOT EXISTS mimiciv_hosp;
+CREATE SCHEMA IF NOT EXISTS mimiciv_icu;
+CREATE SCHEMA IF NOT EXISTS mimiciv_note;
+CREATE SCHEMA IF NOT EXISTS mimiciv_derived;
+CREATE SCHEMA IF NOT EXISTS mimic_results;
+SET search_path = 'mimiciv_hosp,mimiciv_icu,mimiciv_note,mimiciv_derived,mimic_results';
+"""
+
+
 def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
+    generate_init_sql()
     con = duckdb.connect()
+    for statement in INIT_SQL_PATH.read_text().splitlines():
+        statement = statement.strip()
+        if statement:
+            con.execute(statement)
 
-    con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_hosp')
-    con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_icu')
-    con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_note')
-    con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_derived')
-    con.execute('CREATE SCHEMA IF NOT EXISTS mimic_results')
+    # Result parquets are dynamic
+    for table in RESULT_TABLES:
+        parquet_file = MIMIC_RESULTS_DIR / f'{table}.parquet'
+        if parquet_file.exists():
+            con.execute(
+                f"CREATE VIEW IF NOT EXISTS mimic_results.{table} AS SELECT * FROM read_parquet('{parquet_file}')"
+            )
 
+    return con
+
+
+def register_result_view(con: duckdb.DuckDBPyConnection, name: str, df) -> None:
+    con.execute(f'DROP VIEW IF EXISTS mimic_results.{name}')
+    con.register(name, df)
+
+
+def generate_init_sql():
+    if INIT_SQL_PATH.exists():
+        return
+    lines: list[str] = [INIT_SCHEMAS]
     for table in HOSP_TABLES:
         csv = HOSP_DIR / f'{table}.csv'
         if csv.exists():
-            con.execute(f"CREATE VIEW mimiciv_hosp.{table} AS SELECT * FROM read_csv_auto('{csv}')")
-
+            lines.append(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_hosp.{table} AS SELECT * FROM read_csv_auto('{csv}');"
+            )
     for table in ICU_TABLES:
         csv = ICU_DIR / f'{table}.csv'
         if csv.exists():
-            con.execute(f"CREATE VIEW mimiciv_icu.{table} AS SELECT * FROM read_csv_auto('{csv}')")
-
+            lines.append(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_icu.{table} AS SELECT * FROM read_csv_auto('{csv}');"
+            )
     for table in NOTE_TABLES:
         csv = NOTE_DIR / f'{table}.csv'
         if csv.exists():
-            con.execute(f"CREATE VIEW mimiciv_note.{table} AS SELECT * FROM read_csv_auto('{csv}')")
-
-    for table in RESULT_TABLES:
-        parquet = MIMIC_RESULTS_DIR / f'{table}.parquet'
-        if parquet.exists():
-            con.execute(
-                f"CREATE VIEW mimic_results.{table} AS SELECT * FROM read_parquet('{parquet}')"
+            lines.append(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_note.{table} AS SELECT * FROM read_csv_auto('{csv}');"
             )
-
-    con.execute(
-        "SET search_path = 'mimiciv_hosp,mimiciv_icu,mimiciv_note,mimiciv_derived,mimic_results'"
-    )
-
-    return con
+    INIT_SQL_PATH.write_text('\n'.join(lines) + '\n')
 
 
 def run_sql_concept_script(con: duckdb.DuckDBPyConnection, *relative_paths: str):
@@ -92,3 +114,7 @@ def run_sql_concept_script(con: duckdb.DuckDBPyConnection, *relative_paths: str)
             statement = statement.strip()
             if statement:
                 con.execute(statement)
+
+
+if __name__ == '__main__':
+    generate_init_sql()
