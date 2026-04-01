@@ -1,4 +1,8 @@
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect, run_mimic_code_sql
+from experiments.mimic.duck_db_init import (
+    MIMIC_RESULTS_DIR,
+    connect_mimic_duckdb,
+    run_sql_concept_script,
+)
 
 from .a_conditions_stats import select_conditions
 from .b_note_chunking import parse_all_notes
@@ -9,24 +13,27 @@ MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 if __name__ == '__main__':
-    con = connect()
+    con = connect_mimic_duckdb()
 
-    print('> Building mimic-code derived tables')
-    run_mimic_code_sql(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
+    print('> Building mimic-code derived tables...')
+    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     print('\n> Step 1.1: Condition selection')
-    conditions = select_conditions(con=con)
+    conditions = select_conditions(con)
     conditions.write_parquet(MIMIC_RESULTS_DIR / 'conditions.parquet')
+    input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 1.2: Parsing discharge notes')
     chunks = parse_all_notes(con)
+    input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 1.3: Building admissions metadata')
     metadata = build_admissions_metadata(con)
     metadata.write_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
+    input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 1.4: Deduplication')
-    chunks = deduplicate(chunks, metadata)
+    chunks = deduplicate(chunks)
     chunks.write_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
 
     print(f'\n\nPhase 1 complete. Outputs in {MIMIC_RESULTS_DIR}:')

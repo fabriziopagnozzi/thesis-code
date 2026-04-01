@@ -8,7 +8,11 @@ import itertools
 
 import polars as pl
 
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect, run_mimic_code_sql
+from experiments.mimic.duck_db_init import (
+    MIMIC_RESULTS_DIR,
+    connect_mimic_duckdb,
+    run_sql_concept_script,
+)
 
 PERSONAS = {
     'clinician': (
@@ -124,8 +128,8 @@ def build_query_specs(conditions: pl.DataFrame, con, max_modifiers: int = 3) -> 
 
 
 def main():
-    con = connect()
-    run_mimic_code_sql(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
+    con = connect_mimic_duckdb()
+    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions.parquet')
     print(f'Building query specs for top {min(100, len(conditions))} conditions...')

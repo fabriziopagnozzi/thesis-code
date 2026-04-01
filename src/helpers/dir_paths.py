@@ -11,14 +11,19 @@ def find_project_root() -> Path:
 
 ROOT_DIR = find_project_root()
 
-DATASETS_DIR = ROOT_DIR / 'datasets'
+DATASETS_DIR = ROOT_DIR / 'datasets' / 'full-data'
+DATASETS_PREVIEW_DIR = ROOT_DIR / 'datasets' / 'previews'
 
 EMBEDDINGS_CACHE_DIR = ROOT_DIR / '.cached_embeddings'
 
 # MIMIC-IV stuff
-MIMIC_CODE_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic' / 'mimic_code'
-
-MIMIC_IV_DIR = DATASETS_DIR / 'datasets' / 'full-data' / 'mimic-iv'
+MIMIC_IV_DIR = DATASETS_DIR / 'mimic-iv'
 HOSP_DIR = MIMIC_IV_DIR / 'hosp'
 ICU_DIR = MIMIC_IV_DIR / 'icu'
 NOTE_DIR = MIMIC_IV_DIR / 'note'
+
+# MIT repo
+MIMIC_CODE_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic' / 'mimic_code'
+
+# Experiment results dir
+RESULTS_DIR = ROOT_DIR / 'results'

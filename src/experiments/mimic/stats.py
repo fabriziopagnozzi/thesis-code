@@ -1,6 +1,6 @@
-from experiments.mimic.duck_db_init import connect
+from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
-con = connect()
+con = connect_mimic_duckdb()
 
 
 def q(sql: str) -> tuple:
