@@ -10,7 +10,7 @@ def q(sql: str) -> tuple:
 
 
 # Basic counts
-n_patients, n_admissions, n_hosp_patients, n_icu_stays, n_icu_patients, n_radiology = q("""
+n_patients, n_admissions, n_hosp_patients, n_icu_stays, n_icu_patients, n_radiology = q("""--sql
     SELECT
         (SELECT COUNT(DISTINCT subject_id) FROM mimiciv_hosp.patients)            AS n_patients,
         (SELECT COUNT(*)                   FROM mimiciv_hosp.admissions)           AS n_admissions,
@@ -20,7 +20,7 @@ n_patients, n_admissions, n_hosp_patients, n_icu_stays, n_icu_patients, n_radiol
         (SELECT COUNT(*)                   FROM mimiciv_note.radiology)            AS n_radiology,
 """)
 
-n_discharge, n_discharge_patients = q("""
+n_discharge, n_discharge_patients = q("""--sql
     SELECT COUNT(*), COUNT(DISTINCT subject_id)
     FROM mimiciv_note.discharge
 """)
@@ -36,7 +36,7 @@ print(f'Unique ICU patients:         {n_icu_patients:>10,}')
 
 # Age at admission
 # anchor_age is patient age at anchor_year; age at admit = anchor_age + (admit_year - anchor_year)
-hosp_age_mean, hosp_age_std, hosp_age_median, icu_age_mean, icu_age_std, icu_age_median = q("""
+hosp_age_mean, hosp_age_std, hosp_age_median, icu_age_mean, icu_age_std, icu_age_median = q("""--sql
     WITH ages AS (
         SELECT
             mimiciv_hosp.admissions.hadm_id,
@@ -65,7 +65,7 @@ print(
 )
 
 # Gender
-n_female_hosp, n_hosp_total, n_female_icu, n_icu_total = q("""
+n_female_hosp, n_hosp_total, n_female_icu, n_icu_total = q("""--sql
     SELECT
         COUNTIF(mimiciv_hosp.patients.gender = 'F')                                                  AS n_female_hosp,
         COUNT(*)                                                                                      AS n_hosp_total,
@@ -83,7 +83,7 @@ print(f'\nFemale admissions (hospital): {n_female_hosp:,} ({pct_female_hosp:.1f}
 print(f'Female admissions (ICU):      {n_female_icu:,} ({pct_female_icu:.1f}%)')
 
 # Length of stay
-hosp_los = q("""
+hosp_los = q("""--sql
     SELECT
         AVG(epoch(dischtime::TIMESTAMP - admittime::TIMESTAMP) / 86400.0),
         STDDEV_SAMP(epoch(dischtime::TIMESTAMP - admittime::TIMESTAMP) / 86400.0),
@@ -100,7 +100,7 @@ print(f'\nLOS hospital (days):  {hosp_los[0]:.1f} ± {hosp_los[1]:.1f}  [median 
 print(f'LOS ICU (days):       {icu_los[0]:.1f} ± {icu_los[1]:.1f}  [median {icu_los[2]:.1f}]')
 
 # Mortality
-n_hosp_death, n_hosp_total2, n_icu_death, n_icu_total2 = q("""
+n_hosp_death, n_hosp_total2, n_icu_death, n_icu_total2 = q("""--sql
     SELECT
         SUM(mimiciv_hosp.admissions.hospital_expire_flag)                                                        AS n_hosp_death,
         COUNT(*)                                                                                                  AS n_hosp_total,
@@ -118,7 +118,7 @@ print(f'ICU mortality:          {n_icu_death:,} ({pct_icu_death:.1f}%)')
 
 # One-year mortality
 # dod from patients; one-year = died within 365 days of first admission
-n_1y_hosp_death, n_1y_hosp_total, n_1y_icu_death, n_1y_icu_total = q("""
+n_1y_hosp_death, n_1y_hosp_total, n_1y_icu_death, n_1y_icu_total = q("""--sql
     WITH first_admit AS (
         SELECT subject_id, MIN(admittime::TIMESTAMP) AS first_admittime
         FROM mimiciv_hosp.admissions

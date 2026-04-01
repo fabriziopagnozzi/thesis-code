@@ -8,7 +8,7 @@ fi
 
 DIR="$(realpath "$1")"
 OUT_DIR="$(realpath "$2")"
-ROWS="${2:-100}"
+ROWS="${3:-100}"
 
 mkdir -p "$OUT_DIR"
 
