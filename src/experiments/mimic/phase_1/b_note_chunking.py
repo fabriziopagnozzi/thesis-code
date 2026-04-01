@@ -193,10 +193,13 @@ def parse_note(note_id: str, subject_id: int, hadm_id: int, text: str) -> Parsed
 def parse_all_notes(
     con: duckdb.DuckDBPyConnection, output_path: Path | None = None
 ) -> pl.DataFrame:
-    """Parse all discharge notes into a chunks DataFrame with chief_complaint column."""
-    rows = con.execute(
-        'SELECT note_id, subject_id, hadm_id, text FROM mimiciv_note.discharge'
-    ).fetchall()
+    rows = con.execute("""
+        SELECT DISTINCT discharge.note_id, discharge.subject_id, discharge.hadm_id, discharge.text
+        FROM discharge
+        JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
+        JOIN conditions ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions.icd10_3char
+        WHERE diagnoses_icd.icd_version = 10
+    """).fetchall()
 
     all_dicts: list[dict] = []
     chief_complaints: dict[str, str] = {}
@@ -229,8 +232,8 @@ def parse_all_notes(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect
+    from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 
-    con = connect()
+    con = connect_mimic_duckdb()
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks_raw.parquet')

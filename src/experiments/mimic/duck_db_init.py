@@ -1,11 +1,11 @@
 import duckdb
 
-from helpers.dir_paths import HOSP_DIR, ICU_DIR, MIMIC_CODE_DIR, NOTE_DIR, ROOT_DIR
+from helpers.dir_paths import HOSP_DIR, ICU_DIR, MIMIC_CODE_DIR, NOTE_DIR, RESULTS_DIR
 
 DUCKDB_CONCEPTS_DIR = MIMIC_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
-MIMIC_RESULTS_DIR = ROOT_DIR / 'results' / 'mimic'
+MIMIC_RESULTS_DIR = RESULTS_DIR / 'mimic'
 
-HOSP_TABLES = [
+HOSP_TABLES = {
     'admissions',
     'd_hcpcs',
     'd_icd_diagnoses',
@@ -28,8 +28,8 @@ HOSP_TABLES = [
     'provider',
     'services',
     'transfers',
-]
-ICU_TABLES = [
+}
+ICU_TABLES = {
     'caregiver',
     'chartevents',
     'd_items',
@@ -39,17 +39,21 @@ ICU_TABLES = [
     'inputevents',
     'outputevents',
     'procedureevents',
-]
-NOTE_TABLES = ['discharge', 'discharge_detail', 'radiology', 'radiology_detail']
+}
+NOTE_TABLES = {'discharge', 'discharge_detail', 'radiology', 'radiology_detail'}
+
+# Resulting parquet files saved under RESULTS_DIR
+RESULT_TABLES = {'conditions', 'admissions_metadata', 'chunks'}
 
 
-def connect() -> duckdb.DuckDBPyConnection:
+def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
     con = duckdb.connect()
 
     con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_hosp')
     con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_icu')
     con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_note')
     con.execute('CREATE SCHEMA IF NOT EXISTS mimiciv_derived')
+    con.execute('CREATE SCHEMA IF NOT EXISTS mimic_results')
 
     for table in HOSP_TABLES:
         csv = HOSP_DIR / f'{table}.csv'
@@ -66,10 +70,21 @@ def connect() -> duckdb.DuckDBPyConnection:
         if csv.exists():
             con.execute(f"CREATE VIEW mimiciv_note.{table} AS SELECT * FROM read_csv_auto('{csv}')")
 
+    for table in RESULT_TABLES:
+        parquet = MIMIC_RESULTS_DIR / f'{table}.parquet'
+        if parquet.exists():
+            con.execute(
+                f"CREATE VIEW mimic_results.{table} AS SELECT * FROM read_parquet('{parquet}')"
+            )
+
+    con.execute(
+        "SET search_path = 'mimiciv_hosp,mimiciv_icu,mimiciv_note,mimiciv_derived,mimic_results'"
+    )
+
     return con
 
 
-def run_mimic_code_sql(con: duckdb.DuckDBPyConnection, *relative_paths: str):
+def run_sql_concept_script(con: duckdb.DuckDBPyConnection, *relative_paths: str):
     for rel in relative_paths:
         sql_path = DUCKDB_CONCEPTS_DIR / rel
         sql = sql_path.read_text()

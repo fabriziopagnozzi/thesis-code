@@ -16,8 +16,8 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
                 diagnoses_icd.hadm_id,
                 diagnoses_icd.icd_code AS primary_icd_code,
                 d_icd_diagnoses.long_title AS primary_icd_description
-            FROM mimiciv_hosp.diagnoses_icd
-            LEFT JOIN mimiciv_hosp.d_icd_diagnoses
+            FROM diagnoses_icd
+            LEFT JOIN d_icd_diagnoses
                 ON diagnoses_icd.icd_code = d_icd_diagnoses.icd_code
                 AND diagnoses_icd.icd_version = d_icd_diagnoses.icd_version
             WHERE diagnoses_icd.seq_num = 1
@@ -26,8 +26,8 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
             SELECT
                 diagnoses_icd.hadm_id,
                 STRING_AGG(d_icd_diagnoses.long_title, '; ' ORDER BY diagnoses_icd.seq_num) AS top_icd_descriptions
-            FROM mimiciv_hosp.diagnoses_icd
-            LEFT JOIN mimiciv_hosp.d_icd_diagnoses
+            FROM diagnoses_icd
+            LEFT JOIN d_icd_diagnoses
                 ON diagnoses_icd.icd_code = d_icd_diagnoses.icd_code
                 AND diagnoses_icd.icd_version = d_icd_diagnoses.icd_version
             WHERE diagnoses_icd.seq_num <= {N_ICD_DESCRIPTIONS}
@@ -48,10 +48,10 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
             icd_primary.primary_icd_description,
             icd_top.top_icd_descriptions,
             charlson.* EXCLUDE (hadm_id, subject_id)
-        FROM mimiciv_hosp.admissions
-        JOIN mimiciv_hosp.patients ON admissions.subject_id = patients.subject_id
-        LEFT JOIN mimiciv_derived.age ON admissions.hadm_id = age.hadm_id
-        LEFT JOIN mimiciv_derived.charlson ON admissions.hadm_id = charlson.hadm_id
+        FROM admissions
+        JOIN patients ON admissions.subject_id = patients.subject_id
+        LEFT JOIN age ON admissions.hadm_id = age.hadm_id
+        LEFT JOIN charlson ON admissions.hadm_id = charlson.hadm_id
         LEFT JOIN icd_primary ON admissions.hadm_id = icd_primary.hadm_id
         LEFT JOIN icd_top ON admissions.hadm_id = icd_top.hadm_id
     """).pl()
@@ -61,10 +61,14 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect, run_mimic_code_sql
+    from experiments.mimic.duck_db_init import (
+        MIMIC_RESULTS_DIR,
+        connect_mimic_duckdb,
+        run_sql_concept_script,
+    )
 
-    con = connect()
-    run_mimic_code_sql(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
+    con = connect_mimic_duckdb()
+    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
     df = build_admissions_metadata(con)
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     df.write_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')

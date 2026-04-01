@@ -21,7 +21,7 @@ def _content_hash(text: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()[:16]
 
 
-def deduplicate(chunks: pl.DataFrame, metadata: pl.DataFrame) -> pl.DataFrame:
+def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
     """Remove duplicate boilerplate chunks for the same patient.
 
     Deduplicates by (subject_id, section_name, content_hash), keeping only the chunk from the most recent admission (by hadm_id as proxy for time).
@@ -52,7 +52,6 @@ if __name__ == '__main__':
     from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks_raw.parquet')
-    metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
-    result = deduplicate(chunks, metadata)
+    result = deduplicate(chunks)
     result.write_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
     print(f'Saved to {MIMIC_RESULTS_DIR / "chunks.parquet"}')
