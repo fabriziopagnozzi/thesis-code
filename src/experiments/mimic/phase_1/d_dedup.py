@@ -9,10 +9,7 @@ import hashlib
 import polars as pl
 
 BOILERPLATE_SECTIONS = {
-    'Past Medical History',
-    'Allergies',
-    'Family History',
-    'Social History',
+    'PAST MEDICAL HISTORY',
 }
 
 

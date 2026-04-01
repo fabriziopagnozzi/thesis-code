@@ -1,6 +1,7 @@
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
+    generate_init_sql,
     register_result_view,
     run_sql_concept_script,
 )
@@ -14,6 +15,7 @@ MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 if __name__ == '__main__':
+    generate_init_sql(force=True)
     con = connect_mimic_duckdb()
 
     print('> Building mimic-code derived tables...')
