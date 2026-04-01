@@ -78,7 +78,7 @@ def find_top_comorbidity_modifiers(
     charlson_cols = list(CHARLSON_LABELS.keys())
     col_list = ', '.join(f'AVG(ch.{c}) AS {c}' for c in charlson_cols)
 
-    rates = con.execute(f"""
+    rates = con.execute(f"""--sql
         SELECT {col_list}
         FROM mimiciv_hosp.diagnoses_icd di
         JOIN mimiciv_derived.charlson ch ON di.hadm_id = ch.hadm_id

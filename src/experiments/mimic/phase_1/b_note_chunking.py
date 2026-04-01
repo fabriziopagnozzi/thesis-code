@@ -193,7 +193,7 @@ def parse_note(note_id: str, subject_id: int, hadm_id: int, text: str) -> Parsed
 def parse_all_notes(
     con: duckdb.DuckDBPyConnection, output_path: Path | None = None
 ) -> pl.DataFrame:
-    rows = con.execute("""
+    rows = con.execute("""--sql
         SELECT DISTINCT discharge.note_id, discharge.subject_id, discharge.hadm_id, discharge.text
         FROM discharge
         JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
