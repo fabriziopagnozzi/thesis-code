@@ -6,7 +6,8 @@ from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.embedder import Embedder
 
 MODEL_NAME = 'multi-qa-mpnet-base-cos-v1'
-BATCH_SIZE = 64
+BATCH_SIZE = 256
+COMMIT_EVERY = 16384
 
 
 def _age_group(age: float | None) -> str:
@@ -77,16 +78,28 @@ def main(device: str = 'cpu'):
     joined, texts = prepare_texts(chunks, metadata)
     print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
 
-    print(f'Embedding with {MODEL_NAME}...')
+    print(f'Embedding with {MODEL_NAME} (committing every {COMMIT_EVERY:,} chunks)...')
     embedder = Embedder(MODEL_NAME, device=device, batch_size=BATCH_SIZE)
-    embeddings = embedder.embed_corpus(texts)
-    print(f'Embeddings shape: {embeddings.shape}')
-
-    print('Writing to LanceDB...')
-    lance_df = joined.with_columns(pl.Series('vector', embeddings.tolist()))
     db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
-    db.create_table('chunks', data=lance_df.to_arrow(), mode='overwrite')
-    print(f'Saved {len(lance_df):,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
+    table = None
+    total = len(texts)
+
+    for start in range(0, total, COMMIT_EVERY):
+        end = min(start + COMMIT_EVERY, total)
+        batch_texts = texts[start:end]
+        batch_df = joined.slice(start, end - start)
+
+        embeddings = embedder.embed_corpus(batch_texts)
+        batch_df = batch_df.with_columns(pl.Series('vector', embeddings.tolist()))
+
+        if table is None:
+            table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')
+        else:
+            table.add(batch_df.to_arrow())
+
+        print(f'  Committed {end:,}/{total:,} chunks')
+
+    print(f'Saved {total:,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
 
 
 if __name__ == '__main__':
