@@ -28,7 +28,7 @@ if __name__ == '__main__':
     input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 1.2: Parsing discharge notes')
-    chunks = parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks.parquet', limit=100)
+    chunks = parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks.parquet')
     register_result_view(con, 'chunks', chunks)
     input('\nDone. Press enter to continue...\n')
 
