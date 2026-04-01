@@ -16,16 +16,11 @@ DATASETS_PREVIEW_DIR = ROOT_DIR / 'datasets' / 'previews'
 
 EMBEDDINGS_CACHE_DIR = ROOT_DIR / '.cached_embeddings'
 
-# MIMIC-IV stuff
-MIMIC_IV_DIR = DATASETS_DIR / 'mimic-iv'
-HOSP_DIR = MIMIC_IV_DIR / 'hosp'
-ICU_DIR = MIMIC_IV_DIR / 'icu'
-NOTE_DIR = MIMIC_IV_DIR / 'note'
+# MIMIC-IV data
+HOSP_DIR = DATASETS_DIR / 'mimic-iv' / 'hosp'
+ICU_DIR = DATASETS_DIR / 'mimic-iv' / 'icu'
+NOTE_DIR = DATASETS_DIR / 'mimic-iv' / 'note'
+BHC_DIR = DATASETS_DIR / 'mimic-iv' / 'ext-bhc'
 
 # MIT repo
-BHC_DIR = DATASETS_DIR / 'mimic-note-Ext-BHC'
-
 MIMIR_REPO_CODE_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic' / 'mimic_code'
-
-# Experiment results dir
-RESULTS_DIR = ROOT_DIR / 'results'

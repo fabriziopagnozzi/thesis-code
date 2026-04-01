@@ -91,7 +91,8 @@ def select_conditions(
         ) AS icd_labels ON condition_stats.icd10_3char = icd_labels.icd10_3char
         ORDER BY score DESC
     """).pl()
-    # NOTE: for now we only select ICD-10 codes. Selecting ICD-9 also would require mapping the codes. Generally the mapping is not 1-to-1, so leave it like this for now.
+
+    # ! NOTE: for now we only select ICD-10 codes. Selecting ICD-9 also would require mapping the codes. Generally the mapping is not 1-to-1, so leave it like this for now. Also we use FIRST(long_title) and get the first match as long_title for the disease group. Check if anything better is possible
 
     print(f'Conditions with >= {min_admissions} admissions: {len(df)}')
     print('Top 10:')
