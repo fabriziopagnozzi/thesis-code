@@ -54,7 +54,7 @@ def select_conditions(
         con = connect_mimic_duckdb()
         run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
-    df = con.execute(f"""
+    df = con.execute(f"""--sql
         WITH charlson_counts AS (
             SELECT hadm_id, {'+'.join(HIGH_LEVEL_CHARLSON_CONDITIONS)} AS n_comorbidity_categories
             FROM mimiciv_derived.charlson

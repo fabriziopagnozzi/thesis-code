@@ -10,7 +10,7 @@ import polars as pl
 def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     N_ICD_DESCRIPTIONS = 5
 
-    df = con.execute(f"""
+    df = con.execute(f"""--sql
         WITH icd_primary AS (
             SELECT
                 diagnoses_icd.hadm_id,
