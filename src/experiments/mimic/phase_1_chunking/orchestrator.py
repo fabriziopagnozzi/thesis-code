@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     print('\n> Step 1.1: Condition selection')
     conditions = select_conditions(con)
-    conditions.write_parquet(MIMIC_RESULTS_DIR / 'conditions.parquet')
+    conditions.write_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
     register_result_view(con, 'conditions', conditions)
     input('\nDone. Press enter to continue...\n')
 
@@ -44,6 +44,6 @@ if __name__ == '__main__':
     register_result_view(con, 'chunks', chunks)
 
     print(f'\n\nPhase 1 complete. Outputs in {MIMIC_RESULTS_DIR}:')
-    print(f'  conditions.parquet:          {len(conditions):>10,} conditions')
+    print(f'  conditions_stats.parquet:          {len(conditions):>10,} conditions')
     print(f'  admissions_metadata.parquet: {len(metadata):>10,} admissions')
     print(f'  chunks.parquet:              {len(chunks):>10,} chunks')

@@ -5,9 +5,10 @@ For each query spec (condition x modifier x persona), samples real BHC chunks
 from the condition+modifier intersection and assembles a full prompt that
 grounds the LLM in real clinical data.
 
-Output: queries.parquet — ready to be fed to an LLM manually.
+Output: queries.parquet.
 """
 
+import numpy as np
 import polars as pl
 
 from experiments.mimic.duck_db_init import (
@@ -113,85 +114,92 @@ def get_modifier_hadm_ids(
     return set()
 
 
-def sample_grounding_chunks(
-    all_chunks: pl.DataFrame,
-    hadm_ids: set[int],
-    metadata: pl.DataFrame,
-    n_patients: int = N_GROUNDING_PATIENTS,
-    seed: int = 42,
-) -> list[dict]:
-    """Sample multi-section chunks from the condition+modifier intersection.
+class _ChunkIndex:
+    """Pre-partitioned chunk index for fast hadm_id lookups."""
 
-    Picks n_patients distinct patients, then for each patient includes:
-    - The longest BHC chunk (clinical reasoning, always present)
-    - One supplementary high-value section if available
-    """
-    pool = all_chunks.filter(
-        pl.col('hadm_id').is_in(hadm_ids) & pl.col('section_name').is_in(HIGH_VALUE_SECTIONS)
-    )
-    if pool.is_empty():
-        return []
+    def __init__(self, chunks: pl.DataFrame, metadata: pl.DataFrame):
+        hv = chunks.filter(pl.col('section_name').is_in(HIGH_VALUE_SECTIONS))
+        self._by_hadm: dict[int, pl.DataFrame] = {}
+        for key, group in hv.group_by('hadm_id'):
+            self._by_hadm[key[0]] = group  # key is a 1-tuple
+        self._meta: dict[int, dict] = {}
+        for row in (
+            metadata.select('hadm_id', 'age', 'gender', 'race')
+            .unique(subset=['hadm_id'])
+            .iter_rows(named=True)
+        ):
+            self._meta[row['hadm_id']] = row
 
-    bhc_pool = pool.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
-    if bhc_pool.is_empty():
-        return []
+    def hadm_ids_with_bhc(self, hadm_ids: set[int]) -> list[int]:
+        """Return hadm_ids from the set that have BHC chunks, sorted by longest BHC."""
+        result = []
+        for hid in hadm_ids:
+            group = self._by_hadm.get(hid)
+            if group is None:
+                continue
+            bhc = group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
+            if not bhc.is_empty():
+                max_tokens = bhc['approx_tokens'].max()
+                result.append((hid, max_tokens))
+        result.sort(key=lambda x: x[1], reverse=True)
+        return [hid for hid, _ in result]
 
-    bhc_per_patient = bhc_pool.sort('approx_tokens', descending=True).unique(
-        subset=['hadm_id'], keep='first'
-    )
-    if len(bhc_per_patient) > n_patients:
-        bhc_per_patient = bhc_per_patient.sample(n_patients, seed=seed)
+    def sample_patient(self, hadm_id: int) -> list[dict]:
+        group = self._by_hadm[hadm_id]
 
-    selected_hadm_ids = set(bhc_per_patient['hadm_id'].to_list())
+        bhc = group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
+        bhc_row = bhc.sort('approx_tokens', descending=True).row(0, named=True)
 
-    supp_pool = pool.filter(
-        pl.col('hadm_id').is_in(selected_hadm_ids)
-        & (pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
-    )
+        section_priority = {s: i for i, s in enumerate(HIGH_VALUE_SECTIONS)}
+        supp = group.filter(pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
+        supp = supp.with_columns(
+            pl.col('section_name').replace_strict(section_priority, default=99).alias('_p')
+        )
+        supp = supp.sort('_p').head(1).drop('_p')
 
-    # Rank by section priority, keep one per patient
-    section_priority = {s: i for i, s in enumerate(HIGH_VALUE_SECTIONS)}
-    supp_pool = supp_pool.with_columns(
-        pl.col('section_name').replace_strict(section_priority, default=99).alias('_priority')
-    )
-    supp_per_patient = (
-        supp_pool.sort('_priority').unique(subset=['hadm_id'], keep='first').drop('_priority')
-    )
-
-    meta_sub = metadata.select(['hadm_id', 'age', 'gender', 'race']).unique(subset=['hadm_id'])
-
-    samples = []
-    for hadm_id in selected_hadm_ids:
-        patient_chunks = []
-
-        bhc_row = bhc_per_patient.filter(pl.col('hadm_id') == hadm_id).row(0, named=True)
-        patient_chunks.append(bhc_row)
-
-        other_chunks = supp_per_patient.filter(pl.col('hadm_id') == hadm_id)
-        if not other_chunks.is_empty():
-            patient_chunks.append(other_chunks.row(0, named=True))
-
-        meta_row = meta_sub.filter(pl.col('hadm_id') == hadm_id)
-        age = meta_row['age'][0] if not meta_row.is_empty() else None
-        gender = meta_row['gender'][0] if not meta_row.is_empty() else None
-        race = meta_row['race'][0] if not meta_row.is_empty() else None
+        meta = self._meta.get(hadm_id)
+        age = meta['age'] if meta is not None else None
+        gender = meta['gender'] if meta is not None else None
+        race = meta['race'] if meta is not None else None
 
         age_str = f'age {int(age)}' if age is not None else 'unknown age'
         gender_str = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown sex'
-        patient_header = f'{age_str}, {gender_str}, {race or "unknown"}'
+        header_prefix = f'{age_str}, {gender_str}, {race or "unknown"}'
 
-        for chunk in patient_chunks:
+        rows = [bhc_row] + (supp.to_dicts() if not supp.is_empty() else [])
+        samples = []
+        for chunk in rows:
             section = chunk['section_name']
             problem = chunk.get('subsection_name')
             label = f'{section} > {problem}' if problem else section
             samples.append(
                 {
-                    'header': f'{patient_header} [{label}]',
+                    'header': f'{header_prefix} [{label}]',
                     'text': chunk['text'],
                     'hadm_id': hadm_id,
                 }
             )
+        return samples
 
+
+def sample_grounding_chunks(
+    chunk_index: _ChunkIndex,
+    hadm_ids: set[int],
+    n_patients: int = N_GROUNDING_PATIENTS,
+    seed: int = 42,
+) -> list[dict]:
+    """Sample multi-section chunks from the condition+modifier intersection."""
+    candidates = chunk_index.hadm_ids_with_bhc(hadm_ids)
+    if not candidates:
+        return []
+
+    if len(candidates) > n_patients:
+        rng = np.random.default_rng(seed)
+        candidates = rng.choice(candidates, size=n_patients, replace=False).tolist()
+
+    samples = []
+    for hid in candidates:
+        samples.extend(chunk_index.sample_patient(hid))
     return samples
 
 
@@ -216,8 +224,12 @@ def build_grounded_prompts(
 ) -> pl.DataFrame:
     """For each query spec, sample grounding chunks and assemble the full prompt."""
 
+    chunk_index = _ChunkIndex(chunks, metadata)
+    print(f'Built chunk index: {len(chunk_index._by_hadm):,} hadm_ids with high-value sections')
+
     condition_hadm_cache: dict[str, set[int]] = {}
     modifier_hadm_cache: dict[tuple[str, str, str], set[int]] = {}
+    samples_cache: dict[tuple[str, str, str], list[dict]] = {}
 
     results = []
     skipped = 0
@@ -227,7 +239,6 @@ def build_grounded_prompts(
         modifier_text = row['modifier_text']
         modifier_type = row['modifier_type']
 
-        # Get condition hadm_ids (cached)
         if icd3 not in condition_hadm_cache:
             condition_hadm_cache[icd3] = _get_condition_hadm_ids(con, icd3)
         condition_hadm_ids = condition_hadm_cache[icd3]
@@ -243,8 +254,14 @@ def build_grounded_prompts(
             skipped += 1
             continue
 
-        spec_seed = hash((icd3, modifier_text, modifier_type)) & 0xFFFFFFFF
-        samples = sample_grounding_chunks(chunks, intersection_hadm_ids, metadata, seed=spec_seed)
+        # Samples depend only on (condition, modifier), not persona
+        if cache_key not in samples_cache:
+            spec_seed = hash(cache_key) & 0xFFFFFFFF
+            samples_cache[cache_key] = sample_grounding_chunks(
+                chunk_index, intersection_hadm_ids, seed=spec_seed
+            )
+        samples = samples_cache[cache_key]
+
         if not samples:
             skipped += 1
             continue
