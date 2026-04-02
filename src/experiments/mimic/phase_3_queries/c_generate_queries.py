@@ -16,7 +16,9 @@ from experiments.mimic.ollama_client import generate
 SAVE_EVERY = 25
 
 
-def generate_queries(prompts_df: pl.DataFrame, resume_df: pl.DataFrame | None = None) -> pl.DataFrame:
+def generate_queries(
+    prompts_df: pl.DataFrame, resume_df: pl.DataFrame | None = None
+) -> pl.DataFrame:
     """For each prompt row, call ollama to generate the clinical question.
 
     If resume_df is provided, skip rows already present (by matching on
@@ -33,7 +35,9 @@ def generate_queries(prompts_df: pl.DataFrame, resume_df: pl.DataFrame | None = 
 
     out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
 
-    for i, row in enumerate(tqdm(prompts_df.iter_rows(named=True), total=len(prompts_df), desc='Generating queries')):
+    for i, row in enumerate(
+        tqdm(prompts_df.iter_rows(named=True), total=len(prompts_df), desc='Generating queries')
+    ):
         key = (row['icd10_3char'], row['modifier_text'], row['persona'])
         if key in already_done:
             continue
@@ -75,7 +79,7 @@ def main():
 
     print(f'\nSaved {len(df):,} queries to {out_path}')
     print(f'  Conditions: {df["icd10_3char"].n_unique()}')
-    print(f'\n--- Sample query ---')
+    print('\n--- Sample query ---')
     print(df['query_text'][0])
 
 

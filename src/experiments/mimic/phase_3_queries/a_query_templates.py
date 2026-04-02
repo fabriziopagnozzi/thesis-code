@@ -10,6 +10,7 @@ import itertools
 
 import polars as pl
 
+from experiments.mimic.config import N_CONDITIONS
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -100,7 +101,7 @@ def build_query_specs(conditions: pl.DataFrame, con, max_modifiers: int = 3) -> 
     """Build query specifications: (condition, modifier, persona) triples."""
     specs = []
 
-    for row in conditions.head(100).iter_rows(named=True):
+    for row in conditions.head(N_CONDITIONS).iter_rows(named=True):
         icd3 = row['icd10_3char']
         condition_name = row['condition_name'] or icd3
 
@@ -134,7 +135,7 @@ def main():
     run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
-    print(f'Building query specs for top {min(100, len(conditions))} conditions...')
+    print(f'Building query specs for top {min(N_CONDITIONS, len(conditions))} conditions...')
 
     specs = build_query_specs(conditions, con)
     df = pl.DataFrame(specs)
