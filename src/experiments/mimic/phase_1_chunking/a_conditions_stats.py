@@ -103,5 +103,5 @@ def select_conditions(
 if __name__ == '__main__':
     df = select_conditions()
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    df.write_parquet(MIMIC_RESULTS_DIR / 'conditions.parquet')
-    print(f'\nSaved {len(df)} conditions to {MIMIC_RESULTS_DIR / "conditions.parquet"}')
+    df.write_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
+    print(f'\nSaved {len(df)} conditions to {MIMIC_RESULTS_DIR / "conditions_stats.parquet"}')

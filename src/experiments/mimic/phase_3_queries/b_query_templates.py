@@ -2,6 +2,8 @@
 Step 2.2: Generate multi-aspect queries via enumeration.
 
 For each selected condition, picks modifier axes (comorbidity, demographic) and generates queries using multiple LLM personas.
+
+Picks the top 100 conditions for now, according to the output of phase_1_chunking.a_conditions_stats
 """
 
 import itertools
@@ -131,7 +133,7 @@ def main():
     con = connect_mimic_duckdb()
     run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
-    conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions.parquet')
+    conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
     print(f'Building query specs for top {min(100, len(conditions))} conditions...')
 
     specs = build_query_specs(conditions, con)
