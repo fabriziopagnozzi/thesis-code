@@ -95,19 +95,18 @@ class CandidatePoolBuilder:
         db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
         arrow_table = db.open_table('chunks').to_arrow()
 
+        # FixedSizeList column: extract flat value buffer then reshape
         vec_column = arrow_table.column('vector')
-        self._corpus_vectors = np.array(
-            vec_column.combine_chunks().to_numpy(zero_copy_only=False),
-            dtype=np.float32,
+        combined = vec_column.combine_chunks()
+        dim = combined.type.list_size
+        self._corpus_vectors = (
+            combined.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
         )
-        if self._corpus_vectors.ndim == 1:
-            dim = len(vec_column[0].as_py())
-            self._corpus_vectors = self._corpus_vectors.reshape(-1, dim)
 
         self._corpus_df = pl.DataFrame(arrow_table.drop('vector'))
         self._hadm_id_array = self._corpus_df['hadm_id'].to_numpy()
 
-        n, d = self._corpus_vectors.shape
+        n, d = self._corpus_vectors.shape  # type: ignore
         print(f'Loaded corpus: {n:,} chunks, dim={d}')
 
     def _get_embedder(self) -> Embedder:
