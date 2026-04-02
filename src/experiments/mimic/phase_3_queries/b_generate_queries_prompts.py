@@ -16,7 +16,7 @@ from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
     run_sql_concept_script,
 )
-from experiments.mimic.phase_3_queries.b_query_templates import (
+from experiments.mimic.phase_3_queries.a_query_templates import (
     CHARLSON_LABELS,
     DEMOGRAPHIC_MODIFIERS,
 )
