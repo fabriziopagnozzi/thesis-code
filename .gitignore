@@ -6,7 +6,7 @@ datasets/full-data/
 results/
 
 # this is a git repo from MIT
-experiments/mimic/mimic-*/
+experiments/mimic/mimic_*/
 
 **/@pdfs/*
 !**/@pdfs/*.pdf
