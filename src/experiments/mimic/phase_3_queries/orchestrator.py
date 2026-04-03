@@ -7,7 +7,7 @@ from experiments.mimic.duck_db_init import (
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePoolBuilder
 
 from .a_build_query_prompts import build_query_prompts
-from .b_generate_queries import generate_queries
+from .b_gen_queries_llm import generate_queries
 from .c_filter_queries import filter_queries
 from .d_gold_annotation import run_gold_annotation
 
