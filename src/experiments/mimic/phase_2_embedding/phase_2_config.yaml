@@ -1,0 +1,5 @@
+embed:
+  model_name: multi-qa-mpnet-base-cos-v1
+  batch_size: 256
+  commit_every: 16384
+  device: cpu

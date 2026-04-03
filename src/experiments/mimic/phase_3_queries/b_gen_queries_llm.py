@@ -13,10 +13,12 @@ import sys
 import polars as pl
 from tqdm import tqdm
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.ollama_client import generate
 
-SAVE_EVERY = 25
+_cfg = load_phase_config(3)['gen_queries_llm']
+SAVE_EVERY: int = _cfg['save_every']
 
 
 def main():
@@ -70,7 +72,7 @@ def generate_queries(
             continue
 
         try:
-            query_text = generate(row['full_prompt'], temperature=0.3, stream=True).strip()
+            query_text = generate(row['full_prompt'], temperature=_cfg['temperature'], stream=True).strip()
         except Exception as e:
             print(f'  Error on row {i}: {e}')
             continue

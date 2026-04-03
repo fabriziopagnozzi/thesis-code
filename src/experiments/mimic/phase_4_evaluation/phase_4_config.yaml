@@ -1,0 +1,10 @@
+evaluate:
+  strategies:
+    - top_k
+    - mmr
+    - gmmr
+    - facility_location
+  k_values: [5, 10, 20]
+  lam_values: [0.3, 0.5, 0.7]
+  prefilter_n: 500
+  device: cuda

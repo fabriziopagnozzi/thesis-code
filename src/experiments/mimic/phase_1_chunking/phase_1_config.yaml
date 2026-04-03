@@ -1,0 +1,31 @@
+conditions_stats:
+  min_admissions: 200
+
+note_chunking:
+  keep_sections:
+    - HISTORY OF PRESENT ILLNESS
+    - PAST MEDICAL HISTORY
+    - PHYSICAL EXAM
+    - PERTINENT RESULTS
+    - DISCHARGE MEDICATIONS
+    - DISCHARGE DIAGNOSIS
+  skip_sections:
+    - SEX
+    - SERVICE
+    - ALLERGIES
+    - ATTENDING
+    - SOCIAL HISTORY
+    - FOLLOWUP INSTRUCTIONS
+    - FACILITY
+    - MAJOR SURGICAL OR INVASIVE PROCEDURE
+    - FAMILY HISTORY
+    - MEDICATIONS ON ADMISSION
+    - DISCHARGE DISPOSITION
+    - DISCHARGE CONDITION
+    - DISCHARGE INSTRUCTIONS
+  metadata_only_sections:
+    - CHIEF COMPLAINT
+
+dedup:
+  boilerplate_sections:
+    - PAST MEDICAL HISTORY

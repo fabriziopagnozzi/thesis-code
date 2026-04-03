@@ -15,10 +15,13 @@ Uses the Charlson SQL from mimic-code.
 import duckdb
 import polars as pl
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
+
+_cfg = load_phase_config(1)['conditions_stats']
 
 # Charlson groups ICD codes into higher level buckets, containing more coarse disease groups among which it makes more sense to look for comorbidities
 HIGH_LEVEL_CHARLSON_CONDITIONS = {
@@ -43,12 +46,15 @@ HIGH_LEVEL_CHARLSON_CONDITIONS = {
 
 
 def select_conditions(
-    con: duckdb.DuckDBPyConnection | None = None, min_admissions: int = 200
+    con: duckdb.DuckDBPyConnection | None = None,
+    min_admissions: int | None = None,
 ) -> pl.DataFrame:
     """
     Returns a DataFrame with columns:
         icd10_3char, condition_name, n_admissions, mean_comorbidity_count, score
     """
+    if min_admissions is None:
+        min_admissions = _cfg['min_admissions']
     if con is None:
         con = connect_mimic_duckdb()
 

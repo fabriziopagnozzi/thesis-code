@@ -13,10 +13,13 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
+
+_cfg = load_phase_config(4)['evaluate']
 from experiments.mimic.phase_4_evaluation.candidate_pool import (
     CandidatePool,
     CandidatePoolBuilder,
@@ -26,9 +29,9 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import (
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
-DEFAULT_STRATEGIES: list[ScoringFunction] = ['top_k', 'mmr', 'gmmr', 'facility_location']
-DEFAULT_K_VALUES = [5, 10, 20]
-DEFAULT_LAM_VALUES = [0.3, 0.5, 0.7]
+DEFAULT_STRATEGIES: list[ScoringFunction] = _cfg['strategies']
+DEFAULT_K_VALUES: list[int] = _cfg['k_values']
+DEFAULT_LAM_VALUES: list[float] = _cfg['lam_values']
 
 
 def main():
@@ -38,7 +41,7 @@ def main():
     annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
     print(f'Loaded {len(annotations_df):,} annotated queries with facets')
 
-    builder = CandidatePoolBuilder(con, device='cuda')
+    builder = CandidatePoolBuilder(con, device=_cfg['device'])
 
     results = run_evaluation(annotations_df, builder)
 

@@ -16,10 +16,13 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
+
+_cfg = load_phase_config(3)['gold_annotation']
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
@@ -101,7 +104,7 @@ def annotate_batch(
     valid_ids = set(chunk_ids)
 
     try:
-        result = generate_json(prompt, system=MAP_SYSTEM_PROMPT, temperature=0.1)
+        result = generate_json(prompt, system=MAP_SYSTEM_PROMPT, temperature=_cfg['temperature'])
     except Exception as e:
         print(f'    Batch annotation failed: {e}')
         return []
@@ -186,14 +189,18 @@ def annotate_query(
 def run_gold_annotation(
     queries_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
-    prefilter_n: int = 500,
-    batch_size: int = 40,
+    prefilter_n: int | None = None,
+    batch_size: int | None = None,
 ) -> pl.DataFrame:
     """Annotate all queries. Groups by icd10_3char for pool reuse.
 
     Returns DataFrame with columns:
         query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
     """
+    if prefilter_n is None:
+        prefilter_n = _cfg['prefilter_n']
+    if batch_size is None:
+        batch_size = _cfg['batch_size']
     condition_pools: dict[str, CandidatePool] = {}
     results = []
 

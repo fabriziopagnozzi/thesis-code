@@ -8,9 +8,9 @@ import hashlib
 
 import polars as pl
 
-BOILERPLATE_SECTIONS = {
-    'PAST MEDICAL HISTORY',
-}
+from experiments.mimic.config_loader import load_phase_config
+
+BOILERPLATE_SECTIONS = set(load_phase_config(1)['dedup']['boilerplate_sections'])
 
 
 def _content_hash(text: str) -> str:
