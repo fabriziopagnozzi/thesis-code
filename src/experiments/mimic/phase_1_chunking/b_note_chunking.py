@@ -6,34 +6,14 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.chunks_classes import MimicIVChunk
 
-# -- Sections to keep from the <TAG> formatted input --
-KEEP_SECTIONS = {
-    'HISTORY OF PRESENT ILLNESS',
-    'PAST MEDICAL HISTORY',
-    'PHYSICAL EXAM',
-    'PERTINENT RESULTS',
-    'DISCHARGE MEDICATIONS',
-    'DISCHARGE DIAGNOSIS',
-}
-SKIP_SECTIONS = {
-    'SEX',
-    'SERVICE',
-    'ALLERGIES',
-    'ATTENDING',
-    'SOCIAL HISTORY',
-    'FOLLOWUP INSTRUCTIONS',
-    'FACILITY',
-    'MAJOR SURGICAL OR INVASIVE PROCEDURE',
-    'FAMILY HISTORY',
-    'MEDICATIONS ON ADMISSION',
-    'DISCHARGE DISPOSITION',
-    'DISCHARGE CONDITION',
-    'DISCHARGE INSTRUCTIONS',
-}
-METADATA_ONLY_SECTIONS = {'CHIEF COMPLAINT'}
+_cfg = load_phase_config(1)['note_chunking']
+KEEP_SECTIONS = set(_cfg['keep_sections'])
+SKIP_SECTIONS = set(_cfg['skip_sections'])
+METADATA_ONLY_SECTIONS = set(_cfg['metadata_only_sections'])
 
 ALL_SECTIONS = KEEP_SECTIONS | SKIP_SECTIONS | METADATA_ONLY_SECTIONS
 

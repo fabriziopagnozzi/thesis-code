@@ -15,10 +15,13 @@ import numpy as np
 import polars as pl
 
 from experiments.mimic.config import N_CONDITIONS
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
+
+_cfg = load_phase_config(3)['build_query_prompts']
 
 
 def main():
@@ -44,85 +47,22 @@ def main():
     print(df['full_prompt'][0][:1500])
 
 
-PERSONAS = {
-    'clinician': (
-        'You are an experienced attending physician reviewing patient cases. '
-        'Generate a clinical management question about {condition} that requires '
-        'knowing how treatment or workup changes when {modifier} is present. '
-        'The question should require synthesizing information from multiple '
-        'patient cases, not textbook symptom lists. Focus on practical management '
-        'decisions (drug choice, dosing, monitoring, disposition).'
-    ),
-    'researcher': (
-        'You are a clinical researcher analyzing trends in hospital discharge data. '
-        'Generate a research-oriented question about {condition} that investigates '
-        'how outcomes or management patterns differ when {modifier} is present. '
-        'The question should be answerable by synthesizing discharge summaries '
-        'from multiple patients, focusing on observable patterns in care delivery.'
-    ),
-    'neutral': (
-        'Generate a clinical management question about {condition} that requires '
-        'knowing how treatment or workup changes when {modifier} is present. '
-        'The answer should require synthesizing management decisions from multiple '
-        'patient cases, not textbook symptom lists.'
-    ),
-}
+PERSONAS: dict[str, str] = _cfg['personas']
+CHARLSON_LABELS: dict[str, str] = _cfg['charlson_labels']
 
-CHARLSON_LABELS = {
-    'myocardial_infarct': 'prior myocardial infarction',
-    'congestive_heart_failure': 'congestive heart failure',
-    'peripheral_vascular_disease': 'peripheral vascular disease',
-    'cerebrovascular_disease': 'cerebrovascular disease',
-    'dementia': 'dementia',
-    'chronic_pulmonary_disease': 'chronic pulmonary disease (COPD)',
-    'rheumatic_disease': 'rheumatic disease',
-    'peptic_ulcer_disease': 'peptic ulcer disease',
-    'mild_liver_disease': 'mild liver disease',
-    'diabetes_without_cc': 'diabetes without complications',
-    'diabetes_with_cc': 'diabetes with chronic complications',
-    'paraplegia': 'hemiplegia or paraplegia',
-    'renal_disease': 'chronic kidney disease',
-    'malignant_cancer': 'malignancy',
-    'severe_liver_disease': 'severe liver disease (cirrhosis)',
-    'metastatic_solid_tumor': 'metastatic cancer',
-    'aids': 'HIV/AIDS',
-}
-
-DEMOGRAPHIC_MODIFIERS = [
-    'the patient is elderly (age > 75)',
-    'the patient is a young adult (age < 40)',
-]
+DEMOGRAPHIC_MODIFIERS: list[str] = [m['text'] for m in _cfg['demographic_modifiers']]
 
 # -- Reverse maps used for filtering --
 LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
-DEMOGRAPHIC_FILTERS = {
-    DEMOGRAPHIC_MODIFIERS[0]: ('age', '>', 75),
-    DEMOGRAPHIC_MODIFIERS[1]: ('age', '<', 40),
+DEMOGRAPHIC_FILTERS: dict[str, tuple] = {
+    m['text']: (m['column'], m['op'], m['value'])
+    for m in _cfg['demographic_modifiers']
 }
 
-N_GROUNDING_PATIENTS = 4
-HIGH_VALUE_SECTIONS = [
-    'BRIEF HOSPITAL COURSE',
-    'HISTORY OF PRESENT ILLNESS',
-    'PERTINENT RESULTS',
-    'DISCHARGE DIAGNOSIS',
-    'DISCHARGE MEDICATIONS',
-]
+N_GROUNDING_PATIENTS: int = _cfg['n_grounding_patients']
+HIGH_VALUE_SECTIONS: list[str] = _cfg['high_value_sections']
 
-PROMPT_TEMPLATE = """\
-{persona_prompt}
-
-Below are excerpts from real discharge summaries of patients admitted for {condition} where {modifier} was also present. Each excerpt is from the discharge notes, describing clinical management decisions, lab results, diagnoses, and medications.
-
-{chunks_block}
-
-Using these real cases as background context (but NOT overfitting to any specific patient), generate ONE clinical management question about {condition} that:
-- Requires knowing how treatment, workup, or monitoring changes when {modifier} is present
-- Is answerable by synthesizing patterns across multiple patient cases
-- Focuses on a generalizable management decision (drug choice, dosing adjustments, contraindications, monitoring frequency, disposition)
-- Requires multi-source evidence - no single patient note answers it fully
-
-Return ONLY the question, nothing else."""
+PROMPT_TEMPLATE: str = _cfg['prompt_template']
 
 
 def build_query_prompts(
@@ -130,9 +70,11 @@ def build_query_prompts(
     chunks: pl.DataFrame,
     metadata: pl.DataFrame,
     con,
-    max_modifiers: int = 3,
+    max_modifiers: int | None = None,
 ) -> pl.DataFrame:
     """Build grounded query prompts for the top N_CONDITIONS conditions."""
+    if max_modifiers is None:
+        max_modifiers = int(_cfg['max_modifiers'])
     specs = _build_specs(conditions, con, max_modifiers)
     print(f'Built {len(specs):,} specs ({N_CONDITIONS} conditions)')
 

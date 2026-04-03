@@ -13,10 +13,13 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
+
+_cfg = load_phase_config(3)['filter_queries']
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
@@ -88,16 +91,24 @@ def compute_divergence(
 def filter_queries(
     queries_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
-    k: int = 10,
-    lam: float = 0.5,
-    jaccard_threshold: float = 0.7,
-    prefilter_n: int = 500,
+    k: int | None = None,
+    lam: float | None = None,
+    jaccard_threshold: float | None = None,
+    prefilter_n: int | None = None,
 ) -> pl.DataFrame:
     """Run divergence filter on all queries. Returns augmented DataFrame.
 
     Adds columns: jaccard_div, fac_gap, passes_filter, pool_size.
     Queries with jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
     """
+    if k is None:
+        k = _cfg['k']
+    if lam is None:
+        lam = _cfg['lam']
+    if jaccard_threshold is None:
+        jaccard_threshold = _cfg['jaccard_threshold']
+    if prefilter_n is None:
+        prefilter_n = _cfg['prefilter_n']
     results = []
     condition_pools: dict[str, CandidatePool] = {}
 

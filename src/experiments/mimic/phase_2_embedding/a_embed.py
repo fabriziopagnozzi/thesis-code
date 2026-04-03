@@ -2,12 +2,14 @@
 
 import polars as pl
 
+from experiments.mimic.config_loader import load_phase_config
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.embedder import Embedder
 
-MODEL_NAME = 'multi-qa-mpnet-base-cos-v1'
-BATCH_SIZE = 256
-COMMIT_EVERY = 16384
+_cfg = load_phase_config(2)['embed']
+MODEL_NAME: str = _cfg['model_name']
+BATCH_SIZE: int = _cfg['batch_size']
+COMMIT_EVERY: int = _cfg['commit_every']
 
 
 def _age_group(age: float | None) -> str:
@@ -67,7 +69,7 @@ def prepare_texts(
     return joined, texts
 
 
-def main(device: str = 'cpu'):
+def main(device: str = _cfg['device']):
     import lancedb
 
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
