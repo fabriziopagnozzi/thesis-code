@@ -3,9 +3,9 @@
 All functions return an array of selected indices into the candidate pool.
 
 Conventions:
-    - sim_to_query: shape (n,) — cosine similarity of each chunk to the query
-    - sim_matrix:   shape (n, n) — pairwise cosine similarity between chunks
-    - embeddings:   shape (n, d) — chunk embeddings (for FPS / gMMR)
+    - sim_to_query: shape (n,) - cosine similarity of each chunk to the query
+    - sim_matrix:   shape (n, n) - pairwise cosine similarity between chunks
+    - embeddings:   shape (n, d) - chunk embeddings (for FPS / gMMR)
     - k:            number of chunks to select
     - lam:          relevance-diversity trade-off (1.0 = pure relevance)
 """

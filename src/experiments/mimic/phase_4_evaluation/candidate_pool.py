@@ -53,7 +53,7 @@ class CandidatePool:
         if self._sim_matrix is None:
             if self.n > self.MAX_SIM_MATRIX_SIZE:
                 raise ValueError(
-                    f'Candidate pool has {self.n:,} chunks — dense sim matrix would be '
+                    f'Candidate pool has {self.n:,} chunks - dense sim matrix would be '
                     f'{self.n}x{self.n} ({self.n**2 * 4 / 1e9:.1f} GB). '
                     f'Apply prefilter_n to reduce pool size first.'
                 )
