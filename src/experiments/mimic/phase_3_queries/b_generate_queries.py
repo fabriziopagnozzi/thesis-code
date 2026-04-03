@@ -11,7 +11,7 @@ import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
-from experiments.mimic.ollama_client import generate
+from helpers.ollama_client import generate
 
 SAVE_EVERY = 25
 

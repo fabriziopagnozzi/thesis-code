@@ -20,8 +20,8 @@ from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
-from experiments.mimic.ollama_client import generate_json
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from helpers.ollama_client import generate_json
 
 
 def main():
