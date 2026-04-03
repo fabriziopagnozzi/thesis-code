@@ -16,7 +16,6 @@ from tqdm import tqdm
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
-    run_sql_concept_script,
 )
 from experiments.mimic.phase_4_evaluation.candidate_pool import (
     CandidatePool,
@@ -34,7 +33,6 @@ DEFAULT_LAM_VALUES = [0.3, 0.5, 0.7]
 
 def main():
     con = connect_mimic_duckdb()
-    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     annotations_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'gold_annotations.parquet')
     annotations_df = annotations_df.filter(pl.col('n_facets') > 0)

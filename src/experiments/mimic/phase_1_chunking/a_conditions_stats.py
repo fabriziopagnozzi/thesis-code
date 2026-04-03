@@ -18,7 +18,6 @@ import polars as pl
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
-    run_sql_concept_script,
 )
 
 # Charlson groups ICD codes into higher level buckets, containing more coarse disease groups among which it makes more sense to look for comorbidities
@@ -52,7 +51,6 @@ def select_conditions(
     """
     if con is None:
         con = connect_mimic_duckdb()
-        run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     df = con.execute(f"""--sql
         WITH charlson_counts AS (

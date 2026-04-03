@@ -3,7 +3,6 @@ from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
     generate_init_sql,
     register_result_view,
-    run_sql_concept_script,
 )
 
 from .a_conditions_stats import select_conditions
@@ -17,9 +16,6 @@ MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 if __name__ == '__main__':
     generate_init_sql(force=True)
     con = connect_mimic_duckdb()
-
-    print('> Building mimic-code derived tables...')
-    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     print('\n> Step 1.1: Condition selection')
     conditions = select_conditions(con)

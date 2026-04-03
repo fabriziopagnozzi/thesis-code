@@ -64,11 +64,9 @@ if __name__ == '__main__':
     from experiments.mimic.duck_db_init import (
         MIMIC_RESULTS_DIR,
         connect_mimic_duckdb,
-        run_sql_concept_script,
     )
 
     con = connect_mimic_duckdb()
-    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
     df = build_admissions_metadata(con)
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     df.write_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')

@@ -19,7 +19,6 @@ from tqdm import tqdm
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
-    run_sql_concept_script,
 )
 from experiments.mimic.ollama_client import generate_json
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
@@ -45,7 +44,6 @@ If no chunks in this batch are relevant to the question, return an empty array: 
 
 def main():
     con = connect_mimic_duckdb()
-    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     # Load filtered queries (only those that passed divergence filter)
     div_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'
