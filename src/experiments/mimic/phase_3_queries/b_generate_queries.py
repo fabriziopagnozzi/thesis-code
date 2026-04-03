@@ -4,7 +4,7 @@ Step 3.2: Generate actual clinical questions from prompts via ollama.
 Reads queries_prompts.parquet (which contains LLM prompts but not the generated
 query text) and calls a local LLM to produce the clinical question for each row.
 
-Output: queries.parquet — all original columns + query_text.
+Output: queries.parquet - all original columns + query_text.
 """
 
 import polars as pl

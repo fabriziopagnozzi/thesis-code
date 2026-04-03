@@ -60,7 +60,7 @@ def main():
             print(f'  [{label}] → {len(cids)} chunks')
 
 
-MAP_SYSTEM_PROMPT = """You are a clinical information analyst. Your task is to extract facts from discharge note excerpts that are relevant to answering a clinical question. Be exhaustive — tag every chunk that contains relevant information, not just the single best one."""
+MAP_SYSTEM_PROMPT = """You are a clinical information analyst. Your task is to extract facts from discharge note excerpts that are relevant to answering a clinical question. Be exhaustive - tag every chunk that contains relevant information, not just the single best one."""
 
 MAP_USER_TEMPLATE = """Question: {query_text}
 
@@ -71,7 +71,7 @@ Below are excerpts from clinical discharge notes. Each is prefixed with its ID.
 For each fact in these excerpts that is relevant to answering the question:
 1. State the fact concisely (one sentence)
 2. List ALL chunk_id(s) that support this fact
-3. Assign a short facet label — the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
+3. Assign a short facet label - the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
 
 Return a JSON array. Example format:
 [{{"fact": "Heparin dose reduced to 10u/kg/hr due to CrCl < 30", "facet_label": "anticoagulation_adjustment", "chunk_ids": ["chunk_42", "chunk_87"]}}]
@@ -218,7 +218,7 @@ def run_gold_annotation(
             work_pool = pool
 
         print(
-            f'  [{i + 1}/{len(queries_df)}] {icd3} — pool={work_pool.n} chunks, '
+            f'  [{i + 1}/{len(queries_df)}] {icd3} - pool={work_pool.n} chunks, '
             f'{(work_pool.n + batch_size - 1) // batch_size} batches'
         )
 

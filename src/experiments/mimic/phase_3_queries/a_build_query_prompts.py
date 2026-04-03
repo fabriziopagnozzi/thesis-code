@@ -1,10 +1,10 @@
 """
 Step 3.1: Build grounded LLM prompts for query generation.
 
-For each top condition (by frequency × comorbidity richness):
-  1. Enumerate (modifier, persona) pairs — comorbidity axes from Charlson + demographic modifiers
-  2. Sample real BHC chunks from the condition+modifier intersection
-  3. Assemble a full prompt grounded in real clinical data
+For each top condition (by frequency x comorbidity richness):
+    1. Enumerate (modifier, persona) pairs - comorbidity axes from Charlson + demographic modifiers
+    2. Sample real BHC chunks from the condition+modifier intersection
+    3. Assemble a full prompt grounded in real clinical data
 
 Output: queries_prompts.parquet
 """
@@ -120,7 +120,7 @@ Using these real cases as background context (but NOT overfitting to any specifi
 - Requires knowing how treatment, workup, or monitoring changes when {modifier} is present
 - Is answerable by synthesizing patterns across multiple patient cases
 - Focuses on a generalizable management decision (drug choice, dosing adjustments, contraindications, monitoring frequency, disposition)
-- Requires multi-source evidence — no single patient note answers it fully
+- Requires multi-source evidence - no single patient note answers it fully
 
 Return ONLY the question, nothing else."""
 

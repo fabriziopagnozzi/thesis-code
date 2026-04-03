@@ -161,7 +161,7 @@ def run_experiment(cfg: ExperimentConfig) -> pl.DataFrame:
                         break
 
     elapsed = time.perf_counter() - t0
-    print(f'Done in {elapsed:.1f}s — {len(rows)} result rows')
+    print(f'Done in {elapsed:.1f}s - {len(rows)} result rows')
 
     df = pl.DataFrame(rows)
     save_results(df, cfg)

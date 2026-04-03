@@ -7,7 +7,7 @@ from .experiment import run_experiment, summarize
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description='Coverage vs Dispersion diversity experiments')
 
-    # Config file (optional — overrides defaults, CLI overrides config)
+    # Config file (optional - overrides defaults, CLI overrides config)
     p.add_argument('--config', type=str, help='JSON config file path')
 
     p.add_argument(
