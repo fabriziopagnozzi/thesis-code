@@ -16,18 +16,35 @@ def generate(
     json_mode: bool = False,
     model: str | None = None,
     think: bool = False,
+    stream: bool = False,
 ) -> str:
     messages = []
     if system:
         messages.append({'role': 'system', 'content': system})
     messages.append({'role': 'user', 'content': prompt})
 
+    opts = {'temperature': temperature, 'think': think}
+
+    if stream:
+        content_parts: list[str] = []
+        for chunk in _client.chat(
+            model=model if model else OLLAMA_DEFAULT_MODEL,
+            messages=messages,
+            format='json' if json_mode else '',
+            options=opts,
+            stream=True,
+        ):
+            token = chunk.message.content or ''
+            print(token, end='', flush=True)
+            content_parts.append(token)
+        print()
+        return ''.join(content_parts)
+
     resp = _client.chat(
         model=model if model else OLLAMA_DEFAULT_MODEL,
         messages=messages,
         format='json' if json_mode else '',
-        options={'temperature': temperature},
-        think=think,
+        options=opts,
     )
     return resp.message.content or ''
 

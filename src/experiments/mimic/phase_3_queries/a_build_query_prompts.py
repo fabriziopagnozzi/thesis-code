@@ -125,6 +125,81 @@ Using these real cases as background context (but NOT overfitting to any specifi
 Return ONLY the question, nothing else."""
 
 
+def build_query_prompts(
+    conditions: pl.DataFrame,
+    chunks: pl.DataFrame,
+    metadata: pl.DataFrame,
+    con,
+    max_modifiers: int = 3,
+) -> pl.DataFrame:
+    """Build grounded query prompts for the top N_CONDITIONS conditions."""
+    specs = _build_specs(conditions, con, max_modifiers)
+    print(f'Built {len(specs):,} specs ({N_CONDITIONS} conditions)')
+
+    chunk_index = _ChunkIndex(chunks, metadata)
+    print(f'Chunk index: {len(chunk_index._by_hadm):,} hadm_ids with high-value sections')
+
+    condition_hadm_cache: dict[str, set[int]] = {}
+    modifier_hadm_cache: dict[tuple, set[int]] = {}
+    samples_cache: dict[tuple, list[dict]] = {}
+
+    results = []
+    skipped = 0
+
+    for spec in specs:
+        icd3 = spec['icd10_3char']
+        modifier_text = spec['modifier_text']
+        modifier_type = spec['modifier_type']
+
+        if icd3 not in condition_hadm_cache:
+            condition_hadm_cache[icd3] = _get_condition_hadm_ids(con, icd3)
+
+        cache_key = (icd3, modifier_text, modifier_type)
+        if cache_key not in modifier_hadm_cache:
+            modifier_hadm_cache[cache_key] = _get_modifier_hadm_ids(
+                con, condition_hadm_cache[icd3], modifier_text, modifier_type
+            )
+
+        intersection = modifier_hadm_cache[cache_key]
+        if not intersection:
+            skipped += 1
+            continue
+
+        if cache_key not in samples_cache:
+            samples_cache[cache_key] = _sample_grounding_chunks(
+                chunk_index, intersection, seed=hash(cache_key) & 0xFFFFFFFF
+            )
+        samples = samples_cache[cache_key]
+
+        if not samples:
+            skipped += 1
+            continue
+
+        full_prompt = PROMPT_TEMPLATE.format(
+            persona_prompt=spec['prompt'],
+            condition=spec['condition_name'],
+            modifier=modifier_text,
+            chunks_block=_format_chunks_block(samples),
+        )
+
+        results.append(
+            {
+                'icd10_3char': icd3,
+                'condition_name': spec['condition_name'],
+                'modifier_text': modifier_text,
+                'modifier_type': modifier_type,
+                'persona': spec['persona'],
+                'n_grounding_chunks': len(samples),
+                'n_intersection_admissions': len(intersection),
+                'grounding_hadm_ids': [s['hadm_id'] for s in samples],
+                'full_prompt': full_prompt,
+            }
+        )
+
+    print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} (no intersection chunks)')
+    return pl.DataFrame(results)
+
+
 # -- Step 1: enumerate (condition, modifier, persona) specs --
 def _find_top_comorbidity_modifiers(
     con, condition_icd3: str, n: int = 3
@@ -318,81 +393,6 @@ def _format_chunks_block(samples: list[dict]) -> str:
             seen_hadm[hid] = len(seen_hadm) + 1
         parts.append(f'--- Patient {seen_hadm[hid]} ({s["header"]}) ---\n{s["text"]}')
     return '\n\n'.join(parts)
-
-
-def build_query_prompts(
-    conditions: pl.DataFrame,
-    chunks: pl.DataFrame,
-    metadata: pl.DataFrame,
-    con,
-    max_modifiers: int = 3,
-) -> pl.DataFrame:
-    """Build grounded query prompts for the top N_CONDITIONS conditions."""
-    specs = _build_specs(conditions, con, max_modifiers)
-    print(f'Built {len(specs):,} specs ({N_CONDITIONS} conditions)')
-
-    chunk_index = _ChunkIndex(chunks, metadata)
-    print(f'Chunk index: {len(chunk_index._by_hadm):,} hadm_ids with high-value sections')
-
-    condition_hadm_cache: dict[str, set[int]] = {}
-    modifier_hadm_cache: dict[tuple, set[int]] = {}
-    samples_cache: dict[tuple, list[dict]] = {}
-
-    results = []
-    skipped = 0
-
-    for spec in specs:
-        icd3 = spec['icd10_3char']
-        modifier_text = spec['modifier_text']
-        modifier_type = spec['modifier_type']
-
-        if icd3 not in condition_hadm_cache:
-            condition_hadm_cache[icd3] = _get_condition_hadm_ids(con, icd3)
-
-        cache_key = (icd3, modifier_text, modifier_type)
-        if cache_key not in modifier_hadm_cache:
-            modifier_hadm_cache[cache_key] = _get_modifier_hadm_ids(
-                con, condition_hadm_cache[icd3], modifier_text, modifier_type
-            )
-
-        intersection = modifier_hadm_cache[cache_key]
-        if not intersection:
-            skipped += 1
-            continue
-
-        if cache_key not in samples_cache:
-            samples_cache[cache_key] = _sample_grounding_chunks(
-                chunk_index, intersection, seed=hash(cache_key) & 0xFFFFFFFF
-            )
-        samples = samples_cache[cache_key]
-
-        if not samples:
-            skipped += 1
-            continue
-
-        full_prompt = PROMPT_TEMPLATE.format(
-            persona_prompt=spec['prompt'],
-            condition=spec['condition_name'],
-            modifier=modifier_text,
-            chunks_block=_format_chunks_block(samples),
-        )
-
-        results.append(
-            {
-                'icd10_3char': icd3,
-                'condition_name': spec['condition_name'],
-                'modifier_text': modifier_text,
-                'modifier_type': modifier_type,
-                'persona': spec['persona'],
-                'n_grounding_chunks': len(samples),
-                'n_intersection_admissions': len(intersection),
-                'grounding_hadm_ids': [s['hadm_id'] for s in samples],
-                'full_prompt': full_prompt,
-            }
-        )
-
-    print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} (no intersection chunks)')
-    return pl.DataFrame(results)
 
 
 if __name__ == '__main__':

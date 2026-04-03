@@ -5,7 +5,10 @@ Reads queries_prompts.parquet (which contains LLM prompts but not the generated
 query text) and calls a local LLM to produce the clinical question for each row.
 
 Output: queries.parquet - all original columns + query_text.
+If queries.parquet is already existing, it appends the new queries there.
 """
+
+import sys
 
 import polars as pl
 from tqdm import tqdm
@@ -55,14 +58,19 @@ def generate_queries(
     out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
 
     for i, row in enumerate(
-        tqdm(prompts_df.iter_rows(named=True), total=len(prompts_df), desc='Generating queries')
+        tqdm(
+            prompts_df.iter_rows(named=True),
+            total=len(prompts_df),
+            desc='Generating queries',
+            file=sys.stderr,
+        )
     ):
         key = (row['icd10_3char'], row['modifier_text'], row['persona'])
         if key in already_done:
             continue
 
         try:
-            query_text = generate(row['full_prompt'], temperature=0.3).strip()
+            query_text = generate(row['full_prompt'], temperature=0.3, stream=True).strip()
         except Exception as e:
             print(f'  Error on row {i}: {e}')
             continue
