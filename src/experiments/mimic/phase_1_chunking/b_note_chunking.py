@@ -248,8 +248,16 @@ def parse_all_notes(
 if __name__ == '__main__':
     import argparse
 
+    from experiments.mimic.config_loader import parse_config_arg
+
+    _run_cfg = parse_config_arg(1)['note_chunking']
+    KEEP_SECTIONS = set(_run_cfg['keep_sections'])
+    SKIP_SECTIONS = set(_run_cfg['skip_sections'])
+    METADATA_ONLY_SECTIONS = set(_run_cfg['metadata_only_sections'])
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--interactive', action='store_true')
+    parser.add_argument('--config', type=str, default=None)
     args = parser.parse_args()
 
     con = connect_mimic_duckdb()

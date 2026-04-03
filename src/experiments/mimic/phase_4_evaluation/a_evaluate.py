@@ -18,8 +18,6 @@ from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
-
-_cfg = load_phase_config(4)['evaluate']
 from experiments.mimic.phase_4_evaluation.candidate_pool import (
     CandidatePool,
     CandidatePoolBuilder,
@@ -28,6 +26,8 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import (
 )
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
+
+_cfg = load_phase_config(4)['evaluate']
 
 DEFAULT_STRATEGIES: list[ScoringFunction] = _cfg['strategies']
 DEFAULT_K_VALUES: list[int] = _cfg['k_values']
@@ -218,4 +218,17 @@ def print_summary(results_df: pl.DataFrame) -> None:
 
 
 if __name__ == '__main__':
+    import argparse
+
+    from experiments.mimic.config_loader import parse_config_arg
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
+
+    _run_cfg = parse_config_arg(4)['evaluate']
+    DEFAULT_STRATEGIES = _run_cfg['strategies']
+    DEFAULT_K_VALUES = _run_cfg['k_values']
+    DEFAULT_LAM_VALUES = _run_cfg['lam_values']
+
     main()

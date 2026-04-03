@@ -46,7 +46,17 @@ def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
+    import argparse
+
+    from experiments.mimic.config_loader import parse_config_arg
     from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
+
+    _run_cfg = parse_config_arg(1)['dedup']
+    BOILERPLATE_SECTIONS = set(_run_cfg['boilerplate_sections'])
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
 
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks_raw.parquet')
     result = deduplicate(chunks)

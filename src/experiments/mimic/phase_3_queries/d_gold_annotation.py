@@ -21,10 +21,10 @@ from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
-
-_cfg = load_phase_config(3)['gold_annotation']
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
+
+_cfg = load_phase_config(3)['gold_annotation']
 
 
 def main():
@@ -218,7 +218,7 @@ def run_gold_annotation(
 
         # Prefilter pool to top N by similarity (same as retrieval does)
         sim_to_query = pool.sim_to_query(query_vec)
-        if pool.n > prefilter_n:
+        if pool.n > prefilter_n:  # type: ignore
             top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
             work_pool = pool.slice(top_indices)
         else:
@@ -226,10 +226,10 @@ def run_gold_annotation(
 
         print(
             f'  [{i + 1}/{len(queries_df)}] {icd3} - pool={work_pool.n} chunks, '
-            f'{(work_pool.n + batch_size - 1) // batch_size} batches'
+            f'{(work_pool.n + batch_size - 1) // batch_size} batches'  # type: ignore
         )
 
-        facets = annotate_query(query_text, work_pool, batch_size=batch_size)
+        facets = annotate_query(query_text, work_pool, batch_size=batch_size)  # type: ignore
 
         all_gold_chunks = set()
         for cids in facets.values():
@@ -256,4 +256,13 @@ def run_gold_annotation(
 
 
 if __name__ == '__main__':
+    import argparse
+
+    from experiments.mimic.config_loader import parse_config_arg
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
+
+    _run_cfg = parse_config_arg(3)['gold_annotation']
     main()

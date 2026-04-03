@@ -72,7 +72,9 @@ def generate_queries(
             continue
 
         try:
-            query_text = generate(row['full_prompt'], temperature=_cfg['temperature'], stream=True).strip()
+            query_text = generate(
+                row['full_prompt'], temperature=_cfg['temperature'], stream=True
+            ).strip()
         except Exception as e:
             print(f'  Error on row {i}: {e}')
             continue
@@ -94,4 +96,15 @@ def generate_queries(
 
 
 if __name__ == '__main__':
+    import argparse
+
+    from experiments.mimic.config_loader import parse_config_arg
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
+
+    _run_cfg = parse_config_arg(3)['gen_queries_llm']
+    SAVE_EVERY = _run_cfg['save_every']
+
     main()
