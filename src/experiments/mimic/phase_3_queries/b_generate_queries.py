@@ -16,6 +16,25 @@ from experiments.mimic.ollama_client import generate
 SAVE_EVERY = 25
 
 
+def main():
+    prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
+    print(f'Loaded {len(prompts_df):,} prompts')
+
+    # Resume from previous run if available
+    out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
+    resume_df = None
+    if out_path.exists():
+        resume_df = pl.read_parquet(out_path)
+        print(f'Resuming: {len(resume_df):,} queries already generated')
+
+    df = generate_queries(prompts_df, resume_df)
+
+    print(f'\nSaved {len(df):,} queries to {out_path}')
+    print(f'  Conditions: {df["icd10_3char"].n_unique()}')
+    print('\n--- Sample query ---')
+    print(df['query_text'][0])
+
+
 def generate_queries(
     prompts_df: pl.DataFrame, resume_df: pl.DataFrame | None = None
 ) -> pl.DataFrame:
@@ -62,25 +81,6 @@ def generate_queries(
     df = pl.DataFrame(results)
     df.write_parquet(out_path)
     return df
-
-
-def main():
-    prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
-    print(f'Loaded {len(prompts_df):,} prompts')
-
-    # Resume from previous run if available
-    out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
-    resume_df = None
-    if out_path.exists():
-        resume_df = pl.read_parquet(out_path)
-        print(f'Resuming: {len(resume_df):,} queries already generated')
-
-    df = generate_queries(prompts_df, resume_df)
-
-    print(f'\nSaved {len(df):,} queries to {out_path}')
-    print(f'  Conditions: {df["icd10_3char"].n_unique()}')
-    print('\n--- Sample query ---')
-    print(df['query_text'][0])
 
 
 if __name__ == '__main__':

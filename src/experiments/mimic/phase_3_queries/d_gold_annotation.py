@@ -23,24 +23,6 @@ from experiments.mimic.duck_db_init import (
 from experiments.mimic.ollama_client import generate_json
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 
-MAP_SYSTEM_PROMPT = """You are a clinical information analyst. Your task is to extract facts from discharge note excerpts that are relevant to answering a clinical question. Be exhaustive — tag every chunk that contains relevant information, not just the single best one."""
-
-MAP_USER_TEMPLATE = """Question: {query_text}
-
-Below are excerpts from clinical discharge notes. Each is prefixed with its ID.
-
-{chunks_block}
-
-For each fact in these excerpts that is relevant to answering the question:
-1. State the fact concisely (one sentence)
-2. List ALL chunk_id(s) that support this fact
-3. Assign a short facet label — the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
-
-Return a JSON array. Example format:
-[{{"fact": "Heparin dose reduced to 10u/kg/hr due to CrCl < 30", "facet_label": "anticoagulation_adjustment", "chunk_ids": ["chunk_42", "chunk_87"]}}]
-
-If no chunks in this batch are relevant to the question, return an empty array: []"""
-
 
 def main():
     con = connect_mimic_duckdb()
@@ -76,6 +58,25 @@ def main():
         facets = json.loads(sample['facets_json'])
         for label, cids in list(facets.items())[:5]:
             print(f'  [{label}] → {len(cids)} chunks')
+
+
+MAP_SYSTEM_PROMPT = """You are a clinical information analyst. Your task is to extract facts from discharge note excerpts that are relevant to answering a clinical question. Be exhaustive — tag every chunk that contains relevant information, not just the single best one."""
+
+MAP_USER_TEMPLATE = """Question: {query_text}
+
+Below are excerpts from clinical discharge notes. Each is prefixed with its ID.
+
+{chunks_block}
+
+For each fact in these excerpts that is relevant to answering the question:
+1. State the fact concisely (one sentence)
+2. List ALL chunk_id(s) that support this fact
+3. Assign a short facet label — the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
+
+Return a JSON array. Example format:
+[{{"fact": "Heparin dose reduced to 10u/kg/hr due to CrCl < 30", "facet_label": "anticoagulation_adjustment", "chunk_ids": ["chunk_42", "chunk_87"]}}]
+
+If no chunks in this batch are relevant to the question, return an empty array: []"""
 
 
 def _format_chunk_batch(chunk_ids: list[str], texts: list[str]) -> str:
