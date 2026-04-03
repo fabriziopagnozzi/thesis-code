@@ -31,11 +31,9 @@ def run_experiment(cfg: ExperimentConfig) -> pl.DataFrame:
 
     print(f'Loaded {len(records)} records from {cfg.dataset}')
 
-    cache_dir = Path(cfg.cache_dir) / cfg.dataset / cfg.chunk_mode
     embedder = Embedder(
         model_name=cfg.embedding_model,
         device=cfg.device,
-        cache_dir=cache_dir,
         batch_size=cfg.batch_size,
     )
 
@@ -65,7 +63,7 @@ def run_experiment(cfg: ExperimentConfig) -> pl.DataFrame:
             )
             n_chunks = cfg.max_cands
 
-        query_emb, chunk_embs = embedder.embed_qa_record(rec.id, rec.question, chunk_texts)
+        query_emb, chunk_embs = embedder.embed_qa_record(rec.question, chunk_texts)
         sim_to_query = chunk_embs @ query_emb  # (n,)
         sim_matrix = chunk_embs @ chunk_embs.T  # (n, n)
 
