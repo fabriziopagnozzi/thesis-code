@@ -210,7 +210,7 @@ def run_retrieval(
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.duck_db_init import connect_mimic_duckdb, run_sql_concept_script
+    from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
     parser = argparse.ArgumentParser(description='Inspect a per-condition candidate pool')
     parser.add_argument('icd3', help='3-char ICD-10 prefix (e.g. I63 for stroke)')
@@ -221,7 +221,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     con = connect_mimic_duckdb()
-    run_sql_concept_script(con, 'demographics/age.sql', 'comorbidity/charlson.sql')
 
     builder = CandidatePoolBuilder(con, device=args.device)
     pool = builder.for_condition(args.icd3)

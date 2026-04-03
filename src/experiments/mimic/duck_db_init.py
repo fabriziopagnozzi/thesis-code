@@ -43,9 +43,13 @@ ICU_TABLES = {
 }
 NOTE_TABLES = {'discharge', 'discharge_detail', 'radiology', 'radiology_detail'}
 
-# Resulting parquet files saved under RESULTS_DIR
-RESULT_TABLES = {'conditions', 'admissions_metadata', 'chunks'}
+RESULT_TABLES = {'conditions_stats', 'admissions_metadata', 'chunks'}
 
+# From the MIT repo
+DERIVED_CONCEPTS = {
+    'age': 'demographics/age.sql',
+    'charlson': 'comorbidity/charlson.sql',  # for comorbidity index
+}
 
 INIT_SCHEMAS = """--sql
 CREATE SCHEMA IF NOT EXISTS mimiciv_hosp;
@@ -65,7 +69,6 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
         if statement:
             con.execute(statement)
 
-    # Result parquets are dynamic
     for table in RESULT_TABLES:
         parquet_file = MIMIC_RESULTS_DIR / f'{table}.parquet'
         if parquet_file.exists():
@@ -73,7 +76,25 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
                 f"CREATE VIEW IF NOT EXISTS mimic_results.{table} AS SELECT * FROM read_parquet('{parquet_file}')"
             )
 
+    _load_derived_concepts(con)
+
     return con
+
+
+def _load_derived_concepts(con: duckdb.DuckDBPyConnection):
+    """Load derived concept tables (age, charlson) from parquet or compute and save them."""
+    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for table, sql_rel in DERIVED_CONCEPTS.items():
+        parquet_path = MIMIC_RESULTS_DIR / f'{table}.parquet'
+        if parquet_path.exists():
+            con.execute(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_derived.{table} AS SELECT * FROM read_parquet('{parquet_path}')"
+            )
+        else:
+            print(f'Materializing mimiciv_derived.{table} --> {parquet_path.name} ...')
+            run_sql_concept_script(con, sql_rel)
+            con.execute(f"COPY mimiciv_derived.{table} TO '{parquet_path}' (FORMAT PARQUET)")
 
 
 def register_result_view(con: duckdb.DuckDBPyConnection, name: str, df) -> None:
