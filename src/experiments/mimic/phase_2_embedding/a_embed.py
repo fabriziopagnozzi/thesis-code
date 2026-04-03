@@ -107,7 +107,12 @@ def main(device: str = _cfg['device']):
 if __name__ == '__main__':
     import argparse
 
+    from experiments.mimic.config_loader import parse_config_arg
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', default='cuda', help='torch device (e.g. cuda, cpu)')
+    parser.add_argument('--device', default=None, help='torch device (e.g. cuda, cpu)')
+    parser.add_argument('--config', type=str, default=None)
     args = parser.parse_args()
-    main(device=args.device)
+
+    _run_cfg = parse_config_arg(2)['embed']
+    main(device=args.device or _run_cfg['device'])

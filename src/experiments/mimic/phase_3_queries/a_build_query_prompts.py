@@ -21,7 +21,7 @@ from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
 
-_cfg = load_phase_config(3)['build_query_prompts']
+_cfg = load_phase_config(phase=3)['build_query_prompts']
 
 
 def main():
@@ -55,8 +55,7 @@ DEMOGRAPHIC_MODIFIERS: list[str] = [m['text'] for m in _cfg['demographic_modifie
 # -- Reverse maps used for filtering --
 LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
 DEMOGRAPHIC_FILTERS: dict[str, tuple] = {
-    m['text']: (m['column'], m['op'], m['value'])
-    for m in _cfg['demographic_modifiers']
+    m['text']: (m['column'], m['op'], m['value']) for m in _cfg['demographic_modifiers']
 }
 
 N_GROUNDING_PATIENTS: int = _cfg['n_grounding_patients']
@@ -338,4 +337,24 @@ def _format_chunks_block(samples: list[dict]) -> str:
 
 
 if __name__ == '__main__':
+    import argparse
+
+    from experiments.mimic.config_loader import parse_config_arg
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
+
+    _run_cfg = parse_config_arg(3)['build_query_prompts']
+    N_GROUNDING_PATIENTS = _run_cfg['n_grounding_patients']
+    HIGH_VALUE_SECTIONS = _run_cfg['high_value_sections']
+    CHARLSON_LABELS = _run_cfg['charlson_labels']
+    DEMOGRAPHIC_MODIFIERS = [m['text'] for m in _run_cfg['demographic_modifiers']]
+    DEMOGRAPHIC_FILTERS = {
+        m['text']: (m['column'], m['op'], m['value']) for m in _run_cfg['demographic_modifiers']
+    }
+    PERSONAS = _run_cfg['personas']
+    PROMPT_TEMPLATE = _run_cfg['prompt_template']
+    LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
+
     main()

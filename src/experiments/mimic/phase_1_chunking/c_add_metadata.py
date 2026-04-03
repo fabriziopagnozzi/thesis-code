@@ -61,10 +61,16 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
+    import argparse
+
     from experiments.mimic.duck_db_init import (
         MIMIC_RESULTS_DIR,
         connect_mimic_duckdb,
     )
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
 
     con = connect_mimic_duckdb()
     df = build_admissions_metadata(con)

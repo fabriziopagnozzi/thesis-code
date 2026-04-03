@@ -48,13 +48,15 @@ HIGH_LEVEL_CHARLSON_CONDITIONS = {
 def select_conditions(
     con: duckdb.DuckDBPyConnection | None = None,
     min_admissions: int | None = None,
+    cfg: dict | None = None,
 ) -> pl.DataFrame:
     """
     Returns a DataFrame with columns:
         icd10_3char, condition_name, n_admissions, mean_comorbidity_count, score
     """
+    resolved = cfg or _cfg
     if min_admissions is None:
-        min_admissions = _cfg['min_admissions']
+        min_admissions = resolved['min_admissions']
     if con is None:
         con = connect_mimic_duckdb()
 
@@ -105,7 +107,10 @@ def select_conditions(
 
 
 if __name__ == '__main__':
-    df = select_conditions()
+    from experiments.mimic.config_loader import parse_config_arg
+
+    cfg = parse_config_arg(1)['conditions_stats']
+    df = select_conditions(cfg=cfg)
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     df.write_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
     print(f'\nSaved {len(df)} conditions to {MIMIC_RESULTS_DIR / "conditions_stats.parquet"}')

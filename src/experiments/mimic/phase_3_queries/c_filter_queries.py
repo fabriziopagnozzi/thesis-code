@@ -18,11 +18,11 @@ from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
-
-_cfg = load_phase_config(3)['filter_queries']
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
+
+_cfg = load_phase_config(3)['filter_queries']
 
 
 def main():
@@ -123,7 +123,7 @@ def filter_queries(
         pool = condition_pools[icd3]
         query_vec = builder.embed_query(row['query_text'])
 
-        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=prefilter_n)
+        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=prefilter_n)  # type: ignore
         passes = div['jaccard'] < jaccard_threshold
 
         results.append(
@@ -142,4 +142,13 @@ def filter_queries(
 
 
 if __name__ == '__main__':
+    import argparse
+
+    from experiments.mimic.config_loader import parse_config_arg
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default=None)
+    parser.parse_args()
+
+    _run_cfg = parse_config_arg(3)['filter_queries']
     main()
