@@ -225,10 +225,10 @@ if __name__ == '__main__':
     builder = CandidatePoolBuilder(con, device=args.device)
     pool = builder.for_condition(args.icd3)
 
-    print(f'\nCandidate pool for {args.icd3}:')
-    print(f'  Chunks: {pool.n:,}')
-    print(f'  Unique hadm_ids: {len(set(pool.hadm_ids)):,}')
     print(
+        f'\nCandidate pool for {args.icd3}:\n'
+        f'  Chunks: {pool.n:,}\n'
+        f'  Unique hadm_ids: {len(set(pool.hadm_ids)):,}\n'
         f'  Sections: {pl.Series(pool.section_names).value_counts().sort("count", descending=True)}'
     )
 
@@ -243,8 +243,10 @@ if __name__ == '__main__':
             prefilter_n=args.prefilter,
         )
         for r in results:
-            print(f'\n--- {r.strategy} (k={r.k}, lam={r.lam}) ---')
-            print(f'  Unique hadm_ids selected: {len(set(r.selected_hadm_ids))}')
-            print(f'  Avg sim to query: {r.sim_to_query.mean():.4f}')
+            print(
+                f'\n--- {r.strategy} (k={r.k}, lam={r.lam}) ---\n'
+                f'  Unique hadm_ids selected: {len(set(r.selected_hadm_ids))}\n'
+                f'  Avg sim to query: {r.sim_to_query.mean():.4f}'
+            )
             for i, idx in enumerate(r.selected_indices[:5]):
                 print(f'  [{i + 1}] sim={r.sim_to_query[i]:.4f}  {pool.texts[idx][:120]}...')

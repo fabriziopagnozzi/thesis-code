@@ -13,11 +13,11 @@ import sys
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.ollama_client import generate
 
-_cfg = load_phase_config(3)['gen_queries_llm']
+_cfg = load_config(3)['gen_queries_llm']
 SAVE_EVERY: int = _cfg['save_every']
 
 
@@ -34,10 +34,12 @@ def main():
 
     df = generate_queries(prompts_df, resume_df)
 
-    print(f'\nSaved {len(df):,} queries to {out_path}')
-    print(f'  Conditions: {df["icd10_3char"].n_unique()}')
-    print('\n--- Sample query ---')
-    print(df['query_text'][0])
+    print(
+        f'\nSaved {len(df):,} queries to {out_path}\n'
+        f'  Conditions: {df["icd10_3char"].n_unique()}\n'
+        f'\n--- Sample query ---\n'
+        f'{df["query_text"][0]}'
+    )
 
 
 def generate_queries(
@@ -104,13 +106,13 @@ def generate_queries(
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default=None)
     parser.parse_args()
 
-    _run_cfg = parse_config_arg(3)['gen_queries_llm']
+    _run_cfg = load_config_from_main(phase=3)['gen_queries_llm']
     SAVE_EVERY = _run_cfg['save_every']
 
     main()

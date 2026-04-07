@@ -15,13 +15,13 @@ Uses the Charlson SQL from mimic-code.
 import duckdb
 import polars as pl
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
 
-_cfg = load_phase_config(1)['conditions_stats']
+_cfg = load_config(1)['conditions_stats']
 
 # Charlson groups ICD codes into higher level buckets, containing more coarse disease groups among which it makes more sense to look for comorbidities
 HIGH_LEVEL_CHARLSON_CONDITIONS = {
@@ -100,16 +100,14 @@ def select_conditions(
 
     # ! NOTE: for now we only select ICD-10 codes. Selecting ICD-9 also would require mapping the codes. Generally the mapping is not 1-to-1, so leave it like this for now. Also we use FIRST(long_title) and get the first match as long_title for the disease group. Check if anything better is possible
 
-    print(f'Conditions with >= {min_admissions} admissions: {len(df)}')
-    print('Top 10:')
-    print(df.head(10))
+    print(f'Conditions with >= {min_admissions} admissions: {len(df)}\nTop 10:\n{df.head(10)}')
     return df
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
-    cfg = parse_config_arg(1)['conditions_stats']
+    cfg = load_config_from_main(phase=1)['conditions_stats']
     df = select_conditions(cfg=cfg)
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     df.write_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')

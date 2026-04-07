@@ -6,11 +6,11 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.chunks_classes import MimicIVChunk
 
-_cfg = load_phase_config(1)['note_chunking']
+_cfg = load_config(1)['note_chunking']
 KEEP_SECTIONS = set(_cfg['keep_sections'])
 SKIP_SECTIONS = set(_cfg['skip_sections'])
 METADATA_ONLY_SECTIONS = set(_cfg['metadata_only_sections'])
@@ -42,6 +42,123 @@ CHUNK_SCHEMA = {
     'char_count': pl.Int32,
     'approx_tokens': pl.Int32,
 }
+
+
+@dataclass
+class ParsedNote:
+    chunks: list[MimicIVChunk]
+    chief_complaint: str | None = None
+
+
+def parse_all_notes(
+    con: duckdb.DuckDBPyConnection,
+    output_path: Path | None = None,
+    limit: int | None = None,
+) -> pl.DataFrame:
+    limit_clause = f'LIMIT {limit}' if limit is not None else ''
+
+    rows = con.execute(f"""--sql
+        SELECT DISTINCT
+            bhc.note_id,
+            discharge.subject_id,
+            discharge.hadm_id,
+            bhc.input,
+            bhc.target
+        FROM bhc
+        JOIN discharge ON bhc.note_id = discharge.note_id
+        JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
+        JOIN conditions ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions.icd10_3char
+        WHERE diagnoses_icd.icd_version = 10
+        {limit_clause}
+    """).fetchall()
+
+    all_dicts: list[dict] = []
+    chief_complaints: dict[str, str] = {}
+
+    for note_id, subject_id, hadm_id, input_text, target_text in tqdm(rows, desc='Parsing notes'):
+        result = parse_note(note_id, subject_id, hadm_id, input_text, target_text)
+        all_dicts.extend(asdict(c) for c in result.chunks)
+        if result.chief_complaint:
+            chief_complaints[note_id] = result.chief_complaint
+
+    df = pl.DataFrame(all_dicts, schema=CHUNK_SCHEMA)
+
+    print(f'  chief_complaint found in {len(chief_complaints)}/{len(rows)} notes')
+
+    cc_df = pl.DataFrame(
+        {
+            'note_id': list(chief_complaints.keys()),
+            'chief_complaint': list(chief_complaints.values()),
+        }
+    )
+    df = df.join(cc_df, on='note_id', how='left')
+
+    print(
+        f'Parsed {len(rows):,} notes into {len(df):,} chunks\n'
+        f'{df["section_name"].value_counts().sort("count", descending=True).head(15)}'
+    )
+
+    if output_path:
+        df.write_parquet(output_path)
+        print(f'Saved to {output_path}')
+
+    return df
+
+
+def parse_note(
+    note_id: str, subject_id: int, hadm_id: int, input_text: str, target_text: str
+) -> ParsedNote:
+    sections = _parse_tagged_sections(input_text)
+    chunks: list[MimicIVChunk] = []
+    chief_complaint: str | None = None
+    seq = 0
+
+    for section_name, section_text in sections:
+        if section_name in SKIP_SECTIONS:
+            continue
+        if section_name in METADATA_ONLY_SECTIONS:
+            chief_complaint = section_text
+            continue
+        if section_name not in KEEP_SECTIONS:
+            continue
+
+        seq += 1
+        chunks.append(
+            MimicIVChunk(
+                text=section_text,
+                doc_title=note_id,
+                chunk_id=f'{note_id}__{seq:03d}',
+                note_id=note_id,
+                subject_id=subject_id,
+                hadm_id=hadm_id,
+                section_name=section_name,
+                char_count=len(section_text),
+                approx_tokens=len(section_text) // 4,
+            )
+        )
+
+    # BHC from target column, split by # problems
+    if target_text:
+        bhc_chunks = _split_bhc_problems(target_text)
+        for subsection_name, subtext, category in bhc_chunks:
+            seq += 1
+            chunks.append(
+                MimicIVChunk(
+                    text=subtext,
+                    doc_title=note_id,
+                    chunk_id=f'{note_id}__{seq:03d}',
+                    note_id=note_id,
+                    subject_id=subject_id,
+                    hadm_id=hadm_id,
+                    section_name='BRIEF HOSPITAL COURSE',
+                    subsection_name=subsection_name,
+                    bhc_category=category,
+                    char_count=len(subtext),
+                    approx_tokens=len(subtext) // 4,
+                )
+            )
+
+    return ParsedNote(chunks=chunks, chief_complaint=chief_complaint)
 
 
 def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
@@ -130,127 +247,12 @@ def _split_bhc_problems(text: str) -> list[tuple[str | None, str, str | None]]:
     return chunks
 
 
-@dataclass
-class ParsedNote:
-    chunks: list[MimicIVChunk]
-    chief_complaint: str | None = None
-
-
-def parse_note(
-    note_id: str, subject_id: int, hadm_id: int, input_text: str, target_text: str
-) -> ParsedNote:
-    sections = _parse_tagged_sections(input_text)
-    chunks: list[MimicIVChunk] = []
-    chief_complaint: str | None = None
-    seq = 0
-
-    for section_name, section_text in sections:
-        if section_name in SKIP_SECTIONS:
-            continue
-        if section_name in METADATA_ONLY_SECTIONS:
-            chief_complaint = section_text
-            continue
-        if section_name not in KEEP_SECTIONS:
-            continue
-
-        seq += 1
-        chunks.append(
-            MimicIVChunk(
-                text=section_text,
-                doc_title=note_id,
-                chunk_id=f'{note_id}__{seq:03d}',
-                note_id=note_id,
-                subject_id=subject_id,
-                hadm_id=hadm_id,
-                section_name=section_name,
-                char_count=len(section_text),
-                approx_tokens=len(section_text) // 4,
-            )
-        )
-
-    # BHC from target column, split by # problems
-    if target_text:
-        bhc_chunks = _split_bhc_problems(target_text)
-        for subsection_name, subtext, category in bhc_chunks:
-            seq += 1
-            chunks.append(
-                MimicIVChunk(
-                    text=subtext,
-                    doc_title=note_id,
-                    chunk_id=f'{note_id}__{seq:03d}',
-                    note_id=note_id,
-                    subject_id=subject_id,
-                    hadm_id=hadm_id,
-                    section_name='BRIEF HOSPITAL COURSE',
-                    subsection_name=subsection_name,
-                    bhc_category=category,
-                    char_count=len(subtext),
-                    approx_tokens=len(subtext) // 4,
-                )
-            )
-
-    return ParsedNote(chunks=chunks, chief_complaint=chief_complaint)
-
-
-def parse_all_notes(
-    con: duckdb.DuckDBPyConnection,
-    output_path: Path | None = None,
-    limit: int | None = None,
-) -> pl.DataFrame:
-    limit_clause = f'LIMIT {limit}' if limit is not None else ''
-
-    rows = con.execute(f"""--sql
-        SELECT DISTINCT
-            bhc.note_id,
-            discharge.subject_id,
-            discharge.hadm_id,
-            bhc.input,
-            bhc.target
-        FROM bhc
-        JOIN discharge ON bhc.note_id = discharge.note_id
-        JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
-        JOIN conditions ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions.icd10_3char
-        WHERE diagnoses_icd.icd_version = 10
-        {limit_clause}
-    """).fetchall()
-
-    all_dicts: list[dict] = []
-    chief_complaints: dict[str, str] = {}
-
-    for note_id, subject_id, hadm_id, input_text, target_text in tqdm(rows, desc='Parsing notes'):
-        result = parse_note(note_id, subject_id, hadm_id, input_text, target_text)
-        all_dicts.extend(asdict(c) for c in result.chunks)
-        if result.chief_complaint:
-            chief_complaints[note_id] = result.chief_complaint
-
-    df = pl.DataFrame(all_dicts, schema=CHUNK_SCHEMA)
-
-    print(f'  chief_complaint found in {len(chief_complaints)}/{len(rows)} notes')
-
-    cc_df = pl.DataFrame(
-        {
-            'note_id': list(chief_complaints.keys()),
-            'chief_complaint': list(chief_complaints.values()),
-        }
-    )
-    df = df.join(cc_df, on='note_id', how='left')
-
-    print(f'Parsed {len(rows):,} notes into {len(df):,} chunks')
-    print(df['section_name'].value_counts().sort('count', descending=True).head(15))
-
-    if output_path:
-        df.write_parquet(output_path)
-        print(f'Saved to {output_path}')
-
-    return df
-
-
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
-    _run_cfg = parse_config_arg(1)['note_chunking']
+    _run_cfg = load_config_from_main(phase=1)['note_chunking']
     KEEP_SECTIONS = set(_run_cfg['keep_sections'])
     SKIP_SECTIONS = set(_run_cfg['skip_sections'])
     METADATA_ONLY_SECTIONS = set(_run_cfg['metadata_only_sections'])
