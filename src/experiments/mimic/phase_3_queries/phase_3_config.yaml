@@ -93,8 +93,9 @@ filter_queries:
 
 gold_annotation:
   prefilter_n: 500
-  batch_size: 40
-  model: gemma4:31b
+  batch_size: 8
+  num_ctx: 16384
+  model: gemma4:26b
   temperature: 1.0
   top_p: 0.95
   top_k: 64
