@@ -1,4 +1,5 @@
 evaluate:
+  embedding_model: multi-qa-mpnet-base-cos-v1
   strategies:
     - top_k
     - mmr

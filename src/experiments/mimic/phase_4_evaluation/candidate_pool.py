@@ -15,9 +15,10 @@ import polars as pl
 from numpy.typing import NDArray
 
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
-from experiments.mimic.phase_2_embedding.a_embed import MODEL_NAME
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
+
+from .a_evaluate import _cfg
 
 
 @dataclass
@@ -111,7 +112,7 @@ class CandidatePoolBuilder:
 
     def _get_embedder(self) -> Embedder:
         if self._embedder is None:
-            self._embedder = Embedder(MODEL_NAME, device=self._device, batch_size=1)
+            self._embedder = Embedder(_cfg.embedding_model, device=self._device, batch_size=1)
         return self._embedder
 
     def _condition_hadm_ids(self, icd3: str) -> set[int]:

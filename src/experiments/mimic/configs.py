@@ -5,6 +5,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, computed_field
 
+from helpers.query_algorithms import ScoringFunction
+
 _MIMIC_DIR = Path(__file__).parent
 path = _MIMIC_DIR / 'global_config.yaml'
 with open(path) as f:
@@ -178,7 +180,8 @@ class GoldAnnotationCfg(BaseModel):
 
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
-    strategies: list[str]
+    embedding_model: str
+    strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]
     prefilter_n: int
