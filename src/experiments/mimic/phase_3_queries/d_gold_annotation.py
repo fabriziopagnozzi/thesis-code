@@ -296,6 +296,10 @@ def run_gold_annotation(
             }
         )
 
+        # Flush after every query so progress survives crashes
+        out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
+        pl.DataFrame(results).write_parquet(out_path)
+
     return pl.DataFrame(results)
 
 
