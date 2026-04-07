@@ -9,13 +9,24 @@ import hashlib
 import polars as pl
 
 from experiments.mimic.config_loader import load_config
+from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 
-BOILERPLATE_SECTIONS = set(load_config(1)['dedup']['boilerplate_sections'])
+_cfg = load_config(phase=1)['dedup']
+BOILERPLATE_SECTIONS = set(_cfg['boilerplate_sections'])
 
 
-def _content_hash(text: str) -> str:
-    normalized = ' '.join(text.lower().split())
-    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+def run_dedup(cfg: dict | None = None) -> pl.DataFrame:
+    global _cfg, BOILERPLATE_SECTIONS
+    if cfg is not None:
+        _cfg = cfg
+        BOILERPLATE_SECTIONS = set(_cfg['boilerplate_sections'])
+
+    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks_raw.parquet')
+    result = deduplicate(chunks)
+    out_path = MIMIC_RESULTS_DIR / 'chunks.parquet'
+    result.write_parquet(out_path)
+    print(f'Saved to {out_path}')
+    return result
 
 
 def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
@@ -45,20 +56,12 @@ def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
     return result
 
 
+def _content_hash(text: str) -> str:
+    normalized = ' '.join(text.lower().split())
+    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
+
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
-    from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 
-    _run_cfg = load_config_from_main(phase=1)['dedup']
-    BOILERPLATE_SECTIONS = set(_run_cfg['boilerplate_sections'])
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks_raw.parquet')
-    result = deduplicate(chunks)
-    result.write_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
-    print(f'Saved to {MIMIC_RESULTS_DIR / "chunks.parquet"}')
+    run_dedup(cfg=load_config_from_main(phase=1)['dedup'])

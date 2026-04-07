@@ -7,6 +7,22 @@ import duckdb
 import polars as pl
 
 
+def run_add_metadata(con: duckdb.DuckDBPyConnection | None = None) -> pl.DataFrame:
+    from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
+
+    if con is None:
+        con = connect_mimic_duckdb()
+
+    df = build_admissions_metadata(con)
+
+    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
+    df.write_parquet(out_path)
+    print(f'Saved to {out_path}')
+
+    return df
+
+
 def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     N_ICD_DESCRIPTIONS = 5
 
@@ -61,19 +77,4 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
-    import argparse
-
-    from experiments.mimic.duck_db_init import (
-        MIMIC_RESULTS_DIR,
-        connect_mimic_duckdb,
-    )
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    con = connect_mimic_duckdb()
-    df = build_admissions_metadata(con)
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    df.write_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
-    print(f'Saved to {MIMIC_RESULTS_DIR / "admissions_metadata.parquet"}')
+    run_add_metadata()

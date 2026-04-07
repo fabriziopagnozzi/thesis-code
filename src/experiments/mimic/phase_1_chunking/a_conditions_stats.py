@@ -23,6 +23,21 @@ from experiments.mimic.duck_db_init import (
 
 _cfg = load_config(1)['conditions_stats']
 
+
+def run_select_conditions(
+    con: duckdb.DuckDBPyConnection | None = None, cfg: dict | None = None
+) -> pl.DataFrame:
+    resolved = cfg or _cfg
+    if con is None:
+        con = connect_mimic_duckdb()
+    df = select_conditions(con=con, min_admissions=resolved['min_admissions'])
+    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = MIMIC_RESULTS_DIR / 'conditions_stats.parquet'
+    df.write_parquet(out_path)
+    print(f'\nSaved {len(df)} conditions to {out_path}')
+    return df
+
+
 # Charlson groups ICD codes into higher level buckets, containing more coarse disease groups among which it makes more sense to look for comorbidities
 HIGH_LEVEL_CHARLSON_CONDITIONS = {
     'myocardial_infarct',
@@ -46,19 +61,13 @@ HIGH_LEVEL_CHARLSON_CONDITIONS = {
 
 
 def select_conditions(
-    con: duckdb.DuckDBPyConnection | None = None,
-    min_admissions: int | None = None,
-    cfg: dict | None = None,
+    con: duckdb.DuckDBPyConnection,
+    min_admissions: int,
 ) -> pl.DataFrame:
     """
     Returns a DataFrame with columns:
         icd10_3char, condition_name, n_admissions, mean_comorbidity_count, score
     """
-    resolved = cfg or _cfg
-    if min_admissions is None:
-        min_admissions = resolved['min_admissions']
-    if con is None:
-        con = connect_mimic_duckdb()
 
     df = con.execute(f"""--sql
         WITH charlson_counts AS (
@@ -107,8 +116,4 @@ def select_conditions(
 if __name__ == '__main__':
     from experiments.mimic.config_loader import load_config_from_main
 
-    cfg = load_config_from_main(phase=1)['conditions_stats']
-    df = select_conditions(cfg=cfg)
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    df.write_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
-    print(f'\nSaved {len(df)} conditions to {MIMIC_RESULTS_DIR / "conditions_stats.parquet"}')
+    run_select_conditions(cfg=load_config_from_main(phase=1)['conditions_stats'])

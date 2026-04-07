@@ -9,6 +9,7 @@ with open(path) as f:
     _cfg = yaml.safe_load(f)
 
 N_CONDITIONS: int = _cfg['n_conditions']
+RESULTS_SUBDIR: str | None = _cfg.get('results_subdir')
 
 _PHASE_DIRS = {
     1: 'phase_1_chunking',

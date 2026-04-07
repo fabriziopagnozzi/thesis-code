@@ -21,18 +21,30 @@ _cfg = load_config(3)['gen_queries_llm']
 SAVE_EVERY: int = _cfg['save_every']
 
 
-def main():
+def run_gen_queries(cfg: dict | None = None) -> pl.DataFrame:
+    global _cfg, SAVE_EVERY
+    if cfg is not None:
+        _cfg = cfg
+        SAVE_EVERY = _cfg['save_every']
+
     prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
     print(f'Loaded {len(prompts_df):,} prompts')
 
-    # Resume from previous run if available
     out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
     resume_df = None
     if out_path.exists():
         resume_df = pl.read_parquet(out_path)
         print(f'Resuming: {len(resume_df):,} queries already generated')
 
-    df = generate_queries(prompts_df, resume_df)
+    results: list[dict] = resume_df.to_dicts() if resume_df is not None else []
+    for new_result in generate_queries(prompts_df, resume_df):
+        results.append(new_result)
+        if len(results) % SAVE_EVERY == 0:
+            pl.DataFrame(results).write_parquet(out_path)
+            print(f'  Checkpoint: {len(results)} queries saved')
+
+    df = pl.DataFrame(results)
+    df.write_parquet(out_path)
 
     print(
         f'\nSaved {len(df):,} queries to {out_path}\n'
@@ -40,26 +52,22 @@ def main():
         f'\n--- Sample query ---\n'
         f'{df["query_text"][0]}'
     )
+    return df
 
 
 def generate_queries(
-    prompts_df: pl.DataFrame, resume_df: pl.DataFrame | None = None
-) -> pl.DataFrame:
-    """For each prompt row, call ollama to generate the clinical question.
+    prompts_df: pl.DataFrame,
+    resume_df: pl.DataFrame | None = None,
+):
+    """Yield one result dict per prompt row, skipping already-done rows.
 
-    If resume_df is provided, skip rows already present (by matching on
-    icd10_3char + modifier_text + persona).
+    Already-done rows are determined by (icd10_3char, modifier_text, persona).
+    Does NOT include resume_df rows in the output — caller handles that.
     """
     already_done: set[tuple] = set()
     if resume_df is not None:
         for row in resume_df.iter_rows(named=True):
             already_done.add((row['icd10_3char'], row['modifier_text'], row['persona']))
-
-    results: list[dict] = []
-    if resume_df is not None:
-        results = resume_df.to_dicts()
-
-    out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
 
     for i, row in enumerate(
         tqdm(
@@ -92,27 +100,10 @@ def generate_queries(
 
         result = {k: v for k, v in row.items() if k != 'full_prompt'}
         result['query_text'] = query_text
-        results.append(result)
-
-        if len(results) % SAVE_EVERY == 0:
-            pl.DataFrame(results).write_parquet(out_path)
-            print(f'  Checkpoint: {len(results)} queries saved')
-
-    df = pl.DataFrame(results)
-    df.write_parquet(out_path)
-    return df
+        yield result
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    _run_cfg = load_config_from_main(phase=3)['gen_queries_llm']
-    SAVE_EVERY = _run_cfg['save_every']
-
-    main()
+    run_gen_queries(cfg=load_config_from_main(phase=3)['gen_queries_llm'])

@@ -18,7 +18,8 @@ if __name__ == '__main__':
     con = connect_mimic_duckdb()
 
     print('\n> Step 1.1: Condition selection')
-    conditions = select_conditions(con)
+    from .a_conditions_stats import _cfg as _conditions_cfg
+    conditions = select_conditions(con, min_admissions=_conditions_cfg['min_admissions'])
     conditions.write_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
     register_result_view(con, 'conditions', conditions)
 

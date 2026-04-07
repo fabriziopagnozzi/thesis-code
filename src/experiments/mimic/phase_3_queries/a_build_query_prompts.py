@@ -11,11 +11,11 @@ Output: queries_prompts.parquet
 
 import itertools
 
+import duckdb
 import numpy as np
 import polars as pl
-from experiments.mimic.config import N_CONDITIONS
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.config_loader import N_CONDITIONS, load_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -24,8 +24,36 @@ from experiments.mimic.duck_db_init import (
 _cfg = load_config(phase=3)['build_query_prompts']
 
 
-def main():
-    con = connect_mimic_duckdb()
+def run_build_query_prompts(
+    con: duckdb.DuckDBPyConnection | None = None,
+    cfg: dict | None = None,
+) -> pl.DataFrame:
+    global \
+        _cfg, \
+        PERSONAS, \
+        CHARLSON_LABELS, \
+        DEMOGRAPHIC_MODIFIERS, \
+        DEMOGRAPHIC_FILTERS, \
+        N_GROUNDING_PATIENTS, \
+        HIGH_VALUE_SECTIONS, \
+        PROMPT_TEMPLATE, \
+        LABEL_TO_CHARLSON_COL
+
+    if cfg is not None:
+        _cfg = cfg
+        PERSONAS = _cfg['personas']
+        CHARLSON_LABELS = _cfg['charlson_labels']
+        DEMOGRAPHIC_MODIFIERS = [m['text'] for m in _cfg['demographic_modifiers']]
+        DEMOGRAPHIC_FILTERS = {
+            m['text']: (m['column'], m['op'], m['value']) for m in _cfg['demographic_modifiers']
+        }
+        N_GROUNDING_PATIENTS = _cfg['n_grounding_patients']
+        HIGH_VALUE_SECTIONS = _cfg['high_value_sections']
+        PROMPT_TEMPLATE = _cfg['prompt_template']
+        LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
+
+    if con is None:
+        con = connect_mimic_duckdb()
 
     conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
@@ -47,6 +75,7 @@ def main():
         f'\n--- Sample prompt (truncated) ---\n'
         f'{df["full_prompt"][0][:1500]}'
     )
+    return df
 
 
 PERSONAS: dict[str, str] = _cfg['personas']
@@ -339,24 +368,6 @@ def _format_chunks_block(samples: list[dict]) -> str:
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    _run_cfg = load_config_from_main(phase=3)['build_query_prompts']
-    N_GROUNDING_PATIENTS = _run_cfg['n_grounding_patients']
-    HIGH_VALUE_SECTIONS = _run_cfg['high_value_sections']
-    CHARLSON_LABELS = _run_cfg['charlson_labels']
-    DEMOGRAPHIC_MODIFIERS = [m['text'] for m in _run_cfg['demographic_modifiers']]
-    DEMOGRAPHIC_FILTERS = {
-        m['text']: (m['column'], m['op'], m['value']) for m in _run_cfg['demographic_modifiers']
-    }
-    PERSONAS = _run_cfg['personas']
-    PROMPT_TEMPLATE = _run_cfg['prompt_template']
-    LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
-
-    main()
+    run_build_query_prompts(cfg=load_config_from_main(phase=3)['build_query_prompts'])

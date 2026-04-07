@@ -9,6 +9,7 @@ Output: evaluation_results.parquet
 
 import json
 
+import duckdb
 import numpy as np
 import polars as pl
 from tqdm import tqdm
@@ -34,8 +35,18 @@ DEFAULT_K_VALUES: list[int] = _cfg['k_values']
 DEFAULT_LAM_VALUES: list[float] = _cfg['lam_values']
 
 
-def main():
-    con = connect_mimic_duckdb()
+def run_evaluate(
+    con: duckdb.DuckDBPyConnection | None = None,
+    cfg: dict | None = None,
+) -> pl.DataFrame:
+    global _cfg, DEFAULT_STRATEGIES, DEFAULT_K_VALUES, DEFAULT_LAM_VALUES
+    if cfg is not None:
+        _cfg = cfg
+        DEFAULT_STRATEGIES = _cfg['strategies']
+        DEFAULT_K_VALUES = _cfg['k_values']
+        DEFAULT_LAM_VALUES = _cfg['lam_values']
+    if con is None:
+        con = connect_mimic_duckdb()
 
     annotations_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'gold_annotations.parquet')
     annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
@@ -43,13 +54,20 @@ def main():
 
     builder = CandidatePoolBuilder(con, device=_cfg['device'])
 
-    results = run_evaluation(annotations_df, builder)
+    results = run_evaluation(
+        annotations_df,
+        builder,
+        strategies=_cfg['strategies'],
+        k_values=_cfg['k_values'],
+        lam_values=_cfg['lam_values'],
+    )
 
     out_path = MIMIC_RESULTS_DIR / 'evaluation_results.parquet'
     results.write_parquet(out_path)
     print(f'\nSaved {len(results):,} result rows to {out_path}')
 
     print_summary(results)
+    return results
 
 
 def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
@@ -218,17 +236,6 @@ def print_summary(results_df: pl.DataFrame) -> None:
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    _run_cfg = load_config_from_main(phase=4)['evaluate']
-    DEFAULT_STRATEGIES = _run_cfg['strategies']
-    DEFAULT_K_VALUES = _run_cfg['k_values']
-    DEFAULT_LAM_VALUES = _run_cfg['lam_values']
-
-    main()
+    run_evaluate(cfg=load_config_from_main(phase=4)['evaluate'])
