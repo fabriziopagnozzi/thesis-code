@@ -13,6 +13,8 @@ def generate(
     prompt: str,
     system: str = '',
     temperature: float = 0.1,
+    top_p: float | None = None,
+    top_k: int | None = None,
     json_mode: bool = False,
     model: str | None = None,
     think: bool = False,
@@ -24,6 +26,10 @@ def generate(
     messages.append({'role': 'user', 'content': prompt})
 
     opts: dict = {'temperature': temperature}
+    if top_p is not None:
+        opts['top_p'] = top_p
+    if top_k is not None:
+        opts['top_k'] = top_k
     if think:
         opts['think'] = True
 
@@ -65,6 +71,8 @@ def generate_json(
     prompt: str,
     system: str = '',
     temperature: float = 0.1,
+    top_p: float | None = None,
+    top_k: int | None = None,
     max_retries: int = 2,
     model: str | None = None,
     think: bool = False,
@@ -74,6 +82,8 @@ def generate_json(
             prompt,
             system=system,
             temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
             json_mode=True,
             model=model,
             think=think,

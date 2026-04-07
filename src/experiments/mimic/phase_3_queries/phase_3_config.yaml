@@ -75,7 +75,10 @@ build_query_prompts:
 
 gen_queries_llm:
   save_every: 25
+  model:
   temperature: 0.3
+  top_p:
+  top_k:
   think: false
 
 filter_queries:
@@ -87,5 +90,8 @@ filter_queries:
 gold_annotation:
   prefilter_n: 500
   batch_size: 40
+  model:
   temperature: 0.1
+  top_p:
+  top_k:
   think: false
