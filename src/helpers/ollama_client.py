@@ -118,6 +118,12 @@ def generate_json(
         try:
             return json.loads(text)
         except json.JSONDecodeError:
+            # If text doesn't start with [ or {, it's natural language — retrying won't help
+            first_char = text.strip()[0] if text.strip() else ''
+            if first_char not in ('{', '['):
+                preview = text[:150].replace('\n', ' ')
+                print(f'[generate_json] model returned text instead of JSON: {preview!r}')
+                raise
             preview = text[:200] + ('...' if len(text) > 200 else '')
             print(f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, {len(text)} chars): {preview!r}')
             if attempt == max_retries:
