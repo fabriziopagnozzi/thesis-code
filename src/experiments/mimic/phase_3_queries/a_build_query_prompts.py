@@ -15,42 +15,22 @@ import duckdb
 import numpy as np
 import polars as pl
 
-from experiments.mimic.config_loader import N_CONDITIONS, load_config
+from experiments.mimic.configs import N_CONDITIONS, BuildQueryPromptsCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
 
-_cfg = load_config(phase=3)['build_query_prompts']
+_cfg = BuildQueryPromptsCfg.load()
 
 
 def run_build_query_prompts(
     con: duckdb.DuckDBPyConnection | None = None,
-    cfg: dict | None = None,
+    cfg: BuildQueryPromptsCfg | None = None,
 ) -> pl.DataFrame:
-    global \
-        _cfg, \
-        PERSONAS, \
-        CHARLSON_LABELS, \
-        DEMOGRAPHIC_MODIFIERS, \
-        DEMOGRAPHIC_FILTERS, \
-        N_GROUNDING_PATIENTS, \
-        HIGH_VALUE_SECTIONS, \
-        PROMPT_TEMPLATE, \
-        LABEL_TO_CHARLSON_COL
-
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        PERSONAS = _cfg['personas']
-        CHARLSON_LABELS = _cfg['charlson_labels']
-        DEMOGRAPHIC_MODIFIERS = [m['text'] for m in _cfg['demographic_modifiers']]
-        DEMOGRAPHIC_FILTERS = {
-            m['text']: (m['column'], m['op'], m['value']) for m in _cfg['demographic_modifiers']
-        }
-        N_GROUNDING_PATIENTS = _cfg['n_grounding_patients']
-        HIGH_VALUE_SECTIONS = _cfg['high_value_sections']
-        PROMPT_TEMPLATE = _cfg['prompt_template']
-        LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
 
     if con is None:
         con = connect_mimic_duckdb()
@@ -78,23 +58,6 @@ def run_build_query_prompts(
     return df
 
 
-PERSONAS: dict[str, str] = _cfg['personas']
-CHARLSON_LABELS: dict[str, str] = _cfg['charlson_labels']
-
-DEMOGRAPHIC_MODIFIERS: list[str] = [m['text'] for m in _cfg['demographic_modifiers']]
-
-# -- Reverse maps used for filtering --
-LABEL_TO_CHARLSON_COL = {v: k for k, v in CHARLSON_LABELS.items()}
-DEMOGRAPHIC_FILTERS: dict[str, tuple] = {
-    m['text']: (m['column'], m['op'], m['value']) for m in _cfg['demographic_modifiers']
-}
-
-N_GROUNDING_PATIENTS: int = _cfg['n_grounding_patients']
-HIGH_VALUE_SECTIONS: list[str] = _cfg['high_value_sections']
-
-PROMPT_TEMPLATE: str = _cfg['prompt_template']
-
-
 def build_query_prompts(
     conditions: pl.DataFrame,
     chunks: pl.DataFrame,
@@ -104,7 +67,7 @@ def build_query_prompts(
 ) -> pl.DataFrame:
     """Build grounded query prompts for the top N_CONDITIONS conditions."""
     if max_modifiers is None:
-        max_modifiers = int(_cfg['max_modifiers'])
+        max_modifiers = _cfg.max_modifiers
     specs = _build_specs(conditions, con, max_modifiers)
     print(f'Built {len(specs):,} specs ({N_CONDITIONS} conditions)')
 
@@ -147,7 +110,7 @@ def build_query_prompts(
             skipped += 1
             continue
 
-        full_prompt = PROMPT_TEMPLATE.format(
+        full_prompt = _cfg.prompt_template.format(
             persona_prompt=spec['prompt'],
             condition=spec['condition_name'],
             modifier=modifier_text,
@@ -177,7 +140,7 @@ def _find_top_comorbidity_modifiers(
     con, condition_icd3: str, n: int = 3
 ) -> list[tuple[str, str, float]]:
     """Most common co-occurring Charlson categories for a condition. Returns (col, label, rate)."""
-    charlson_cols = list(CHARLSON_LABELS.keys())
+    charlson_cols = list(_cfg.charlson_labels.keys())
     col_list = ', '.join(f'AVG(ch.{c}) AS {c}' for c in charlson_cols)
 
     rates = con.execute(f"""--sql
@@ -188,7 +151,7 @@ def _find_top_comorbidity_modifiers(
     """).fetchone()
 
     scored = [
-        (col, CHARLSON_LABELS[col], float(rate))
+        (col, _cfg.charlson_labels[col], float(rate))
         for col, rate in zip(charlson_cols, rates, strict=True)
         if rate and rate > 0.05
     ]
@@ -204,10 +167,10 @@ def _build_specs(conditions: pl.DataFrame, con, max_modifiers: int = 3) -> list[
 
         comorbidity_mods = _find_top_comorbidity_modifiers(con, icd3, n=max_modifiers)
         modifiers = [(label, 'comorbidity') for _, label, _ in comorbidity_mods]
-        modifiers.extend([(m, 'demographic') for m in DEMOGRAPHIC_MODIFIERS])
+        modifiers.extend([(m, 'demographic') for m in _cfg.demographic_modifiers_text])
 
         for (modifier_text, modifier_type), persona_name in itertools.product(
-            modifiers, PERSONAS.keys()
+            modifiers, _cfg.personas.keys()
         ):
             specs.append(
                 {
@@ -216,7 +179,7 @@ def _build_specs(conditions: pl.DataFrame, con, max_modifiers: int = 3) -> list[
                     'modifier_text': modifier_text,
                     'modifier_type': modifier_type,
                     'persona': persona_name,
-                    'prompt': PERSONAS[persona_name].format(
+                    'prompt': _cfg.personas[persona_name].format(
                         condition=condition_name, modifier=modifier_text
                     ),
                 }
@@ -236,7 +199,7 @@ def _get_condition_hadm_ids(con, icd3: str) -> set[int]:
 
 
 def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
-    col = LABEL_TO_CHARLSON_COL.get(modifier_text)
+    col = _cfg.label_to_charlson_col.get(modifier_text)
     if col is None:
         return set()
     placeholders = ','.join(str(h) for h in condition_hadm_ids)
@@ -250,7 +213,7 @@ def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -
 
 
 def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
-    filt = DEMOGRAPHIC_FILTERS.get(modifier_text)
+    filt = _cfg.demographic_filters.get(modifier_text)
     if filt is None:
         return set()
     _, op, val = filt
@@ -278,7 +241,7 @@ class _ChunkIndex:
     """Pre-partitioned chunk index for fast hadm_id lookups."""
 
     def __init__(self, chunks: pl.DataFrame, metadata: pl.DataFrame):
-        hv = chunks.filter(pl.col('section_name').is_in(HIGH_VALUE_SECTIONS))
+        hv = chunks.filter(pl.col('section_name').is_in(_cfg.high_value_sections))
         self._by_hadm: dict[int, pl.DataFrame] = {}
         for key, group in hv.group_by('hadm_id'):
             self._by_hadm[key[0]] = group
@@ -311,7 +274,7 @@ class _ChunkIndex:
             .row(0, named=True)
         )
 
-        section_priority = {s: i for i, s in enumerate(HIGH_VALUE_SECTIONS)}
+        section_priority = {s: i for i, s in enumerate(_cfg.high_value_sections)}
         supp = group.filter(pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
         supp = (
             supp.with_columns(
@@ -347,9 +310,9 @@ def _sample_grounding_chunks(
     candidates = chunk_index.hadm_ids_with_bhc(hadm_ids)
     if not candidates:
         return []
-    if len(candidates) > N_GROUNDING_PATIENTS:
+    if len(candidates) > _cfg.n_grounding_patients:
         rng = np.random.default_rng(seed)
-        candidates = rng.choice(candidates, size=N_GROUNDING_PATIENTS, replace=False).tolist()
+        candidates = rng.choice(candidates, size=_cfg.n_grounding_patients, replace=False).tolist()
     samples = []
     for hid in candidates:
         samples.extend(chunk_index.sample_patient(hid))
@@ -368,6 +331,7 @@ def _format_chunks_block(samples: list[dict]) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_build_query_prompts(cfg=load_config_from_main(phase=3)['build_query_prompts'])
+    raw = load_config_from_main(phase=3)
+    run_build_query_prompts(cfg=BuildQueryPromptsCfg(**raw['build_query_prompts']))

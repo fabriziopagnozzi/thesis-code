@@ -13,19 +13,17 @@ import sys
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import GenQueriesCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.ollama_client import generate
 
-_cfg = load_config(3)['gen_queries_llm']
-SAVE_EVERY: int = _cfg['save_every']
+_cfg = GenQueriesCfg.load()
 
 
-def run_gen_queries(cfg: dict | None = None) -> pl.DataFrame:
-    global _cfg, SAVE_EVERY
+def run_gen_queries(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        SAVE_EVERY = _cfg['save_every']
 
     prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
     print(f'Loaded {len(prompts_df):,} prompts')
@@ -39,7 +37,7 @@ def run_gen_queries(cfg: dict | None = None) -> pl.DataFrame:
     results: list[dict] = resume_df.to_dicts() if resume_df is not None else []
     for new_result in generate_queries(prompts_df, resume_df):
         results.append(new_result)
-        if len(results) % SAVE_EVERY == 0:
+        if len(results) % _cfg.save_every == 0:
             pl.DataFrame(results).write_parquet(out_path)
             print(f'  Checkpoint: {len(results)} queries saved')
 
@@ -84,11 +82,11 @@ def generate_queries(
         try:
             query_text = generate(
                 row['full_prompt'],
-                model=_cfg.get('model') or None,
-                temperature=_cfg['temperature'],
-                top_p=_cfg.get('top_p') or None,
-                top_k=_cfg.get('top_k') or None,
-                think=_cfg.get('think', False),
+                model=_cfg.model or None,
+                temperature=_cfg.temperature,
+                top_p=_cfg.top_p,
+                top_k=_cfg.top_k,
+                think=_cfg.think,
                 stream=True,
             ).strip()
         except Exception as e:
@@ -104,6 +102,7 @@ def generate_queries(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_gen_queries(cfg=load_config_from_main(phase=3)['gen_queries_llm'])
+    raw = load_config_from_main(phase=3)
+    run_gen_queries(cfg=GenQueriesCfg(**raw['gen_queries_llm']))

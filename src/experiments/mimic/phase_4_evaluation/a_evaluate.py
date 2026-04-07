@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import EvaluateCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -28,23 +28,16 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import (
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
-_cfg = load_config(4)['evaluate']
-
-DEFAULT_STRATEGIES: list[ScoringFunction] = _cfg['strategies']
-DEFAULT_K_VALUES: list[int] = _cfg['k_values']
-DEFAULT_LAM_VALUES: list[float] = _cfg['lam_values']
+_cfg = EvaluateCfg.load()
 
 
 def run_evaluate(
     con: duckdb.DuckDBPyConnection | None = None,
-    cfg: dict | None = None,
+    cfg: EvaluateCfg | None = None,
 ) -> pl.DataFrame:
-    global _cfg, DEFAULT_STRATEGIES, DEFAULT_K_VALUES, DEFAULT_LAM_VALUES
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        DEFAULT_STRATEGIES = _cfg['strategies']
-        DEFAULT_K_VALUES = _cfg['k_values']
-        DEFAULT_LAM_VALUES = _cfg['lam_values']
     if con is None:
         con = connect_mimic_duckdb()
 
@@ -52,14 +45,14 @@ def run_evaluate(
     annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
     print(f'Loaded {len(annotations_df):,} annotated queries with facets')
 
-    builder = CandidatePoolBuilder(con, device=_cfg['device'])
+    builder = CandidatePoolBuilder(con, device=_cfg.device)
 
     results = run_evaluation(
         annotations_df,
         builder,
-        strategies=_cfg['strategies'],
-        k_values=_cfg['k_values'],
-        lam_values=_cfg['lam_values'],
+        strategies=_cfg.strategies,
+        k_values=_cfg.k_values,
+        lam_values=_cfg.lam_values,
     )
 
     out_path = MIMIC_RESULTS_DIR / 'evaluation_results.parquet'
@@ -165,12 +158,16 @@ def evaluate_query(
 def run_evaluation(
     annotations_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
-    strategies: list[ScoringFunction] = DEFAULT_STRATEGIES,
-    k_values: list[int] = DEFAULT_K_VALUES,
-    lam_values: list[float] = DEFAULT_LAM_VALUES,
-    prefilter_n: int = 500,
+    strategies: list[ScoringFunction] | None = None,
+    k_values: list[int] | None = None,
+    lam_values: list[float] | None = None,
+    prefilter_n: int | None = None,
 ) -> pl.DataFrame:
     """Full evaluation across all annotated queries."""
+    strategies = strategies or _cfg.strategies
+    k_values = k_values or _cfg.k_values
+    lam_values = lam_values or _cfg.lam_values
+    prefilter_n = prefilter_n or _cfg.prefilter_n
     condition_pools: dict[str, CandidatePool] = {}
     all_rows = []
 
@@ -236,6 +233,7 @@ def print_summary(results_df: pl.DataFrame) -> None:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_evaluate(cfg=load_config_from_main(phase=4)['evaluate'])
+    raw = load_config_from_main(phase=4)
+    run_evaluate(cfg=EvaluateCfg(**raw['evaluate']))

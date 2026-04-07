@@ -2,25 +2,19 @@
 
 import polars as pl
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import EmbedCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.embedder import Embedder
 
-_cfg = load_config(2)['embed']
-MODEL_NAME: str = _cfg['model_name']
-BATCH_SIZE: int = _cfg['batch_size']
-COMMIT_EVERY: int = _cfg['commit_every']
+_cfg = EmbedCfg.load()
 
 
-def run_embed(cfg: dict | None = None) -> None:
+def run_embed(cfg: EmbedCfg | None = None) -> None:
     import lancedb
 
-    global _cfg, MODEL_NAME, BATCH_SIZE, COMMIT_EVERY
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        MODEL_NAME = _cfg['model_name']
-        BATCH_SIZE = _cfg['batch_size']
-        COMMIT_EVERY = _cfg['commit_every']
 
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -30,14 +24,14 @@ def run_embed(cfg: dict | None = None) -> None:
     joined, texts = prepare_texts(chunks, metadata)
     print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
 
-    print(f'Embedding with {MODEL_NAME} (committing every {COMMIT_EVERY:,} chunks)...')
-    embedder = Embedder(MODEL_NAME, device=_cfg['device'], batch_size=BATCH_SIZE)
+    print(f'Embedding with {_cfg.model_name} (committing every {_cfg.commit_every:,} chunks)...')
+    embedder = Embedder(_cfg.model_name, device=_cfg.device, batch_size=_cfg.batch_size)
     db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
     table = None
     total = len(texts)
 
-    for start in range(0, total, COMMIT_EVERY):
-        end = min(start + COMMIT_EVERY, total)
+    for start in range(0, total, _cfg.commit_every):
+        end = min(start + _cfg.commit_every, total)
         batch_texts = texts[start:end]
         batch_df = joined.slice(start, end - start)
 
@@ -112,6 +106,7 @@ def prepare_texts(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_embed(cfg=load_config_from_main(phase=2)['embed'])
+    raw = load_config_from_main(phase=2)
+    run_embed(cfg=EmbedCfg(**raw['embed']))

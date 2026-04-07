@@ -8,18 +8,16 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import DedupCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 
-_cfg = load_config(phase=1)['dedup']
-BOILERPLATE_SECTIONS = set(_cfg['boilerplate_sections'])
+_cfg = DedupCfg.load()
 
 
-def run_dedup(cfg: dict | None = None) -> pl.DataFrame:
-    global _cfg, BOILERPLATE_SECTIONS
+def run_dedup(cfg: DedupCfg | None = None) -> pl.DataFrame:
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        BOILERPLATE_SECTIONS = set(_cfg['boilerplate_sections'])
 
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks_raw.parquet')
     result = deduplicate(chunks)
@@ -38,7 +36,7 @@ def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
     hashes = [_content_hash(t) for t in chunks['text'].to_list()]
     chunks = chunks.with_columns(pl.Series('content_hash', hashes))
 
-    is_boilerplate = chunks['section_name'].is_in(list(BOILERPLATE_SECTIONS))
+    is_boilerplate = chunks['section_name'].is_in(list(_cfg.boilerplate_sections_set))
     bp = chunks.filter(is_boilerplate)
     non_bp = chunks.filter(~is_boilerplate)
 
@@ -62,6 +60,7 @@ def _content_hash(text: str) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_dedup(cfg=load_config_from_main(phase=1)['dedup'])
+    raw = load_config_from_main(phase=1)
+    run_dedup(cfg=DedupCfg(**raw['dedup']))

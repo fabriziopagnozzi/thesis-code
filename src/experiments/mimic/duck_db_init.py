@@ -1,6 +1,6 @@
 import duckdb
 
-from experiments.mimic.config_loader import RESULTS_SUBDIR
+from experiments.mimic.configs import RESULTS_SUBDIR
 from helpers.dir_paths import BHC_DIR, HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR
 
 INIT_SQL_PATH = MIMIR_REPO_CODE_DIR.parent / '_mimic_init.sql'
