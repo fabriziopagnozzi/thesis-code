@@ -87,14 +87,14 @@ gen_queries_llm:
 
 filter_queries:
   k: 10
-  lam: 0.3
+  lam: 0.35
   jaccard_threshold: 0.8
-  prefilter_n: 1000
+  prefilter_n: 300
 
 gold_annotation:
-  prefilter_n: 500
-  batch_size: 8
-  num_ctx: 16384
+  prefilter_n: 300
+  batch_size: 30
+  num_ctx: 32768
   model: gemma4:26b
   temperature: 1.0
   top_p: 0.95
