@@ -73,7 +73,10 @@ def generate_queries(
 
         try:
             query_text = generate(
-                row['full_prompt'], temperature=_cfg['temperature'], stream=True
+                row['full_prompt'],
+                temperature=_cfg['temperature'],
+                think=_cfg.get('think', False),
+                stream=True,
             ).strip()
         except Exception as e:
             print(f'  Error on row {i}: {e}')

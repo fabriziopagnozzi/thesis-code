@@ -104,7 +104,7 @@ def annotate_batch(
     valid_ids = set(chunk_ids)
 
     try:
-        result = generate_json(prompt, system=MAP_SYSTEM_PROMPT, temperature=_cfg['temperature'])
+        result = generate_json(prompt, system=MAP_SYSTEM_PROMPT, temperature=_cfg['temperature'], think=_cfg.get('think', False))
     except Exception as e:
         print(f'    Batch annotation failed: {e}')
         return []

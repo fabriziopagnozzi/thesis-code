@@ -76,6 +76,7 @@ build_query_prompts:
 gen_queries_llm:
   save_every: 25
   temperature: 0.3
+  think: false
 
 filter_queries:
   k: 10
@@ -87,3 +88,4 @@ gold_annotation:
   prefilter_n: 500
   batch_size: 40
   temperature: 0.1
+  think: false
