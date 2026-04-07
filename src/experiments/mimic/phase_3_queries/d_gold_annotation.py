@@ -17,7 +17,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import GoldAnnotationCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -25,18 +25,16 @@ from experiments.mimic.duck_db_init import (
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
-_cfg = load_config(phase=3)['gold_annotation']
+_cfg = GoldAnnotationCfg.load()
 
 
 def run_gold_annotation_step(
     con: duckdb.DuckDBPyConnection | None = None,
-    cfg: dict | None = None,
+    cfg: GoldAnnotationCfg | None = None,
 ) -> pl.DataFrame:
-    global _cfg, MAP_SYSTEM_PROMPT, MAP_USER_TEMPLATE
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        MAP_SYSTEM_PROMPT = _cfg['map_system_prompt']
-        MAP_USER_TEMPLATE = _cfg['map_user_template']
     if con is None:
         con = connect_mimic_duckdb()
 
@@ -76,10 +74,6 @@ def run_gold_annotation_step(
     return result
 
 
-MAP_SYSTEM_PROMPT: str = _cfg['map_system_prompt']
-MAP_USER_TEMPLATE: str = _cfg['map_user_template']
-
-
 def _format_chunk_batch(chunk_ids: list[str], texts: list[str]) -> str:
     parts = []
     for cid, text in zip(chunk_ids, texts, strict=True):
@@ -99,7 +93,7 @@ def annotate_batch(
     Returns list of {fact, facet_label, chunk_ids} dicts.
     """
     chunks_block = _format_chunk_batch(chunk_ids, texts)
-    prompt = MAP_USER_TEMPLATE.format(query_text=query_text, chunks_block=chunks_block)
+    prompt = _cfg.map_user_template.format(query_text=query_text, chunks_block=chunks_block)
     prompt_chars = len(prompt)
 
     valid_ids = set(chunk_ids)
@@ -107,14 +101,14 @@ def annotate_batch(
     try:
         result = generate_json(
             prompt,
-            system=MAP_SYSTEM_PROMPT,
-            model=_cfg.get('model') or None,
-            temperature=_cfg['temperature'],
-            top_p=_cfg.get('top_p') or None,
-            top_k=_cfg.get('top_k') or None,
-            num_ctx=_cfg.get('num_ctx') or None,
-            num_predict=_cfg.get('num_predict') or None,
-            think=_cfg.get('think', False),
+            system=_cfg.map_system_prompt,
+            model=_cfg.model or None,
+            temperature=_cfg.temperature,
+            top_p=_cfg.top_p,
+            top_k=_cfg.top_k,
+            num_ctx=_cfg.num_ctx,
+            num_predict=_cfg.num_predict,
+            think=_cfg.think,
         )
     except Exception as e:
         print(
@@ -233,16 +227,16 @@ def run_gold_annotation(
         query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
     """
     if prefilter_n is None:
-        prefilter_n = _cfg['prefilter_n']
+        prefilter_n = _cfg.prefilter_n
     if batch_size is None:
-        batch_size = _cfg['batch_size']
+        batch_size = _cfg.batch_size
 
-    model_name = _cfg.get('model') or 'default'
+    model_name = _cfg.model or 'default'
     print(
         f'\n-- Gold annotation config --\n'
-        f'model={model_name}  temperature={_cfg["temperature"]}  '
-        f'top_p={_cfg.get("top_p")}  top_k={_cfg.get("top_k")}  '
-        f'num_ctx={_cfg.get("num_ctx")}  think={_cfg.get("think", False)}\n'
+        f'model={model_name}  temperature={_cfg.temperature}  '
+        f'top_p={_cfg.top_p}  top_k={_cfg.top_k}  '
+        f'num_ctx={_cfg.num_ctx}  think={_cfg.think}\n'
         f'  prefilter_n={prefilter_n}  batch_size={batch_size}\n'
         f'  queries={len(queries_df)}\n'
     )
@@ -326,6 +320,7 @@ def run_gold_annotation(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_gold_annotation_step(cfg=load_config_from_main(phase=3)['gold_annotation'])
+    raw = load_config_from_main(phase=3)
+    run_gold_annotation_step(cfg=GoldAnnotationCfg(**raw['gold_annotation']))

@@ -1,46 +1,42 @@
+import duckdb
 import polars as pl
 
-from experiments.mimic.duck_db_init import (
-    MIMIC_RESULTS_DIR,
-    connect_mimic_duckdb,
+from experiments.mimic.configs import (
+    BuildQueryPromptsCfg,
+    FilterQueriesCfg,
+    GenQueriesCfg,
+    GoldAnnotationCfg,
 )
-from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePoolBuilder
+from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 
-from .a_build_query_prompts import build_query_prompts
-from .b_gen_queries_llm import generate_queries
-from .c_filter_queries import filter_queries
-from .d_gold_annotation import run_gold_annotation
+from .a_build_query_prompts import run_build_query_prompts
+from .b_gen_queries_llm import run_gen_queries
+from .c_filter_queries import run_filter_queries
+from .d_gold_annotation import run_gold_annotation_step
 
-if __name__ == '__main__':
-    con = connect_mimic_duckdb()
 
-    conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
-    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
-    metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
-    print(
-        f'Loaded {len(conditions):,} conditions, {len(chunks):,} chunks, '
-        f'{len(metadata):,} admissions'
-    )
+def run_phase_3(
+    con: duckdb.DuckDBPyConnection | None = None,
+    build_query_prompts_cfg: BuildQueryPromptsCfg | None = None,
+    gen_queries_cfg: GenQueriesCfg | None = None,
+    filter_queries_cfg: FilterQueriesCfg | None = None,
+    gold_annotation_cfg: GoldAnnotationCfg | None = None,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    if con is None:
+        con = connect_mimic_duckdb()
 
     print('\n> Step 3.1: Building grounded query prompts')
-    prompts_df = build_query_prompts(conditions, chunks, metadata, con)
-    prompts_df.write_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
+    prompts_df = run_build_query_prompts(con, cfg=build_query_prompts_cfg)
 
     print('\n> Step 3.2: Generating clinical questions via LLM')
-    queries_df = generate_queries(prompts_df)
-    queries_df.write_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
+    queries_df = run_gen_queries(cfg=gen_queries_cfg)
 
     print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
-    builder = CandidatePoolBuilder(con, device='cuda')
-    divergence_df = filter_queries(queries_df, builder)
-    divergence_df.write_parquet(MIMIC_RESULTS_DIR / 'divergence_stats.parquet')
-    filtered_df = divergence_df.filter(pl.col('passes_filter'))
-    n_pass = len(filtered_df)
-    print(f'  {n_pass:,} / {len(divergence_df):,} queries pass filter')
+    divergence_df = run_filter_queries(con, cfg=filter_queries_cfg)
+    n_pass = divergence_df.filter(pl.col('passes_filter')).height
 
     print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
-    gold_df = run_gold_annotation(filtered_df, builder)
-    gold_df.write_parquet(MIMIC_RESULTS_DIR / 'gold_annotations.parquet')
+    gold_df = run_gold_annotation_step(con, cfg=gold_annotation_cfg)
 
     print(
         f'\n\nPhase 3 complete. Outputs in {MIMIC_RESULTS_DIR}:\n'
@@ -50,3 +46,8 @@ if __name__ == '__main__':
         f'  gold_annotations.parquet: {len(gold_df):>10,} annotations\n'
         f'  Avg facets per query:     {gold_df["n_facets"].mean():.1f}'
     )
+    return prompts_df, queries_df, divergence_df, gold_df
+
+
+if __name__ == '__main__':
+    run_phase_3()

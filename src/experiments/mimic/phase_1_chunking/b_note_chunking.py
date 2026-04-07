@@ -6,18 +6,11 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import NoteChunkingCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.chunks_classes import MimicIVChunk
 
-_cfg = load_config(1)['note_chunking']
-KEEP_SECTIONS = set(_cfg['keep_sections'])
-SKIP_SECTIONS = set(_cfg['skip_sections'])
-METADATA_ONLY_SECTIONS = set(_cfg['metadata_only_sections'])
-
-ALL_SECTIONS = KEEP_SECTIONS | SKIP_SECTIONS | METADATA_ONLY_SECTIONS
-
-TAG_RE = re.compile(rf'<({"|".join(re.escape(s) for s in ALL_SECTIONS)})>', re.IGNORECASE)
+_cfg = NoteChunkingCfg.load()
 
 # -- BHC problem markers in the target column --
 BHC_PROBLEM_RE = re.compile(r'^#\s*(.+)', re.MULTILINE)
@@ -52,17 +45,12 @@ class ParsedNote:
 
 def run_note_chunking(
     con: duckdb.DuckDBPyConnection | None = None,
-    cfg: dict | None = None,
+    cfg: NoteChunkingCfg | None = None,
     interactive: bool = False,
 ) -> pl.DataFrame | None:
-    global _cfg, KEEP_SECTIONS, SKIP_SECTIONS, METADATA_ONLY_SECTIONS, ALL_SECTIONS, TAG_RE
+    global _cfg
     if cfg is not None:
         _cfg = cfg
-        KEEP_SECTIONS = set(_cfg['keep_sections'])
-        SKIP_SECTIONS = set(_cfg['skip_sections'])
-        METADATA_ONLY_SECTIONS = set(_cfg['metadata_only_sections'])
-        ALL_SECTIONS = KEEP_SECTIONS | SKIP_SECTIONS | METADATA_ONLY_SECTIONS
-        TAG_RE = re.compile(rf'<({"|".join(re.escape(s) for s in ALL_SECTIONS)})>', re.IGNORECASE)
 
     if con is None:
         con = connect_mimic_duckdb()
@@ -149,12 +137,12 @@ def parse_note(
     seq = 0
 
     for section_name, section_text in sections:
-        if section_name in SKIP_SECTIONS:
+        if section_name in _cfg.skip_sections:
             continue
-        if section_name in METADATA_ONLY_SECTIONS:
+        if section_name in _cfg.metadata_only_sections:
             chief_complaint = section_text
             continue
-        if section_name not in KEEP_SECTIONS:
+        if section_name not in _cfg.keep_sections:
             continue
 
         seq += 1
@@ -198,7 +186,7 @@ def parse_note(
 
 def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
     """Split <TAG>-delimited input into (section_name, section_text) pairs."""
-    matches = list(TAG_RE.finditer(text))
+    matches = list(_cfg.tag_re.finditer(text))
     if not matches:
         return [('_full_note', text.strip())]
 
@@ -285,13 +273,14 @@ def _split_bhc_problems(text: str) -> list[tuple[str | None, str, str | None]]:
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--interactive', action='store_true')
     args, _ = parser.parse_known_args()
 
+    raw = load_config_from_main(phase=1)
     run_note_chunking(
-        cfg=load_config_from_main(phase=1)['note_chunking'],
+        cfg=NoteChunkingCfg(**raw['note_chunking']),
         interactive=args.interactive,
     )

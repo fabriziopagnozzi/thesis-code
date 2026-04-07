@@ -14,7 +14,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import FilterQueriesCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -23,12 +23,12 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, C
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
-_cfg = load_config(phase=3)['filter_queries']
+_cfg = FilterQueriesCfg.load()
 
 
 def run_filter_queries(
     con: duckdb.DuckDBPyConnection | None = None,
-    cfg: dict | None = None,
+    cfg: FilterQueriesCfg | None = None,
 ) -> pl.DataFrame:
     global _cfg
     if cfg is not None:
@@ -109,13 +109,13 @@ def filter_queries(
     Queries with jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
     """
     if k is None:
-        k = _cfg['k']
+        k = _cfg.k
     if lam is None:
-        lam = _cfg['lam']
+        lam = _cfg.lam
     if jaccard_threshold is None:
-        jaccard_threshold = _cfg['jaccard_threshold']
+        jaccard_threshold = _cfg.jaccard_threshold
     if prefilter_n is None:
-        prefilter_n = _cfg['prefilter_n']
+        prefilter_n = _cfg.prefilter_n
     results = []
     condition_pools: dict[str, CandidatePool] = {}
 
@@ -149,6 +149,7 @@ def filter_queries(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_filter_queries(cfg=load_config_from_main(phase=3)['filter_queries'])
+    raw = load_config_from_main(phase=3)
+    run_filter_queries(cfg=FilterQueriesCfg(**raw['filter_queries']))

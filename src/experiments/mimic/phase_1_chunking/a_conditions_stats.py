@@ -15,22 +15,20 @@ Uses the Charlson SQL from mimic-code.
 import duckdb
 import polars as pl
 
-from experiments.mimic.config_loader import load_config
+from experiments.mimic.configs import ConditionsStatsCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
 
-_cfg = load_config(1)['conditions_stats']
-
 
 def run_select_conditions(
-    con: duckdb.DuckDBPyConnection | None = None, cfg: dict | None = None
+    con: duckdb.DuckDBPyConnection | None = None, cfg: ConditionsStatsCfg | None = None
 ) -> pl.DataFrame:
-    resolved = cfg or _cfg
+    cfg = cfg or ConditionsStatsCfg.load()
     if con is None:
         con = connect_mimic_duckdb()
-    df = select_conditions(con=con, min_admissions=resolved['min_admissions'])
+    df = select_conditions(con=con, min_admissions=cfg.min_admissions)
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = MIMIC_RESULTS_DIR / 'conditions_stats.parquet'
     df.write_parquet(out_path)
@@ -114,6 +112,7 @@ def select_conditions(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loader import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
-    run_select_conditions(cfg=load_config_from_main(phase=1)['conditions_stats'])
+    raw = load_config_from_main(phase=1)
+    run_select_conditions(cfg=ConditionsStatsCfg(**raw['conditions_stats']))
