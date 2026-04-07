@@ -93,6 +93,8 @@ def annotate_batch(
     query_text: str,
     chunk_ids: list[str],
     texts: list[str],
+    batch_idx: int = 0,
+    n_batches: int = 1,
 ) -> list[dict]:
     """Run map-phase annotation on a single batch of chunks.
 
@@ -100,6 +102,7 @@ def annotate_batch(
     """
     chunks_block = _format_chunk_batch(chunk_ids, texts)
     prompt = MAP_USER_TEMPLATE.format(query_text=query_text, chunks_block=chunks_block)
+    prompt_chars = len(prompt)
 
     valid_ids = set(chunk_ids)
 
@@ -111,10 +114,11 @@ def annotate_batch(
             temperature=_cfg['temperature'],
             top_p=_cfg.get('top_p') or None,
             top_k=_cfg.get('top_k') or None,
+            num_ctx=_cfg.get('num_ctx') or None,
             think=_cfg.get('think', False),
         )
     except Exception as e:
-        print(f'    Batch annotation failed: {e}')
+        print(f'    batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}')
         return []
 
     if not isinstance(result, list):
@@ -131,17 +135,21 @@ def annotate_batch(
 
     # Validate and clean results
     cleaned = []
+    n_dropped = 0
     for item in result:
         if not isinstance(item, dict):
+            n_dropped += 1
             continue
         fact = item.get('fact', '')
         label = item.get('facet_label', '')
         cids = item.get('chunk_ids', [])
         if not fact or not label or not cids:
+            n_dropped += 1
             continue
         # Only keep chunk_ids that were actually in the batch
         cids = [c for c in cids if c in valid_ids]
         if not cids:
+            n_dropped += 1
             continue
         cleaned.append(
             {
@@ -151,6 +159,13 @@ def annotate_batch(
             }
         )
 
+    facet_labels = {item['facet_label'] for item in cleaned}
+    print(
+        f'    batch {batch_idx + 1}/{n_batches}: '
+        f'{len(cleaned)} facts, {len(facet_labels)} facets, '
+        f'{n_dropped} dropped '
+        f'({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens)'
+    )
     return cleaned
 
 
@@ -181,17 +196,25 @@ def annotate_query(
     Returns {facet_label: [chunk_id, ...]}.
     """
     n = pool.n
+    n_batches = (n + batch_size - 1) // batch_size
     all_batch_results = []
 
-    for start in range(0, n, batch_size):
+    for i, start in enumerate(range(0, n, batch_size)):
         end = min(start + batch_size, n)
         batch_ids = pool.chunk_ids[start:end]
         batch_texts = pool.texts[start:end]
 
-        batch_result = annotate_batch(query_text, batch_ids, batch_texts)
+        batch_result = annotate_batch(
+            query_text, batch_ids, batch_texts,
+            batch_idx=i, n_batches=n_batches,
+        )
         all_batch_results.append(batch_result)
 
-    return reduce_facets(all_batch_results)
+    facets = reduce_facets(all_batch_results)
+    total_facts = sum(len(b) for b in all_batch_results)
+    all_gold = {cid for cids in facets.values() for cid in cids}
+    print(f'    reduce: {total_facts} facts → {len(facets)} facets, {len(all_gold)} gold chunks')
+    return facets
 
 
 def run_gold_annotation(
@@ -209,6 +232,16 @@ def run_gold_annotation(
         prefilter_n = _cfg['prefilter_n']
     if batch_size is None:
         batch_size = _cfg['batch_size']
+
+    model_name = _cfg.get('model') or 'default'
+    print('\n-- Gold annotation config --')
+    print(f'  model={model_name}  temperature={_cfg["temperature"]}  '
+          f'top_p={_cfg.get("top_p")}  top_k={_cfg.get("top_k")}  '
+          f'num_ctx={_cfg.get("num_ctx")}  think={_cfg.get("think", False)}')
+    print(f'  prefilter_n={prefilter_n}  batch_size={batch_size}')
+    print(f'  queries={len(queries_df)}')
+    print()
+
     condition_pools: dict[str, CandidatePool] = {}
     results = []
 
@@ -232,10 +265,13 @@ def run_gold_annotation(
         else:
             work_pool = pool
 
+        n_batches = (work_pool.n + batch_size - 1) // batch_size  # type: ignore
         print(
-            f'  [{i + 1}/{len(queries_df)}] {icd3} - pool={work_pool.n} chunks, '
-            f'{(work_pool.n + batch_size - 1) // batch_size} batches'  # type: ignore
+            f'  [{i + 1}/{len(queries_df)}] {icd3} — '
+            f'full_pool={pool.n}, work_pool={work_pool.n} chunks, '
+            f'{n_batches} batches'
         )
+        print(f'    query: {query_text[:120]}{"..." if len(query_text) > 120 else ""}')
 
         facets = annotate_query(query_text, work_pool, batch_size=batch_size)  # type: ignore
 

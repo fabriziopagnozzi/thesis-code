@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import ollama
 
@@ -15,6 +16,7 @@ def generate(
     temperature: float = 0.1,
     top_p: float | None = None,
     top_k: int | None = None,
+    num_ctx: int | None = None,
     json_mode: bool = False,
     model: str | None = None,
     think: bool = False,
@@ -30,6 +32,8 @@ def generate(
         opts['top_p'] = top_p
     if top_k is not None:
         opts['top_k'] = top_k
+    if num_ctx is not None:
+        opts['num_ctx'] = num_ctx
     if think:
         opts['think'] = True
 
@@ -64,7 +68,22 @@ def generate(
         options=opts,
         think=think,
     )
-    return resp.message.content or ''
+    content = resp.message.content or ''
+    if not content:
+        thinking = getattr(resp.message, 'thinking', None)
+        if thinking:
+            print(f'[ollama] WARNING: empty content, thinking={len(thinking)} chars')
+        else:
+            print(f'[ollama] WARNING: empty content, no thinking. Raw status={getattr(resp, "status_code", "?")}')
+    return content
+
+
+_CODE_FENCE_RE = re.compile(r'^```(?:json)?\s*\n?(.*?)```\s*$', re.DOTALL)
+
+
+def _strip_code_fences(text: str) -> str:
+    m = _CODE_FENCE_RE.match(text.strip())
+    return m.group(1).strip() if m else text
 
 
 def generate_json(
@@ -73,6 +92,7 @@ def generate_json(
     temperature: float = 0.1,
     top_p: float | None = None,
     top_k: int | None = None,
+    num_ctx: int | None = None,
     max_retries: int = 2,
     model: str | None = None,
     think: bool = False,
@@ -84,14 +104,22 @@ def generate_json(
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
+            num_ctx=num_ctx,
             json_mode=True,
             model=model,
             think=think,
         )
+        text = _strip_code_fences(text)
+        if not text.strip():
+            print(f'[generate_json] empty response (attempt {attempt + 1}/{max_retries + 1})')
+            if attempt == max_retries:
+                raise json.JSONDecodeError('Model returned empty response', text, 0)
+            continue
         try:
             return json.loads(text)
         except json.JSONDecodeError:
+            preview = text[:200] + ('...' if len(text) > 200 else '')
+            print(f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, {len(text)} chars): {preview!r}')
             if attempt == max_retries:
                 raise
-            temperature = min(temperature + 0.1, 0.5)
     raise RuntimeError('unreachable')
