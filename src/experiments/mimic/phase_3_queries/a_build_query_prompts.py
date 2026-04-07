@@ -13,15 +13,15 @@ import itertools
 
 import numpy as np
 import polars as pl
-
 from experiments.mimic.config import N_CONDITIONS
-from experiments.mimic.config_loader import load_phase_config
+
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
 
-_cfg = load_phase_config(phase=3)['build_query_prompts']
+_cfg = load_config(phase=3)['build_query_prompts']
 
 
 def main():
@@ -39,12 +39,14 @@ def main():
 
     out_path = MIMIC_RESULTS_DIR / 'queries_prompts.parquet'
     df.write_parquet(out_path)
-    print(f'\nSaved {len(df):,} prompts to {out_path}')
-    print(f'  Conditions: {df["icd10_3char"].n_unique()}')
-    print(f'  Avg grounding chunks: {df["n_grounding_chunks"].mean():.1f}')
-    print(f'  Avg intersection admissions: {df["n_intersection_admissions"].mean():.0f}')
-    print('\n--- Sample prompt (truncated) ---')
-    print(df['full_prompt'][0][:1500])
+    print(
+        f'\nSaved {len(df):,} prompts to {out_path}\n'
+        f'  Conditions: {df["icd10_3char"].n_unique()}\n'
+        f'  Avg grounding chunks: {df["n_grounding_chunks"].mean():.1f}\n'
+        f'  Avg intersection admissions: {df["n_intersection_admissions"].mean():.0f}\n'
+        f'\n--- Sample prompt (truncated) ---\n'
+        f'{df["full_prompt"][0][:1500]}'
+    )
 
 
 PERSONAS: dict[str, str] = _cfg['personas']
@@ -339,13 +341,13 @@ def _format_chunks_block(samples: list[dict]) -> str:
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default=None)
     parser.parse_args()
 
-    _run_cfg = parse_config_arg(3)['build_query_prompts']
+    _run_cfg = load_config_from_main(phase=3)['build_query_prompts']
     N_GROUNDING_PATIENTS = _run_cfg['n_grounding_patients']
     HIGH_VALUE_SECTIONS = _run_cfg['high_value_sections']
     CHARLSON_LABELS = _run_cfg['charlson_labels']

@@ -101,4 +101,24 @@ gold_annotation:
   top_p: 0.95
   top_k: 64
   think: false
+  map_system_prompt: >-
+    You are a clinical information analyst. Your task is to extract facts from
+    discharge note excerpts that are relevant to answering a clinical question.
+    Be exhaustive - tag every chunk that contains relevant information, not just
+    the single best one.
+  map_user_template: |
+    Question: {query_text}
 
+    Below are excerpts from clinical discharge notes. Each is prefixed with its ID.
+
+    {chunks_block}
+
+    For each fact in these excerpts that is relevant to answering the question:
+    1. State the fact concisely (one sentence)
+    2. List ALL chunk_id(s) that support this fact
+    3. Assign a short facet label - the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
+
+    Return a JSON array. Example format:
+    [{{"fact": "Heparin dose reduced to 10u/kg/hr due to CrCl < 30", "facet_label": "anticoagulation_adjustment", "chunk_ids": ["chunk_42", "chunk_87"]}}]
+
+    If no chunks in this batch are relevant to the question, return an empty array: []

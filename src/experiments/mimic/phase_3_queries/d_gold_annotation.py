@@ -4,7 +4,7 @@ Step 4.2: Gold facet annotation via map-reduce LLM calls.
 For each query + its candidate pool, annotates which chunks support which
 facets (aspects of the answer). Uses ollama for local inference.
 
-Map: batches of ~40 chunks → LLM extracts facts + facet labels + chunk citations
+Map: batches of N chunks → LLM extracts facts + facet labels + chunk citations
 Reduce: merge facet labels across batches (deterministic, no LLM)
 
 Output: gold_annotations.parquet
@@ -16,7 +16,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -24,7 +24,7 @@ from experiments.mimic.duck_db_init import (
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
-_cfg = load_phase_config(3)['gold_annotation']
+_cfg = load_config(phase=3)['gold_annotation']
 
 
 def main():
@@ -49,37 +49,23 @@ def main():
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
     result.write_parquet(out_path)
 
-    print(f'\nSaved {len(result):,} annotations to {out_path}')
-    print(f'  Avg facets per query: {result["n_facets"].mean():.1f}')
-    print(f'  Avg gold chunks per query: {result["n_gold_chunks"].mean():.1f}')
-    print(f'  Queries with 0 facets: {result.filter(pl.col("n_facets") == 0).height}')
+    print(
+        f'\nSaved {len(result):,} annotations to {out_path}\n'
+        f'  Avg facets per query: {result["n_facets"].mean():.1f}\n'
+        f'  Avg gold chunks per query: {result["n_gold_chunks"].mean():.1f}\n'
+        f'  Queries with 0 facets: {result.filter(pl.col("n_facets") == 0).height}'
+    )
 
     if len(result) > 0:
         sample = result.row(0, named=True)
-        print('\n--- Sample annotation ---')
-        print(f'  Query: {sample["query_text"][:200]}')
+        print(f'\n--- Sample annotation ---\n  Query: {sample["query_text"][:200]}')
         facets = json.loads(sample['facets_json'])
         for label, cids in list(facets.items())[:5]:
             print(f'  [{label}] → {len(cids)} chunks')
 
 
-MAP_SYSTEM_PROMPT = """You are a clinical information analyst. Your task is to extract facts from discharge note excerpts that are relevant to answering a clinical question. Be exhaustive - tag every chunk that contains relevant information, not just the single best one."""
-
-MAP_USER_TEMPLATE = """Question: {query_text}
-
-Below are excerpts from clinical discharge notes. Each is prefixed with its ID.
-
-{chunks_block}
-
-For each fact in these excerpts that is relevant to answering the question:
-1. State the fact concisely (one sentence)
-2. List ALL chunk_id(s) that support this fact
-3. Assign a short facet label - the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
-
-Return a JSON array. Example format:
-[{{"fact": "Heparin dose reduced to 10u/kg/hr due to CrCl < 30", "facet_label": "anticoagulation_adjustment", "chunk_ids": ["chunk_42", "chunk_87"]}}]
-
-If no chunks in this batch are relevant to the question, return an empty array: []"""
+MAP_SYSTEM_PROMPT: str = _cfg['map_system_prompt']
+MAP_USER_TEMPLATE: str = _cfg['map_user_template']
 
 
 def _format_chunk_batch(chunk_ids: list[str], texts: list[str]) -> str:
@@ -240,15 +226,14 @@ def run_gold_annotation(
         batch_size = _cfg['batch_size']
 
     model_name = _cfg.get('model') or 'default'
-    print('\n-- Gold annotation config --')
     print(
+        f'\n-- Gold annotation config --\n'
         f'model={model_name}  temperature={_cfg["temperature"]}  '
         f'top_p={_cfg.get("top_p")}  top_k={_cfg.get("top_k")}  '
-        f'num_ctx={_cfg.get("num_ctx")}  think={_cfg.get("think", False)}'
+        f'num_ctx={_cfg.get("num_ctx")}  think={_cfg.get("think", False)}\n'
+        f'  prefilter_n={prefilter_n}  batch_size={batch_size}\n'
+        f'  queries={len(queries_df)}\n'
     )
-    print(f'  prefilter_n={prefilter_n}  batch_size={batch_size}')
-    print(f'  queries={len(queries_df)}')
-    print()
 
     # Resume from previous run if output exists
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
@@ -331,11 +316,11 @@ def run_gold_annotation(
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default=None)
     parser.parse_args()
 
-    _run_cfg = parse_config_arg(3)['gold_annotation']
+    _run_cfg = load_config_from_main(phase=3)['gold_annotation']
     main()

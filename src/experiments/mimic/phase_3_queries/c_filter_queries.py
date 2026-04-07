@@ -13,7 +13,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -22,7 +22,7 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, C
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
-_cfg = load_phase_config(3)['filter_queries']
+_cfg = load_config(3)['filter_queries']
 
 
 def main():
@@ -38,12 +38,10 @@ def main():
     result.write_parquet(out_path)
 
     n_pass = result.filter(pl.col('passes_filter')).height
-    print(f'\nSaved {len(result):,} rows to {out_path}')
-    print(f'  Pass filter: {n_pass:,} / {len(result):,} ({100 * n_pass / len(result):.1f}%)')
     print(
-        f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}, median={result["jaccard_div"].median():.3f}'
-    )
-    print(
+        f'\nSaved {len(result):,} rows to {out_path}\n'
+        f'  Pass filter: {n_pass:,} / {len(result):,} ({100 * n_pass / len(result):.1f}%)\n'
+        f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}, median={result["jaccard_div"].median():.3f}\n'
         f'  Fac gap:     mean={result["fac_gap"].mean():.4f}, median={result["fac_gap"].median():.4f}'
     )
 
@@ -144,11 +142,11 @@ def filter_queries(
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default=None)
     parser.parse_args()
 
-    _run_cfg = parse_config_arg(3)['filter_queries']
+    _run_cfg = load_config_from_main(phase=3)['filter_queries']
     main()

@@ -2,14 +2,49 @@
 
 import polars as pl
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.embedder import Embedder
 
-_cfg = load_phase_config(2)['embed']
+_cfg = load_config(2)['embed']
 MODEL_NAME: str = _cfg['model_name']
 BATCH_SIZE: int = _cfg['batch_size']
 COMMIT_EVERY: int = _cfg['commit_every']
+
+
+def main(device: str = _cfg['device']):
+    import lancedb
+
+    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
+    metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
+
+    joined, texts = prepare_texts(chunks, metadata)
+    print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
+
+    print(f'Embedding with {MODEL_NAME} (committing every {COMMIT_EVERY:,} chunks)...')
+    embedder = Embedder(MODEL_NAME, device=device, batch_size=BATCH_SIZE)
+    db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
+    table = None
+    total = len(texts)
+
+    for start in range(0, total, COMMIT_EVERY):
+        end = min(start + COMMIT_EVERY, total)
+        batch_texts = texts[start:end]
+        batch_df = joined.slice(start, end - start)
+
+        embeddings = embedder.embed_corpus(batch_texts)
+        batch_df = batch_df.with_columns(pl.Series('vector', embeddings.tolist()))
+
+        if table is None:
+            table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')
+        else:
+            table.add(batch_df.to_arrow())
+
+        print(f'  Committed {end:,}/{total:,} chunks')
+
+    print(f'Saved {total:,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
 
 
 def _age_group(age: float | None) -> str:
@@ -69,50 +104,15 @@ def prepare_texts(
     return joined, texts
 
 
-def main(device: str = _cfg['device']):
-    import lancedb
-
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
-    metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
-
-    joined, texts = prepare_texts(chunks, metadata)
-    print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
-
-    print(f'Embedding with {MODEL_NAME} (committing every {COMMIT_EVERY:,} chunks)...')
-    embedder = Embedder(MODEL_NAME, device=device, batch_size=BATCH_SIZE)
-    db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
-    table = None
-    total = len(texts)
-
-    for start in range(0, total, COMMIT_EVERY):
-        end = min(start + COMMIT_EVERY, total)
-        batch_texts = texts[start:end]
-        batch_df = joined.slice(start, end - start)
-
-        embeddings = embedder.embed_corpus(batch_texts)
-        batch_df = batch_df.with_columns(pl.Series('vector', embeddings.tolist()))
-
-        if table is None:
-            table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')
-        else:
-            table.add(batch_df.to_arrow())
-
-        print(f'  Committed {end:,}/{total:,} chunks')
-
-    print(f'Saved {total:,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
-
-
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', default=None, help='torch device (e.g. cuda, cpu)')
     parser.add_argument('--config', type=str, default=None)
     args = parser.parse_args()
 
-    _run_cfg = parse_config_arg(2)['embed']
+    _run_cfg = load_config_from_main(phase=2)['embed']
     main(device=args.device or _run_cfg['device'])

@@ -25,12 +25,10 @@ if __name__ == '__main__':
     print('\n> Step 3.1: Building grounded query prompts')
     prompts_df = build_query_prompts(conditions, chunks, metadata, con)
     prompts_df.write_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
-    input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 3.2: Generating clinical questions via LLM')
     queries_df = generate_queries(prompts_df)
     queries_df.write_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
-    input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
     builder = CandidatePoolBuilder(con, device='cuda')
@@ -39,15 +37,16 @@ if __name__ == '__main__':
     filtered_df = divergence_df.filter(pl.col('passes_filter'))
     n_pass = len(filtered_df)
     print(f'  {n_pass:,} / {len(divergence_df):,} queries pass filter')
-    input('\nDone. Press enter to continue...\n')
 
     print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
     gold_df = run_gold_annotation(filtered_df, builder)
     gold_df.write_parquet(MIMIC_RESULTS_DIR / 'gold_annotations.parquet')
 
-    print(f'\n\nPhase 3 complete. Outputs in {MIMIC_RESULTS_DIR}:')
-    print(f'  queries_prompts.parquet:  {len(prompts_df):>10,} prompts')
-    print(f'  queries.parquet:          {len(queries_df):>10,} queries')
-    print(f'  divergence_stats.parquet: {len(divergence_df):>10,} queries ({n_pass:,} passing)')
-    print(f'  gold_annotations.parquet: {len(gold_df):>10,} annotations')
-    print(f'  Avg facets per query:     {gold_df["n_facets"].mean():.1f}')
+    print(
+        f'\n\nPhase 3 complete. Outputs in {MIMIC_RESULTS_DIR}:\n'
+        f'  queries_prompts.parquet:  {len(prompts_df):>10,} prompts\n'
+        f'  queries.parquet:          {len(queries_df):>10,} queries\n'
+        f'  divergence_stats.parquet: {len(divergence_df):>10,} queries ({n_pass:,} passing)\n'
+        f'  gold_annotations.parquet: {len(gold_df):>10,} annotations\n'
+        f'  Avg facets per query:     {gold_df["n_facets"].mean():.1f}'
+    )

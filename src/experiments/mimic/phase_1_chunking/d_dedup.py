@@ -8,9 +8,9 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.config_loader import load_phase_config
+from experiments.mimic.config_loader import load_config
 
-BOILERPLATE_SECTIONS = set(load_phase_config(1)['dedup']['boilerplate_sections'])
+BOILERPLATE_SECTIONS = set(load_config(1)['dedup']['boilerplate_sections'])
 
 
 def _content_hash(text: str) -> str:
@@ -48,10 +48,10 @@ def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loader import parse_config_arg
+    from experiments.mimic.config_loader import load_config_from_main
     from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 
-    _run_cfg = parse_config_arg(1)['dedup']
+    _run_cfg = load_config_from_main(phase=1)['dedup']
     BOILERPLATE_SECTIONS = set(_run_cfg['boilerplate_sections'])
 
     parser = argparse.ArgumentParser()
