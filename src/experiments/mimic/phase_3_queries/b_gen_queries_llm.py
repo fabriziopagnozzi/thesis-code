@@ -74,7 +74,10 @@ def generate_queries(
         try:
             query_text = generate(
                 row['full_prompt'],
+                model=_cfg.get('model') or None,
                 temperature=_cfg['temperature'],
+                top_p=_cfg.get('top_p') or None,
+                top_k=_cfg.get('top_k') or None,
                 think=_cfg.get('think', False),
                 stream=True,
             ).strip()
