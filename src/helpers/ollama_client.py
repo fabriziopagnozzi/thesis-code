@@ -17,6 +17,7 @@ def generate(
     top_p: float | None = None,
     top_k: int | None = None,
     num_ctx: int | None = None,
+    num_predict: int | None = None,
     json_mode: bool = False,
     model: str | None = None,
     think: bool = False,
@@ -34,6 +35,8 @@ def generate(
         opts['top_k'] = top_k
     if num_ctx is not None:
         opts['num_ctx'] = num_ctx
+    if num_predict is not None:
+        opts['num_predict'] = num_predict
     if think:
         opts['think'] = True
 
@@ -86,6 +89,24 @@ def _strip_code_fences(text: str) -> str:
     return m.group(1).strip() if m else text
 
 
+def _salvage_truncated_json(text: str) -> list | dict | None:
+    """Try to recover a truncated JSON array by finding the last complete element."""
+    text = text.strip()
+    if not text.startswith('['):
+        return None
+    # Find the last complete object boundary: "},\n  {" or "}\n]"
+    last_close = text.rfind('}')
+    if last_close == -1:
+        return None
+    candidate = text[:last_close + 1].rstrip().rstrip(',') + ']'
+    try:
+        result = json.loads(candidate)
+        print(f'[generate_json] salvaged truncated JSON: kept {len(result)} items')
+        return result
+    except json.JSONDecodeError:
+        return None
+
+
 def generate_json(
     prompt: str,
     system: str = '',
@@ -93,6 +114,7 @@ def generate_json(
     top_p: float | None = None,
     top_k: int | None = None,
     num_ctx: int | None = None,
+    num_predict: int | None = None,
     max_retries: int = 2,
     model: str | None = None,
     think: bool = False,
@@ -105,6 +127,7 @@ def generate_json(
             top_p=top_p,
             top_k=top_k,
             num_ctx=num_ctx,
+            num_predict=num_predict,
             json_mode=True,
             model=model,
             think=think,
@@ -124,6 +147,10 @@ def generate_json(
                 preview = text[:150].replace('\n', ' ')
                 print(f'[generate_json] model returned text instead of JSON: {preview!r}')
                 raise
+            # Try to salvage truncated JSON before retrying
+            salvaged = _salvage_truncated_json(text)
+            if salvaged is not None:
+                return salvaged
             preview = text[:200] + ('...' if len(text) > 200 else '')
             print(f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, {len(text)} chars): {preview!r}')
             if attempt == max_retries:
