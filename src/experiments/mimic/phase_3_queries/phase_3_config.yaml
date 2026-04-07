@@ -63,35 +63,39 @@ build_query_prompts:
 
     Below are excerpts from real discharge summaries of patients admitted for {condition} where {modifier} was also present. Each excerpt is from the discharge notes, describing clinical management decisions, lab results, diagnoses, and medications.
 
+    <START DISCHARGE SUMMARIES EXAMPLES>
     {chunks_block}
+    <END DISCHARGE SUMMARIES EXAMPLES>
 
-    Using these real cases as background context (but NOT overfitting to any specific patient), generate ONE clinical management question about {condition} that:
+    Using these real cases as background context (but NOT overfitting to any specific patient in the examples), generate ONE clinical management question about {condition} that:
     - Requires knowing how treatment, workup, or monitoring changes when {modifier} is present
     - Is answerable by synthesizing patterns across multiple patient cases
     - Focuses on a generalizable management decision (drug choice, dosing adjustments, contraindications, monitoring frequency, disposition)
     - Requires multi-source evidence - no single patient note answers it fully
 
+    Make sure to use the given discharge summaries examples only as a reference of what the dataset looks like: you don't have to generate a question about those specific examples: it must be a generalizable question.
+
     Return ONLY the question, nothing else.
 
 gen_queries_llm:
   save_every: 25
-  model:
+  model: gemma4:31b
   temperature: 0.3
-  top_p:
-  top_k:
+  top_p: 0.95
+  top_k: 64
   think: false
 
 filter_queries:
   k: 10
-  lam: 0.5
-  jaccard_threshold: 0.7
-  prefilter_n: 500
+  lam: 0.3
+  jaccard_threshold: 0.8
+  prefilter_n: 1000
 
 gold_annotation:
   prefilter_n: 500
   batch_size: 40
-  model:
-  temperature: 0.1
-  top_p:
-  top_k:
+  model: gemma4:31b
+  temperature: 1.0
+  top_p: 0.95
+  top_k: 64
   think: false
