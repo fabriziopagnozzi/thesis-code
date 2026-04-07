@@ -115,10 +115,13 @@ def annotate_batch(
             top_p=_cfg.get('top_p') or None,
             top_k=_cfg.get('top_k') or None,
             num_ctx=_cfg.get('num_ctx') or None,
+            num_predict=_cfg.get('num_predict') or None,
             think=_cfg.get('think', False),
         )
     except Exception as e:
-        print(f'    batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}')
+        print(
+            f'    batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}'
+        )
         return []
 
     if not isinstance(result, list):
@@ -205,8 +208,11 @@ def annotate_query(
         batch_texts = pool.texts[start:end]
 
         batch_result = annotate_batch(
-            query_text, batch_ids, batch_texts,
-            batch_idx=i, n_batches=n_batches,
+            query_text,
+            batch_ids,
+            batch_texts,
+            batch_idx=i,
+            n_batches=n_batches,
         )
         all_batch_results.append(batch_result)
 
@@ -235,21 +241,35 @@ def run_gold_annotation(
 
     model_name = _cfg.get('model') or 'default'
     print('\n-- Gold annotation config --')
-    print(f'  model={model_name}  temperature={_cfg["temperature"]}  '
-          f'top_p={_cfg.get("top_p")}  top_k={_cfg.get("top_k")}  '
-          f'num_ctx={_cfg.get("num_ctx")}  think={_cfg.get("think", False)}')
+    print(
+        f'model={model_name}  temperature={_cfg["temperature"]}  '
+        f'top_p={_cfg.get("top_p")}  top_k={_cfg.get("top_k")}  '
+        f'num_ctx={_cfg.get("num_ctx")}  think={_cfg.get("think", False)}'
+    )
     print(f'  prefilter_n={prefilter_n}  batch_size={batch_size}')
     print(f'  queries={len(queries_df)}')
     print()
 
+    # Resume from previous run if output exists
+    out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
+    done_texts: set[str] = set()
+    if out_path.exists():
+        prev = pl.read_parquet(out_path)
+        done_texts = set(prev['query_text'].to_list())
+        print(
+            f'  Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
+        )
+
     condition_pools: dict[str, CandidatePool] = {}
-    results = []
 
     for i, row in enumerate(
         tqdm(queries_df.iter_rows(named=True), total=len(queries_df), desc='Gold annotation')
     ):
         icd3 = row['icd10_3char']
         query_text = row['query_text']
+
+        if query_text in done_texts:
+            continue
 
         if icd3 not in condition_pools:
             condition_pools[icd3] = builder.for_condition(icd3)
@@ -282,25 +302,30 @@ def run_gold_annotation(
         query_id = f'{icd3}_{row.get("modifier_text", "")}_{row.get("persona", "")}_{i}'
         query_id = query_id.replace(' ', '_')[:120]
 
-        results.append(
-            {
-                'query_id': query_id,
-                'icd10_3char': icd3,
-                'condition_name': row.get('condition_name', ''),
-                'modifier_text': row.get('modifier_text', ''),
-                'persona': row.get('persona', ''),
-                'query_text': query_text,
-                'facets_json': json.dumps(facets),
-                'n_facets': len(facets),
-                'n_gold_chunks': len(all_gold_chunks),
-            }
+        new_row = pl.DataFrame(
+            [
+                {
+                    'query_id': query_id,
+                    'icd10_3char': icd3,
+                    'condition_name': row.get('condition_name', ''),
+                    'modifier_text': row.get('modifier_text', ''),
+                    'persona': row.get('persona', ''),
+                    'query_text': query_text,
+                    'facets_json': json.dumps(facets),
+                    'n_facets': len(facets),
+                    'n_gold_chunks': len(all_gold_chunks),
+                }
+            ]
         )
 
-        # Flush after every query so progress survives crashes
-        out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
-        pl.DataFrame(results).write_parquet(out_path)
+        # Append to parquet on disk after every query
+        if out_path.exists():
+            existing = pl.read_parquet(out_path)
+            pl.concat([existing, new_row]).write_parquet(out_path)
+        else:
+            new_row.write_parquet(out_path)
 
-    return pl.DataFrame(results)
+    return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 
 
 if __name__ == '__main__':

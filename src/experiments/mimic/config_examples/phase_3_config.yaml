@@ -95,8 +95,10 @@ gold_annotation:
   prefilter_n: 300
   batch_size: 30
   num_ctx: 32768
+  num_predict: 16384
   model: gemma4:26b
   temperature: 1.0
   top_p: 0.95
   top_k: 64
   think: false
+
