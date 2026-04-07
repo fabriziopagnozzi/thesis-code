@@ -12,8 +12,15 @@ BATCH_SIZE: int = _cfg['batch_size']
 COMMIT_EVERY: int = _cfg['commit_every']
 
 
-def main(device: str = _cfg['device']):
+def run_embed(cfg: dict | None = None) -> None:
     import lancedb
+
+    global _cfg, MODEL_NAME, BATCH_SIZE, COMMIT_EVERY
+    if cfg is not None:
+        _cfg = cfg
+        MODEL_NAME = _cfg['model_name']
+        BATCH_SIZE = _cfg['batch_size']
+        COMMIT_EVERY = _cfg['commit_every']
 
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -24,7 +31,7 @@ def main(device: str = _cfg['device']):
     print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
 
     print(f'Embedding with {MODEL_NAME} (committing every {COMMIT_EVERY:,} chunks)...')
-    embedder = Embedder(MODEL_NAME, device=device, batch_size=BATCH_SIZE)
+    embedder = Embedder(MODEL_NAME, device=_cfg['device'], batch_size=BATCH_SIZE)
     db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
     table = None
     total = len(texts)
@@ -105,14 +112,6 @@ def prepare_texts(
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--device', default=None, help='torch device (e.g. cuda, cpu)')
-    parser.add_argument('--config', type=str, default=None)
-    args = parser.parse_args()
-
-    _run_cfg = load_config_from_main(phase=2)['embed']
-    main(device=args.device or _run_cfg['device'])
+    run_embed(cfg=load_config_from_main(phase=2)['embed'])

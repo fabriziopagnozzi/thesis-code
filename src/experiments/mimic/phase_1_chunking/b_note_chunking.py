@@ -50,6 +50,41 @@ class ParsedNote:
     chief_complaint: str | None = None
 
 
+def run_note_chunking(
+    con: duckdb.DuckDBPyConnection | None = None,
+    cfg: dict | None = None,
+    interactive: bool = False,
+) -> pl.DataFrame | None:
+    global _cfg, KEEP_SECTIONS, SKIP_SECTIONS, METADATA_ONLY_SECTIONS, ALL_SECTIONS, TAG_RE
+    if cfg is not None:
+        _cfg = cfg
+        KEEP_SECTIONS = set(_cfg['keep_sections'])
+        SKIP_SECTIONS = set(_cfg['skip_sections'])
+        METADATA_ONLY_SECTIONS = set(_cfg['metadata_only_sections'])
+        ALL_SECTIONS = KEEP_SECTIONS | SKIP_SECTIONS | METADATA_ONLY_SECTIONS
+        TAG_RE = re.compile(rf'<({"|".join(re.escape(s) for s in ALL_SECTIONS)})>', re.IGNORECASE)
+
+    if con is None:
+        con = connect_mimic_duckdb()
+    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if interactive:
+        while True:
+            try:
+                raw = input('\nLimit (or q to quit): ').strip()
+            except EOFError, KeyboardInterrupt:
+                break
+            if raw.lower() == 'q':
+                break
+            if not raw.isdigit():
+                print('Enter a positive integer.')
+                continue
+            parse_all_notes(con, limit=int(raw))
+        return None
+    else:
+        return parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks.parquet')
+
+
 def parse_all_notes(
     con: duckdb.DuckDBPyConnection,
     output_path: Path | None = None,
@@ -252,31 +287,11 @@ if __name__ == '__main__':
 
     from experiments.mimic.config_loader import load_config_from_main
 
-    _run_cfg = load_config_from_main(phase=1)['note_chunking']
-    KEEP_SECTIONS = set(_run_cfg['keep_sections'])
-    SKIP_SECTIONS = set(_run_cfg['skip_sections'])
-    METADATA_ONLY_SECTIONS = set(_run_cfg['metadata_only_sections'])
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--interactive', action='store_true')
-    parser.add_argument('--config', type=str, default=None)
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
-    con = connect_mimic_duckdb()
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = MIMIC_RESULTS_DIR / 'chunks.parquet'
-
-    if args.interactive:
-        while True:
-            try:
-                raw = input('\nLimit (or q to quit): ').strip()
-            except EOFError, KeyboardInterrupt:
-                break
-            if raw.lower() == 'q':
-                break
-            if not raw.isdigit():
-                print('Enter a positive integer.')
-                continue
-            parse_all_notes(con, limit=int(raw))
-    else:
-        parse_all_notes(con, output_path=output_path)
+    run_note_chunking(
+        cfg=load_config_from_main(phase=1)['note_chunking'],
+        interactive=args.interactive,
+    )

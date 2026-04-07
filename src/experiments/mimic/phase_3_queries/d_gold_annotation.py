@@ -12,6 +12,7 @@ Output: gold_annotations.parquet
 
 import json
 
+import duckdb
 import numpy as np
 import polars as pl
 from tqdm import tqdm
@@ -27,8 +28,17 @@ from helpers.ollama_client import generate_json
 _cfg = load_config(phase=3)['gold_annotation']
 
 
-def main():
-    con = connect_mimic_duckdb()
+def run_gold_annotation_step(
+    con: duckdb.DuckDBPyConnection | None = None,
+    cfg: dict | None = None,
+) -> pl.DataFrame:
+    global _cfg, MAP_SYSTEM_PROMPT, MAP_USER_TEMPLATE
+    if cfg is not None:
+        _cfg = cfg
+        MAP_SYSTEM_PROMPT = _cfg['map_system_prompt']
+        MAP_USER_TEMPLATE = _cfg['map_user_template']
+    if con is None:
+        con = connect_mimic_duckdb()
 
     # Load filtered queries (only those that passed divergence filter)
     div_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'
@@ -62,6 +72,8 @@ def main():
         facets = json.loads(sample['facets_json'])
         for label, cids in list(facets.items())[:5]:
             print(f'  [{label}] → {len(cids)} chunks')
+
+    return result
 
 
 MAP_SYSTEM_PROMPT: str = _cfg['map_system_prompt']
@@ -314,13 +326,6 @@ def run_gold_annotation(
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    _run_cfg = load_config_from_main(phase=3)['gold_annotation']
-    main()
+    run_gold_annotation_step(cfg=load_config_from_main(phase=3)['gold_annotation'])

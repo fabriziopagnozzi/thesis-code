@@ -8,6 +8,7 @@ pool. Keep only queries where coverage meaningfully diverges from top_k
 TODO: understand if this is good
 """
 
+import duckdb
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
@@ -22,11 +23,18 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, C
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
-_cfg = load_config(3)['filter_queries']
+_cfg = load_config(phase=3)['filter_queries']
 
 
-def main():
-    con = connect_mimic_duckdb()
+def run_filter_queries(
+    con: duckdb.DuckDBPyConnection | None = None,
+    cfg: dict | None = None,
+) -> pl.DataFrame:
+    global _cfg
+    if cfg is not None:
+        _cfg = cfg
+    if con is None:
+        con = connect_mimic_duckdb()
 
     queries_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
     print(f'Loaded {len(queries_df):,} queries')
@@ -44,6 +52,7 @@ def main():
         f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}, median={result["jaccard_div"].median():.3f}\n'
         f'  Fac gap:     mean={result["fac_gap"].mean():.4f}, median={result["fac_gap"].median():.4f}'
     )
+    return result
 
 
 def compute_divergence(
@@ -140,13 +149,6 @@ def filter_queries(
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.config_loader import load_config_from_main
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.parse_args()
-
-    _run_cfg = load_config_from_main(phase=3)['filter_queries']
-    main()
+    run_filter_queries(cfg=load_config_from_main(phase=3)['filter_queries'])
