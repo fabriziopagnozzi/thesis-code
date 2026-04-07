@@ -4,7 +4,8 @@ _*/
 .cached_embeddings/
 datasets/full-data/
 results/
-**/phase*/phase*.yaml
+**/*_config.yaml
+!**/config_examples/*_config.yaml
 
 # this is a git repo from MIT
 experiments/mimic/mimic_*/
