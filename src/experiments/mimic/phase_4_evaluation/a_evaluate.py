@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg
+from experiments.mimic.config_models import EvaluateCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -233,7 +233,7 @@ def print_summary(results_df: pl.DataFrame) -> None:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.config_loaders import load_config_from_main
 
     raw = load_config_from_main(phase=4)
     run_evaluate(cfg=EvaluateCfg(**raw['evaluate']))

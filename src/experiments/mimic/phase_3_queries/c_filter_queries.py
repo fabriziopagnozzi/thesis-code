@@ -14,7 +14,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import FilterQueriesCfg
+from experiments.mimic.config_models import FilterQueriesCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -149,7 +149,7 @@ def filter_queries(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.config_loaders import load_config_from_main
 
     raw = load_config_from_main(phase=3)
     run_filter_queries(cfg=FilterQueriesCfg(**raw['filter_queries']))
