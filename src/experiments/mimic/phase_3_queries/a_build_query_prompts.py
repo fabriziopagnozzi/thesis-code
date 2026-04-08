@@ -15,8 +15,7 @@ import duckdb
 import numpy as np
 import polars as pl
 
-from experiments.mimic.config_loaders import global_cfg
-from experiments.mimic.config_models import BuildQueryPromptsCfg
+from experiments.mimic.configs import BuildQueryPromptsCfg, global_cfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -334,7 +333,7 @@ def _format_chunks_block(samples: list[dict]) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loaders import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)
     run_build_query_prompts(cfg=BuildQueryPromptsCfg(**raw['build_query_prompts']))

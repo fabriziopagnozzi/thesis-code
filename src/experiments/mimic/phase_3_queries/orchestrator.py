@@ -2,7 +2,7 @@ import argparse
 
 import duckdb
 
-from experiments.mimic.config_models import (
+from experiments.mimic.configs import (
     BuildQueryPromptsCfg,
     FilterQueriesCfg,
     GenQueriesCfg,
