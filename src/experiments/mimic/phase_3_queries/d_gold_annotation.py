@@ -15,6 +15,7 @@ import json
 import duckdb
 import numpy as np
 import polars as pl
+from pydantic import BaseModel, field_validator
 from tqdm import tqdm
 
 from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnotationCfg
@@ -25,6 +26,25 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, C
 from helpers.ollama_client import generate_json
 
 _cfg = GoldAnnotationCfg.load()
+
+
+class _Annotation(BaseModel):
+    fact: str
+    facet_label: str
+    chunk_ids: list[str]
+
+    @field_validator('facet_label')
+    @classmethod
+    def normalize_label(cls, v: str) -> str:
+        return v.strip().lower().replace(' ', '_').replace(' ', '_')
+
+    @field_validator('fact')
+    @classmethod
+    def nonempty_fact(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError('empty fact')
+        return v
 
 
 def run_gold_annotation(
@@ -302,31 +322,19 @@ def annotate_batch(
         else:
             return []
 
-    # Validate and clean results
     cleaned = []
     n_dropped = 0
     for item in result:
-        if not isinstance(item, dict):
+        try:
+            ann = _Annotation.model_validate(item)
+        except Exception:
             n_dropped += 1
             continue
-        fact = item.get('fact', '')
-        label = item.get('facet_label', '')
-        cids = item.get('chunk_ids', [])
-        if not fact or not label or not cids:
+        ann.chunk_ids = [c for c in ann.chunk_ids if c in valid_ids]
+        if not ann.chunk_ids:
             n_dropped += 1
             continue
-        # Only keep chunk_ids that were actually in the batch
-        cids = [c for c in cids if c in valid_ids]
-        if not cids:
-            n_dropped += 1
-            continue
-        cleaned.append(
-            {
-                'fact': fact.strip(),
-                'facet_label': label.strip().lower().replace(' ', '_'),
-                'chunk_ids': cids,
-            }
-        )
+        cleaned.append(ann.model_dump())
 
     facet_labels = {item['facet_label'] for item in cleaned}
     print(
@@ -360,16 +368,16 @@ def _build_patient_meta(meta_path) -> dict[int, str]:
     meta = pl.read_parquet(meta_path)
 
     charlson_cols = {
-        'myocardial_infarct': 'MI',
-        'congestive_heart_failure': 'CHF',
-        'peripheral_vascular_disease': 'PVD',
-        'cerebrovascular_disease': 'CVD',
-        'chronic_pulmonary_disease': 'COPD',
-        'diabetes_without_cc': 'DM',
-        'diabetes_with_cc': 'DM+complications',
-        'renal_disease': 'CKD',
+        'myocardial_infarct': 'myocardial infarction',
+        'congestive_heart_failure': 'congestive heart failure',
+        'peripheral_vascular_disease': 'peripheral vascular disease',
+        'cerebrovascular_disease': 'cerebrovascular disease',
+        'chronic_pulmonary_disease': 'chronic pulmonary disease',
+        'diabetes_without_cc': 'diabetes',
+        'diabetes_with_cc': 'diabetes with complications',
+        'renal_disease': 'renal disease',
         'mild_liver_disease': 'liver disease',
-        'severe_liver_disease': 'cirrhosis',
+        'severe_liver_disease': 'severe liver disease',
         'malignant_cancer': 'cancer',
         'metastatic_solid_tumor': 'metastatic cancer',
     }
