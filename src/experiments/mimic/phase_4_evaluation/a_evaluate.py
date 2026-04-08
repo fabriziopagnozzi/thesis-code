@@ -28,16 +28,16 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import (
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
-_cfg = EvaluateCfg.load()
+evaluate_cfg = EvaluateCfg.load()
 
 
 def run_evaluate(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: EvaluateCfg | None = None,
 ) -> pl.DataFrame:
-    global _cfg
+    global evaluate_cfg
     if cfg is not None:
-        _cfg = cfg
+        evaluate_cfg = cfg
     if con is None:
         con = connect_mimic_duckdb()
 
@@ -45,14 +45,14 @@ def run_evaluate(
     annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
     print(f'Loaded {len(annotations_df):,} annotated queries with facets')
 
-    builder = CandidatePoolBuilder(con, device=_cfg.device)
+    builder = CandidatePoolBuilder(con, cfg=evaluate_cfg, device=evaluate_cfg.device)
 
     results = evaluate(
         annotations_df,
         builder,
-        strategies=_cfg.strategies,
-        k_values=_cfg.k_values,
-        lam_values=_cfg.lam_values,
+        strategies=evaluate_cfg.strategies,
+        k_values=evaluate_cfg.k_values,
+        lam_values=evaluate_cfg.lam_values,
     )
 
     out_path = MIMIC_RESULTS_DIR / 'evaluation_results.parquet'
@@ -72,10 +72,10 @@ def evaluate(
     prefilter_n: int | None = None,
 ) -> pl.DataFrame:
     """Full evaluation across all annotated queries."""
-    strategies = strategies or _cfg.strategies
-    k_values = k_values or _cfg.k_values
-    lam_values = lam_values or _cfg.lam_values
-    prefilter_n = prefilter_n or _cfg.prefilter_n
+    strategies = strategies or evaluate_cfg.strategies
+    k_values = k_values or evaluate_cfg.k_values
+    lam_values = lam_values or evaluate_cfg.lam_values
+    prefilter_n = prefilter_n or evaluate_cfg.prefilter_n
     condition_pools: dict[str, CandidatePool] = {}
     all_rows = []
 

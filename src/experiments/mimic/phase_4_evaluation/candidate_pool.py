@@ -12,13 +12,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import polars as pl
+from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
+from experiments.mimic.configs import EvaluateCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
-
-from .a_evaluate import _cfg
 
 
 @dataclass
@@ -78,8 +78,9 @@ class CandidatePool:
 
 
 class CandidatePoolBuilder:
-    def __init__(self, con, device: str = 'cuda'):
+    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str = 'cuda'):
         self._con = con
+        self._cfg = cfg
         self._device = device
         self._corpus_df: pl.DataFrame | None = None
         self._corpus_vectors: NDArray[np.float32] | None = None
@@ -112,7 +113,7 @@ class CandidatePoolBuilder:
 
     def _get_embedder(self) -> Embedder:
         if self._embedder is None:
-            self._embedder = Embedder(_cfg.embedding_model, device=self._device, batch_size=1)
+            self._embedder = Embedder(self._cfg.embedding_model, device=self._device, batch_size=1)
         return self._embedder
 
     def _condition_hadm_ids(self, icd3: str) -> set[int]:
@@ -223,7 +224,7 @@ if __name__ == '__main__':
 
     con = connect_mimic_duckdb()
 
-    builder = CandidatePoolBuilder(con, device=args.device)
+    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device=args.device)
     pool = builder.for_condition(args.icd3)
 
     print(
