@@ -1,13 +1,10 @@
 import duckdb
 
-from experiments.mimic.configs import global_cfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR
 from helpers.dir_paths import BHC_DIR, HOSP_DIR, ICU_DIR, MIMIR_REPO_CODE_DIR, NOTE_DIR
 
 INIT_SQL_PATH = MIMIR_REPO_CODE_DIR.parent / '_mimic_init.sql'
 DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
-_base_results = MIMIR_REPO_CODE_DIR.parent / '_results'
-RESULTS_SUBDIR = global_cfg.results_subdir
-MIMIC_RESULTS_DIR = _base_results / RESULTS_SUBDIR if RESULTS_SUBDIR else _base_results
 
 HOSP_TABLES = {
     'admissions',

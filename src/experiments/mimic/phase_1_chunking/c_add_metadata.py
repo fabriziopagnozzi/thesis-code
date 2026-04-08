@@ -6,9 +6,11 @@ into a single metadata table keyed by hadm_id.
 import duckdb
 import polars as pl
 
+from experiments.mimic.configs import MIMIC_RESULTS_DIR
+
 
 def run_add_metadata(con: duckdb.DuckDBPyConnection | None = None) -> pl.DataFrame:
-    from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
+    from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
     if con is None:
         con = connect_mimic_duckdb()

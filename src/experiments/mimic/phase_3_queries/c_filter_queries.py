@@ -14,9 +14,8 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg, FilterQueriesCfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, FilterQueriesCfg
 from experiments.mimic.duck_db_init import (
-    MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder

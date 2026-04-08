@@ -15,9 +15,8 @@ import duckdb
 import numpy as np
 import polars as pl
 
-from experiments.mimic.configs import BuildQueryPromptsCfg, global_cfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, BuildQueryPromptsCfg, global_cfg
 from experiments.mimic.duck_db_init import (
-    MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
 )
 

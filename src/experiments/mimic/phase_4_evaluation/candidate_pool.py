@@ -13,8 +13,7 @@ import polars as pl
 from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
-from experiments.mimic.configs import EvaluateCfg
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 

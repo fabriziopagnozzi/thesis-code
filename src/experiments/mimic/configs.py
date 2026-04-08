@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, PositiveInt, computed_field
 
-from helpers.dir_paths import MIMIC_IV_DIR
+from helpers.dir_paths import MIMIC_IV_DIR, MIMIR_REPO_CODE_DIR
 from helpers.query_algorithms import ScoringFunction
 
 
@@ -23,15 +23,26 @@ def load_global_cfg(path: Path = MIMIC_IV_DIR / 'global_config.yaml', cfg: Globa
         return
 
     with open(path) as f:
-        _loaded_global_cfg = yaml.safe_load(f)
+        _loaded_cfg = yaml.safe_load(f)
 
     global_cfg = GlobalCfg(
-        num_conditions=_loaded_global_cfg['n_conditions'],
-        results_subdir=_loaded_global_cfg.get('results_subdir'),
+        num_conditions=_loaded_cfg['n_conditions'],
+        results_subdir=_loaded_cfg.get('results_subdir'),
     )
+    return
 
 
 load_global_cfg()
+
+_PHASE_DIRS = {
+    1: 'phase_1_chunking',
+    2: 'phase_2_embedding',
+    3: 'phase_3_queries',
+    4: 'phase_4_evaluation',
+}
+_base_results = MIMIR_REPO_CODE_DIR.parent / '_results'
+RESULTS_SUBDIR = global_cfg.results_subdir
+MIMIC_RESULTS_DIR = _base_results / RESULTS_SUBDIR if RESULTS_SUBDIR else _base_results
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict:
@@ -51,8 +62,6 @@ def load_config_from_main(phase: int) -> dict:
 
 
 # PYDANTIC MODELS FOR CONFIGS
-
-
 # -- Phase 1 --
 class ConditionsStatsCfg(BaseModel):
     min_admissions: int
@@ -203,11 +212,3 @@ class EvaluateCfg(BaseModel):
     @classmethod
     def load(cls) -> EvaluateCfg:
         return cls(**load_default_config(phase=4)['evaluate'])
-
-
-_PHASE_DIRS = {
-    1: 'phase_1_chunking',
-    2: 'phase_2_embedding',
-    3: 'phase_3_queries',
-    4: 'phase_4_evaluation',
-}

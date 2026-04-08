@@ -8,8 +8,7 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.configs import DedupCfg
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, DedupCfg
 
 dedup_cfg = DedupCfg.load()
 

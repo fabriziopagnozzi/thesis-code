@@ -2,8 +2,8 @@
 
 import polars as pl
 
-from experiments.mimic.configs import EmbedCfg, global_cfg
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, EmbedCfg, global_cfg
+from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
 embed_cfg = EmbedCfg.load()
