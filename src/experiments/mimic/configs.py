@@ -14,6 +14,7 @@ RESULTS_BASE_DIR = MIMIC_IV_DIR / '_results'
 
 class GlobalCfg(BaseModel):
     num_conditions: PositiveInt
+    vector_db_dir: str
     results_subdir: str | None
 
 
@@ -31,6 +32,7 @@ def load_global_cfg(
 
     global_cfg = GlobalCfg(
         num_conditions=_loaded_cfg['n_conditions'],
+        vector_db_dir=_loaded_cfg['vector_db_dir'],
         results_subdir=_loaded_cfg.get('results_subdir'),
     )
     return
@@ -40,6 +42,7 @@ load_global_cfg()
 
 RESULTS_SUBDIR = global_cfg.results_subdir
 MIMIC_RESULTS_DIR = RESULTS_BASE_DIR / RESULTS_SUBDIR if RESULTS_SUBDIR else RESULTS_BASE_DIR
+VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict:

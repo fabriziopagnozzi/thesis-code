@@ -13,7 +13,7 @@ import polars as pl
 from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg
+from experiments.mimic.configs import VECTOR_DB_DIR, EvaluateCfg
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
@@ -93,7 +93,7 @@ class CandidatePoolBuilder:
 
         import lancedb
 
-        db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
+        db = lancedb.connect(VECTOR_DB_DIR)
         arrow_table = db.open_table('chunks').to_arrow()
 
         # FixedSizeList column: extract flat value buffer then reshape
@@ -149,6 +149,7 @@ class CandidatePoolBuilder:
         """modifier_text -> charlson column name."""
         if self._charlson_label_to_col is None:
             from experiments.mimic.configs import BuildQueryPromptsCfg
+
             self._charlson_label_to_col = BuildQueryPromptsCfg.load().label_to_charlson_col
         return self._charlson_label_to_col
 

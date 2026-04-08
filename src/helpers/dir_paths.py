@@ -30,4 +30,4 @@ NOTE_DIR = DATASETS_DIR / 'mimic-iv' / 'note'
 BHC_DIR = DATASETS_DIR / 'mimic-iv' / 'ext-bhc'
 
 # MIT repo
-MIMIR_REPO_CODE_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic' / 'mimic_code'
+MIMIR_REPO_CODE_DIR = MIMIC_IV_DIR / 'mimic_code'

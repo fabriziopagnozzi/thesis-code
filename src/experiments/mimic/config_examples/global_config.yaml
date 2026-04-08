@@ -1,2 +1,3 @@
 n_conditions: 5
 # results_subdir: my_experiment  # optional: write all results to _results/<subdir>/
+# vector_db_dir: '_results' # relative to experiments/mimic

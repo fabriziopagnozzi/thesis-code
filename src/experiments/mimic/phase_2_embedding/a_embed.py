@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EmbedCfg, global_cfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, VECTOR_DB_DIR, EmbedCfg, global_cfg
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
@@ -37,7 +37,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     embedder = Embedder(
         embed_cfg.model_name, device=embed_cfg.device, batch_size=embed_cfg.batch_size
     )
-    db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
+    db = lancedb.connect(VECTOR_DB_DIR)
     table = None
     total = len(texts)
 
