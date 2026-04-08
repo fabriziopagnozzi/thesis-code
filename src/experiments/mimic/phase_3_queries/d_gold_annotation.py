@@ -65,7 +65,7 @@ def run_gold_annotation(
 
     if len(result) > 0:
         sample = result.row(0, named=True)
-        print(f'\n--- Sample annotation ---\n  Query: {sample["query_text"][:200]}')
+        print(f'\n--- Sample annotation ---\n  Query: {sample["query_text"][:600]}')
         facets = json.loads(sample['facets_json'])
         for label, cids in list(facets.items())[:5]:
             print(f'  [{label}] → {len(cids)} chunks')
@@ -89,6 +89,12 @@ def annotate(
     if batch_size is None:
         batch_size = _cfg.batch_size
 
+    # Load patient metadata for chunk context
+    meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
+    patient_meta = _build_patient_meta(meta_path) if meta_path.exists() else {}
+    if patient_meta:
+        print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
+
     model_name = _cfg.model or 'default'
     print(
         f'\n-- Gold annotation config --\n'
@@ -109,7 +115,7 @@ def annotate(
             f'  Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
         )
 
-    condition_pools: dict[str, CandidatePool] = {}
+    condition_pools: dict[tuple[str, str | None], CandidatePool] = {}
 
     for i, row in enumerate(
         tqdm(queries_df.iter_rows(named=True), total=len(queries_df), desc='Gold annotation')
@@ -120,19 +126,22 @@ def annotate(
         if query_text in done_texts:
             continue
 
-        if icd3 not in condition_pools:
-            condition_pools[icd3] = builder.for_condition(icd3)
+        modifier_text = row.get('modifier_text')
+        pool_key = (icd3, modifier_text)
+        if pool_key not in condition_pools:
+            condition_pools[pool_key] = builder.for_query(icd3, modifier_text)
 
-        pool = condition_pools[icd3]
+        pool = condition_pools[pool_key]
         query_vec = builder.embed_query(query_text)
 
-        # Prefilter pool to top N by similarity (same as retrieval does)
+        # Prefilter to top N and sort by descending similarity so the
+        # most relevant chunks are in the first batches (shapes the
+        # accumulated facet vocabulary).
         sim_to_query = pool.sim_to_query(query_vec)
+        sorted_indices = np.argsort(sim_to_query)[::-1]
         if pool.n > prefilter_n:  # type: ignore
-            top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
-            work_pool = pool.slice(top_indices)
-        else:
-            work_pool = pool
+            sorted_indices = sorted_indices[:prefilter_n]
+        work_pool = pool.slice(sorted_indices.copy())
 
         n_batches = (work_pool.n + batch_size - 1) // batch_size  # type: ignore
         print(
@@ -142,7 +151,9 @@ def annotate(
         )
         print(f'    query: {query_text[:120]}{"..." if len(query_text) > 120 else ""}')
 
-        facets = annotate_query(query_text, work_pool, batch_size=batch_size)  # type: ignore
+        facets = annotate_query(
+            query_text, work_pool, batch_size=batch_size, patient_meta=patient_meta
+        )  # type: ignore
 
         all_gold_chunks = set()
         for cids in facets.values():
@@ -181,6 +192,7 @@ def annotate_query(
     query_text: str,
     pool: CandidatePool,
     batch_size: int = 40,
+    patient_meta: dict[int, str] | None = None,
 ) -> dict[str, list[str]]:
     """Full map-reduce annotation for one query.
 
@@ -189,20 +201,38 @@ def annotate_query(
     n = pool.n
     n_batches = (n + batch_size - 1) // batch_size
     all_batch_results = []
+    accumulated_facets: set[str] = set()
 
     for i, start in enumerate(range(0, n, batch_size)):
         end = min(start + batch_size, n)
         batch_ids = pool.chunk_ids[start:end]
         batch_texts = pool.texts[start:end]
+        batch_sections = pool.section_names[start:end]
+        batch_hadm_ids = pool.hadm_ids[start:end].tolist()
+        batch_meta = [patient_meta.get(h, '') for h in batch_hadm_ids] if patient_meta else None
+
+        # Print a sample chunk from the first batch
+        if i == 0:
+            sample = _format_chunk_batch(
+                batch_ids[:1],
+                batch_texts[:1],
+                sections=batch_sections[:1],
+                meta_lines=batch_meta[:1] if batch_meta else None,
+            )
+            print(f'    -- sample chunk --\n{sample[:400]}\n    --')
 
         batch_result = annotate_batch(
             query_text,
             batch_ids,
             batch_texts,
+            batch_sections=batch_sections,
+            batch_meta=batch_meta,
             batch_idx=i,
             n_batches=n_batches,
+            existing_facets=accumulated_facets,
         )
         all_batch_results.append(batch_result)
+        accumulated_facets.update(item['facet_label'] for item in batch_result)
 
     facets = reduce_facets(all_batch_results)
     total_facts = sum(len(b) for b in all_batch_results)
@@ -215,15 +245,29 @@ def annotate_batch(
     query_text: str,
     chunk_ids: list[str],
     texts: list[str],
+    batch_sections: list[str] | None = None,
+    batch_meta: list[str] | None = None,
     batch_idx: int = 0,
     n_batches: int = 1,
+    existing_facets: set[str] | None = None,
 ) -> list[dict]:
     """Run map-phase annotation on a single batch of chunks.
 
     Returns list of {fact, facet_label, chunk_ids} dicts.
     """
-    chunks_block = _format_chunk_batch(chunk_ids, texts)
+    chunks_block = _format_chunk_batch(
+        chunk_ids, texts, sections=batch_sections, meta_lines=batch_meta
+    )
     prompt = _cfg.map_user_template.format(query_text=query_text, chunks_block=chunks_block)
+
+    if existing_facets:
+        facet_list = ', '.join(sorted(existing_facets))
+        prompt += (
+            f'\nThe following facet labels have already been identified in previous batches: '
+            f'{facet_list}\n'
+            f'Reuse these labels when a fact addresses the same clinical aspect. '
+            f'Only create a new label if none of them fit.'
+        )
     prompt_chars = len(prompt)
 
     valid_ids = set(chunk_ids)
@@ -294,17 +338,69 @@ def annotate_batch(
     return cleaned
 
 
-def _format_chunk_batch(chunk_ids: list[str], texts: list[str]) -> str:
+def _format_chunk_batch(
+    chunk_ids: list[str],
+    texts: list[str],
+    sections: list[str] | None = None,
+    meta_lines: list[str] | None = None,
+) -> str:
     parts = []
-    for cid, text in zip(chunk_ids, texts, strict=True):
-        parts.append(f'[CHUNK_ID: {cid}]\n{text}')
+    for i, (cid, text) in enumerate(zip(chunk_ids, texts, strict=True)):
+        section = sections[i] if sections else None
+        meta = meta_lines[i] if meta_lines else None
+        header = f'[CHUNK_ID: {cid}] [{section}]' if section else f'[CHUNK_ID: {cid}]'
+        if meta:
+            header += f'\n{meta}'
+        parts.append(f'{header}\n{text}')
     return '\n---\n'.join(parts)
+
+
+def _build_patient_meta(meta_path) -> dict[int, str]:
+    """Build hadm_id -> one-line patient summary for chunk context."""
+    meta = pl.read_parquet(meta_path)
+
+    charlson_cols = {
+        'myocardial_infarct': 'MI',
+        'congestive_heart_failure': 'CHF',
+        'peripheral_vascular_disease': 'PVD',
+        'cerebrovascular_disease': 'CVD',
+        'chronic_pulmonary_disease': 'COPD',
+        'diabetes_without_cc': 'DM',
+        'diabetes_with_cc': 'DM+complications',
+        'renal_disease': 'CKD',
+        'mild_liver_disease': 'liver disease',
+        'severe_liver_disease': 'cirrhosis',
+        'malignant_cancer': 'cancer',
+        'metastatic_solid_tumor': 'metastatic cancer',
+    }
+
+    lookup: dict[int, str] = {}
+    for row in meta.iter_rows(named=True):
+        age = int(row['age']) if row.get('age') is not None else None
+        gender = 'F' if row.get('gender') == 'F' else 'M'
+        age_str = f'age {age}' if age is not None else 'age unknown'
+
+        comorbidities = [
+            label for col, label in charlson_cols.items() if row.get(col) and row[col] > 0
+        ]
+        primary = row.get('primary_icd_description', '')
+
+        parts = [f'{age_str}, {gender}']
+        if primary:
+            parts.append(f'primary dx: {primary}')
+        if comorbidities:
+            parts.append(f'comorbidities: {", ".join(comorbidities)}')
+
+        lookup[row['hadm_id']] = 'Patient: ' + ' | '.join(parts)
+
+    return lookup
 
 
 def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
     """Merge facet annotations across batches. Deterministic (no LLM).
 
-    Groups by exact facet label, unions chunk_ids.
+    1. Group by exact label, union chunk_ids.
+    2. Fuzzy-merge labels that share a long common prefix or have small edit distance (e.g. insulin_titration ≈ insulin_dose_titration).
     """
     facet_to_chunks: dict[str, set[str]] = {}
 
@@ -315,7 +411,88 @@ def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
                 facet_to_chunks[label] = set()
             facet_to_chunks[label].update(item['chunk_ids'])
 
+    facet_to_chunks = _fuzzy_merge_facets(facet_to_chunks)
     return {label: sorted(cids) for label, cids in facet_to_chunks.items()}
+
+
+def _fuzzy_merge_facets(
+    facets: dict[str, set[str]],
+    max_edit_dist: int = 5,
+    min_prefix_ratio: float = 0.7,
+) -> dict[str, set[str]]:
+    labels = list(facets.keys())
+    if len(labels) <= 1:
+        return facets
+
+    parent = {label: label for label in labels}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            # Keep the label with more chunks as root
+            if len(facets[ra]) >= len(facets[rb]):
+                parent[rb] = ra
+            else:
+                parent[ra] = rb
+
+    for i in range(len(labels)):
+        for j in range(i + 1, len(labels)):
+            a, b = labels[i], labels[j]
+            if find(a) == find(b):
+                continue
+            if _should_merge(a, b, max_edit_dist, min_prefix_ratio):
+                union(a, b)
+
+    groups: dict[str, set[str]] = {}
+    for lbl in labels:
+        root = find(lbl)
+        if root not in groups:
+            groups[root] = set()
+        groups[root].update(facets[lbl])
+
+    if len(groups) < len(labels):
+        merged_count = len(labels) - len(groups)
+        print(f'    fuzzy merge: {len(labels)} → {len(groups)} facets ({merged_count} merged)')
+
+    return groups
+
+
+def _should_merge(a: str, b: str, max_edit_dist: int, min_prefix_ratio: float) -> bool:
+    shorter = min(len(a), len(b))
+    if shorter == 0:
+        return False
+    prefix_len = 0
+    for ca, cb in zip(a, b, strict=False):
+        if ca != cb:
+            break
+        prefix_len += 1
+    if prefix_len / shorter >= min_prefix_ratio:
+        return True
+
+    if abs(len(a) - len(b)) > max_edit_dist:
+        return False
+    return _edit_distance(a, b, max_edit_dist) <= max_edit_dist
+
+
+def _edit_distance(a: str, b: str, threshold: int) -> int:
+    if len(a) < len(b):
+        a, b = b, a
+    prev = list(range(len(b) + 1))
+    for i in range(1, len(a) + 1):
+        curr = [i] + [0] * len(b)
+        for j in range(1, len(b) + 1):
+            cost = 0 if a[i - 1] == b[j - 1] else 1
+            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        if min(curr) > threshold:
+            return threshold + 1
+        prev = curr
+    return prev[len(b)]
 
 
 if __name__ == '__main__':
