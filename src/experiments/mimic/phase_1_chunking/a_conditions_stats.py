@@ -22,7 +22,7 @@ from experiments.mimic.duck_db_init import (
 )
 
 
-def run_select_conditions(
+def run_conditions_stats(
     con: duckdb.DuckDBPyConnection | None = None, cfg: ConditionsStatsCfg | None = None
 ) -> pl.DataFrame:
     cfg = cfg or ConditionsStatsCfg.load()
@@ -115,4 +115,4 @@ if __name__ == '__main__':
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=1)
-    run_select_conditions(cfg=ConditionsStatsCfg(**raw['conditions_stats']))
+    run_conditions_stats(cfg=ConditionsStatsCfg(**raw['conditions_stats']))

@@ -64,7 +64,7 @@ class ConditionsStatsCfg(BaseModel):
 
     @classmethod
     def load(cls) -> ConditionsStatsCfg:
-        return cls(**load_default_config(1)['conditions_stats'])
+        return cls(**load_default_config(phase=1)['conditions_stats'])
 
 
 class NoteChunkingCfg(BaseModel):
@@ -89,7 +89,7 @@ class NoteChunkingCfg(BaseModel):
 
     @classmethod
     def load(cls) -> NoteChunkingCfg:
-        return cls(**load_default_config(1)['note_chunking'])
+        return cls(**load_default_config(phase=1)['note_chunking'])
 
 
 class DedupCfg(BaseModel):
@@ -102,7 +102,7 @@ class DedupCfg(BaseModel):
 
     @classmethod
     def load(cls) -> DedupCfg:
-        return cls(**load_default_config(1)['dedup'])
+        return cls(**load_default_config(phase=1)['dedup'])
 
 
 # -- Phase 2 --
@@ -114,7 +114,7 @@ class EmbedCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EmbedCfg:
-        return cls(**load_default_config(2)['embed'])
+        return cls(**load_default_config(phase=2)['embed'])
 
 
 # -- Phase 3 --
@@ -151,7 +151,7 @@ class BuildQueryPromptsCfg(BaseModel):
 
     @classmethod
     def load(cls) -> BuildQueryPromptsCfg:
-        return cls(**load_default_config(3)['build_query_prompts'])
+        return cls(**load_default_config(phase=3)['build_query_prompts'])
 
 
 class GenQueriesCfg(BaseModel):
@@ -164,7 +164,7 @@ class GenQueriesCfg(BaseModel):
 
     @classmethod
     def load(cls) -> GenQueriesCfg:
-        return cls(**load_default_config(3)['gen_queries_llm'])
+        return cls(**load_default_config(phase=3)['gen_queries_llm'])
 
 
 class FilterQueriesCfg(BaseModel):
@@ -175,7 +175,7 @@ class FilterQueriesCfg(BaseModel):
 
     @classmethod
     def load(cls) -> FilterQueriesCfg:
-        return cls(**load_default_config(3)['filter_queries'])
+        return cls(**load_default_config(phase=3)['filter_queries'])
 
 
 class GoldAnnotationCfg(BaseModel):
@@ -193,7 +193,7 @@ class GoldAnnotationCfg(BaseModel):
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:
-        return cls(**load_default_config(3)['gold_annotation'])
+        return cls(**load_default_config(phase=3)['gold_annotation'])
 
 
 # -- Phase 4 --
@@ -207,4 +207,4 @@ class EvaluateCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EvaluateCfg:
-        return cls(**load_default_config(4)['evaluate'])
+        return cls(**load_default_config(phase=4)['evaluate'])

@@ -117,13 +117,13 @@ class CandidatePoolBuilder:
 
     def _condition_hadm_ids(self, icd3: str) -> set[int]:
         if icd3 not in self._condition_hadm_cache:
-            rows = self._con.execute(f"""--sql
+            hadm_ids = self._con.execute(f"""--sql
                 SELECT DISTINCT diagnoses_icd.hadm_id
                 FROM diagnoses_icd
                 WHERE diagnoses_icd.icd_version = 10
                 AND SUBSTR(diagnoses_icd.icd_code, 1, 3) = '{icd3}'
-            """).fetchall()
-            self._condition_hadm_cache[icd3] = {r[0] for r in rows}
+            """).pl()['hadm_id']
+            self._condition_hadm_cache[icd3] = set(hadm_ids.to_list())
         return self._condition_hadm_cache[icd3]
 
     def _build_pool(self, hadm_ids: set[int]) -> CandidatePool:

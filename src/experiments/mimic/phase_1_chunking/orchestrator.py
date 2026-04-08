@@ -8,7 +8,7 @@ from experiments.mimic.duck_db_init import (
     register_result_view,
 )
 
-from .a_conditions_stats import run_select_conditions
+from .a_conditions_stats import run_conditions_stats
 from .b_note_chunking import run_note_chunking
 from .c_add_metadata import run_add_metadata
 from .d_dedup import run_dedup
@@ -27,7 +27,7 @@ def run_phase_1(
         con = connect_mimic_duckdb()
 
     print('\n> Step 1.1: Condition selection')
-    conditions = run_select_conditions(con, cfg=conditions_cfg)
+    conditions = run_conditions_stats(con, cfg=conditions_cfg)
     register_result_view(con, 'conditions', conditions)
 
     print('\n> Step 1.2: Parsing discharge notes')

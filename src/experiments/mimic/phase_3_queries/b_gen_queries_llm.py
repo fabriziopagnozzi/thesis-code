@@ -20,7 +20,7 @@ from helpers.ollama_client import generate
 _cfg = GenQueriesCfg.load()
 
 
-def run_gen_queries(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
+def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
     global _cfg
     if cfg is not None:
         _cfg = cfg
@@ -105,4 +105,4 @@ if __name__ == '__main__':
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)
-    run_gen_queries(cfg=GenQueriesCfg(**raw['gen_queries_llm']))
+    run_gen_queries_llm(cfg=GenQueriesCfg(**raw['gen_queries_llm']))
