@@ -20,7 +20,8 @@ DATASETS_DIR = (
 
 DATASETS_PREVIEW_DIR = ROOT_DIR / 'datasets' / 'previews'
 
-EMBEDDINGS_CACHE_DIR = ROOT_DIR / '.cached_embeddings'
+# MIMIC-IV Experiments dir
+MIMIC_IV_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic'
 
 # MIMIC-IV data
 HOSP_DIR = DATASETS_DIR / 'mimic-iv' / 'hosp'

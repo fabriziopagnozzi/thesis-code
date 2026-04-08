@@ -3,17 +3,10 @@ import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, PositiveInt, computed_field
 
+from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
-
-_MIMIC_DIR = Path(__file__).parent
-path = _MIMIC_DIR / 'global_config.yaml'
-with open(path) as f:
-    _cfg = yaml.safe_load(f)
-
-N_CONDITIONS: int = _cfg['n_conditions']
-RESULTS_SUBDIR: str | None = _cfg.get('results_subdir')
 
 _PHASE_DIRS = {
     1: 'phase_1_chunking',
@@ -23,9 +16,28 @@ _PHASE_DIRS = {
 }
 
 
-def load_config(phase: int, path: str | Path | None = None) -> dict:
+def load_global_cfg(path: Path = MIMIC_IV_DIR / 'global_config.yml', cfg: GlobalCfg | None = None):
+    global global_cfg
+
+    if cfg is not None:
+        global_cfg = cfg
+        return
+
+    with open(path) as f:
+        _loaded_global_cfg = yaml.safe_load(f)
+
+    global_cfg = GlobalCfg(
+        num_conditions=_loaded_global_cfg['n_conditions'],
+        results_subdir=_loaded_global_cfg.get('results_subdir'),
+    )
+
+
+load_global_cfg()
+
+
+def load_default_config(phase: int, path: str | Path | None = None) -> dict:
     if path is None:
-        path = _MIMIC_DIR / _PHASE_DIRS[phase] / f'phase_{phase}_config.yaml'
+        path = MIMIC_IV_DIR / _PHASE_DIRS[phase] / f'phase_{phase}_config.yaml'
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -36,17 +48,23 @@ def load_config_from_main(phase: int) -> dict:
         '--config', type=str, default=None, help='Path to a custom YAML config file'
     )
     args, _ = parser.parse_known_args()
-    return load_config(phase, path=args.config)
+    return load_default_config(phase, path=args.config)
 
 
 # PYDANTIC MODELS FOR CONFIGS
+# Global
+class GlobalCfg(BaseModel):
+    num_conditions: PositiveInt
+    results_subdir: str | None
+
+
 # -- Phase 1 --
 class ConditionsStatsCfg(BaseModel):
     min_admissions: int
 
     @classmethod
     def load(cls) -> ConditionsStatsCfg:
-        return cls(**load_config(1)['conditions_stats'])
+        return cls(**load_default_config(1)['conditions_stats'])
 
 
 class NoteChunkingCfg(BaseModel):
@@ -71,7 +89,7 @@ class NoteChunkingCfg(BaseModel):
 
     @classmethod
     def load(cls) -> NoteChunkingCfg:
-        return cls(**load_config(1)['note_chunking'])
+        return cls(**load_default_config(1)['note_chunking'])
 
 
 class DedupCfg(BaseModel):
@@ -84,7 +102,7 @@ class DedupCfg(BaseModel):
 
     @classmethod
     def load(cls) -> DedupCfg:
-        return cls(**load_config(1)['dedup'])
+        return cls(**load_default_config(1)['dedup'])
 
 
 # -- Phase 2 --
@@ -96,7 +114,7 @@ class EmbedCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EmbedCfg:
-        return cls(**load_config(2)['embed'])
+        return cls(**load_default_config(2)['embed'])
 
 
 # -- Phase 3 --
@@ -133,7 +151,7 @@ class BuildQueryPromptsCfg(BaseModel):
 
     @classmethod
     def load(cls) -> BuildQueryPromptsCfg:
-        return cls(**load_config(3)['build_query_prompts'])
+        return cls(**load_default_config(3)['build_query_prompts'])
 
 
 class GenQueriesCfg(BaseModel):
@@ -146,7 +164,7 @@ class GenQueriesCfg(BaseModel):
 
     @classmethod
     def load(cls) -> GenQueriesCfg:
-        return cls(**load_config(3)['gen_queries_llm'])
+        return cls(**load_default_config(3)['gen_queries_llm'])
 
 
 class FilterQueriesCfg(BaseModel):
@@ -157,7 +175,7 @@ class FilterQueriesCfg(BaseModel):
 
     @classmethod
     def load(cls) -> FilterQueriesCfg:
-        return cls(**load_config(3)['filter_queries'])
+        return cls(**load_default_config(3)['filter_queries'])
 
 
 class GoldAnnotationCfg(BaseModel):
@@ -175,7 +193,7 @@ class GoldAnnotationCfg(BaseModel):
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:
-        return cls(**load_config(3)['gold_annotation'])
+        return cls(**load_default_config(3)['gold_annotation'])
 
 
 # -- Phase 4 --
@@ -189,4 +207,4 @@ class EvaluateCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EvaluateCfg:
-        return cls(**load_config(4)['evaluate'])
+        return cls(**load_default_config(4)['evaluate'])
