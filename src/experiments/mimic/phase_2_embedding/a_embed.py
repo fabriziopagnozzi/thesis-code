@@ -2,8 +2,8 @@
 
 import polars as pl
 
-from experiments.mimic.configs import EmbedCfg
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
+from experiments.mimic.configs import EmbedCfg, global_cfg
+from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.embedder import Embedder
 
 _cfg = EmbedCfg.load()
@@ -20,6 +20,13 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
 
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
     metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
+
+    relevant = _relevant_hadm_ids()
+    n_before = len(chunks)
+    chunks = chunks.filter(pl.col('hadm_id').is_in(relevant))
+    print(
+        f'Filtered to {len(chunks):,}/{n_before:,} chunks ({global_cfg.num_conditions} conditions)'
+    )
 
     joined, texts = prepare_texts(chunks, metadata)
     print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
@@ -46,20 +53,6 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         print(f'  Committed {end:,}/{total:,} chunks')
 
     print(f'Saved {total:,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
-
-
-def _age_group(age: float | None) -> str:
-    if age is None:
-        return 'unknown age'
-    if age < 30:
-        return 'young adult'
-    if age < 50:
-        return 'middle-aged'
-    if age < 65:
-        return 'older adult'
-    if age < 80:
-        return 'elderly'
-    return 'very elderly'
 
 
 def build_contextual_prefix(meta_row: dict) -> str:
@@ -103,6 +96,36 @@ def prepare_texts(
         texts.append(f'{prefix}\nSection: {section_label}.\n{row["text"]}')
 
     return joined, texts
+
+
+def _relevant_hadm_ids() -> set[int]:
+    """Return hadm_ids that have any ICD-10 diagnosis matching a top condition."""
+    conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
+    top_icd3 = conditions.head(global_cfg.num_conditions)['icd10_3char'].to_list()
+    placeholders = ','.join(f"'{c}'" for c in top_icd3)
+
+    con = connect_mimic_duckdb()
+    rows = con.execute(f"""--sql
+        SELECT DISTINCT diagnoses_icd.hadm_id
+        FROM diagnoses_icd
+        WHERE diagnoses_icd.icd_version = 10
+        AND SUBSTR(diagnoses_icd.icd_code, 1, 3) IN ({placeholders})
+    """).fetchall()
+    return {r[0] for r in rows}
+
+
+def _age_group(age: float | None) -> str:
+    if age is None:
+        return 'unknown age'
+    if age < 30:
+        return 'young adult'
+    if age < 50:
+        return 'middle-aged'
+    if age < 65:
+        return 'older adult'
+    if age < 80:
+        return 'elderly'
+    return 'very elderly'
 
 
 if __name__ == '__main__':

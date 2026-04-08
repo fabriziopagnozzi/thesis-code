@@ -15,7 +15,7 @@ import duckdb
 import numpy as np
 import polars as pl
 
-from experiments.mimic.configs import N_CONDITIONS, BuildQueryPromptsCfg
+from experiments.mimic.configs import BuildQueryPromptsCfg, global_cfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -69,7 +69,7 @@ def build_query_prompts(
     if max_modifiers is None:
         max_modifiers = _cfg.max_modifiers
     specs = _build_specs(conditions, con, max_modifiers)
-    print(f'Built {len(specs):,} specs ({N_CONDITIONS} conditions)')
+    print(f'Built {len(specs):,} specs ({global_cfg.num_conditions} conditions)')
 
     chunk_index = _ChunkIndex(chunks, metadata)
     print(f'Chunk index: {len(chunk_index._by_hadm):,} hadm_ids with high-value sections')
@@ -161,7 +161,7 @@ def _find_top_comorbidity_modifiers(
 
 def _build_specs(conditions: pl.DataFrame, con, max_modifiers: int = 3) -> list[dict]:
     specs = []
-    for row in conditions.head(N_CONDITIONS).iter_rows(named=True):
+    for row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
         icd3 = row['icd10_3char']
         condition_name = row['condition_name'] or icd3
 

@@ -28,7 +28,7 @@ from helpers.ollama_client import generate_json
 _cfg = GoldAnnotationCfg.load()
 
 
-def run_gold_annotation_step(
+def run_gold_annotation(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: GoldAnnotationCfg | None = None,
 ) -> pl.DataFrame:
@@ -52,7 +52,7 @@ def run_gold_annotation_step(
         print(f'No divergence_stats.parquet found, using all {len(queries_df):,} queries')
 
     builder = CandidatePoolBuilder(con, device='cuda')
-    result = run_gold_annotation(queries_df, builder)
+    result = annotate(queries_df, builder)
 
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
     result.write_parquet(out_path)
@@ -74,148 +74,7 @@ def run_gold_annotation_step(
     return result
 
 
-def _format_chunk_batch(chunk_ids: list[str], texts: list[str]) -> str:
-    parts = []
-    for cid, text in zip(chunk_ids, texts, strict=True):
-        parts.append(f'[CHUNK_ID: {cid}]\n{text}')
-    return '\n---\n'.join(parts)
-
-
-def annotate_batch(
-    query_text: str,
-    chunk_ids: list[str],
-    texts: list[str],
-    batch_idx: int = 0,
-    n_batches: int = 1,
-) -> list[dict]:
-    """Run map-phase annotation on a single batch of chunks.
-
-    Returns list of {fact, facet_label, chunk_ids} dicts.
-    """
-    chunks_block = _format_chunk_batch(chunk_ids, texts)
-    prompt = _cfg.map_user_template.format(query_text=query_text, chunks_block=chunks_block)
-    prompt_chars = len(prompt)
-
-    valid_ids = set(chunk_ids)
-
-    try:
-        result = generate_json(
-            prompt,
-            system=_cfg.map_system_prompt,
-            model=_cfg.model or None,
-            temperature=_cfg.temperature,
-            top_p=_cfg.top_p,
-            top_k=_cfg.top_k,
-            num_ctx=_cfg.num_ctx,
-            num_predict=_cfg.num_predict,
-            think=_cfg.think,
-        )
-    except Exception as e:
-        print(
-            f'    batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}'
-        )
-        return []
-
-    if not isinstance(result, list):
-        # LLM sometimes wraps in {"annotations": [...]}
-        if isinstance(result, dict):
-            for key in ('annotations', 'facts', 'results'):
-                if key in result and isinstance(result[key], list):
-                    result = result[key]
-                    break
-            else:
-                return []
-        else:
-            return []
-
-    # Validate and clean results
-    cleaned = []
-    n_dropped = 0
-    for item in result:
-        if not isinstance(item, dict):
-            n_dropped += 1
-            continue
-        fact = item.get('fact', '')
-        label = item.get('facet_label', '')
-        cids = item.get('chunk_ids', [])
-        if not fact or not label or not cids:
-            n_dropped += 1
-            continue
-        # Only keep chunk_ids that were actually in the batch
-        cids = [c for c in cids if c in valid_ids]
-        if not cids:
-            n_dropped += 1
-            continue
-        cleaned.append(
-            {
-                'fact': fact.strip(),
-                'facet_label': label.strip().lower().replace(' ', '_'),
-                'chunk_ids': cids,
-            }
-        )
-
-    facet_labels = {item['facet_label'] for item in cleaned}
-    print(
-        f'    batch {batch_idx + 1}/{n_batches}: '
-        f'{len(cleaned)} facts, {len(facet_labels)} facets, '
-        f'{n_dropped} dropped '
-        f'({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens)'
-    )
-    return cleaned
-
-
-def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
-    """Merge facet annotations across batches. Deterministic (no LLM).
-
-    Groups by exact facet label, unions chunk_ids.
-    """
-    facet_to_chunks: dict[str, set[str]] = {}
-
-    for batch in all_batch_results:
-        for item in batch:
-            label = item['facet_label']
-            if label not in facet_to_chunks:
-                facet_to_chunks[label] = set()
-            facet_to_chunks[label].update(item['chunk_ids'])
-
-    return {label: sorted(cids) for label, cids in facet_to_chunks.items()}
-
-
-def annotate_query(
-    query_text: str,
-    pool: CandidatePool,
-    batch_size: int = 40,
-) -> dict[str, list[str]]:
-    """Full map-reduce annotation for one query.
-
-    Returns {facet_label: [chunk_id, ...]}.
-    """
-    n = pool.n
-    n_batches = (n + batch_size - 1) // batch_size
-    all_batch_results = []
-
-    for i, start in enumerate(range(0, n, batch_size)):
-        end = min(start + batch_size, n)
-        batch_ids = pool.chunk_ids[start:end]
-        batch_texts = pool.texts[start:end]
-
-        batch_result = annotate_batch(
-            query_text,
-            batch_ids,
-            batch_texts,
-            batch_idx=i,
-            n_batches=n_batches,
-        )
-        all_batch_results.append(batch_result)
-
-    facets = reduce_facets(all_batch_results)
-    total_facts = sum(len(b) for b in all_batch_results)
-    all_gold = {cid for cids in facets.values() for cid in cids}
-    print(f'    reduce: {total_facts} facts → {len(facets)} facets, {len(all_gold)} gold chunks')
-    return facets
-
-
-def run_gold_annotation(
+def annotate(
     queries_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
     prefilter_n: int | None = None,
@@ -319,8 +178,149 @@ def run_gold_annotation(
     return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 
 
+def annotate_query(
+    query_text: str,
+    pool: CandidatePool,
+    batch_size: int = 40,
+) -> dict[str, list[str]]:
+    """Full map-reduce annotation for one query.
+
+    Returns {facet_label: [chunk_id, ...]}.
+    """
+    n = pool.n
+    n_batches = (n + batch_size - 1) // batch_size
+    all_batch_results = []
+
+    for i, start in enumerate(range(0, n, batch_size)):
+        end = min(start + batch_size, n)
+        batch_ids = pool.chunk_ids[start:end]
+        batch_texts = pool.texts[start:end]
+
+        batch_result = annotate_batch(
+            query_text,
+            batch_ids,
+            batch_texts,
+            batch_idx=i,
+            n_batches=n_batches,
+        )
+        all_batch_results.append(batch_result)
+
+    facets = reduce_facets(all_batch_results)
+    total_facts = sum(len(b) for b in all_batch_results)
+    all_gold = {cid for cids in facets.values() for cid in cids}
+    print(f'    reduce: {total_facts} facts → {len(facets)} facets, {len(all_gold)} gold chunks')
+    return facets
+
+
+def annotate_batch(
+    query_text: str,
+    chunk_ids: list[str],
+    texts: list[str],
+    batch_idx: int = 0,
+    n_batches: int = 1,
+) -> list[dict]:
+    """Run map-phase annotation on a single batch of chunks.
+
+    Returns list of {fact, facet_label, chunk_ids} dicts.
+    """
+    chunks_block = _format_chunk_batch(chunk_ids, texts)
+    prompt = _cfg.map_user_template.format(query_text=query_text, chunks_block=chunks_block)
+    prompt_chars = len(prompt)
+
+    valid_ids = set(chunk_ids)
+
+    try:
+        result = generate_json(
+            prompt,
+            system=_cfg.map_system_prompt,
+            model=_cfg.model or None,
+            temperature=_cfg.temperature,
+            top_p=_cfg.top_p,
+            top_k=_cfg.top_k,
+            num_ctx=_cfg.num_ctx,
+            num_predict=_cfg.num_predict,
+            think=_cfg.think,
+        )
+    except Exception as e:
+        print(
+            f'    batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}'
+        )
+        return []
+
+    if not isinstance(result, list):
+        # LLM sometimes wraps in {"annotations": [...]}
+        if isinstance(result, dict):
+            for key in ('annotations', 'facts', 'results'):
+                if key in result and isinstance(result[key], list):
+                    result = result[key]
+                    break
+            else:
+                return []
+        else:
+            return []
+
+    # Validate and clean results
+    cleaned = []
+    n_dropped = 0
+    for item in result:
+        if not isinstance(item, dict):
+            n_dropped += 1
+            continue
+        fact = item.get('fact', '')
+        label = item.get('facet_label', '')
+        cids = item.get('chunk_ids', [])
+        if not fact or not label or not cids:
+            n_dropped += 1
+            continue
+        # Only keep chunk_ids that were actually in the batch
+        cids = [c for c in cids if c in valid_ids]
+        if not cids:
+            n_dropped += 1
+            continue
+        cleaned.append(
+            {
+                'fact': fact.strip(),
+                'facet_label': label.strip().lower().replace(' ', '_'),
+                'chunk_ids': cids,
+            }
+        )
+
+    facet_labels = {item['facet_label'] for item in cleaned}
+    print(
+        f'    batch {batch_idx + 1}/{n_batches}: '
+        f'{len(cleaned)} facts, {len(facet_labels)} facets, '
+        f'{n_dropped} dropped '
+        f'({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens)'
+    )
+    return cleaned
+
+
+def _format_chunk_batch(chunk_ids: list[str], texts: list[str]) -> str:
+    parts = []
+    for cid, text in zip(chunk_ids, texts, strict=True):
+        parts.append(f'[CHUNK_ID: {cid}]\n{text}')
+    return '\n---\n'.join(parts)
+
+
+def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
+    """Merge facet annotations across batches. Deterministic (no LLM).
+
+    Groups by exact facet label, unions chunk_ids.
+    """
+    facet_to_chunks: dict[str, set[str]] = {}
+
+    for batch in all_batch_results:
+        for item in batch:
+            label = item['facet_label']
+            if label not in facet_to_chunks:
+                facet_to_chunks[label] = set()
+            facet_to_chunks[label].update(item['chunk_ids'])
+
+    return {label: sorted(cids) for label, cids in facet_to_chunks.items()}
+
+
 if __name__ == '__main__':
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)
-    run_gold_annotation_step(cfg=GoldAnnotationCfg(**raw['gold_annotation']))
+    run_gold_annotation(cfg=GoldAnnotationCfg(**raw['gold_annotation']))

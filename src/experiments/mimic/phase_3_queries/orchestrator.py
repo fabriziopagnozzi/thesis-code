@@ -10,9 +10,9 @@ from experiments.mimic.configs import (
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 
 from .a_build_query_prompts import run_build_query_prompts
-from .b_gen_queries_llm import run_gen_queries
+from .b_gen_queries_llm import run_gen_queries_llm
 from .c_filter_queries import run_filter_queries
-from .d_gold_annotation import run_gold_annotation_step
+from .d_gold_annotation import run_gold_annotation
 
 
 def run_phase_3(
@@ -29,14 +29,14 @@ def run_phase_3(
     prompts_df = run_build_query_prompts(con, cfg=build_query_prompts_cfg)
 
     print('\n> Step 3.2: Generating clinical questions via LLM')
-    queries_df = run_gen_queries(cfg=gen_queries_cfg)
+    queries_df = run_gen_queries_llm(cfg=gen_queries_cfg)
 
     print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
     divergence_df = run_filter_queries(con, cfg=filter_queries_cfg)
     n_pass = divergence_df.filter(pl.col('passes_filter')).height
 
     print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
-    gold_df = run_gold_annotation_step(con, cfg=gold_annotation_cfg)
+    gold_df = run_gold_annotation(con, cfg=gold_annotation_cfg)
 
     print(
         f'\n\nPhase 3 complete. Outputs in {MIMIC_RESULTS_DIR}:\n'

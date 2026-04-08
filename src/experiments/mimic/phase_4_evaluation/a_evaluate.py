@@ -47,7 +47,7 @@ def run_evaluate(
 
     builder = CandidatePoolBuilder(con, device=_cfg.device)
 
-    results = run_evaluation(
+    results = evaluate(
         annotations_df,
         builder,
         strategies=_cfg.strategies,
@@ -61,6 +61,61 @@ def run_evaluate(
 
     print_summary(results)
     return results
+
+
+def evaluate(
+    annotations_df: pl.DataFrame,
+    builder: CandidatePoolBuilder,
+    strategies: list[ScoringFunction] | None = None,
+    k_values: list[int] | None = None,
+    lam_values: list[float] | None = None,
+    prefilter_n: int | None = None,
+) -> pl.DataFrame:
+    """Full evaluation across all annotated queries."""
+    strategies = strategies or _cfg.strategies
+    k_values = k_values or _cfg.k_values
+    lam_values = lam_values or _cfg.lam_values
+    prefilter_n = prefilter_n or _cfg.prefilter_n
+    condition_pools: dict[str, CandidatePool] = {}
+    all_rows = []
+
+    for row in tqdm(
+        annotations_df.iter_rows(named=True), total=len(annotations_df), desc='Evaluating'
+    ):
+        icd3 = row['icd10_3char']
+        query_text = row['query_text']
+        facets = json.loads(row['facets_json'])
+
+        if not facets:
+            continue
+
+        if icd3 not in condition_pools:
+            condition_pools[icd3] = builder.for_condition(icd3)
+
+        pool = condition_pools[icd3]
+        query_vec = builder.embed_query(query_text)
+
+        query_metrics = evaluate_query(
+            pool,
+            query_vec,
+            facets,
+            strategies=strategies,
+            k_values=k_values,
+            lam_values=lam_values,
+            prefilter_n=prefilter_n,
+        )
+
+        for m in query_metrics:
+            all_rows.append(
+                {
+                    'query_id': row['query_id'],
+                    'icd10_3char': icd3,
+                    'n_facets': row['n_facets'],
+                    **m,
+                }
+            )
+
+    return pl.DataFrame(all_rows)
 
 
 def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
@@ -153,61 +208,6 @@ def evaluate_query(
         )
 
     return metrics
-
-
-def run_evaluation(
-    annotations_df: pl.DataFrame,
-    builder: CandidatePoolBuilder,
-    strategies: list[ScoringFunction] | None = None,
-    k_values: list[int] | None = None,
-    lam_values: list[float] | None = None,
-    prefilter_n: int | None = None,
-) -> pl.DataFrame:
-    """Full evaluation across all annotated queries."""
-    strategies = strategies or _cfg.strategies
-    k_values = k_values or _cfg.k_values
-    lam_values = lam_values or _cfg.lam_values
-    prefilter_n = prefilter_n or _cfg.prefilter_n
-    condition_pools: dict[str, CandidatePool] = {}
-    all_rows = []
-
-    for row in tqdm(
-        annotations_df.iter_rows(named=True), total=len(annotations_df), desc='Evaluating'
-    ):
-        icd3 = row['icd10_3char']
-        query_text = row['query_text']
-        facets = json.loads(row['facets_json'])
-
-        if not facets:
-            continue
-
-        if icd3 not in condition_pools:
-            condition_pools[icd3] = builder.for_condition(icd3)
-
-        pool = condition_pools[icd3]
-        query_vec = builder.embed_query(query_text)
-
-        query_metrics = evaluate_query(
-            pool,
-            query_vec,
-            facets,
-            strategies=strategies,
-            k_values=k_values,
-            lam_values=lam_values,
-            prefilter_n=prefilter_n,
-        )
-
-        for m in query_metrics:
-            all_rows.append(
-                {
-                    'query_id': row['query_id'],
-                    'icd10_3char': icd3,
-                    'n_facets': row['n_facets'],
-                    **m,
-                }
-            )
-
-    return pl.DataFrame(all_rows)
 
 
 def print_summary(results_df: pl.DataFrame) -> None:
