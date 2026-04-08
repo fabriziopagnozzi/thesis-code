@@ -14,7 +14,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import FilterQueriesCfg
+from experiments.mimic.configs import EvaluateCfg, FilterQueriesCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -39,7 +39,7 @@ def run_filter_queries(
     queries_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
     print(f'Loaded {len(queries_df):,} queries')
 
-    builder = CandidatePoolBuilder(con, device='cuda')
+    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
     result = filter_queries(queries_df, builder)
 
     out_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'

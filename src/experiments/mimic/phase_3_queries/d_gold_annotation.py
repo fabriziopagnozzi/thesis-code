@@ -17,7 +17,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import GoldAnnotationCfg
+from experiments.mimic.configs import EvaluateCfg, GoldAnnotationCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -51,7 +51,7 @@ def run_gold_annotation(
         queries_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
         print(f'No divergence_stats.parquet found, using all {len(queries_df):,} queries')
 
-    builder = CandidatePoolBuilder(con, device='cuda')
+    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
     result = annotate(queries_df, builder)
 
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
