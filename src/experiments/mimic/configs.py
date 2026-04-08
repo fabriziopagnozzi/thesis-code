@@ -15,7 +15,7 @@ class GlobalCfg(BaseModel):
     results_subdir: str | None
 
 
-def load_global_cfg(path: Path = MIMIC_IV_DIR / 'global_config.yml', cfg: GlobalCfg | None = None):
+def load_global_cfg(path: Path = MIMIC_IV_DIR / 'global_config.yaml', cfg: GlobalCfg | None = None):
     global global_cfg
 
     if cfg is not None:
