@@ -1,5 +1,6 @@
+import argparse
+
 import duckdb
-import polars as pl
 
 from experiments.mimic.config_models import (
     BuildQueryPromptsCfg,
@@ -21,33 +22,39 @@ def run_phase_3(
     gen_queries_cfg: GenQueriesCfg | None = None,
     filter_queries_cfg: FilterQueriesCfg | None = None,
     gold_annotation_cfg: GoldAnnotationCfg | None = None,
-) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    from_step: int = 1,
+):
     if con is None:
         con = connect_mimic_duckdb()
 
-    print('\n> Step 3.1: Building grounded query prompts')
-    prompts_df = run_build_query_prompts(con, cfg=build_query_prompts_cfg)
+    if from_step <= 1:
+        print('\n> Step 3.1: Building grounded query prompts')
+        run_build_query_prompts(con, cfg=build_query_prompts_cfg)
 
-    print('\n> Step 3.2: Generating clinical questions via LLM')
-    queries_df = run_gen_queries_llm(cfg=gen_queries_cfg)
+    if from_step <= 2:
+        print('\n> Step 3.2: Generating clinical questions via LLM')
+        run_gen_queries_llm(cfg=gen_queries_cfg)
 
-    print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
-    divergence_df = run_filter_queries(con, cfg=filter_queries_cfg)
-    n_pass = divergence_df.filter(pl.col('passes_filter')).height
+    if from_step <= 3:
+        print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
+        run_filter_queries(con, cfg=filter_queries_cfg)
 
-    print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
-    gold_df = run_gold_annotation(con, cfg=gold_annotation_cfg)
+    if from_step <= 4:
+        print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
+        run_gold_annotation(con, cfg=gold_annotation_cfg)
 
-    print(
-        f'\n\nPhase 3 complete. Outputs in {MIMIC_RESULTS_DIR}:\n'
-        f'  queries_prompts.parquet:  {len(prompts_df):>10,} prompts\n'
-        f'  queries.parquet:          {len(queries_df):>10,} queries\n'
-        f'  divergence_stats.parquet: {len(divergence_df):>10,} queries ({n_pass:,} passing)\n'
-        f'  gold_annotations.parquet: {len(gold_df):>10,} annotations\n'
-        f'  Avg facets per query:     {gold_df["n_facets"].mean():.1f}'
-    )
-    return prompts_df, queries_df, divergence_df, gold_df
+    print(f'\n\nPhase 3 complete. Outputs in {MIMIC_RESULTS_DIR}:\n')
 
 
 if __name__ == '__main__':
-    run_phase_3()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--from',
+        dest='from_step',
+        type=int,
+        default=1,
+        metavar='STEP',
+        help='Resume from this step number (1-4)',
+    )
+    args = parser.parse_args()
+    run_phase_3(from_step=args.from_step)
