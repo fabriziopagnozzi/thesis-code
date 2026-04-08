@@ -102,23 +102,37 @@ gold_annotation:
   top_k: 64
   think: false
   map_system_prompt: >-
-    You are a clinical information analyst. Your task is to extract facts from
-    discharge note excerpts that are relevant to answering a clinical question.
-    Be exhaustive - tag every chunk that contains relevant information, not just
-    the single best one.
+    You are a clinical information analyst extracting structured evidence from discharge notes.
+    Your task: for a given clinical question, identify which chunks contain relevant information
+    and group them under a small set of high-level clinical facets.
+    A facet is a CLINICAL DECISION CATEGORY (e.g. drug_choice, dose_adjustment, monitoring,
+    contraindication, complication_management) — not a specific drug name, lab value, or patient
+    scenario. Use the fewest facets that completely cover the answer. Be exhaustive in tagging
+    chunks: every chunk relevant to a facet must be listed, not just the best one. Do NOT tag chunks 
+    that are irrelevant to answering the question.
   map_user_template: |
     Question: {query_text}
 
-    Below are excerpts from clinical discharge notes. Each is prefixed with its ID.
+    Below are excerpts from clinical discharge notes. Each is prefixed with its chunk ID, section, and patient context.
 
+    <START DISCHARGE NOTES BLOCK>
     {chunks_block}
+    <END DISCHARGE NOTES BLOCK>
 
-    For each fact in these excerpts that is relevant to answering the question:
-    1. State the fact concisely (one sentence)
-    2. List ALL chunk_id(s) that support this fact
-    3. Assign a short facet label - the clinical aspect this fact addresses (e.g. "anticoagulation_adjustment", "renal_dosing", "bp_target", "monitoring_frequency", "drug_choice")
+    Identify the clinical aspects (facets) needed to fully answer the question. For each facet:
+    1. Assign a short snake_case label describing the DECISION CATEGORY, not a specific drug or value.
+       Good labels: "drug_choice", "dose_adjustment", "monitoring_frequency", "contraindication", "complication_management", "discharge_planning"
+       Bad labels: "insulin_dose_reduction_for_ckd", "metformin_contraindication", "creatinine_monitoring"
+    2. State one representative fact for this facet (one sentence)
+    3. List ALL chunk_ids in this batch that provide evidence for this facet
 
-    Return a JSON array. Example format:
-    [{{"fact": "Heparin dose reduced to 10u/kg/hr due to CrCl < 30", "facet_label": "anticoagulation_adjustment", "chunk_ids": ["chunk_42", "chunk_87"]}}]
+    Rules:
+    - Use at most 6 facet labels across your entire response
+    - Merge facts that address the same decision category under one label
+    - Skip chunks that are not relevant to the question
+    - Only cite chunk_ids that appear in this batch
 
-    If no chunks in this batch are relevant to the question, return an empty array: []
+    Return a JSON array. Example:
+    [{{"facet_label": "dose_adjustment", "fact": "Insulin dose reduced by 20-30% when CrCl < 30 to avoid hypoglycemia", "chunk_ids": ["chunk_42", "chunk_87"]}}]
+
+    If no chunks in this batch are relevant, return: []. Stick strictly to these instructions.
