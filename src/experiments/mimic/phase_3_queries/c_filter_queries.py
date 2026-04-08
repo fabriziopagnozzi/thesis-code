@@ -116,17 +116,19 @@ def filter_queries(
     if prefilter_n is None:
         prefilter_n = _cfg.prefilter_n
     results = []
-    condition_pools: dict[str, CandidatePool] = {}
+    query_pools: dict[tuple[str, str | None], CandidatePool] = {}
 
     for row in tqdm(
         queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
     ):
         icd3 = row['icd10_3char']
+        modifier_text = row.get('modifier_text')
 
-        if icd3 not in condition_pools:
-            condition_pools[icd3] = builder.for_condition(icd3)
+        pool_key = (icd3, modifier_text)
+        if pool_key not in query_pools:
+            query_pools[pool_key] = builder.for_query(icd3, modifier_text)
 
-        pool = condition_pools[icd3]
+        pool = query_pools[pool_key]
         query_vec = builder.embed_query(row['query_text'])
 
         div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=prefilter_n)  # type: ignore
