@@ -6,8 +6,6 @@ filtered by hadm_id sets derived from DuckDB. Strategy: one global vector
 store, per-query metadata filtering.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import numpy as np

@@ -77,7 +77,9 @@ def generate(
         if thinking:
             print(f'[ollama] WARNING: empty content, thinking={len(thinking)} chars')
         else:
-            print(f'[ollama] WARNING: empty content, no thinking. Raw status={getattr(resp, "status_code", "?")}')
+            print(
+                f'[ollama] WARNING: empty content, no thinking. Raw status={getattr(resp, "status_code", "?")}'
+            )
     return content
 
 
@@ -98,7 +100,7 @@ def _salvage_truncated_json(text: str) -> list | dict | None:
     last_close = text.rfind('}')
     if last_close == -1:
         return None
-    candidate = text[:last_close + 1].rstrip().rstrip(',') + ']'
+    candidate = text[: last_close + 1].rstrip().rstrip(',') + ']'
     try:
         result = json.loads(candidate)
         print(f'[generate_json] salvaged truncated JSON: kept {len(result)} items')
@@ -119,40 +121,70 @@ def generate_json(
     model: str | None = None,
     think: bool = False,
 ) -> dict | list:
+    messages = []
+    if system:
+        messages.append({'role': 'system', 'content': system})
+    messages.append({'role': 'user', 'content': prompt})
+
+    opts: dict = {'temperature': temperature}
+    if top_p is not None:
+        opts['top_p'] = top_p
+    if top_k is not None:
+        opts['top_k'] = top_k
+    if num_ctx is not None:
+        opts['num_ctx'] = num_ctx
+    if num_predict is not None:
+        opts['num_predict'] = num_predict
+    if think:
+        opts['think'] = True
+
+    _model = model if model else OLLAMA_DEFAULT_MODEL
+
     for attempt in range(max_retries + 1):
-        text = generate(
-            prompt,
-            system=system,
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            num_ctx=num_ctx,
-            num_predict=num_predict,
-            json_mode=True,
-            model=model,
+        resp = _client.chat(
+            model=_model,
+            messages=messages,
+            format='json',
+            options=opts,
             think=think,
         )
-        text = _strip_code_fences(text)
+        text = _strip_code_fences(resp.message.content or '')
+
         if not text.strip():
             print(f'[generate_json] empty response (attempt {attempt + 1}/{max_retries + 1})')
             if attempt == max_retries:
                 raise json.JSONDecodeError('Model returned empty response', text, 0)
             continue
+
         try:
             return json.loads(text)
-        except json.JSONDecodeError:
-            # If text doesn't start with [ or {, it's natural language — retrying won't help
+        except json.JSONDecodeError as exc:
             first_char = text.strip()[0] if text.strip() else ''
             if first_char not in ('{', '['):
                 preview = text[:150].replace('\n', ' ')
                 print(f'[generate_json] model returned text instead of JSON: {preview!r}')
                 raise
-            # Try to salvage truncated JSON before retrying
+
             salvaged = _salvage_truncated_json(text)
             if salvaged is not None:
                 return salvaged
-            preview = text[:200] + ('...' if len(text) > 200 else '')
-            print(f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, {len(text)} chars): {preview!r}')
+
+            print(
+                f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, {len(text)} chars):\n{text}'
+            )
             if attempt == max_retries:
                 raise
+
+            # Feed the bad output back so the model can self-correct
+            messages.append({'role': 'assistant', 'content': resp.message.content or ''})
+            messages.append(
+                {
+                    'role': 'user',
+                    'content': (
+                        f'Your previous response was not valid JSON. Parse error: {exc.msg} '
+                        f'at position {exc.pos}. Please output only valid JSON, no prose.'
+                    ),
+                }
+            )
+
     raise RuntimeError('unreachable')
