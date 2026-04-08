@@ -1,7 +1,7 @@
 import duckdb
 import polars as pl
 
-from experiments.mimic.configs import (
+from experiments.mimic.config_models import (
     BuildQueryPromptsCfg,
     FilterQueriesCfg,
     GenQueriesCfg,

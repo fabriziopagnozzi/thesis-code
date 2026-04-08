@@ -13,7 +13,7 @@ import sys
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import GenQueriesCfg
+from experiments.mimic.config_models import GenQueriesCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 from helpers.ollama_client import generate
 
@@ -102,7 +102,7 @@ def generate_queries(
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.config_loaders import load_config_from_main
 
     raw = load_config_from_main(phase=3)
     run_gen_queries_llm(cfg=GenQueriesCfg(**raw['gen_queries_llm']))

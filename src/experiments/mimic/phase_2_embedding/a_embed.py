@@ -2,19 +2,20 @@
 
 import polars as pl
 
-from experiments.mimic.configs import EmbedCfg, global_cfg
+from experiments.mimic.config_loaders import global_cfg
+from experiments.mimic.config_models import EmbedCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.embedder import Embedder
 
-_cfg = EmbedCfg.load()
+embed_cfg = EmbedCfg.load()
 
 
 def run_embed(cfg: EmbedCfg | None = None) -> None:
     import lancedb
 
-    global _cfg
+    global embed_cfg
     if cfg is not None:
-        _cfg = cfg
+        embed_cfg = cfg
 
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -31,14 +32,18 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     joined, texts = prepare_texts(chunks, metadata)
     print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
 
-    print(f'Embedding with {_cfg.model_name} (committing every {_cfg.commit_every:,} chunks)...')
-    embedder = Embedder(_cfg.model_name, device=_cfg.device, batch_size=_cfg.batch_size)
+    print(
+        f'Embedding with {embed_cfg.model_name} (committing every {embed_cfg.commit_every:,} chunks)...'
+    )
+    embedder = Embedder(
+        embed_cfg.model_name, device=embed_cfg.device, batch_size=embed_cfg.batch_size
+    )
     db = lancedb.connect(MIMIC_RESULTS_DIR / '_lancedb')
     table = None
     total = len(texts)
 
-    for start in range(0, total, _cfg.commit_every):
-        end = min(start + _cfg.commit_every, total)
+    for start in range(0, total, embed_cfg.commit_every):
+        end = min(start + embed_cfg.commit_every, total)
         batch_texts = texts[start:end]
         batch_df = joined.slice(start, end - start)
 
@@ -129,7 +134,7 @@ def _age_group(age: float | None) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.config_loaders import load_config_from_main
 
     raw = load_config_from_main(phase=2)
     run_embed(cfg=EmbedCfg(**raw['embed']))
