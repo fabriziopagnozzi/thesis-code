@@ -2,8 +2,7 @@
 
 import polars as pl
 
-from experiments.mimic.config_loaders import global_cfg
-from experiments.mimic.config_models import EmbedCfg
+from experiments.mimic.configs import EmbedCfg, global_cfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.embedder import Embedder
 
@@ -134,7 +133,7 @@ def _age_group(age: float | None) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loaders import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=2)
     run_embed(cfg=EmbedCfg(**raw['embed']))

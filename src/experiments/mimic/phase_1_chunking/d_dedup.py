@@ -8,7 +8,7 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.config_models import DedupCfg
+from experiments.mimic.configs import DedupCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR
 
 dedup_cfg = DedupCfg.load()
@@ -60,7 +60,7 @@ def _content_hash(text: str) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loaders import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=1)
     run_dedup(cfg=DedupCfg(**raw['dedup']))

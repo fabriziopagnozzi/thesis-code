@@ -6,7 +6,7 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_loaders import NoteChunkingCfg
+from experiments.mimic.configs import NoteChunkingCfg
 from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
 from helpers.chunks_classes import MimicIVChunk
 
@@ -273,7 +273,7 @@ def _split_bhc_problems(text: str) -> list[tuple[str | None, str, str | None]]:
 if __name__ == '__main__':
     import argparse
 
-    from experiments.mimic.config_loaders import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--interactive', action='store_true')

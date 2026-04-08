@@ -17,7 +17,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.config_models import GoldAnnotationCfg
+from experiments.mimic.configs import GoldAnnotationCfg
 from experiments.mimic.duck_db_init import (
     MIMIC_RESULTS_DIR,
     connect_mimic_duckdb,
@@ -320,7 +320,7 @@ def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.config_loaders import load_config_from_main
+    from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)
     run_gold_annotation(cfg=GoldAnnotationCfg(**raw['gold_annotation']))
