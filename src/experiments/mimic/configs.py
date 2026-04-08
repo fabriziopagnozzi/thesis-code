@@ -5,19 +5,21 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, PositiveInt, computed_field
 
-from helpers.dir_paths import MIMIC_IV_DIR, MIMIR_REPO_CODE_DIR
+from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
 
-global_cfg: GlobalCfg
+DEFAULT_CONFIGS_DIR = MIMIC_IV_DIR / '_configs'
+RESULTS_BASE_DIR = MIMIC_IV_DIR / '_results'
 
 
-# Global
 class GlobalCfg(BaseModel):
     num_conditions: PositiveInt
     results_subdir: str | None
 
 
-def load_global_cfg(path: Path = MIMIC_IV_DIR / 'global_config.yaml', cfg: GlobalCfg | None = None):
+def load_global_cfg(
+    path: Path = DEFAULT_CONFIGS_DIR / 'global_config.yaml', cfg: GlobalCfg | None = None
+):
     global global_cfg
 
     if cfg is not None:
@@ -36,20 +38,13 @@ def load_global_cfg(path: Path = MIMIC_IV_DIR / 'global_config.yaml', cfg: Globa
 
 load_global_cfg()
 
-_PHASE_DIRS = {
-    1: 'phase_1_chunking',
-    2: 'phase_2_embedding',
-    3: 'phase_3_queries',
-    4: 'phase_4_evaluation',
-}
-_base_results = MIMIR_REPO_CODE_DIR.parent / '_results'
 RESULTS_SUBDIR = global_cfg.results_subdir
-MIMIC_RESULTS_DIR = _base_results / RESULTS_SUBDIR if RESULTS_SUBDIR else _base_results
+MIMIC_RESULTS_DIR = RESULTS_BASE_DIR / RESULTS_SUBDIR if RESULTS_SUBDIR else RESULTS_BASE_DIR
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict:
     if path is None:
-        path = MIMIC_IV_DIR / _PHASE_DIRS[phase] / f'phase_{phase}_config.yaml'
+        path = DEFAULT_CONFIGS_DIR / f'phase_{phase}_config.yaml'
     with open(path) as f:
         return yaml.safe_load(f)
 
