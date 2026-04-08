@@ -3,12 +3,13 @@ import argparse
 import duckdb
 
 from experiments.mimic.configs import (
+    MIMIC_RESULTS_DIR,
     BuildQueryPromptsCfg,
     FilterQueriesCfg,
     GenQueriesCfg,
     GoldAnnotationCfg,
 )
-from experiments.mimic.duck_db_init import MIMIC_RESULTS_DIR, connect_mimic_duckdb
+from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
 from .a_build_query_prompts import run_build_query_prompts
 from .b_gen_queries_llm import run_gen_queries_llm

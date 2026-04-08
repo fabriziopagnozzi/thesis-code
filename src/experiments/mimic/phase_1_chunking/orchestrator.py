@@ -2,9 +2,13 @@ import argparse
 
 import duckdb
 
-from experiments.mimic.configs import ConditionsStatsCfg, DedupCfg, NoteChunkingCfg
-from experiments.mimic.duck_db_init import (
+from experiments.mimic.configs import (
     MIMIC_RESULTS_DIR,
+    ConditionsStatsCfg,
+    DedupCfg,
+    NoteChunkingCfg,
+)
+from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
     generate_init_sql,
     register_result_view,
