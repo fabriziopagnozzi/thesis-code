@@ -25,7 +25,7 @@ from experiments.mimic.duck_db_init import (
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
-_cfg = GoldAnnotationCfg.load()
+gold_annotation_cfg = GoldAnnotationCfg.load()
 
 
 class _Annotation(BaseModel):
@@ -51,9 +51,9 @@ def run_gold_annotation(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: GoldAnnotationCfg | None = None,
 ) -> pl.DataFrame:
-    global _cfg
+    global gold_annotation_cfg
     if cfg is not None:
-        _cfg = cfg
+        gold_annotation_cfg = cfg
     if con is None:
         con = connect_mimic_duckdb()
 
@@ -105,9 +105,9 @@ def annotate(
         query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
     """
     if prefilter_n is None:
-        prefilter_n = _cfg.prefilter_n
+        prefilter_n = gold_annotation_cfg.prefilter_n
     if batch_size is None:
-        batch_size = _cfg.batch_size
+        batch_size = gold_annotation_cfg.batch_size
 
     # Load patient metadata for chunk context
     meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
@@ -115,12 +115,12 @@ def annotate(
     if patient_meta:
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
 
-    model_name = _cfg.model or 'default'
+    model_name = gold_annotation_cfg.model or 'default'
     print(
         f'\n-- Gold annotation config --\n'
-        f'model={model_name}  temperature={_cfg.temperature}  '
-        f'top_p={_cfg.top_p}  top_k={_cfg.top_k}  '
-        f'num_ctx={_cfg.num_ctx}  think={_cfg.think}\n'
+        f'model={model_name}  temperature={gold_annotation_cfg.temperature}  '
+        f'top_p={gold_annotation_cfg.top_p}  top_k={gold_annotation_cfg.top_k}  '
+        f'num_ctx={gold_annotation_cfg.num_ctx}  think={gold_annotation_cfg.think}\n'
         f'  prefilter_n={prefilter_n}  batch_size={batch_size}\n'
         f'  queries={len(queries_df)}\n'
     )
@@ -239,7 +239,7 @@ def annotate_query(
                 sections=batch_sections[:1],
                 meta_lines=batch_meta[:1] if batch_meta else None,
             )
-            print(f'    -- sample chunk --\n{sample[:400]}\n    --')
+            print(f'    -- sample chunk --\n{sample}\n    --')
 
         batch_result = annotate_batch(
             query_text,
@@ -278,7 +278,9 @@ def annotate_batch(
     chunks_block = _format_chunk_batch(
         chunk_ids, texts, sections=batch_sections, meta_lines=batch_meta
     )
-    prompt = _cfg.map_user_template.format(query_text=query_text, chunks_block=chunks_block)
+    prompt = gold_annotation_cfg.map_user_template.format(
+        query_text=query_text, chunks_block=chunks_block
+    )
 
     if existing_facets:
         facet_list = ', '.join(sorted(existing_facets))
@@ -295,14 +297,14 @@ def annotate_batch(
     try:
         result = generate_json(
             prompt,
-            system=_cfg.map_system_prompt,
-            model=_cfg.model or None,
-            temperature=_cfg.temperature,
-            top_p=_cfg.top_p,
-            top_k=_cfg.top_k,
-            num_ctx=_cfg.num_ctx,
-            num_predict=_cfg.num_predict,
-            think=_cfg.think,
+            system=gold_annotation_cfg.map_system_prompt,
+            model=gold_annotation_cfg.model or None,
+            temperature=gold_annotation_cfg.temperature,
+            top_p=gold_annotation_cfg.top_p,
+            top_k=gold_annotation_cfg.top_k,
+            num_ctx=gold_annotation_cfg.num_ctx,
+            num_predict=gold_annotation_cfg.num_predict,
+            think=gold_annotation_cfg.think,
         )
     except Exception as e:
         print(
