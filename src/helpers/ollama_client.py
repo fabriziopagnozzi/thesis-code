@@ -84,10 +84,12 @@ def generate(
 
 
 _CODE_FENCE_RE = re.compile(r'^```(?:json)?\s*\n?(.*?)```\s*$', re.DOTALL)
+_THINK_TAG_RE = re.compile(r'<think>.*?</think>', re.DOTALL)
 
 
 def _strip_code_fences(text: str) -> str:
-    m = _CODE_FENCE_RE.match(text.strip())
+    text = _THINK_TAG_RE.sub('', text).strip()
+    m = _CODE_FENCE_RE.match(text)
     return m.group(1).strip() if m else text
 
 
@@ -163,14 +165,26 @@ def generate_json(
             if first_char not in ('{', '['):
                 preview = text[:150].replace('\n', ' ')
                 print(f'[generate_json] model returned text instead of JSON: {preview!r}')
-                raise
+                if attempt == max_retries:
+                    raise
+                messages.append({'role': 'assistant', 'content': resp.message.content or ''})
+                messages.append(
+                    {
+                        'role': 'user',
+                        'content': 'You must respond with only valid JSON. No prose, no explanation. Output the JSON array now.',
+                    }
+                )
+                continue
 
             salvaged = _salvage_truncated_json(text)
             if salvaged is not None:
                 return salvaged
 
             print(
-                f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, {len(text)} chars):\n{text}'
+                f'[generate_json] bad JSON (attempt {attempt + 1}/{max_retries + 1}, '
+                f'{len(text)} chars, error: {exc.msg} at pos {exc.pos}):\n'
+                f'  first 80 repr: {text[:80]!r}\n'
+                f'  last 80 repr:  {text[-80:]!r}'
             )
             if attempt == max_retries:
                 raise

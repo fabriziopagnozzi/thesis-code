@@ -84,6 +84,8 @@ class CandidatePoolBuilder:
         self._hadm_id_array: NDArray[np.int64] | None = None
         self._embedder: Embedder | None = None
         self._condition_hadm_cache: dict[str, set[int]] = {}
+        self._comorbidity_hadm_cache: dict[str, set[int]] = {}
+        self._charlson_label_to_col: dict[str, str] | None = None
 
     def _load_corpus(self) -> None:
         if self._corpus_df is not None:
@@ -143,8 +145,51 @@ class CandidatePoolBuilder:
             metadata_df=pool_df,
         )
 
+    def _get_charlson_mapping(self) -> dict[str, str]:
+        """modifier_text -> charlson column name."""
+        if self._charlson_label_to_col is None:
+            from experiments.mimic.configs import BuildQueryPromptsCfg
+            self._charlson_label_to_col = BuildQueryPromptsCfg.load().label_to_charlson_col
+        return self._charlson_label_to_col
+
+    def _comorbidity_hadm_ids(self, modifier_text: str) -> set[int]:
+        """All hadm_ids carrying this comorbidity (via Charlson table)."""
+        if modifier_text not in self._comorbidity_hadm_cache:
+            col = self._get_charlson_mapping().get(modifier_text)
+            if col is None:
+                self._comorbidity_hadm_cache[modifier_text] = set()
+            else:
+                hadm_ids = self._con.execute(f"""--sql
+                    SELECT DISTINCT charlson.hadm_id
+                    FROM charlson
+                    WHERE charlson.{col} > 0
+                """).pl()['hadm_id']
+                self._comorbidity_hadm_cache[modifier_text] = set(hadm_ids.to_list())
+        return self._comorbidity_hadm_cache[modifier_text]
+
     def for_condition(self, icd3: str) -> CandidatePool:
         return self._build_pool(self._condition_hadm_ids(icd3))
+
+    def for_query(self, icd3: str, modifier_text: str | None = None) -> CandidatePool:
+        """Build pool from primary condition + modifier condition admissions.
+
+        For comorbidity modifiers, unions hadm_ids from both conditions to
+        create multi-cluster structure (primary cluster + modifier cluster).
+        For demographic modifiers or unknown modifiers, falls back to
+        per-condition pool.
+        """
+        primary = self._condition_hadm_ids(icd3)
+        if modifier_text:
+            modifier = self._comorbidity_hadm_ids(modifier_text)
+            if modifier:
+                all_hadm_ids = primary | modifier
+                print(
+                    f'  Pool for {icd3}+"{modifier_text}": '
+                    f'{len(primary):,} primary + {len(modifier):,} modifier '
+                    f'= {len(all_hadm_ids):,} total hadm_ids'
+                )
+                return self._build_pool(all_hadm_ids)
+        return self._build_pool(primary)
 
     def for_hadm_ids(self, hadm_ids: set[int]) -> CandidatePool:
         return self._build_pool(hadm_ids)

@@ -8,6 +8,8 @@ from pydantic import BaseModel, PositiveInt, computed_field
 from helpers.dir_paths import MIMIC_IV_DIR, MIMIR_REPO_CODE_DIR
 from helpers.query_algorithms import ScoringFunction
 
+global_cfg: GlobalCfg
+
 
 # Global
 class GlobalCfg(BaseModel):
