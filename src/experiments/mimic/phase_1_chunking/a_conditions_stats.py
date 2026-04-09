@@ -27,15 +27,18 @@ def run_conditions_stats(
     cfg = cfg or ConditionsStatsCfg.load()
     if con is None:
         con = connect_mimic_duckdb()
+
     df = select_conditions(con=con, min_admissions=cfg.min_admissions)
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = MIMIC_RESULTS_DIR / 'conditions_stats.parquet'
     df.write_parquet(out_path)
     print(f'\nSaved {len(df)} conditions to {out_path}')
+
     return df
 
 
-# Charlson groups ICD codes into higher level buckets, containing more coarse disease groups among which it makes more sense to look for comorbidities
+# Charlson groups ICD codes into higher level buckets, containing more coarse disease
+# groups among which it makes more sense to look for comorbidities
 HIGH_LEVEL_CHARLSON_CONDITIONS = {
     'myocardial_infarct',
     'congestive_heart_failure',

@@ -20,17 +20,15 @@ def run_dedup(cfg: DedupCfg | None = None) -> pl.DataFrame:
 
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
     result = deduplicate(chunks)
+
     out_path = MIMIC_RESULTS_DIR / 'chunks.parquet'
     result.write_parquet(out_path)
     print(f'Saved to {out_path}')
+
     return result
 
 
 def deduplicate(chunks: pl.DataFrame) -> pl.DataFrame:
-    """Remove duplicate boilerplate chunks for the same patient.
-
-    Deduplicates by (subject_id, section_name, content_hash), keeping only the chunk from the most recent admission (by hadm_id as proxy for time).
-    """
     n_before = len(chunks)
     hashes = [_content_hash(t) for t in chunks['text'].to_list()]
     chunks = chunks.with_columns(pl.Series('content_hash', hashes))

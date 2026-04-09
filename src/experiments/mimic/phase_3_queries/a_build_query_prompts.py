@@ -9,11 +9,9 @@ For each top condition (by frequency x comorbidity richness):
 Output: queries_prompts.parquet
 """
 
-import itertools
-
-import duckdb
 import numpy as np
 import polars as pl
+from duckdb import DuckDBPyConnection
 
 from experiments.mimic.configs import MIMIC_RESULTS_DIR, BuildQueryPromptsCfg, global_cfg
 from experiments.mimic.duck_db_init import (
@@ -24,7 +22,7 @@ query_prompts_cfg = BuildQueryPromptsCfg.load()
 
 
 def run_build_query_prompts(
-    con: duckdb.DuckDBPyConnection | None = None,
+    con: DuckDBPyConnection | None = None,
     cfg: BuildQueryPromptsCfg | None = None,
 ) -> pl.DataFrame:
     global query_prompts_cfg
@@ -46,14 +44,7 @@ def run_build_query_prompts(
 
     out_path = MIMIC_RESULTS_DIR / 'queries_prompts.parquet'
     df.write_parquet(out_path)
-    print(
-        f'\nSaved {len(df):,} prompts to {out_path}\n'
-        f'  Conditions: {df["icd10_3char"].n_unique()}\n'
-        f'  Avg grounding chunks: {df["n_grounding_chunks"].mean():.1f}\n'
-        f'  Avg intersection admissions: {df["n_intersection_admissions"].mean():.0f}\n'
-        f'\n--- Sample prompt (truncated) ---\n'
-        f'{df["full_prompt"][0][:1500]}'
-    )
+
     return df
 
 
@@ -62,73 +53,92 @@ def build_query_prompts(
     chunks: pl.DataFrame,
     metadata: pl.DataFrame,
     con,
-    max_modifiers: int | None = None,
 ) -> pl.DataFrame:
-    """Build grounded query prompts for the top N_CONDITIONS conditions."""
-    if max_modifiers is None:
-        max_modifiers = query_prompts_cfg.max_modifiers
-    specs = _build_specs(conditions, con, max_modifiers)
-    print(f'Built {len(specs):,} specs ({global_cfg.num_conditions} conditions)')
+    filtered_chunks = chunks.filter(
+        pl.col('section_name').is_in(query_prompts_cfg.high_value_sections)
+    )
+    chunks_by_hadm_id: dict[int, pl.DataFrame] = {
+        key[0]: grp for (key, grp) in filtered_chunks.group_by('hadm_id')
+    }
+    meta_by_hadm_id: dict[int, dict] = {
+        row['hadm_id']: row
+        for row in metadata.select('hadm_id', 'age', 'gender', 'race')
+        .unique(subset=['hadm_id'])
+        .iter_rows(named=True)
+    }
 
-    chunk_index = _ChunkIndex(chunks, metadata)
-    print(f'Chunk index: {len(chunk_index._by_hadm):,} hadm_ids with high-value sections')
-
-    condition_hadm_cache: dict[str, set[int]] = {}
-    modifier_hadm_cache: dict[tuple, set[int]] = {}
-    samples_cache: dict[tuple, list[dict]] = {}
+    print(f'Chunk index: {len(chunks_by_hadm_id):,} hadm_ids with high-value sections')
 
     results = []
     skipped = 0
 
-    for spec in specs:
-        icd3 = spec['icd10_3char']
-        modifier_text = spec['modifier_text']
-        modifier_type = spec['modifier_type']
+    # OUTER LOOP: iterate over top N conditions (defined in global_cfg)
+    for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
+        icd3 = condition_row['icd10_3char']
+        cond_name = condition_row['condition_name'] or icd3
+        cond_hadm_ids = _get_condition_hadm_ids(con, icd3)
 
-        if icd3 not in condition_hadm_cache:
-            condition_hadm_cache[icd3] = _get_condition_hadm_ids(con, icd3)
-
-        cache_key = (icd3, modifier_text, modifier_type)
-        if cache_key not in modifier_hadm_cache:
-            modifier_hadm_cache[cache_key] = _get_modifier_hadm_ids(
-                con, condition_hadm_cache[icd3], modifier_text, modifier_type
-            )
-
-        intersection = modifier_hadm_cache[cache_key]
-        if not intersection:
-            skipped += 1
-            continue
-
-        if cache_key not in samples_cache:
-            samples_cache[cache_key] = _sample_grounding_chunks(
-                chunk_index, intersection, seed=hash(cache_key) & 0xFFFFFFFF
-            )
-        samples = samples_cache[cache_key]
-
-        if not samples:
-            skipped += 1
-            continue
-
-        full_prompt = query_prompts_cfg.prompt_template.format(
-            persona_prompt=spec['prompt'],
-            condition=spec['condition_name'],
-            modifier=modifier_text,
-            chunks_block=_format_chunks_block(samples),
+        # FIND MODIFIERS
+        # find dynamically the comborbidity modifier for current condition
+        comorbidity_mods = _find_top_comorbidity_modifiers(
+            con, icd3, n=query_prompts_cfg.max_modifiers
+        )
+        modifiers = [(disease_label, 'comorbidity') for _, disease_label, _ in comorbidity_mods]
+        # use the hardocoded modifiers for demographics in the config
+        modifiers.extend(
+            [
+                (demo_modifier, 'demographic')
+                for demo_modifier in query_prompts_cfg.demographic_modifiers_text
+            ]
         )
 
-        results.append(
-            {
-                'icd10_3char': icd3,
-                'condition_name': spec['condition_name'],
-                'modifier_text': modifier_text,
-                'modifier_type': modifier_type,
-                'persona': spec['persona'],
-                'n_grounding_chunks': len(samples),
-                'n_intersection_admissions': len(intersection),
-                'grounding_hadm_ids': [s['hadm_id'] for s in samples],
-                'full_prompt': full_prompt,
-            }
-        )
+        # INNER LOOP 1: iterate over the modifiers
+        for modifier_text, modifier_type in modifiers:
+            candidate_hadm_ids = _get_modifier_hadm_ids(
+                con, cond_hadm_ids, modifier_text, modifier_type
+            )
+            if not candidate_hadm_ids:
+                skipped += len(query_prompts_cfg.personas)
+                continue
+
+            # SAMPLE: use examples from the data to guide the LLM in the prompt
+            seed = hash((icd3, modifier_text, modifier_type)) & 0xFFFFFFFF
+            data_samples = _sample_grounding_chunks(
+                chunks_by_hadm_id,
+                meta_by_hadm_id,
+                candidate_hadm_ids,
+                seed=seed,
+            )
+            if not data_samples:
+                skipped += len(query_prompts_cfg.personas)
+                continue
+
+            # INNER LOOP 2: iterate over the personas
+            for persona_name, persona_template in query_prompts_cfg.personas.items():
+                full_prompt = query_prompts_cfg.prompt_template.format(
+                    persona_prompt=persona_template.format(
+                        condition=cond_name, modifier=modifier_text
+                    ),
+                    condition=cond_name,
+                    modifier=modifier_text,
+                    chunks_block=_format_chunks_block(data_samples),
+                )
+                results.append(
+                    {
+                        'icd10_3char': icd3,
+                        'condition_name': cond_name,
+                        'modifier_text': modifier_text,
+                        'modifier_type': modifier_type,
+                        'persona': persona_name,
+                        'n_grounding_chunks': len(data_samples),
+                        'n_intersection_admissions': len(candidate_hadm_ids),
+                        'grounding_hadm_ids': [s['hadm_id'] for s in data_samples],
+                        'full_prompt': full_prompt,
+                    }
+                )
+            # END INNER LOOP 2: iterate over the personas
+        # END INNER LOOP 1: iterate over the modifiers
+    # END OUTER iterate over top N conditions (defined in global_cfg)
 
     print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} (no intersection chunks)')
     return pl.DataFrame(results)
@@ -158,34 +168,6 @@ def _find_top_comorbidity_modifiers(
     return scored[:n]
 
 
-def _build_specs(conditions: pl.DataFrame, con, max_modifiers: int = 3) -> list[dict]:
-    specs = []
-    for row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
-        icd3 = row['icd10_3char']
-        condition_name = row['condition_name'] or icd3
-
-        comorbidity_mods = _find_top_comorbidity_modifiers(con, icd3, n=max_modifiers)
-        modifiers = [(label, 'comorbidity') for _, label, _ in comorbidity_mods]
-        modifiers.extend([(m, 'demographic') for m in query_prompts_cfg.demographic_modifiers_text])
-
-        for (modifier_text, modifier_type), persona_name in itertools.product(
-            modifiers, query_prompts_cfg.personas.keys()
-        ):
-            specs.append(
-                {
-                    'icd10_3char': icd3,
-                    'condition_name': condition_name,
-                    'modifier_text': modifier_text,
-                    'modifier_type': modifier_type,
-                    'persona': persona_name,
-                    'prompt': query_prompts_cfg.personas[persona_name].format(
-                        condition=condition_name, modifier=modifier_text
-                    ),
-                }
-            )
-    return specs
-
-
 # -- Step 2: sample grounding chunks and assemble full prompts --
 def _get_condition_hadm_ids(con, icd3: str) -> set[int]:
     rows = con.execute(f"""--sql
@@ -195,6 +177,16 @@ def _get_condition_hadm_ids(con, icd3: str) -> set[int]:
         AND SUBSTR(diagnoses_icd.icd_code, 1, 3) = '{icd3}'
     """).fetchall()
     return {r[0] for r in rows}
+
+
+def _get_modifier_hadm_ids(
+    con, condition_hadm_ids: set[int], modifier_text: str, modifier_type: str
+) -> set[int]:
+    if modifier_type == 'comorbidity':
+        return _filter_comorbidity(con, condition_hadm_ids, modifier_text)
+    if modifier_type == 'demographic':
+        return _filter_demographic(con, condition_hadm_ids, modifier_text)
+    return set()
 
 
 def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
@@ -226,87 +218,13 @@ def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -
     return {r[0] for r in rows}
 
 
-def _get_modifier_hadm_ids(
-    con, condition_hadm_ids: set[int], modifier_text: str, modifier_type: str
-) -> set[int]:
-    if modifier_type == 'comorbidity':
-        return _filter_comorbidity(con, condition_hadm_ids, modifier_text)
-    if modifier_type == 'demographic':
-        return _filter_demographic(con, condition_hadm_ids, modifier_text)
-    return set()
-
-
-class _ChunkIndex:
-    """Pre-partitioned chunk index for fast hadm_id lookups."""
-
-    def __init__(self, chunks: pl.DataFrame, metadata: pl.DataFrame):
-        hv = chunks.filter(pl.col('section_name').is_in(query_prompts_cfg.high_value_sections))
-        self._by_hadm: dict[int, pl.DataFrame] = {}
-        for key, group in hv.group_by('hadm_id'):
-            self._by_hadm[key[0]] = group
-        self._meta: dict[int, dict] = {}
-        for row in (
-            metadata.select('hadm_id', 'age', 'gender', 'race')
-            .unique(subset=['hadm_id'])
-            .iter_rows(named=True)
-        ):
-            self._meta[row['hadm_id']] = row
-
-    def hadm_ids_with_bhc(self, hadm_ids: set[int]) -> list[int]:
-        """hadm_ids from the set that have BHC chunks, sorted by longest BHC."""
-        result = []
-        for hid in hadm_ids:
-            group = self._by_hadm.get(hid)
-            if group is None:
-                continue
-            bhc = group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
-            if not bhc.is_empty():
-                result.append((hid, bhc['approx_tokens'].max()))
-        result.sort(key=lambda x: x[1], reverse=True)
-        return [hid for hid, _ in result]
-
-    def sample_patient(self, hadm_id: int) -> list[dict]:
-        group = self._by_hadm[hadm_id]
-        bhc_row = (
-            group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
-            .sort('approx_tokens', descending=True)
-            .row(0, named=True)
-        )
-
-        section_priority = {s: i for i, s in enumerate(query_prompts_cfg.high_value_sections)}
-        supp = group.filter(pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
-        supp = (
-            supp.with_columns(
-                pl.col('section_name').replace_strict(section_priority, default=99).alias('_p')
-            )
-            .sort('_p')
-            .head(1)
-            .drop('_p')
-        )
-
-        meta = self._meta.get(hadm_id)
-        age = meta['age'] if meta else None
-        gender = meta['gender'] if meta else None
-        race = meta['race'] if meta else None
-        age_str = f'age {int(age)}' if age is not None else 'unknown age'
-        gender_str = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown sex'
-        header_prefix = f'{age_str}, {gender_str}, {race or "unknown"}'
-
-        rows = [bhc_row] + (supp.to_dicts() if not supp.is_empty() else [])
-        return [
-            {
-                'header': f'{header_prefix} [{row["section_name"] + (" > " + row["subsection_name"] if row.get("subsection_name") else "")}]',
-                'text': row['text'],
-                'hadm_id': hadm_id,
-            }
-            for row in rows
-        ]
-
-
 def _sample_grounding_chunks(
-    chunk_index: _ChunkIndex, hadm_ids: set[int], seed: int = 42
+    chunks_by_hadm: dict[int, pl.DataFrame],
+    meta_by_hadm: dict[int, dict],
+    hadm_ids: set[int],
+    seed: int = 42,
 ) -> list[dict]:
-    candidates = chunk_index.hadm_ids_with_bhc(hadm_ids)
+    candidates = _hadm_ids_with_bhc(chunks_by_hadm, hadm_ids)
     if not candidates:
         return []
     if len(candidates) > query_prompts_cfg.n_grounding_patients:
@@ -316,8 +234,62 @@ def _sample_grounding_chunks(
         ).tolist()
     samples = []
     for hid in candidates:
-        samples.extend(chunk_index.sample_patient(hid))
+        samples.extend(_sample_patient(hid, chunks_by_hadm, meta_by_hadm))
     return samples
+
+
+def _sample_patient(
+    hadm_id: int, chunks_by_hadm: dict[int, pl.DataFrame], meta_by_hadm: dict[int, dict]
+) -> list[dict]:
+    group = chunks_by_hadm[hadm_id]
+    bhc_row = (
+        group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
+        .sort('approx_tokens', descending=True)
+        .row(0, named=True)
+    )
+
+    section_priority = {s: i for i, s in enumerate(query_prompts_cfg.high_value_sections)}
+    supp = group.filter(pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
+    supp = (
+        supp.with_columns(
+            pl.col('section_name').replace_strict(section_priority, default=99).alias('_p')
+        )
+        .sort('_p')
+        .head(1)
+        .drop('_p')
+    )
+
+    meta = meta_by_hadm.get(hadm_id)
+    age = meta['age'] if meta else None
+    gender = meta['gender'] if meta else None
+    race = meta['race'] if meta else None
+    age_str = f'age {int(age)}' if age is not None else 'unknown age'
+    gender_str = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown sex'
+    header_prefix = f'{age_str}, {gender_str}, {race or "unknown"}'
+
+    rows = [bhc_row] + (supp.to_dicts() if not supp.is_empty() else [])
+    return [
+        {
+            'header': f'{header_prefix} [{row["section_name"] + (" > " + row["subsection_name"] if row.get("subsection_name") else "")}]',
+            'text': row['text'],
+            'hadm_id': hadm_id,
+        }
+        for row in rows
+    ]
+
+
+def _hadm_ids_with_bhc(chunks_by_hadm: dict[int, pl.DataFrame], hadm_ids: set[int]) -> list[int]:
+    """hadm_ids from the set that have BHC chunks, sorted by longest BHC."""
+    result = []
+    for hid in hadm_ids:
+        group = chunks_by_hadm.get(hid)
+        if group is None:
+            continue
+        bhc = group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
+        if not bhc.is_empty():
+            result.append((hid, bhc['approx_tokens'].max()))
+    result.sort(key=lambda x: x[1], reverse=True)
+    return [hid for hid, _ in result]
 
 
 def _format_chunks_block(samples: list[dict]) -> str:

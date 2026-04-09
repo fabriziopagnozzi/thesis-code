@@ -13,7 +13,7 @@ import polars as pl
 from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
-from experiments.mimic.configs import VECTOR_DB_DIR, EvaluateCfg
+from experiments.mimic.configs import VECTOR_DB_DIR, BuildQueryPromptsCfg, EvaluateCfg
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
@@ -48,14 +48,15 @@ class CandidatePool:
 
     def sim_matrix(self) -> NDArray[np.float32]:
         """Pairwise cosine similarity (cached, vectors assumed normalized)."""
+
         if self._sim_matrix is None:
             if self.n > self.MAX_SIM_MATRIX_SIZE:
                 raise ValueError(
-                    f'Candidate pool has {self.n:,} chunks - dense sim matrix would be '
-                    f'{self.n}x{self.n} ({self.n**2 * 4 / 1e9:.1f} GB). '
-                    f'Apply prefilter_n to reduce pool size first.'
+                    'Exceeded size {MAX_SIM_MATRIX_SIZE}. Apply prefilter_n to reduce pool size first.'
                 )
+
             self._sim_matrix = self.vectors @ self.vectors.T
+
         return self._sim_matrix
 
     def sim_to_query(self, query_vec: NDArray[np.float32]) -> NDArray[np.float32]:
@@ -73,229 +74,22 @@ class CandidatePool:
             metadata_df=self.metadata_df[idx_list],
         )
 
+    def top_k_by_similarity(self, query_vec: NDArray[np.float32], k: int) -> CandidatePool:
+        sim = self.sim_to_query(query_vec)
+        take = min(k, self.n)
+        idx = np.argsort(sim)[::-1][:take].copy()
+        return self.slice(idx)
 
-class CandidatePoolBuilder:
-    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str = 'cuda'):
-        self._con = con
-        self._cfg = cfg
-        self._device = device
-        self._corpus_df: pl.DataFrame | None = None
-        self._corpus_vectors: NDArray[np.float32] | None = None
-        self._hadm_id_array: NDArray[np.int64] | None = None
-        self._embedder: Embedder | None = None
-        self._condition_hadm_cache: dict[str, set[int]] = {}
-        self._comorbidity_hadm_cache: dict[str, set[int]] = {}
-        self._charlson_label_to_col: dict[str, str] | None = None
-
-    def _load_corpus(self) -> None:
-        if self._corpus_df is not None:
-            return
-
-        import lancedb
-
-        db = lancedb.connect(VECTOR_DB_DIR)
-        arrow_table = db.open_table('chunks').to_arrow()
-
-        # FixedSizeList column: extract flat value buffer then reshape
-        vec_column = arrow_table.column('vector')
-        combined = vec_column.combine_chunks()
-        dim = combined.type.list_size
-        self._corpus_vectors = (
-            combined.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
-        )
-
-        self._corpus_df = pl.DataFrame(arrow_table.drop('vector'))
-        self._hadm_id_array = self._corpus_df['hadm_id'].to_numpy()
-
-        n, d = self._corpus_vectors.shape  # type: ignore
-        print(f'Loaded corpus: {n:,} chunks, dim={d}')
-
-    def _get_embedder(self) -> Embedder:
-        if self._embedder is None:
-            self._embedder = Embedder(self._cfg.embedding_model, device=self._device, batch_size=1)
-        return self._embedder
-
-    def _condition_hadm_ids(self, icd3: str) -> set[int]:
-        if icd3 not in self._condition_hadm_cache:
-            hadm_ids = self._con.execute(f"""--sql
-                SELECT DISTINCT diagnoses_icd.hadm_id
-                FROM diagnoses_icd
-                WHERE diagnoses_icd.icd_version = 10
-                AND SUBSTR(diagnoses_icd.icd_code, 1, 3) = '{icd3}'
-            """).pl()['hadm_id']
-            self._condition_hadm_cache[icd3] = set(hadm_ids.to_list())
-        return self._condition_hadm_cache[icd3]
-
-    def _build_pool(self, hadm_ids: set[int]) -> CandidatePool:
-        self._load_corpus()
-        assert self._corpus_df is not None
-        assert self._corpus_vectors is not None
-        assert self._hadm_id_array is not None
-
-        mask = np.isin(self._hadm_id_array, np.fromiter(hadm_ids, dtype=np.int64))
-        pool_df = self._corpus_df.filter(pl.Series(mask))
-        pool_vectors = self._corpus_vectors[mask]
-
+    @classmethod
+    def concat(cls, pools: list[CandidatePool]) -> CandidatePool:
         return CandidatePool(
-            chunk_ids=pool_df['chunk_id'].to_list(),
-            hadm_ids=pool_df['hadm_id'].to_numpy(),
-            vectors=pool_vectors,
-            texts=pool_df['text'].to_list(),
-            section_names=pool_df['section_name'].to_list(),
-            metadata_df=pool_df,
+            chunk_ids=[cid for p in pools for cid in p.chunk_ids],
+            hadm_ids=np.concatenate([p.hadm_ids for p in pools]),
+            vectors=np.concatenate([p.vectors for p in pools]),
+            texts=[t for p in pools for t in p.texts],
+            section_names=[s for p in pools for s in p.section_names],
+            metadata_df=pl.concat([p.metadata_df for p in pools]),
         )
-
-    def _get_charlson_mapping(self) -> dict[str, str]:
-        """modifier_text -> charlson column name."""
-        if self._charlson_label_to_col is None:
-            from experiments.mimic.configs import BuildQueryPromptsCfg
-
-            self._charlson_label_to_col = BuildQueryPromptsCfg.load().label_to_charlson_col
-        return self._charlson_label_to_col
-
-    def _comorbidity_hadm_ids(self, modifier_text: str) -> set[int]:
-        """All hadm_ids carrying this comorbidity (via Charlson table)."""
-        if modifier_text not in self._comorbidity_hadm_cache:
-            col = self._get_charlson_mapping().get(modifier_text)
-            if col is None:
-                self._comorbidity_hadm_cache[modifier_text] = set()
-            else:
-                hadm_ids = self._con.execute(f"""--sql
-                    SELECT DISTINCT charlson.hadm_id
-                    FROM charlson
-                    WHERE charlson.{col} > 0
-                """).pl()['hadm_id']
-                self._comorbidity_hadm_cache[modifier_text] = set(hadm_ids.to_list())
-        return self._comorbidity_hadm_cache[modifier_text]
-
-    def for_condition(self, icd3: str) -> CandidatePool:
-        return self._build_pool(self._condition_hadm_ids(icd3))
-
-    def for_query(self, icd3: str, modifier_text: str | None = None) -> CandidatePool:
-        """Build pool from primary condition + modifier condition admissions.
-
-        For comorbidity modifiers, unions hadm_ids from both conditions to
-        create multi-cluster structure (primary cluster + modifier cluster).
-        For demographic modifiers or unknown modifiers, falls back to
-        per-condition pool.
-        """
-        primary = self._condition_hadm_ids(icd3)
-        if modifier_text:
-            modifier = self._comorbidity_hadm_ids(modifier_text)
-            if modifier:
-                all_hadm_ids = primary | modifier
-                print(
-                    f'  Pool for {icd3}+"{modifier_text}": '
-                    f'{len(primary):,} primary + {len(modifier):,} modifier '
-                    f'= {len(all_hadm_ids):,} total hadm_ids'
-                )
-                return self._build_pool(all_hadm_ids)
-        return self._build_pool(primary)
-
-    def for_query_stratified(
-        self,
-        icd3: str,
-        query_vec: NDArray[np.float32],
-        prefilter_n: int,
-        modifier_text: str | None = None,
-        strata_other_frac: float = 0.2,
-    ) -> CandidatePool:
-        """Build a stratified candidate pool that preserves multi-cluster structure.
-
-        For comorbidity modifiers, splits hadm_ids into three strata:
-        intersection (primary ∩ modifier), primary-only, modifier-only.
-        Allocates prefilter_n slots proportionally and fills each stratum
-        by cosine similarity to the query, then concatenates.
-
-        For demographic/unknown modifiers, falls back to a single stratum.
-        """
-        primary = self._condition_hadm_ids(icd3)
-
-        if modifier_text:
-            modifier = self._comorbidity_hadm_ids(modifier_text)
-            if modifier:
-                intersection = primary & modifier
-                primary_only = primary - modifier
-                modifier_only = modifier - primary
-
-                n_other = int(prefilter_n * strata_other_frac)
-                n_intersection = prefilter_n - 2 * n_other
-
-                strata = [
-                    ('intersection', intersection, n_intersection),
-                    ('primary_only', primary_only, n_other),
-                    ('modifier_only', modifier_only, n_other),
-                ]
-
-                pools = []
-                unused = 0
-                for name, hadm_ids, budget in strata:
-                    if not hadm_ids:
-                        unused += budget
-                        continue
-                    stratum_pool = self._build_pool(hadm_ids)
-                    sim = stratum_pool.sim_to_query(query_vec)
-                    take = min(budget, stratum_pool.n)
-                    if take < budget:
-                        unused += budget - take
-                    top_idx = np.argsort(sim)[::-1][:take].copy()
-                    pools.append((stratum_pool.slice(top_idx), name, take))
-
-                # Redistribute unused slots to intersection pool
-                if unused > 0 and pools:
-                    first_pool, first_name, first_take = pools[0]
-                    parent_pool = self._build_pool(
-                        intersection if first_name == 'intersection' else primary
-                    )
-                    sim = parent_pool.sim_to_query(query_vec)
-                    new_take = min(first_take + unused, parent_pool.n)
-                    top_idx = np.argsort(sim)[::-1][:new_take].copy()
-                    pools[0] = (parent_pool.slice(top_idx), first_name, new_take)
-
-                # Concatenate strata
-                all_chunk_ids: list[str] = []
-                all_hadm_ids_list: list[NDArray[np.int64]] = []
-                all_vectors: list[NDArray[np.float32]] = []
-                all_texts: list[str] = []
-                all_sections: list[str] = []
-                all_meta_dfs: list[pl.DataFrame] = []
-
-                for p, name, take in pools:
-                    all_chunk_ids.extend(p.chunk_ids)
-                    all_hadm_ids_list.append(p.hadm_ids)
-                    all_vectors.append(p.vectors)
-                    all_texts.extend(p.texts)
-                    all_sections.extend(p.section_names)
-                    all_meta_dfs.append(p.metadata_df)
-
-                total = sum(t for _, _, t in pools)
-                print(
-                    f'  Stratified pool for {icd3}+"{modifier_text}": '
-                    + ', '.join(f'{name}={t}' for _, name, t in pools)
-                    + f' --> {total} chunks'
-                )
-
-                return CandidatePool(
-                    chunk_ids=all_chunk_ids,
-                    hadm_ids=np.concatenate(all_hadm_ids_list),
-                    vectors=np.concatenate(all_vectors),
-                    texts=all_texts,
-                    section_names=all_sections,
-                    metadata_df=pl.concat(all_meta_dfs),
-                )
-
-        # Fallback: single stratum (demographic modifier or no modifier)
-        pool = self._build_pool(primary)
-        sim = pool.sim_to_query(query_vec)
-        take = min(prefilter_n, pool.n)
-        top_idx = np.argsort(sim)[::-1][:take].copy()
-        return pool.slice(top_idx)
-
-    def for_hadm_ids(self, hadm_ids: set[int]) -> CandidatePool:
-        return self._build_pool(hadm_ids)
-
-    def embed_query(self, query_text: str) -> NDArray[np.float32]:
-        return self._get_embedder().embed_corpus([query_text])[0]
 
 
 def run_retrieval(
@@ -350,47 +144,134 @@ def run_retrieval(
     return results
 
 
-# -- CLI: inspect a candidate pool --
-if __name__ == '__main__':
-    import argparse
+class CandidatePoolBuilder:
+    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str = 'cuda'):
+        self._con = con
+        self._embedder = Embedder(cfg.embedding_model, device=device, batch_size=1)
+        self._condition_to_hadm_ids_cache: dict[str, set[int]] = {}
+        self._comorbidity_to_hadm_ids_cache: dict[str, set[int]] = {}
+        self._charlson_label_to_col_name = BuildQueryPromptsCfg.load().label_to_charlson_col
 
-    from experiments.mimic.duck_db_init import connect_mimic_duckdb
+        import lancedb
 
-    parser = argparse.ArgumentParser(description='Inspect a per-condition candidate pool')
-    parser.add_argument('icd3', help='3-char ICD-10 prefix (e.g. I63 for stroke)')
-    parser.add_argument('--query', help='Optional query text to run retrieval', default=None)
-    parser.add_argument('--k', type=int, default=10)
-    parser.add_argument('--prefilter', type=int, default=500)
-    parser.add_argument('--device', default='cuda')
-    args = parser.parse_args()
+        db = lancedb.connect(VECTOR_DB_DIR)
+        arrow_table = db.open_table('chunks').to_arrow()
 
-    con = connect_mimic_duckdb()
-
-    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device=args.device)
-    pool = builder.for_condition(args.icd3)
-
-    print(
-        f'\nCandidate pool for {args.icd3}:\n'
-        f'  Chunks: {pool.n:,}\n'
-        f'  Unique hadm_ids: {len(set(pool.hadm_ids)):,}\n'
-        f'  Sections: {pl.Series(pool.section_names).value_counts().sort("count", descending=True)}'
-    )
-
-    if args.query:
-        query_vec = builder.embed_query(args.query)
-        results = run_retrieval(
-            pool,
-            query_vec,
-            strategies=['top_k', 'mmr', 'facility_location'],
-            k_values=[args.k],
-            lam_values=[0.5],
-            prefilter_n=args.prefilter,
+        vec_column = arrow_table.column('vector')
+        combined = vec_column.combine_chunks()
+        dim = combined.type.list_size
+        self._corpus_vectors = (
+            combined.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
         )
-        for r in results:
-            print(
-                f'\n--- {r.strategy} (k={r.k}, lam={r.lam}) ---\n'
-                f'  Unique hadm_ids selected: {len(set(r.selected_hadm_ids))}\n'
-                f'  Avg sim to query: {r.sim_to_query.mean():.4f}'
-            )
-            for i, idx in enumerate(r.selected_indices[:5]):
-                print(f'  [{i + 1}] sim={r.sim_to_query[i]:.4f}  {pool.texts[idx][:120]}...')
+
+        self._corpus_df = pl.DataFrame(arrow_table.drop('vector'))
+        self._hadm_id_array: NDArray[np.int64] = self._corpus_df['hadm_id'].to_numpy()
+
+    def for_query_stratified(
+        self,
+        icd3: str,
+        query_vec: NDArray[np.float32],
+        prefilter_n: int,
+        modifier_text: str | None = None,
+        strata_other_frac: float = 0.2,
+    ) -> CandidatePool:
+        """Build a stratified candidate pool that preserves multi-cluster structure.
+
+        For comorbidity modifiers, splits hadm_ids into three strata:
+        intersection (primary & modifier), primary-only, modifier-only.
+        Allocates prefilter_n slots proportionally and fills each stratum
+        by cosine similarity to the query, then concatenates.
+
+        For demographic/unknown modifiers, falls back to a single stratum.
+        """
+        primary_hadm_ids = self._condition_hadm_ids(icd3)
+
+        if modifier_text:
+            modifier = self._comorbidity_hadm_ids(modifier_text)
+            if modifier:
+                intersection_ids = primary_hadm_ids & modifier
+                primary_only_ids = primary_hadm_ids - modifier
+                modifier_only_ids = modifier - primary_hadm_ids
+
+                n_other = int(prefilter_n * strata_other_frac)
+                n_intersection = prefilter_n - 2 * n_other
+
+                strata = [
+                    ('intersection', intersection_ids, n_intersection),
+                    ('primary_only', primary_only_ids, n_other),
+                    ('modifier_only', modifier_only_ids, n_other),
+                ]
+
+                pools: list[tuple[CandidatePool, str, int]] = []
+                unused = 0
+                for name, hadm_ids, budget in strata:
+                    if not hadm_ids:
+                        unused += budget
+                        continue
+                    stratum_pool = self._build_pool(hadm_ids)
+                    take = min(budget, stratum_pool.n)
+                    if take < budget:
+                        unused += budget - take
+                    pools.append((stratum_pool.top_k_by_similarity(query_vec, take), name, take))
+
+                # Redistribute unused slots to intersection pool
+                if unused > 0 and pools:
+                    _, first_name, first_take = pools[0]
+                    parent_pool = self._build_pool(
+                        intersection_ids if first_name == 'intersection' else primary_hadm_ids
+                    )
+                    new_take = min(first_take + unused, parent_pool.n)
+                    pools[0] = (
+                        parent_pool.top_k_by_similarity(query_vec, new_take),
+                        first_name,
+                        new_take,
+                    )
+
+                return CandidatePool.concat([p for p, _, _ in pools])
+
+        # Fallback: single stratum (demographic modifier or no modifier)
+        pool = self._build_pool(primary_hadm_ids)
+        return pool.top_k_by_similarity(query_vec, prefilter_n)
+
+    def _condition_hadm_ids(self, icd3: str) -> set[int]:
+        if icd3 not in self._condition_to_hadm_ids_cache:
+            hadm_ids = self._con.execute(f"""--sql
+                SELECT DISTINCT diagnoses_icd.hadm_id
+                FROM diagnoses_icd
+                WHERE diagnoses_icd.icd_version = 10
+                AND SUBSTR(diagnoses_icd.icd_code, 1, 3) = '{icd3}'
+            """).pl()['hadm_id']
+            self._condition_to_hadm_ids_cache[icd3] = set(hadm_ids.to_list())
+        return self._condition_to_hadm_ids_cache[icd3]
+
+    def _build_pool(self, hadm_ids: set[int]) -> CandidatePool:
+        mask = np.isin(self._hadm_id_array, np.fromiter(hadm_ids, dtype=np.int64))
+        pool_df = self._corpus_df.filter(pl.Series(mask))
+        pool_vectors = self._corpus_vectors[mask]
+
+        return CandidatePool(
+            chunk_ids=pool_df['chunk_id'].to_list(),
+            hadm_ids=pool_df['hadm_id'].to_numpy(),
+            vectors=pool_vectors,
+            texts=pool_df['text'].to_list(),
+            section_names=pool_df['section_name'].to_list(),
+            metadata_df=pool_df,
+        )
+
+    def _comorbidity_hadm_ids(self, modifier_text: str) -> set[int]:
+        """All hadm_ids carrying this comorbidity (via Charlson table)."""
+        if modifier_text not in self._comorbidity_to_hadm_ids_cache:
+            col = self._charlson_label_to_col_name.get(modifier_text)
+            if col is None:
+                self._comorbidity_to_hadm_ids_cache[modifier_text] = set()
+            else:
+                hadm_ids = self._con.execute(f"""--sql
+                    SELECT DISTINCT charlson.hadm_id
+                    FROM charlson
+                    WHERE charlson.{col} > 0
+                """).pl()['hadm_id']
+                self._comorbidity_to_hadm_ids_cache[modifier_text] = set(hadm_ids.to_list())
+        return self._comorbidity_to_hadm_ids_cache[modifier_text]
+
+    def embed_query(self, query_text: str) -> NDArray[np.float32]:
+        return self._embedder.embed_corpus([query_text])[0]

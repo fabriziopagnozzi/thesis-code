@@ -108,14 +108,6 @@ def annotate(
     Returns DataFrame with columns:
         query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
     """
-    print(
-        f'\n--------- Gold annotation config ---------\n'
-        f'model={gold_annotation_cfg.model}  temperature={gold_annotation_cfg.temperature}  '
-        f'top_p={gold_annotation_cfg.top_p}  top_k={gold_annotation_cfg.top_k}  '
-        f'num_ctx={gold_annotation_cfg.num_ctx}  think={gold_annotation_cfg.think}\n'
-        f'  prefilter_n={gold_annotation_cfg.prefilter_n}  batch_size={gold_annotation_cfg.batch_size}\n'
-        f'  queries={len(queries_df)}\n'
-    )
 
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
 
@@ -144,16 +136,6 @@ def annotate(
         sim_to_query = work_pool.sim_to_query(query_vec)
         sorted_indices = np.argsort(sim_to_query)[::-1]
         work_pool = work_pool.slice(sorted_indices.copy())
-
-        n_batches = (
-            work_pool.n + gold_annotation_cfg.batch_size - 1
-        ) // gold_annotation_cfg.batch_size  # type: ignore
-        print(
-            f'  [{i + 1}/{len(queries_df)}] {icd3} — '
-            f'work_pool={work_pool.n} chunks, '
-            f'{n_batches} batches'
-        )
-        print(f'    query: {query_text[:120]}{"..." if len(query_text) > 120 else ""}')
 
         facets = annotate_query(
             query_text,
