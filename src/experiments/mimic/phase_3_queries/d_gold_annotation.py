@@ -4,8 +4,9 @@ Step 4.2: Gold facet annotation via map-reduce LLM calls.
 For each query + its candidate pool, annotates which chunks support which
 facets (aspects of the answer). Uses ollama for local inference.
 
-Map: batches of N chunks → LLM extracts facts + facet labels + chunk citations
-Reduce: merge facet labels across batches (deterministic, no LLM)
+STEPS:
+    Map: batches of N chunks --> LLM extracts facts + facet labels + chunk citations
+    Reduce: merge facet labels across batches (deterministic)
 
 Output: gold_annotations.parquet
 """
@@ -57,21 +58,32 @@ def run_gold_annotation(
     if con is None:
         con = connect_mimic_duckdb()
 
-    # Load filtered queries (only those that passed divergence filter)
-    div_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'
-    if div_path.exists():
-        all_queries = pl.read_parquet(div_path)
+    # Load filtered queries
+    filtered_queries_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'
+    if filtered_queries_path.exists():
+        all_queries = pl.read_parquet(filtered_queries_path)
         queries_df = all_queries.filter(pl.col('passes_filter'))
-        print(
-            f'Loaded {len(queries_df):,} queries passing divergence filter '
-            f'(from {len(all_queries):,} total)'
-        )
     else:
         queries_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
-        print(f'No divergence_stats.parquet found, using all {len(queries_df):,} queries')
+
+    # Load patient metadata for chunk context
+    meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
+    patient_meta = _build_patient_meta(meta_path) if meta_path.exists() else None
+    if patient_meta:
+        print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
+
+    # Resume from previous run if output exists
+    out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
+    done_texts: set[str] = set()
+    if out_path.exists():
+        prev = pl.read_parquet(out_path)
+        done_texts = set(prev['query_text'].to_list())
+        print(
+            f'Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
+        )
 
     builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
-    result = annotate(queries_df, builder)
+    result = annotate(queries_df, builder, patient_meta, done_texts)
 
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
     result.write_parquet(out_path)
@@ -83,57 +95,29 @@ def run_gold_annotation(
         f'  Queries with 0 facets: {result.filter(pl.col("n_facets") == 0).height}'
     )
 
-    if len(result) > 0:
-        sample = result.row(0, named=True)
-        print(f'\n--- Sample annotation ---\n  Query: {sample["query_text"][:600]}')
-        facets = json.loads(sample['facets_json'])
-        for label, cids in list(facets.items())[:5]:
-            print(f'  [{label}] → {len(cids)} chunks')
-
     return result
 
 
 def annotate(
     queries_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
-    prefilter_n: int | None = None,
-    batch_size: int | None = None,
+    patient_meta: dict[int, str] | None,
+    done_texts: set[str],
 ) -> pl.DataFrame:
-    """Annotate all queries. Groups by icd10_3char for pool reuse.
-
+    """Annotate all queries.
     Returns DataFrame with columns:
         query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
     """
-    if prefilter_n is None:
-        prefilter_n = gold_annotation_cfg.prefilter_n
-    if batch_size is None:
-        batch_size = gold_annotation_cfg.batch_size
-
-    # Load patient metadata for chunk context
-    meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
-    patient_meta = _build_patient_meta(meta_path) if meta_path.exists() else {}
-    if patient_meta:
-        print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
-
-    model_name = gold_annotation_cfg.model or 'default'
     print(
-        f'\n-- Gold annotation config --\n'
-        f'model={model_name}  temperature={gold_annotation_cfg.temperature}  '
+        f'\n--------- Gold annotation config ---------\n'
+        f'model={gold_annotation_cfg.model}  temperature={gold_annotation_cfg.temperature}  '
         f'top_p={gold_annotation_cfg.top_p}  top_k={gold_annotation_cfg.top_k}  '
         f'num_ctx={gold_annotation_cfg.num_ctx}  think={gold_annotation_cfg.think}\n'
-        f'  prefilter_n={prefilter_n}  batch_size={batch_size}\n'
+        f'  prefilter_n={gold_annotation_cfg.prefilter_n}  batch_size={gold_annotation_cfg.batch_size}\n'
         f'  queries={len(queries_df)}\n'
     )
 
-    # Resume from previous run if output exists
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
-    done_texts: set[str] = set()
-    if out_path.exists():
-        prev = pl.read_parquet(out_path)
-        done_texts = set(prev['query_text'].to_list())
-        print(
-            f'  Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
-        )
 
     for i, row in enumerate(
         tqdm(queries_df.iter_rows(named=True), total=len(queries_df), desc='Gold annotation')
@@ -151,7 +135,7 @@ def annotate(
         work_pool = builder.for_query_stratified(
             icd3,
             query_vec,
-            prefilter_n=prefilter_n,
+            prefilter_n=gold_annotation_cfg.prefilter_n,
             modifier_text=modifier_text,
         )
 
@@ -161,7 +145,9 @@ def annotate(
         sorted_indices = np.argsort(sim_to_query)[::-1]
         work_pool = work_pool.slice(sorted_indices.copy())
 
-        n_batches = (work_pool.n + batch_size - 1) // batch_size  # type: ignore
+        n_batches = (
+            work_pool.n + gold_annotation_cfg.batch_size - 1
+        ) // gold_annotation_cfg.batch_size  # type: ignore
         print(
             f'  [{i + 1}/{len(queries_df)}] {icd3} — '
             f'work_pool={work_pool.n} chunks, '
@@ -170,7 +156,10 @@ def annotate(
         print(f'    query: {query_text[:120]}{"..." if len(query_text) > 120 else ""}')
 
         facets = annotate_query(
-            query_text, work_pool, batch_size=batch_size, patient_meta=patient_meta
+            query_text,
+            work_pool,
+            batch_size=gold_annotation_cfg.batch_size,
+            patient_meta=patient_meta,
         )  # type: ignore
 
         all_gold_chunks = set()
@@ -229,16 +218,6 @@ def annotate_query(
         batch_hadm_ids = pool.hadm_ids[start:end].tolist()
         batch_meta = [patient_meta.get(h, '') for h in batch_hadm_ids] if patient_meta else None
 
-        # Print a sample chunk from the first batch
-        if i == 0:
-            sample = _format_chunk_batch(
-                batch_ids[:1],
-                batch_texts[:1],
-                sections=batch_sections[:1],
-                meta_lines=batch_meta[:1] if batch_meta else None,
-            )
-            print(f'    -- sample chunk --\n{sample}\n    --')
-
         batch_result = annotate_batch(
             query_text,
             batch_ids,
@@ -255,7 +234,7 @@ def annotate_query(
     facets = reduce_facets(all_batch_results)
     total_facts = sum(len(b) for b in all_batch_results)
     all_gold = {cid for cids in facets.values() for cid in cids}
-    print(f'    reduce: {total_facts} facts → {len(facets)} facets, {len(all_gold)} gold chunks')
+    print(f'    reduce: {total_facts} facts --> {len(facets)} facets, {len(all_gold)} gold chunks')
     return facets
 
 
@@ -306,7 +285,7 @@ def annotate_batch(
         )
     except Exception as e:
         print(
-            f'    batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}'
+            f'[ERROR] batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}'
         )
         return []
 
@@ -338,7 +317,7 @@ def annotate_batch(
 
     facet_labels = {item['facet_label'] for item in cleaned}
     print(
-        f'    batch {batch_idx + 1}/{n_batches}: '
+        f'[INFO] batch {batch_idx + 1}/{n_batches}: '
         f'{len(cleaned)} facts, {len(facet_labels)} facets, '
         f'{n_dropped} dropped '
         f'({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens)'
@@ -364,7 +343,6 @@ def _format_chunk_batch(
 
 
 def _build_patient_meta(meta_path) -> dict[int, str]:
-    """Build hadm_id -> one-line patient summary for chunk context."""
     meta = pl.read_parquet(meta_path)
 
     charlson_cols = {
@@ -405,7 +383,6 @@ def _build_patient_meta(meta_path) -> dict[int, str]:
 
 
 def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
-    """Merge facet annotations across batches. Groups by exact label, unions chunk_ids."""
     facet_to_chunks: dict[str, set[str]] = {}
 
     for batch in all_batch_results:

@@ -10,7 +10,7 @@ from experiments.mimic.configs import MIMIC_RESULTS_DIR, NoteChunkingCfg
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.chunks_classes import MimicIVChunk
 
-_cfg = NoteChunkingCfg.load()
+chunking_cfg = NoteChunkingCfg.load()
 
 # -- BHC problem markers in the target column --
 BHC_PROBLEM_RE = re.compile(r'^#\s*(.+)', re.MULTILINE)
@@ -46,31 +46,16 @@ class ParsedNote:
 def run_note_chunking(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: NoteChunkingCfg | None = None,
-    interactive: bool = False,
 ) -> pl.DataFrame | None:
-    global _cfg
+    global chunking_cfg
     if cfg is not None:
-        _cfg = cfg
+        chunking_cfg = cfg
 
     if con is None:
         con = connect_mimic_duckdb()
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    if interactive:
-        while True:
-            try:
-                raw = input('\nLimit (or q to quit): ').strip()
-            except EOFError, KeyboardInterrupt:
-                break
-            if raw.lower() == 'q':
-                break
-            if not raw.isdigit():
-                print('Enter a positive integer.')
-                continue
-            parse_all_notes(con, limit=int(raw))
-        return None
-    else:
-        return parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks.parquet')
+    return parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks.parquet')
 
 
 def parse_all_notes(
@@ -137,12 +122,12 @@ def parse_note(
     seq = 0
 
     for section_name, section_text in sections:
-        if section_name in _cfg.skip_sections:
+        if section_name in chunking_cfg.skip_sections:
             continue
-        if section_name in _cfg.metadata_only_sections:
+        if section_name in chunking_cfg.metadata_only_sections:
             chief_complaint = section_text
             continue
-        if section_name not in _cfg.keep_sections:
+        if section_name not in chunking_cfg.keep_sections:
             continue
 
         seq += 1
@@ -186,7 +171,7 @@ def parse_note(
 
 def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
     """Split <TAG>-delimited input into (section_name, section_text) pairs."""
-    matches = list(_cfg.tag_re.finditer(text))
+    matches = list(chunking_cfg.tag_re.finditer(text))
     if not matches:
         return [('_full_note', text.strip())]
 
@@ -271,16 +256,9 @@ def _split_bhc_problems(text: str) -> list[tuple[str | None, str, str | None]]:
 
 
 if __name__ == '__main__':
-    import argparse
-
     from experiments.mimic.configs import load_config_from_main
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--interactive', action='store_true')
-    args, _ = parser.parse_known_args()
 
     raw = load_config_from_main(phase=1)
     run_note_chunking(
         cfg=NoteChunkingCfg(**raw['note_chunking']),
-        interactive=args.interactive,
     )

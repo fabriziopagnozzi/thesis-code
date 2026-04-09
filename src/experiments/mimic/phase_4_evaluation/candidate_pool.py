@@ -272,7 +272,7 @@ class CandidatePoolBuilder:
                 print(
                     f'  Stratified pool for {icd3}+"{modifier_text}": '
                     + ', '.join(f'{name}={t}' for _, name, t in pools)
-                    + f' → {total} chunks'
+                    + f' --> {total} chunks'
                 )
 
                 return CandidatePool(

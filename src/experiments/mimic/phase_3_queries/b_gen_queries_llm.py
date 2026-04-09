@@ -16,13 +16,13 @@ from tqdm import tqdm
 from experiments.mimic.configs import MIMIC_RESULTS_DIR, GenQueriesCfg
 from helpers.ollama_client import generate
 
-_cfg = GenQueriesCfg.load()
+gen_queries_cfg = GenQueriesCfg.load()
 
 
 def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
-    global _cfg
+    global gen_queries_cfg
     if cfg is not None:
-        _cfg = cfg
+        gen_queries_cfg = cfg
 
     prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
     print(f'Loaded {len(prompts_df):,} prompts')
@@ -36,7 +36,7 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
     results: list[dict] = resume_df.to_dicts() if resume_df is not None else []
     for new_result in generate_queries(prompts_df, resume_df):
         results.append(new_result)
-        if len(results) % _cfg.save_every == 0:
+        if len(results) % gen_queries_cfg.save_every == 0:
             pl.DataFrame(results).write_parquet(out_path)
             print(f'  Checkpoint: {len(results)} queries saved')
 
@@ -81,11 +81,11 @@ def generate_queries(
         try:
             query_text = generate(
                 row['full_prompt'],
-                model=_cfg.model or None,
-                temperature=_cfg.temperature,
-                top_p=_cfg.top_p,
-                top_k=_cfg.top_k,
-                think=_cfg.think,
+                model=gen_queries_cfg.model or None,
+                temperature=gen_queries_cfg.temperature,
+                top_p=gen_queries_cfg.top_p,
+                top_k=gen_queries_cfg.top_k,
+                think=gen_queries_cfg.think,
                 stream=True,
             ).strip()
         except Exception as e:
