@@ -2,7 +2,7 @@
 Step 3.1: Build grounded LLM prompts for query generation.
 
 For each top condition (by frequency x comorbidity richness):
-    1. Enumerate (modifier, persona) pairs - comorbidity axes from Charlson + demographic modifiers
+    1. Enumerate (condition, modifier) pairs - comorbidity axes from Charlson + demographic modifiers
     2. Sample real BHC chunks from the condition+modifier intersection
     3. Assemble a full prompt grounded in real clinical data
 
@@ -72,7 +72,7 @@ def build_query_prompts(
     results = []
     skipped = 0
 
-    # OUTER LOOP: iterate over top N conditions (defined in global_cfg)
+    # OUTER LOOP: iterate over top N conditions from condition_stats (N defined in global_cfg)
     for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
         icd3 = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd3
@@ -98,7 +98,6 @@ def build_query_prompts(
                 con, cond_hadm_ids, modifier_text, modifier_type
             )
             if not candidate_hadm_ids:
-                skipped += len(query_prompts_cfg.personas)
                 continue
 
             # SAMPLE: use examples from the data to guide the LLM in the prompt
@@ -110,33 +109,25 @@ def build_query_prompts(
                 seed=seed,
             )
             if not data_samples:
-                skipped += len(query_prompts_cfg.personas)
                 continue
 
-            # INNER LOOP 2: iterate over the personas
-            for persona_name, persona_template in query_prompts_cfg.personas.items():
-                full_prompt = query_prompts_cfg.prompt_template.format(
-                    persona_prompt=persona_template.format(
-                        condition=cond_name, modifier=modifier_text
-                    ),
-                    condition=cond_name,
-                    modifier=modifier_text,
-                    chunks_block=_format_chunks_block(data_samples),
-                )
-                results.append(
-                    {
-                        'icd10_3char': icd3,
-                        'condition_name': cond_name,
-                        'modifier_text': modifier_text,
-                        'modifier_type': modifier_type,
-                        'persona': persona_name,
-                        'n_grounding_chunks': len(data_samples),
-                        'n_intersection_admissions': len(candidate_hadm_ids),
-                        'grounding_hadm_ids': [s['hadm_id'] for s in data_samples],
-                        'full_prompt': full_prompt,
-                    }
-                )
-            # END INNER LOOP 2: iterate over the personas
+            full_prompt = query_prompts_cfg.prompt_template.format(
+                condition=cond_name,
+                modifier=modifier_text,
+                chunks_block=_format_chunks_block(data_samples),
+            )
+            results.append(
+                {
+                    'icd10_3char': icd3,
+                    'condition_name': cond_name,
+                    'modifier_text': modifier_text,
+                    'modifier_type': modifier_type,
+                    'n_grounding_chunks': len(data_samples),
+                    'n_intersection_admissions': len(candidate_hadm_ids),
+                    'grounding_hadm_ids': [s['hadm_id'] for s in data_samples],
+                    'full_prompt': full_prompt,
+                }
+            )
         # END INNER LOOP 1: iterate over the modifiers
     # END OUTER iterate over top N conditions (defined in global_cfg)
 
@@ -144,7 +135,7 @@ def build_query_prompts(
     return pl.DataFrame(results)
 
 
-# -- Step 1: enumerate (condition, modifier, persona) specs --
+# -- Step 1: enumerate (condition, modifier) specs --
 def _find_top_comorbidity_modifiers(
     con, condition_icd3: str, n: int = 3
 ) -> list[tuple[str, str, float]]:
@@ -194,6 +185,7 @@ def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -
     if col is None:
         return set()
     placeholders = ','.join(str(h) for h in condition_hadm_ids)
+
     rows = con.execute(f"""--sql
         SELECT charlson.hadm_id
         FROM charlson
@@ -209,6 +201,7 @@ def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -
         return set()
     _, op, val = filt
     placeholders = ','.join(str(h) for h in condition_hadm_ids)
+
     rows = con.execute(f"""--sql
         SELECT age.hadm_id
         FROM age

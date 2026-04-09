@@ -5,9 +5,9 @@ import re
 import ollama
 
 OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
-OLLAMA_DEFAULT_MODEL = os.environ.get('OLLAMA_MODEL', 'qwen3.5:35b')
+OLLAMA_DEFAULT_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma4:26b')
 
-_client = ollama.Client(host=OLLAMA_HOST, timeout=300)
+ollama_client = ollama.Client(host=OLLAMA_HOST, timeout=300)
 
 
 def generate(
@@ -43,7 +43,7 @@ def generate(
     if stream:
         content_parts: list[str] = []
         thinking_done = False
-        for chunk in _client.chat(
+        for chunk in ollama_client.chat(
             model=model if model else OLLAMA_DEFAULT_MODEL,
             messages=messages,
             format='json' if json_mode else '',
@@ -64,7 +64,7 @@ def generate(
         print()
         return ''.join(content_parts)
 
-    resp = _client.chat(
+    resp = ollama_client.chat(
         model=model if model else OLLAMA_DEFAULT_MODEL,
         messages=messages,
         format='json' if json_mode else '',
@@ -143,7 +143,7 @@ def generate_json(
     _model = model if model else OLLAMA_DEFAULT_MODEL
 
     for attempt in range(max_retries + 1):
-        resp = _client.chat(
+        resp = ollama_client.chat(
             model=_model,
             messages=messages,
             format='json',
