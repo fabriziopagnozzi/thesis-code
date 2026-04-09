@@ -22,7 +22,7 @@ from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnota
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
-from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePoolBuilder
+from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
 gold_annotation_cfg = GoldAnnotationCfg.load()
@@ -149,7 +149,10 @@ def annotate(
 
         # Pool is already stratified and prefiltered
         work_pool = builder.for_query_stratified(
-            icd3, query_vec, prefilter_n=prefilter_n, modifier_text=modifier_text,
+            icd3,
+            query_vec,
+            prefilter_n=prefilter_n,
+            modifier_text=modifier_text,
         )
 
         # Sort by descending similarity so most relevant chunks are in
@@ -161,7 +164,7 @@ def annotate(
         n_batches = (work_pool.n + batch_size - 1) // batch_size  # type: ignore
         print(
             f'  [{i + 1}/{len(queries_df)}] {icd3} — '
-            f'full_pool={pool.n}, work_pool={work_pool.n} chunks, '
+            f'work_pool={work_pool.n} chunks, '
             f'{n_batches} batches'
         )
         print(f'    query: {query_text[:120]}{"..." if len(query_text) > 120 else ""}')
@@ -402,11 +405,7 @@ def _build_patient_meta(meta_path) -> dict[int, str]:
 
 
 def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
-    """Merge facet annotations across batches. Deterministic (no LLM).
-
-    1. Group by exact label, union chunk_ids.
-    2. Fuzzy-merge labels that share a long common prefix or have small edit distance (e.g. insulin_titration ≈ insulin_dose_titration).
-    """
+    """Merge facet annotations across batches. Groups by exact label, unions chunk_ids."""
     facet_to_chunks: dict[str, set[str]] = {}
 
     for batch in all_batch_results:
@@ -416,88 +415,7 @@ def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
                 facet_to_chunks[label] = set()
             facet_to_chunks[label].update(item['chunk_ids'])
 
-    facet_to_chunks = _fuzzy_merge_facets(facet_to_chunks)
     return {label: sorted(cids) for label, cids in facet_to_chunks.items()}
-
-
-def _fuzzy_merge_facets(
-    facets: dict[str, set[str]],
-    max_edit_dist: int = 5,
-    min_prefix_ratio: float = 0.7,
-) -> dict[str, set[str]]:
-    labels = list(facets.keys())
-    if len(labels) <= 1:
-        return facets
-
-    parent = {label: label for label in labels}
-
-    def find(x: str) -> str:
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(a: str, b: str) -> None:
-        ra, rb = find(a), find(b)
-        if ra != rb:
-            # Keep the label with more chunks as root
-            if len(facets[ra]) >= len(facets[rb]):
-                parent[rb] = ra
-            else:
-                parent[ra] = rb
-
-    for i in range(len(labels)):
-        for j in range(i + 1, len(labels)):
-            a, b = labels[i], labels[j]
-            if find(a) == find(b):
-                continue
-            if _should_merge(a, b, max_edit_dist, min_prefix_ratio):
-                union(a, b)
-
-    groups: dict[str, set[str]] = {}
-    for lbl in labels:
-        root = find(lbl)
-        if root not in groups:
-            groups[root] = set()
-        groups[root].update(facets[lbl])
-
-    if len(groups) < len(labels):
-        merged_count = len(labels) - len(groups)
-        print(f'    fuzzy merge: {len(labels)} → {len(groups)} facets ({merged_count} merged)')
-
-    return groups
-
-
-def _should_merge(a: str, b: str, max_edit_dist: int, min_prefix_ratio: float) -> bool:
-    shorter = min(len(a), len(b))
-    if shorter == 0:
-        return False
-    prefix_len = 0
-    for ca, cb in zip(a, b, strict=False):
-        if ca != cb:
-            break
-        prefix_len += 1
-    if prefix_len / shorter >= min_prefix_ratio:
-        return True
-
-    if abs(len(a) - len(b)) > max_edit_dist:
-        return False
-    return _edit_distance(a, b, max_edit_dist) <= max_edit_dist
-
-
-def _edit_distance(a: str, b: str, threshold: int) -> int:
-    if len(a) < len(b):
-        a, b = b, a
-    prev = list(range(len(b) + 1))
-    for i in range(1, len(a) + 1):
-        curr = [i] + [0] * len(b)
-        for j in range(1, len(b) + 1):
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
-        if min(curr) > threshold:
-            return threshold + 1
-        prev = curr
-    return prev[len(b)]
 
 
 if __name__ == '__main__':
