@@ -29,6 +29,58 @@ class RetrievalResult:
     sim_to_query: NDArray[np.float32]
 
 
+def run_retrieval(
+    pool: CandidatePool,
+    query_vec: NDArray[np.float32],
+    strategies: list[ScoringFunction],
+    k_values: list[int],
+    lam_values: list[float],
+    prefilter_n: int | None = 500,
+) -> list[RetrievalResult]:
+    sim_to_query = pool.sim_to_query(query_vec)
+
+    if prefilter_n is not None and pool.n > prefilter_n:
+        top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
+        pool = pool.slice(top_indices)
+        sim_to_query = sim_to_query[top_indices]
+
+    sim_matrix = pool.sim_matrix()
+
+    results = []
+    for strategy in strategies:
+        needs_lambda = strategy in ('mmr', 'gmmr', 'facility_location')
+        lams = lam_values if needs_lambda else [None]
+
+        for lam in lams:
+            for k in k_values:
+                if k > pool.n:
+                    break
+
+                selected = select(
+                    strategy=strategy,
+                    sim_to_query=sim_to_query,
+                    k=k,
+                    sim_matrix=sim_matrix,
+                    embeddings=pool.vectors,
+                    query_embedding=query_vec,
+                    lam=lam if lam is not None else 0.5,
+                )
+
+                results.append(
+                    RetrievalResult(
+                        strategy=strategy,
+                        k=k,
+                        lam=lam,
+                        selected_indices=selected,
+                        selected_chunk_ids=[pool.chunk_ids[i] for i in selected],
+                        selected_hadm_ids=[int(pool.hadm_ids[i]) for i in selected],
+                        sim_to_query=sim_to_query[selected],
+                    )
+                )
+
+    return results
+
+
 @dataclass
 class CandidatePool:
     chunk_ids: list[str]
@@ -90,58 +142,6 @@ class CandidatePool:
             section_names=[s for p in pools for s in p.section_names],
             metadata_df=pl.concat([p.metadata_df for p in pools]),
         )
-
-
-def run_retrieval(
-    pool: CandidatePool,
-    query_vec: NDArray[np.float32],
-    strategies: list[ScoringFunction],
-    k_values: list[int],
-    lam_values: list[float],
-    prefilter_n: int | None = 500,
-) -> list[RetrievalResult]:
-    sim_to_query = pool.sim_to_query(query_vec)
-
-    if prefilter_n is not None and pool.n > prefilter_n:
-        top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
-        pool = pool.slice(top_indices)
-        sim_to_query = sim_to_query[top_indices]
-
-    sim_matrix = pool.sim_matrix()
-
-    results = []
-    for strategy in strategies:
-        needs_lambda = strategy in ('mmr', 'gmmr', 'facility_location')
-        lams = lam_values if needs_lambda else [None]
-
-        for lam in lams:
-            for k in k_values:
-                if k > pool.n:
-                    continue
-
-                selected = select(
-                    strategy=strategy,
-                    sim_to_query=sim_to_query,
-                    k=k,
-                    sim_matrix=sim_matrix,
-                    embeddings=pool.vectors,
-                    query_embedding=query_vec,
-                    lam=lam if lam is not None else 0.5,
-                )
-
-                results.append(
-                    RetrievalResult(
-                        strategy=strategy,
-                        k=k,
-                        lam=lam,
-                        selected_indices=selected,
-                        selected_chunk_ids=[pool.chunk_ids[i] for i in selected],
-                        selected_hadm_ids=[int(pool.hadm_ids[i]) for i in selected],
-                        sim_to_query=sim_to_query[selected],
-                    )
-                )
-
-    return results
 
 
 class CandidatePoolBuilder:

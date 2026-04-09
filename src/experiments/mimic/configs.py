@@ -138,7 +138,6 @@ class BuildQueryPromptsCfg(BaseModel):
     high_value_sections: list[str]
     charlson_labels: dict[str, str]
     demographic_modifiers: list[DemographicModifier]
-    personas: dict[str, str]
     prompt_template: str
 
     @computed_field

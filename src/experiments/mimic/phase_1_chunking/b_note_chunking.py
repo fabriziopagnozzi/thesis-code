@@ -61,7 +61,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
             discharge.subject_id,
             discharge.hadm_id,
             bhc.input,
-            bhc.target
+            discharge.text
         FROM bhc
         JOIN discharge ON bhc.note_id = discharge.note_id
         JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
@@ -71,9 +71,12 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
     all_dicts: list[dict] = []
 
-    for note_id, subject_id, hadm_id, input_text, target_text in tqdm(rows, desc='Parsing notes'):
+    for note_id, subject_id, hadm_id, input_text, discharge_text in tqdm(
+        rows, desc='Parsing notes'
+    ):
+        bhc_text = _extract_bhc_from_discharge(discharge_text)
         all_dicts.extend(
-            asdict(c) for c in parse_note(note_id, subject_id, hadm_id, input_text, target_text)
+            asdict(c) for c in parse_note(note_id, subject_id, hadm_id, input_text, bhc_text)
         )
 
     df = pl.DataFrame(
@@ -100,7 +103,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
 
 def parse_note(
-    note_id: str, subject_id: int, hadm_id: int, input_text: str, target_text: str
+    note_id: str, subject_id: int, hadm_id: int, input_text: str, bhc_text: str | None
 ) -> list[MimicIVChunk]:
     sections = _parse_tagged_sections(input_text)
     chunks: list[MimicIVChunk] = []
@@ -131,11 +134,10 @@ def parse_note(
                     approx_tokens=_count_tokens(sub_text),
                 )
             )
-    # END for section_name, section_text in sections:
 
-    # BHC from target column
-    if target_text:
-        for subtext in _split_bhc(target_text):
+    # BHC from discharge.csv (newlines preserved, split on # markers)
+    if bhc_text:
+        for subtext in _split_bhc(bhc_text):
             for sub_text in _fixed_chunk(subtext):
                 seq += 1
                 chunks.append(
@@ -173,19 +175,39 @@ def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
-def _split_bhc(text: str) -> list[str]:
-    """Truncate at TRANSITIONAL ISSUES and return the cleaned BHC text as one block."""
-    TRANSITIONAL_RE = re.compile(
-        r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
-        re.IGNORECASE,
-    )
+_TRANSITIONAL_RE = re.compile(
+    r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
+    re.IGNORECASE,
+)
 
-    trans_match = TRANSITIONAL_RE.search(text)
+_BHC_PROBLEM_RE = re.compile(r'\n\s*#\s*(?=[A-Za-z])')
+
+
+def _extract_bhc_from_discharge(discharge_text: str) -> str | None:
+    """Extract the Brief Hospital Course section from the full discharge note (newlines preserved)."""
+    start = re.search(r'Brief Hospital Course:', discharge_text, re.IGNORECASE)
+    if not start:
+        return None
+
+    bhc_body = discharge_text[start.end() :]
+
+    # Find the next major section header (all-caps line followed by colon)
+    next_section = re.search(r'\n\s*[A-Z][A-Za-z ]+:\s*\n', bhc_body)
+    if next_section:
+        bhc_body = bhc_body[: next_section.start()]
+
+    return bhc_body.strip() or None
+
+
+def _split_bhc(text: str) -> list[str]:
+    """Truncate at TRANSITIONAL ISSUES, then split on # problem markers."""
+    trans_match = _TRANSITIONAL_RE.search(text)
     if trans_match:
         text = text[: trans_match.start()]
 
-    stripped = text.strip()
-    return [stripped] if stripped else []
+    parts = _BHC_PROBLEM_RE.split(text)
+    result = [p.strip() for p in parts if p.strip()]
+    return result
 
 
 def _load_tokenizer(model_name: str) -> Tokenizer:

@@ -39,19 +39,20 @@ build_query_prompts:
       value: 40
 
   prompt_template: |
-    Below are excerpts from real discharge summaries of patients admitted for {condition} where {modifier} was also present. Each excerpt is from the discharge notes, describing clinical management decisions, lab results, diagnoses, and medications.
+    Below are excerpts from real discharge summaries of patients admitted for {condition} where {modifier} was also present.
 
     <START DISCHARGE SUMMARIES EXAMPLES>
     {chunks_block}
     <END DISCHARGE SUMMARIES EXAMPLES>
 
-    Using these real cases as background context (but NOT overfitting to any specific patient in the examples), generate ONE clinical management question about {condition} that:
-    - Requires knowing how treatment, workup, or monitoring changes when {modifier} is present
-    - Is answerable by synthesizing patterns across multiple patient cases
-    - Focuses on a generalizable management decision (drug choice, dosing adjustments, contraindications, monitoring frequency, disposition)
-    - Requires multi-source evidence - no single patient note answers it fully
+    Using these real cases as background, generate ONE question about {condition} that:
+    - Asks what medications, labs, procedures, or complications are observed when {modifier} is present
+    - Can be answered by reading across many patient discharge notes (not from a textbook)
+    - Is concrete and specific (e.g. "What medications are prescribed at discharge for..." or "What complications are seen in..." or "What labs are monitored for...")
+    - Requires evidence from multiple patients — no single note fully answers it
 
-    Make sure to use the given discharge summaries examples only as a reference of what the dataset looks like: you don't have to generate a question about those specific examples: it must be a generalizable question.
+    Keep the question short (1-2 sentences). Do NOT write an abstract clinical reasoning question.
+    The question should ask about observable patterns in the data, not about what "should" be done.
 
     Return ONLY the question, nothing else.
 
@@ -82,11 +83,10 @@ gold_annotation:
   map_system_prompt: >-
     You are a clinical information analyst extracting structured evidence from discharge notes.
     Your task: for a given clinical question, identify which chunks contain relevant information
-    and group them under a small set of high-level clinical facets.
-    A facet is a CLINICAL DECISION CATEGORY (e.g. drug_choice, dose_adjustment, monitoring,
-    contraindication, complication_management) — not a specific drug name, lab value, or patient
-    scenario. Use the fewest facets that completely cover the answer. Be exhaustive in tagging
-    chunks: every chunk relevant to a facet must be listed, not just the best one. Do NOT tag chunks 
+    and group them under a small set of high-level INFORMATION TYPE facets.
+    A facet is a TYPE OF INFORMATION — not a specific drug, lab value, or patient scenario.
+    Use the fewest facets that completely cover the answer. Be exhaustive in tagging
+    chunks: every chunk relevant to a facet must be listed, not just the best one. Do NOT tag chunks
     that are irrelevant to answering the question.
   map_user_template: |
     Question: {query_text}
@@ -97,9 +97,9 @@ gold_annotation:
     {chunks_block}
     <END DISCHARGE NOTES BLOCK>
 
-    Identify the clinical aspects (facets) needed to fully answer the question. For each facet:
-    1. Assign a short snake_case label describing the DECISION CATEGORY, not a specific drug or value.
-       Good labels: "drug_choice", "dose_adjustment", "monitoring_frequency", "contraindication", "complication_management", "discharge_planning"
+    Identify the information aspects (facets) needed to fully answer the question. For each facet:
+    1. Assign a short snake_case label describing the INFORMATION TYPE, not a specific drug or value.
+       Good labels: "medication", "lab_result", "procedure", "complication", "clinical_reasoning", "disposition"
        Bad labels: "insulin_dose_reduction_for_ckd", "metformin_contraindication", "creatinine_monitoring"
     2. State one representative fact for this facet (one sentence)
     3. List ALL chunk_ids in this batch that provide evidence for this facet

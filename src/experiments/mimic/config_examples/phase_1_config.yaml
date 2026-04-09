@@ -5,8 +5,6 @@ note_chunking:
   embedding_model: multi-qa-mpnet-base-cos-v1
   keep_sections:
     - HISTORY OF PRESENT ILLNESS
-    - PAST MEDICAL HISTORY
-    - PHYSICAL EXAM
     - PERTINENT RESULTS
     - DISCHARGE MEDICATIONS
     - DISCHARGE DIAGNOSIS
@@ -24,6 +22,8 @@ note_chunking:
     - DISCHARGE DISPOSITION
     - DISCHARGE CONDITION
     - DISCHARGE INSTRUCTIONS
+    - PHYSICAL EXAM
+    - PAST MEDICAL HISTORY
   metadata_only_sections:
     - CHIEF COMPLAINT
 

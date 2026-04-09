@@ -27,8 +27,8 @@ def run_phase_1(
     conditions_cfg: ConditionsStatsCfg | None = None,
     note_chunking_cfg: NoteChunkingCfg | None = None,
     dedup_cfg: DedupCfg | None = None,
+    from_step: int = 1,
     *,
-    from_step: int,
     init_sql: bool,
 ):
     if con is None:
