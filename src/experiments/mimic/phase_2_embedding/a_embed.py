@@ -94,10 +94,7 @@ def prepare_texts(
     texts: list[str] = []
     for row in joined.iter_rows(named=True):
         prefix = build_contextual_prefix(row)
-        section = row['section_name']
-        subsection = row.get('subsection_name')
-        section_label = f'{section} > {subsection}' if subsection else section
-        texts.append(f'{prefix}\nSection: {section_label}.\n{row["text"]}')
+        texts.append(f'{prefix}\nSection: {row["section_name"]}.\n{row["text"]}')
 
     return joined, texts
 

@@ -26,6 +26,5 @@ class MimicIVChunk(Chunk):
     subject_id: int | None = None
     hadm_id: int | None = None
     section_name: str | None = None
-    subsection_name: str | None = None
     char_count: int = 0
     approx_tokens: int = 0
