@@ -77,6 +77,9 @@ class NoteChunkingCfg(BaseModel):
     keep_sections: set[str]
     skip_sections: set[str]
     metadata_only_sections: set[str]
+    embedding_model: str
+    max_tokens: int = 512
+    stride_tokens: int = 128
 
     @computed_field
     @property

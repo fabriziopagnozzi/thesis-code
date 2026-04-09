@@ -3,6 +3,7 @@ from dataclasses import asdict, dataclass
 
 import duckdb
 import polars as pl
+from tokenizers import Tokenizer
 from tqdm import tqdm
 
 from experiments.mimic.configs import MIMIC_RESULTS_DIR, NoteChunkingCfg
@@ -11,15 +12,10 @@ from helpers.chunks_classes import MimicIVChunk
 
 chunking_cfg = NoteChunkingCfg.load()
 
-# -- BHC problem markers in the target column --
-BHC_PROBLEM_RE = re.compile(r'^#\s*(.+)', re.MULTILINE)
-BHC_SUBHEADER_RE = re.compile(
-    r'^(SUMMARY|ACTIVE ISSUES|CHRONIC ISSUES|CHRONIC/RESOLVED ISSUES|RESOLVED ISSUES)\s*:?\s*=*\s*$',
-    re.MULTILINE | re.IGNORECASE,
-)
+BHC_SUBPROBLEM_RE = re.compile(r'(?:(?<=\s)|^)#\s*(?=[A-Za-z]{2})')
 TRANSITIONAL_RE = re.compile(
-    r'^[\s=]*\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\s*:?\s*\*{0,2}\s*=*\s*$',
-    re.MULTILINE | re.IGNORECASE,
+    r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
+    re.IGNORECASE,
 )
 
 CHUNK_SCHEMA = {
@@ -29,7 +25,6 @@ CHUNK_SCHEMA = {
     'hadm_id': pl.Int64,
     'section_name': pl.Utf8,
     'subsection_name': pl.Utf8,
-    'bhc_category': pl.Utf8,
     'text': pl.Utf8,
     'char_count': pl.Int32,
     'approx_tokens': pl.Int32,
@@ -46,9 +41,11 @@ def run_note_chunking(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: NoteChunkingCfg | None = None,
 ) -> pl.DataFrame | None:
-    global chunking_cfg
+    global chunking_cfg, tokenizer
     if cfg is not None:
         chunking_cfg = cfg
+
+    tokenizer = _load_tokenizer(chunking_cfg.embedding_model)
 
     if con is None:
         con = connect_mimic_duckdb()
@@ -120,41 +117,41 @@ def parse_note(
         if section_name not in chunking_cfg.keep_sections:
             continue
 
-        seq += 1
-        chunks.append(
-            MimicIVChunk(
-                text=section_text,
-                doc_title=note_id,
-                chunk_id=f'{note_id}__{seq:03d}',
-                note_id=note_id,
-                subject_id=subject_id,
-                hadm_id=hadm_id,
-                section_name=section_name,
-                char_count=len(section_text),
-                approx_tokens=len(section_text) // 4,
-            )
-        )
-
-    # BHC from target column, split by # problems
-    if target_text:
-        bhc_chunks = _split_bhc_problems(target_text)
-        for subsection_name, subtext, category in bhc_chunks:
+        for sub_text in _fixed_chunk(section_text):
             seq += 1
             chunks.append(
                 MimicIVChunk(
-                    text=subtext,
+                    text=sub_text,
                     doc_title=note_id,
                     chunk_id=f'{note_id}__{seq:03d}',
                     note_id=note_id,
                     subject_id=subject_id,
                     hadm_id=hadm_id,
-                    section_name='BRIEF HOSPITAL COURSE',
-                    subsection_name=subsection_name,
-                    bhc_category=category,
-                    char_count=len(subtext),
-                    approx_tokens=len(subtext) // 4,
+                    section_name=section_name,
+                    char_count=len(sub_text),
+                    approx_tokens=_count_tokens(sub_text),
                 )
             )
+
+    # BHC from target column
+    if target_text:
+        for subsection_name, subtext in _split_bhc(target_text):
+            for sub_text in _fixed_chunk(subtext):
+                seq += 1
+                chunks.append(
+                    MimicIVChunk(
+                        text=sub_text,
+                        doc_title=note_id,
+                        chunk_id=f'{note_id}__{seq:03d}',
+                        note_id=note_id,
+                        subject_id=subject_id,
+                        hadm_id=hadm_id,
+                        section_name='BRIEF HOSPITAL COURSE',
+                        subsection_name=subsection_name,
+                        char_count=len(sub_text),
+                        approx_tokens=_count_tokens(sub_text),
+                    )
+                )
 
     return ParsedNote(chunks=chunks, chief_complaint=chief_complaint)
 
@@ -177,72 +174,78 @@ def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
-def _split_bhc_problems(text: str) -> list[tuple[str | None, str, str | None]]:
-    """Split BHC target text by # problem markers.
-    Returns list of (subsection_name_or_None, text, category_or_None).
-    Category is the most recent subheader (ACTIVE ISSUES, CHRONIC ISSUES, etc).
+def _split_bhc(text: str) -> list[tuple[str | None, str]]:
+    """Split BHC target text by inline # problem markers.
+    Returns list of (subsection_name_or_None, text).
     """
-    # Truncate at TRANSITIONAL ISSUES (follow-up instructions, admin items)
+    # Truncate at TRANSITIONAL ISSUES
     trans_match = TRANSITIONAL_RE.search(text)
     if trans_match:
         text = text[: trans_match.start()]
 
-    # Clean up ====== decoration lines but keep subheader text
-    text = re.sub(r'^=+\s*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    splits = list(BHC_SUBPROBLEM_RE.finditer(text))
+    if not splits:
+        stripped = text.strip()
+        return [(None, stripped)] if stripped else []
 
-    # Build a list of events: subheader positions and # problem positions
-    subheader_matches = list(BHC_SUBHEADER_RE.finditer(text))
-    problem_matches = list(BHC_PROBLEM_RE.finditer(text))
+    chunks: list[tuple[str | None, str]] = []
 
-    if not problem_matches:
-        return [(None, text.strip(), None)]
-
-    # Map each position to the most recent subheader category
-    def _category_at(pos: int) -> str | None:
-        cat = None
-        for sh in subheader_matches:
-            if sh.start() <= pos:
-                cat = sh.group(1).strip().rstrip(':').title()
-            else:
-                break
-        return cat
-
-    clean_text = BHC_SUBHEADER_RE.sub('', text)
-    clean_text = re.sub(r'\n{3,}', '\n\n', clean_text)
-
-    clean_matches = list(BHC_PROBLEM_RE.finditer(clean_text))
-    if not clean_matches:
-        return [(None, clean_text.strip(), None)]
-
-    # Map each clean match back to a category using original positions
-    categories: list[str | None] = []
-    for cm in clean_matches:
-        label = cm.group(1).strip()
-        cat = None
-        for om in problem_matches:
-            if om.group(1).strip() == label:
-                cat = _category_at(om.start())
-                break
-        categories.append(cat)
-
-    chunks: list[tuple[str | None, str, str | None]] = []
-
-    preamble = clean_text[: clean_matches[0].start()].strip()
+    # Preamble before first # marker
+    preamble = text[: splits[0].start()].strip()
     if preamble:
-        chunks.append((None, preamble, _category_at(0)))
+        chunks.append((None, preamble))
 
-    for i, m in enumerate(clean_matches):
-        raw_label = m.group(1).strip()
-        label = re.split(r'[.\n]', raw_label)[0].strip().rstrip(':')
-        start = m.start()
-        end = clean_matches[i + 1].start() if i + 1 < len(clean_matches) else len(clean_text)
-        body = clean_text[start:end].strip()
-        body = re.sub(r'^#\s*', '', body, count=1)
-        if body:
-            chunks.append((label, body, categories[i]))
+    for i, m in enumerate(splits):
+        start = m.end()
+        end = splits[i + 1].start() if i + 1 < len(splits) else len(text)
+        body = text[start:end].strip()
+        if not body:
+            continue
+        # Extract label: text up to first period or end of body
+        dot_pos = body.find('.')
+        label = body[:dot_pos].strip().rstrip(':') if dot_pos > 0 else None
+        chunks.append((label, body))
 
     return chunks
+
+
+def _load_tokenizer(model_name: str) -> Tokenizer:
+    from sentence_transformers import SentenceTransformer
+
+    model = SentenceTransformer(model_name)
+    fast_tok: Tokenizer = model.tokenizer._tokenizer
+    del model
+    fast_tok.no_padding()
+    fast_tok.no_truncation()
+    return fast_tok
+
+
+def _count_tokens(text: str) -> int:
+    return len(tokenizer.encode(text, add_special_tokens=False).ids)
+
+
+def _fixed_chunk(text: str) -> list[str]:
+    """Split text into overlapping token windows using the embedding tokenizer."""
+    assert tokenizer is not None
+    max_tok = chunking_cfg.max_tokens
+    stride_tok = chunking_cfg.stride_tokens
+
+    ids = tokenizer.encode(text, add_special_tokens=False).ids
+    if len(ids) <= max_tok:
+        return [text]
+
+    step = max_tok - stride_tok
+    windows: list[str] = []
+    start = 0
+    while start < len(ids):
+        end = min(start + max_tok, len(ids))
+        window = tokenizer.decode(ids[start:end], skip_special_tokens=True).strip()
+        if window:
+            windows.append(window)
+        if end >= len(ids):
+            break
+        start += step
+    return windows if windows else [text]
 
 
 if __name__ == '__main__':
