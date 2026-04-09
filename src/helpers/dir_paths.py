@@ -15,7 +15,7 @@ ROOT_DIR = find_project_root()
 DATASETS_DIR = (
     ROOT_DIR / 'data' / 'full-data'
     if getenv('LOCAL_MACHINE', 'false') == 'true'
-    else Path('/DATA/pagnozzi/data')
+    else Path('/DATA/pagnozzi/datasets')
 )
 
 DATASETS_PREVIEW_DIR = ROOT_DIR / 'data' / 'previews'

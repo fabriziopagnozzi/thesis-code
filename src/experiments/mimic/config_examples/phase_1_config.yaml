@@ -2,6 +2,7 @@ conditions_stats:
   min_admissions: 200
 
 note_chunking:
+  embedding_model: multi-qa-mpnet-base-cos-v1
   keep_sections:
     - HISTORY OF PRESENT ILLNESS
     - PAST MEDICAL HISTORY

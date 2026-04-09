@@ -40,7 +40,7 @@ class ParsedNote:
 def run_note_chunking(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: NoteChunkingCfg | None = None,
-) -> pl.DataFrame | None:
+) -> pl.DataFrame:
     global chunking_cfg, tokenizer
     if cfg is not None:
         chunking_cfg = cfg
@@ -56,6 +56,7 @@ def run_note_chunking(
     df = parse_all_notes(con)
     df.write_parquet(out_path)
     print(f'Saved to {out_path}')
+    return df
 
 
 def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
