@@ -13,12 +13,12 @@ def find_project_root() -> Path:
 ROOT_DIR = find_project_root()
 
 DATASETS_DIR = (
-    ROOT_DIR / 'datasets' / 'full-data'
+    ROOT_DIR / 'data' / 'full-data'
     if getenv('LOCAL_MACHINE', 'false') == 'true'
-    else Path('/DATA/pagnozzi/datasets')
+    else Path('/DATA/pagnozzi/data')
 )
 
-DATASETS_PREVIEW_DIR = ROOT_DIR / 'datasets' / 'previews'
+DATASETS_PREVIEW_DIR = ROOT_DIR / 'data' / 'previews'
 
 # MIMIC-IV Experiments dir
 MIMIC_IV_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic'

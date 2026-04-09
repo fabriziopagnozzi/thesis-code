@@ -129,8 +129,9 @@ gold_annotation:
     Rules:
     - Use at most 6 facet labels across your entire response
     - Merge facts that address the same decision category under one label
-    - Skip chunks that are not relevant to the question
     - Only cite chunk_ids that appear in this batch
+    - Check the patient metadata line (age, gender, comorbidities) on each chunk.
+      Only tag a chunk if the patient profile matches what the question asks about.
 
     Return a JSON array. Example:
     [{{"facet_label": "dose_adjustment", "fact": "Insulin dose reduced by 20-30% when CrCl < 30 to avoid hypoglycemia", "chunk_ids": ["chunk_42", "chunk_87"]}}]
