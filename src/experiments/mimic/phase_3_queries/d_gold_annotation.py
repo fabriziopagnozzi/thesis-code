@@ -148,7 +148,7 @@ def annotate(
         for cids in facets.values():
             all_gold_chunks.update(cids)
 
-        query_id = f'{icd3}_{row.get("modifier_text", "")}_{row.get("persona", "")}_{i}'
+        query_id = f'{icd3}_{row.get("modifier_text", "")}_{i}'
         query_id = query_id.replace(' ', '_')[:120]
 
         new_row = pl.DataFrame(
@@ -158,7 +158,6 @@ def annotate(
                     'icd10_3char': icd3,
                     'condition_name': row.get('condition_name', ''),
                     'modifier_text': row.get('modifier_text', ''),
-                    'persona': row.get('persona', ''),
                     'query_text': query_text,
                     'facets_json': json.dumps(facets),
                     'n_facets': len(facets),

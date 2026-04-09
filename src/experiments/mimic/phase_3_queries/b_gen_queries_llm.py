@@ -51,7 +51,7 @@ def query_generator(
     already_done: set[tuple] = set()
     if resume_df is not None:
         for row in resume_df.iter_rows(named=True):
-            already_done.add((row['icd10_3char'], row['modifier_text'], row['persona']))
+            already_done.add((row['icd10_3char'], row['modifier_text']))
 
     for i, row in enumerate(
         tqdm(
@@ -61,7 +61,7 @@ def query_generator(
             file=sys.stderr,
         )
     ):
-        key = (row['icd10_3char'], row['modifier_text'], row['persona'])
+        key = (row['icd10_3char'], row['modifier_text'])
         if key in already_done:
             continue
 
