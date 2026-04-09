@@ -59,12 +59,11 @@ def compute_divergence(
     query_vec: NDArray[np.float32],
     k: int = 10,
     lam: float = 0.5,
-    prefilter_n: int = 500,
+    prefilter_n: int | None = None,
 ) -> dict:
     sim_to_query = pool.sim_to_query(query_vec)
 
-    # Prefilter to top N by query similarity
-    if pool.n > prefilter_n:
+    if prefilter_n is not None and pool.n > prefilter_n:
         top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
         pool = pool.slice(top_indices)
         sim_to_query = sim_to_query[top_indices]
@@ -116,7 +115,6 @@ def filter_queries(
     if prefilter_n is None:
         prefilter_n = _cfg.prefilter_n
     results = []
-    query_pools: dict[tuple[str, str | None], CandidatePool] = {}
 
     for row in tqdm(
         queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
@@ -124,14 +122,12 @@ def filter_queries(
         icd3 = row['icd10_3char']
         modifier_text = row.get('modifier_text')
 
-        pool_key = (icd3, modifier_text)
-        if pool_key not in query_pools:
-            query_pools[pool_key] = builder.for_query(icd3, modifier_text)
-
-        pool = query_pools[pool_key]
         query_vec = builder.embed_query(row['query_text'])
+        pool = builder.for_query_stratified(
+            icd3, query_vec, prefilter_n=prefilter_n, modifier_text=modifier_text,
+        )
 
-        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=prefilter_n)  # type: ignore
+        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
         passes = div['jaccard'] < jaccard_threshold
 
         results.append(

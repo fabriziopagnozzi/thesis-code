@@ -207,6 +207,7 @@ class EvaluateCfg(BaseModel):
     k_values: list[int]
     lam_values: list[float]
     prefilter_n: int
+    strata_other_frac: float = 0.2
     device: str
 
     @classmethod

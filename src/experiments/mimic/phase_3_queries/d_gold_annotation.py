@@ -22,7 +22,7 @@ from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnota
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
-from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
 gold_annotation_cfg = GoldAnnotationCfg.load()
@@ -135,8 +135,6 @@ def annotate(
             f'  Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
         )
 
-    condition_pools: dict[tuple[str, str | None], CandidatePool] = {}
-
     for i, row in enumerate(
         tqdm(queries_df.iter_rows(named=True), total=len(queries_df), desc='Gold annotation')
     ):
@@ -147,21 +145,18 @@ def annotate(
             continue
 
         modifier_text = row.get('modifier_text')
-        pool_key = (icd3, modifier_text)
-        if pool_key not in condition_pools:
-            condition_pools[pool_key] = builder.for_query(icd3, modifier_text)
-
-        pool = condition_pools[pool_key]
         query_vec = builder.embed_query(query_text)
 
-        # Prefilter to top N and sort by descending similarity so the
-        # most relevant chunks are in the first batches (shapes the
-        # accumulated facet vocabulary).
-        sim_to_query = pool.sim_to_query(query_vec)
+        # Pool is already stratified and prefiltered
+        work_pool = builder.for_query_stratified(
+            icd3, query_vec, prefilter_n=prefilter_n, modifier_text=modifier_text,
+        )
+
+        # Sort by descending similarity so most relevant chunks are in
+        # the first batches (shapes the accumulated facet vocabulary)
+        sim_to_query = work_pool.sim_to_query(query_vec)
         sorted_indices = np.argsort(sim_to_query)[::-1]
-        if pool.n > prefilter_n:  # type: ignore
-            sorted_indices = sorted_indices[:prefilter_n]
-        work_pool = pool.slice(sorted_indices.copy())
+        work_pool = work_pool.slice(sorted_indices.copy())
 
         n_batches = (work_pool.n + batch_size - 1) // batch_size  # type: ignore
         print(
