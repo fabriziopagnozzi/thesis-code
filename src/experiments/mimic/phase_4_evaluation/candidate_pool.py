@@ -192,6 +192,105 @@ class CandidatePoolBuilder:
                 return self._build_pool(all_hadm_ids)
         return self._build_pool(primary)
 
+    def for_query_stratified(
+        self,
+        icd3: str,
+        query_vec: NDArray[np.float32],
+        prefilter_n: int,
+        modifier_text: str | None = None,
+        strata_other_frac: float = 0.2,
+    ) -> CandidatePool:
+        """Build a stratified candidate pool that preserves multi-cluster structure.
+
+        For comorbidity modifiers, splits hadm_ids into three strata:
+        intersection (primary ∩ modifier), primary-only, modifier-only.
+        Allocates prefilter_n slots proportionally and fills each stratum
+        by cosine similarity to the query, then concatenates.
+
+        For demographic/unknown modifiers, falls back to a single stratum.
+        """
+        primary = self._condition_hadm_ids(icd3)
+
+        if modifier_text:
+            modifier = self._comorbidity_hadm_ids(modifier_text)
+            if modifier:
+                intersection = primary & modifier
+                primary_only = primary - modifier
+                modifier_only = modifier - primary
+
+                n_other = int(prefilter_n * strata_other_frac)
+                n_intersection = prefilter_n - 2 * n_other
+
+                strata = [
+                    ('intersection', intersection, n_intersection),
+                    ('primary_only', primary_only, n_other),
+                    ('modifier_only', modifier_only, n_other),
+                ]
+
+                pools = []
+                unused = 0
+                for name, hadm_ids, budget in strata:
+                    if not hadm_ids:
+                        unused += budget
+                        continue
+                    stratum_pool = self._build_pool(hadm_ids)
+                    sim = stratum_pool.sim_to_query(query_vec)
+                    take = min(budget, stratum_pool.n)
+                    if take < budget:
+                        unused += budget - take
+                    top_idx = np.argsort(sim)[::-1][:take].copy()
+                    pools.append((stratum_pool.slice(top_idx), name, take))
+
+                # Redistribute unused slots to intersection pool
+                if unused > 0 and pools:
+                    first_pool, first_name, first_take = pools[0]
+                    parent_pool = self._build_pool(
+                        intersection if first_name == 'intersection' else primary
+                    )
+                    sim = parent_pool.sim_to_query(query_vec)
+                    new_take = min(first_take + unused, parent_pool.n)
+                    top_idx = np.argsort(sim)[::-1][:new_take].copy()
+                    pools[0] = (parent_pool.slice(top_idx), first_name, new_take)
+
+                # Concatenate strata
+                all_chunk_ids: list[str] = []
+                all_hadm_ids_list: list[NDArray[np.int64]] = []
+                all_vectors: list[NDArray[np.float32]] = []
+                all_texts: list[str] = []
+                all_sections: list[str] = []
+                all_meta_dfs: list[pl.DataFrame] = []
+
+                for p, name, take in pools:
+                    all_chunk_ids.extend(p.chunk_ids)
+                    all_hadm_ids_list.append(p.hadm_ids)
+                    all_vectors.append(p.vectors)
+                    all_texts.extend(p.texts)
+                    all_sections.extend(p.section_names)
+                    all_meta_dfs.append(p.metadata_df)
+
+                total = sum(t for _, _, t in pools)
+                print(
+                    f'  Stratified pool for {icd3}+"{modifier_text}": '
+                    + ', '.join(f'{name}={t}' for _, name, t in pools)
+                    + f' → {total} chunks'
+                )
+
+                return CandidatePool(
+                    chunk_ids=all_chunk_ids,
+                    hadm_ids=np.concatenate(all_hadm_ids_list),
+                    vectors=np.concatenate(all_vectors),
+                    texts=all_texts,
+                    section_names=all_sections,
+                    metadata_df=pl.concat(all_meta_dfs),
+                )
+
+        # Fallback: single stratum (demographic modifier or no modifier)
+        pool = self._build_pool(primary)
+        sim = pool.sim_to_query(query_vec)
+        take = min(prefilter_n, pool.n)
+        top_idx = np.argsort(sim)[::-1][:take].copy()
+        return pool.slice(top_idx)
+
     def for_hadm_ids(self, hadm_ids: set[int]) -> CandidatePool:
         return self._build_pool(hadm_ids)
 

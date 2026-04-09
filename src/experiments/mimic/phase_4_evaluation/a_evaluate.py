@@ -22,7 +22,6 @@ from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
 from .candidate_pool import (
-    CandidatePool,
     CandidatePoolBuilder,
     RetrievalResult,
     run_retrieval,
@@ -76,7 +75,6 @@ def evaluate(
     k_values = k_values or evaluate_cfg.k_values
     lam_values = lam_values or evaluate_cfg.lam_values
     prefilter_n = prefilter_n or evaluate_cfg.prefilter_n
-    query_pools: dict[tuple[str, str | None], CandidatePool] = {}
     all_rows = []
 
     for row in tqdm(
@@ -90,12 +88,11 @@ def evaluate(
         if not facets:
             continue
 
-        pool_key = (icd3, modifier_text)
-        if pool_key not in query_pools:
-            query_pools[pool_key] = builder.for_query(icd3, modifier_text)
-
-        pool = query_pools[pool_key]
         query_vec = builder.embed_query(query_text)
+        pool = builder.for_query_stratified(
+            icd3, query_vec, prefilter_n=prefilter_n, modifier_text=modifier_text,
+            strata_other_frac=evaluate_cfg.strata_other_frac,
+        )
 
         query_metrics = evaluate_query(
             pool,
@@ -104,7 +101,6 @@ def evaluate(
             strategies=strategies,
             k_values=k_values,
             lam_values=lam_values,
-            prefilter_n=prefilter_n,
         )
 
         for m in query_metrics:
@@ -129,16 +125,16 @@ def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) ->
 
 
 def evaluate_query(
-    pool: CandidatePool,
+    pool: 'CandidatePool',
     query_vec: np.ndarray,
     facets: dict[str, list[str]],
     strategies: list[ScoringFunction],
     k_values: list[int],
     lam_values: list[float],
-    prefilter_n: int = 500,
 ) -> list[dict]:
     """Evaluate all strategy x k x λ combos for a single query.
 
+    Pool is assumed to be already prefiltered/stratified.
     Returns list of metric dicts.
     """
     retrieval_results = run_retrieval(
@@ -147,7 +143,7 @@ def evaluate_query(
         strategies=strategies,
         k_values=k_values,
         lam_values=lam_values,
-        prefilter_n=prefilter_n,
+        prefilter_n=None,
     )
 
     # Find top_k results for Jaccard comparison
@@ -157,17 +153,9 @@ def evaluate_query(
             topk_by_k[r.k] = r
 
     sim_to_query = pool.sim_to_query(query_vec)
-    if pool.n > prefilter_n:
-        top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
-        eval_pool = pool.slice(top_indices)
-        eval_sim_to_query = sim_to_query[top_indices]
-    else:
-        eval_pool = pool
-        eval_sim_to_query = sim_to_query
+    sim_matrix = pool.sim_matrix()
 
-    sim_matrix = eval_pool.sim_matrix()
-
-    chunk_id_to_idx: dict[str, int] = {cid: i for i, cid in enumerate(eval_pool.chunk_ids)}
+    chunk_id_to_idx: dict[str, int] = {cid: i for i, cid in enumerate(pool.chunk_ids)}
 
     metrics = []
     for r in retrieval_results:
@@ -180,7 +168,7 @@ def evaluate_query(
         )
 
         fac = fac_cov_score(eval_indices, sim_matrix) if len(eval_indices) > 0 else 0.0
-        ac = avg_cos(eval_indices, eval_sim_to_query) if len(eval_indices) > 0 else 0.0
+        ac = avg_cos(eval_indices, sim_to_query) if len(eval_indices) > 0 else 0.0
 
         topk_ref = topk_by_k.get(r.k)
         if topk_ref is not None and r.strategy != 'top_k':
