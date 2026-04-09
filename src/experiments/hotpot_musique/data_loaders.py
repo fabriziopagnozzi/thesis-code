@@ -1,8 +1,7 @@
 import json
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
-
-from helpers.chunks_classes import HotpotChunk
 
 from .config import DatasetName
 from .qa_processing import (
@@ -10,6 +9,18 @@ from .qa_processing import (
     _build_doc_chunks,
     _split_sentences,
 )
+
+
+@dataclass
+class HotpotChunk:
+    """Chunk with HotpotQA / MuSiQue gold annotations."""
+
+    text: str
+    doc_title: str  # HotpotQA: Wikipedia title
+    doc_idx: int = -1  # position in the candidate pool; -1 until assigned at experiment load time
+    sentence_idx: int | None = None
+    is_gold_doc: bool = False
+    is_gold_fact: bool = False
 
 
 def _load_hotpot_format(

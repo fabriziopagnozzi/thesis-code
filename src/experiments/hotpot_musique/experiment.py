@@ -6,13 +6,12 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from helpers.chunks_classes import HotpotChunk
 from helpers.embedder import Embedder
 from helpers.metrics import compute_metrics, jaccard
 from helpers.query_algorithms import select
 
 from .config import ExperimentConfig
-from .data_loaders import load_dataset
+from .data_loaders import HotpotChunk, load_dataset
 from .qa_processing import QARecord
 
 

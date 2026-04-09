@@ -6,32 +6,23 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, NoteChunkingCfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, NoteChunkingCfg, global_cfg
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from helpers.chunks_classes import MimicIVChunk
 
 chunking_cfg = NoteChunkingCfg.load()
 
-TRANSITIONAL_RE = re.compile(
-    r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
-    re.IGNORECASE,
-)
-CHUNK_SCHEMA = {
-    'chunk_id': pl.Utf8,
-    'note_id': pl.Utf8,
-    'subject_id': pl.Int64,
-    'hadm_id': pl.Int64,
-    'section_name': pl.Utf8,
-    'text': pl.Utf8,
-    'char_count': pl.Int32,
-    'approx_tokens': pl.Int32,
-}
-
 
 @dataclass
-class ParsedNote:
-    chunks: list[MimicIVChunk]
+class MimicIVChunk:
+    text: str
+    chunk_id: str
+    note_id: str
+    subject_id: int
+    hadm_id: int
+    section_name: str
     chief_complaint: str | None = None
+    char_count: int = 0
+    approx_tokens: int = 0
 
 
 def run_note_chunking(
@@ -57,7 +48,14 @@ def run_note_chunking(
 
 
 def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
-    rows = con.execute("""--sql
+    top_icd3 = (
+        pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
+        .head(global_cfg.num_conditions)['icd10_3char']
+        .to_list()
+    )
+    placeholders = ','.join(f"'{c}'" for c in top_icd3)
+
+    rows = con.execute(f"""--sql
         SELECT DISTINCT
             bhc.note_id,
             discharge.subject_id,
@@ -67,28 +65,31 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
         FROM bhc
         JOIN discharge ON bhc.note_id = discharge.note_id
         JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
-        JOIN conditions_stats ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions_stats.icd10_3char
         WHERE diagnoses_icd.icd_version = 10
+        AND SUBSTR(diagnoses_icd.icd_code, 1, 3) IN ({placeholders})
     """).fetchall()
 
     all_dicts: list[dict] = []
-    chief_complaints: dict[str, str] = {}
 
     for note_id, subject_id, hadm_id, input_text, target_text in tqdm(rows, desc='Parsing notes'):
-        result = parse_note(note_id, subject_id, hadm_id, input_text, target_text)
-        all_dicts.extend(asdict(c) for c in result.chunks)
-        if result.chief_complaint:
-            chief_complaints[note_id] = result.chief_complaint
+        all_dicts.extend(
+            asdict(c) for c in parse_note(note_id, subject_id, hadm_id, input_text, target_text)
+        )
 
-    df = pl.DataFrame(all_dicts, schema=CHUNK_SCHEMA)
-
-    cc_df = pl.DataFrame(
-        {
-            'note_id': list(chief_complaints.keys()),
-            'chief_complaint': list(chief_complaints.values()),
-        }
+    df = pl.DataFrame(
+        all_dicts,
+        schema={
+            'chunk_id': pl.Utf8,
+            'note_id': pl.Utf8,
+            'subject_id': pl.Int64,
+            'hadm_id': pl.Int64,
+            'section_name': pl.Utf8,
+            'chief_complaint': pl.Utf8,
+            'text': pl.Utf8,
+            'char_count': pl.Int32,
+            'approx_tokens': pl.Int32,
+        },
     )
-    df = df.join(cc_df, on='note_id', how='left')
 
     print(
         f'Parsed {len(rows):,} notes into {len(df):,} chunks\n'
@@ -100,7 +101,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
 def parse_note(
     note_id: str, subject_id: int, hadm_id: int, input_text: str, target_text: str
-) -> ParsedNote:
+) -> list[MimicIVChunk]:
     sections = _parse_tagged_sections(input_text)
     chunks: list[MimicIVChunk] = []
     chief_complaint: str | None = None
@@ -120,16 +121,17 @@ def parse_note(
             chunks.append(
                 MimicIVChunk(
                     text=sub_text,
-                    doc_title=note_id,
                     chunk_id=f'{note_id}__{seq:03d}',
                     note_id=note_id,
                     subject_id=subject_id,
                     hadm_id=hadm_id,
                     section_name=section_name,
+                    chief_complaint=chief_complaint,
                     char_count=len(sub_text),
                     approx_tokens=_count_tokens(sub_text),
                 )
             )
+    # END for section_name, section_text in sections:
 
     # BHC from target column
     if target_text:
@@ -139,18 +141,18 @@ def parse_note(
                 chunks.append(
                     MimicIVChunk(
                         text=sub_text,
-                        doc_title=note_id,
                         chunk_id=f'{note_id}__{seq:03d}',
                         note_id=note_id,
                         subject_id=subject_id,
                         hadm_id=hadm_id,
+                        chief_complaint=chief_complaint,
                         section_name='BRIEF HOSPITAL COURSE',
                         char_count=len(sub_text),
                         approx_tokens=_count_tokens(sub_text),
                     )
                 )
 
-    return ParsedNote(chunks=chunks, chief_complaint=chief_complaint)
+    return chunks
 
 
 def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
@@ -173,9 +175,15 @@ def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
 
 def _split_bhc(text: str) -> list[str]:
     """Truncate at TRANSITIONAL ISSUES and return the cleaned BHC text as one block."""
+    TRANSITIONAL_RE = re.compile(
+        r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
+        re.IGNORECASE,
+    )
+
     trans_match = TRANSITIONAL_RE.search(text)
     if trans_match:
         text = text[: trans_match.start()]
+
     stripped = text.strip()
     return [stripped] if stripped else []
 

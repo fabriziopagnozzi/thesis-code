@@ -30,7 +30,8 @@ dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs", "taskipy"]
 
 # Like NPM scripts
 [tool.taskipy.tasks]
-stats = "python -m experiments.mimic.stats"
+phase1 = "uv run -m experiments.mimic.phase_1_chunking.orchestrator"
+phase3 = "uv run -m experiments.mimic.phase_3_queries.orchestrator"
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]

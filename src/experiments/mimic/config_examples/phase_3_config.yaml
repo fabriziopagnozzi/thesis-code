@@ -38,29 +38,7 @@ build_query_prompts:
       op: "<"
       value: 40
 
-  personas:
-    clinician: >-
-      You are an experienced attending physician reviewing patient cases.
-      Generate a clinical management question about {condition} that requires
-      knowing how treatment or workup changes when {modifier} is present.
-      The question should require synthesizing information from multiple
-      patient cases, not textbook symptom lists. Focus on practical management
-      decisions (drug choice, dosing, monitoring, disposition).
-    researcher: >-
-      You are a clinical researcher analyzing trends in hospital discharge data.
-      Generate a research-oriented question about {condition} that investigates
-      how outcomes or management patterns differ when {modifier} is present.
-      The question should be answerable by synthesizing discharge summaries
-      from multiple patients, focusing on observable patterns in care delivery.
-    neutral: >-
-      Generate a clinical management question about {condition} that requires
-      knowing how treatment or workup changes when {modifier} is present.
-      The answer should require synthesizing management decisions from multiple
-      patient cases, not textbook symptom lists.
-
   prompt_template: |
-    {persona_prompt}
-
     Below are excerpts from real discharge summaries of patients admitted for {condition} where {modifier} was also present. Each excerpt is from the discharge notes, describing clinical management decisions, lab results, diagnoses, and medications.
 
     <START DISCHARGE SUMMARIES EXAMPLES>

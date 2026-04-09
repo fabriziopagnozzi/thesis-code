@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from helpers.chunks_classes import HotpotChunk
+from .data_loaders import HotpotChunk
 
 
 @dataclass
