@@ -22,16 +22,16 @@ from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, C
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
-_cfg = FilterQueriesCfg.load()
+filter_queries_cfg = FilterQueriesCfg.load()
 
 
 def run_filter_queries(
     con: duckdb.DuckDBPyConnection | None = None,
     cfg: FilterQueriesCfg | None = None,
 ) -> pl.DataFrame:
-    global _cfg
+    global filter_queries_cfg
     if cfg is not None:
-        _cfg = cfg
+        filter_queries_cfg = cfg
     if con is None:
         con = connect_mimic_duckdb()
 
@@ -48,8 +48,8 @@ def run_filter_queries(
     print(
         f'\nSaved {len(result):,} rows to {out_path}\n'
         f'  Pass filter: {n_pass:,} / {len(result):,} ({100 * n_pass / len(result):.1f}%)\n'
-        f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}, median={result["jaccard_div"].median():.3f}\n'
-        f'  Fac gap:     mean={result["fac_gap"].mean():.4f}, median={result["fac_gap"].median():.4f}'
+        f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}\n'
+        f'  Fac gap:     mean={result["fac_gap"].mean():.4f}'
     )
     return result
 
@@ -107,13 +107,13 @@ def filter_queries(
     Queries with jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
     """
     if k is None:
-        k = _cfg.k
+        k = filter_queries_cfg.k
     if lam is None:
-        lam = _cfg.lam
+        lam = filter_queries_cfg.lam
     if jaccard_threshold is None:
-        jaccard_threshold = _cfg.jaccard_threshold
+        jaccard_threshold = filter_queries_cfg.jaccard_threshold
     if prefilter_n is None:
-        prefilter_n = _cfg.prefilter_n
+        prefilter_n = filter_queries_cfg.prefilter_n
     results = []
 
     for row in tqdm(
@@ -124,7 +124,10 @@ def filter_queries(
 
         query_vec = builder.embed_query(row['query_text'])
         pool = builder.for_query_stratified(
-            icd3, query_vec, prefilter_n=prefilter_n, modifier_text=modifier_text,
+            icd3,
+            query_vec,
+            prefilter_n=prefilter_n,
+            modifier_text=modifier_text,
         )
 
         div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)

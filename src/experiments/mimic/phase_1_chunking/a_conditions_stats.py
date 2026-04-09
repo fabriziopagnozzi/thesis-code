@@ -9,7 +9,7 @@ Uses the Charlson SQL from mimic-code.
         * Frequent
         * Comorbidity-rich (patients with multiple Charlson categories active --> their discharge notes cover diverse clinical aspects)
 
-    * Filter: only keep conditions with ≥ 200 admissions (ensures enough documents).
+    * Filter: only keep conditions with ≥ 100 admissions.
 """
 
 import duckdb
