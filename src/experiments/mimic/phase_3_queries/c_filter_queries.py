@@ -2,8 +2,7 @@
 Step 4.1: Divergence pre-filter.
 
 For each query, run top_k and facility_location on its condition's candidate
-pool. Keep only queries where coverage meaningfully diverges from top_k
-(i.e., coverage selects different chunks, indicating multi-cluster structure).
+pool. Keep only queries where coverage diverges from top_k
 
 TODO: understand if this is good
 """
@@ -47,11 +46,59 @@ def run_filter_queries(
     n_pass = result.filter(pl.col('passes_filter')).height
     print(
         f'\nSaved {len(result):,} rows to {out_path}\n'
-        f'  Pass filter: {n_pass:,} / {len(result):,} ({100 * n_pass / len(result):.1f}%)\n'
+        f'  Retained queries: {n_pass:,} / {len(result):,} ({n_pass / len(result) * 100:.2f}%)\n'
         f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}\n'
         f'  Fac gap:     mean={result["fac_gap"].mean():.4f}'
     )
     return result
+
+
+def filter_queries(
+    queries_df: pl.DataFrame,
+    builder: CandidatePoolBuilder,
+) -> pl.DataFrame:
+    """
+    Adds columns: jaccard_div, fac_gap, passes_filter, pool_size.
+    Queries with jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
+    """
+    k, lam, jaccard_threshold, prefilter_n = (
+        filter_queries_cfg.k,
+        filter_queries_cfg.lam,
+        filter_queries_cfg.jaccard_threshold,
+        filter_queries_cfg.prefilter_n,
+    )
+    results = []
+
+    for row in tqdm(
+        queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
+    ):
+        icd3 = row['icd10_3char']
+        modifier_text = row.get('modifier_text')
+
+        query_vec = builder.embed_query(row['query_text'])
+        pool = builder.for_query_stratified(
+            icd3,
+            query_vec,
+            prefilter_n=prefilter_n,
+            modifier_text=modifier_text,
+        )
+
+        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
+        passes = div['jaccard'] < jaccard_threshold
+
+        results.append(
+            {
+                **{c: row[c] for c in queries_df.columns},
+                'jaccard_div': div['jaccard_div'],
+                'fac_gap': div['fac_gap'],
+                'fac_topk': div['fac_topk'],
+                'fac_fl': div['fac_fl'],
+                'pool_size': div['pool_size'],
+                'passes_filter': passes,
+            }
+        )
+
+    return pl.DataFrame(results)
 
 
 def compute_divergence(
@@ -91,61 +138,6 @@ def compute_divergence(
         'fac_fl': fac_fl,
         'pool_size': pool.n,
     }
-
-
-def filter_queries(
-    queries_df: pl.DataFrame,
-    builder: CandidatePoolBuilder,
-    k: int | None = None,
-    lam: float | None = None,
-    jaccard_threshold: float | None = None,
-    prefilter_n: int | None = None,
-) -> pl.DataFrame:
-    """Run divergence filter on all queries. Returns augmented DataFrame.
-
-    Adds columns: jaccard_div, fac_gap, passes_filter, pool_size.
-    Queries with jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
-    """
-    if k is None:
-        k = filter_queries_cfg.k
-    if lam is None:
-        lam = filter_queries_cfg.lam
-    if jaccard_threshold is None:
-        jaccard_threshold = filter_queries_cfg.jaccard_threshold
-    if prefilter_n is None:
-        prefilter_n = filter_queries_cfg.prefilter_n
-    results = []
-
-    for row in tqdm(
-        queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
-    ):
-        icd3 = row['icd10_3char']
-        modifier_text = row.get('modifier_text')
-
-        query_vec = builder.embed_query(row['query_text'])
-        pool = builder.for_query_stratified(
-            icd3,
-            query_vec,
-            prefilter_n=prefilter_n,
-            modifier_text=modifier_text,
-        )
-
-        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
-        passes = div['jaccard'] < jaccard_threshold
-
-        results.append(
-            {
-                **{c: row[c] for c in queries_df.columns},
-                'jaccard_div': div['jaccard_div'],
-                'fac_gap': div['fac_gap'],
-                'fac_topk': div['fac_topk'],
-                'fac_fl': div['fac_fl'],
-                'pool_size': div['pool_size'],
-                'passes_filter': passes,
-            }
-        )
-
-    return pl.DataFrame(results)
 
 
 if __name__ == '__main__':

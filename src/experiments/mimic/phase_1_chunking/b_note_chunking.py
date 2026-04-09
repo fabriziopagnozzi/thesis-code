@@ -1,6 +1,5 @@
 import re
 from dataclasses import asdict, dataclass
-from pathlib import Path
 
 import duckdb
 import polars as pl
@@ -55,17 +54,15 @@ def run_note_chunking(
         con = connect_mimic_duckdb()
     MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    return parse_all_notes(con, output_path=MIMIC_RESULTS_DIR / 'chunks.parquet')
+    out_path = MIMIC_RESULTS_DIR / 'chunks.parquet'
+
+    df = parse_all_notes(con)
+    df.write_parquet(out_path)
+    print(f'Saved to {out_path}')
 
 
-def parse_all_notes(
-    con: duckdb.DuckDBPyConnection,
-    output_path: Path | None = None,
-    limit: int | None = None,
-) -> pl.DataFrame:
-    limit_clause = f'LIMIT {limit}' if limit is not None else ''
-
-    rows = con.execute(f"""--sql
+def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
+    rows = con.execute("""--sql
         SELECT DISTINCT
             bhc.note_id,
             discharge.subject_id,
@@ -75,9 +72,8 @@ def parse_all_notes(
         FROM bhc
         JOIN discharge ON bhc.note_id = discharge.note_id
         JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
-        JOIN conditions ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions.icd10_3char
+        JOIN conditions_stats ON SUBSTR(diagnoses_icd.icd_code, 1, 3) = conditions_stats.icd10_3char
         WHERE diagnoses_icd.icd_version = 10
-        {limit_clause}
     """).fetchall()
 
     all_dicts: list[dict] = []
@@ -91,8 +87,6 @@ def parse_all_notes(
 
     df = pl.DataFrame(all_dicts, schema=CHUNK_SCHEMA)
 
-    print(f'  chief_complaint found in {len(chief_complaints)}/{len(rows)} notes')
-
     cc_df = pl.DataFrame(
         {
             'note_id': list(chief_complaints.keys()),
@@ -105,10 +99,6 @@ def parse_all_notes(
         f'Parsed {len(rows):,} notes into {len(df):,} chunks\n'
         f'{df["section_name"].value_counts().sort("count", descending=True).head(15)}'
     )
-
-    if output_path:
-        df.write_parquet(output_path)
-        print(f'Saved to {output_path}')
 
     return df
 

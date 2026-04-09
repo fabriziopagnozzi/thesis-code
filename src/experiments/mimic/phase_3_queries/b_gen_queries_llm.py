@@ -1,8 +1,7 @@
 """
 Step 3.2: Generate actual clinical questions from prompts via ollama.
 
-Reads queries_prompts.parquet (which contains LLM prompts but not the generated
-query text) and calls a local LLM to produce the clinical question for each row.
+Reads queries_prompts.parquet and calls a local LLM to produce the clinical question for each row.
 
 Output: queries.parquet - all original columns + query_text.
 If queries.parquet is already existing, it appends the new queries there.
@@ -25,7 +24,6 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
         gen_queries_cfg = cfg
 
     prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
-    print(f'Loaded {len(prompts_df):,} prompts')
 
     out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
     resume_df = None
@@ -34,33 +32,22 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
         print(f'Resuming: {len(resume_df):,} queries already generated')
 
     results: list[dict] = resume_df.to_dicts() if resume_df is not None else []
-    for new_result in generate_queries(prompts_df, resume_df):
-        results.append(new_result)
+
+    for curr_query in query_generator(prompts_df, resume_df):
+        results.append(curr_query)
         if len(results) % gen_queries_cfg.save_every == 0:
             pl.DataFrame(results).write_parquet(out_path)
-            print(f'  Checkpoint: {len(results)} queries saved')
 
     df = pl.DataFrame(results)
     df.write_parquet(out_path)
 
-    print(
-        f'\nSaved {len(df):,} queries to {out_path}\n'
-        f'  Conditions: {df["icd10_3char"].n_unique()}\n'
-        f'\n--- Sample query ---\n'
-        f'{df["query_text"][0]}'
-    )
     return df
 
 
-def generate_queries(
+def query_generator(
     prompts_df: pl.DataFrame,
     resume_df: pl.DataFrame | None = None,
 ):
-    """Yield one result dict per prompt row, skipping already-done rows.
-
-    Already-done rows are determined by (icd10_3char, modifier_text, persona).
-    Does NOT include resume_df rows in the output — caller handles that.
-    """
     already_done: set[tuple] = set()
     if resume_df is not None:
         for row in resume_df.iter_rows(named=True):

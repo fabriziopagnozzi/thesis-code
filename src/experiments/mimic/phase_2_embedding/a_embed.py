@@ -29,14 +29,14 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     )
 
     joined, texts = prepare_texts(chunks, metadata)
-    print(f'{len(texts):,} texts prepared. Sample:\n  {texts[0][:200]}...\n')
 
-    print(
-        f'Embedding with {embed_cfg.model_name} (committing every {embed_cfg.commit_every:,} chunks)...'
-    )
+    print(f'Embedding with {embed_cfg.model_name}...')
     embedder = Embedder(
-        embed_cfg.model_name, device=embed_cfg.device, batch_size=embed_cfg.batch_size
+        embed_cfg.model_name,
+        device=embed_cfg.device,
+        batch_size=embed_cfg.batch_size,
     )
+
     db = lancedb.connect(VECTOR_DB_DIR)
     table = None
     total = len(texts)

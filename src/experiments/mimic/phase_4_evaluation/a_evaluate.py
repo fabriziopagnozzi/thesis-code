@@ -22,6 +22,7 @@ from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
 from .candidate_pool import (
+    CandidatePool,
     CandidatePoolBuilder,
     RetrievalResult,
     run_retrieval,
@@ -90,7 +91,10 @@ def evaluate(
 
         query_vec = builder.embed_query(query_text)
         pool = builder.for_query_stratified(
-            icd3, query_vec, prefilter_n=prefilter_n, modifier_text=modifier_text,
+            icd3,
+            query_vec,
+            prefilter_n=prefilter_n,
+            modifier_text=modifier_text,
             strata_other_frac=evaluate_cfg.strata_other_frac,
         )
 
@@ -125,7 +129,7 @@ def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) ->
 
 
 def evaluate_query(
-    pool: 'CandidatePool',
+    pool: CandidatePool,
     query_vec: np.ndarray,
     facets: dict[str, list[str]],
     strategies: list[ScoringFunction],
