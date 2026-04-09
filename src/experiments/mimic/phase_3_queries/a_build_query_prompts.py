@@ -270,7 +270,7 @@ def _sample_patient(
     rows = [bhc_row] + (supp.to_dicts() if not supp.is_empty() else [])
     return [
         {
-            'header': f'{header_prefix} [{row["section_name"] + (" > " + row["subsection_name"] if row.get("subsection_name") else "")}]',
+            'header': f'{header_prefix} [{row["section_name"]}]',
             'text': row['text'],
             'hadm_id': hadm_id,
         }

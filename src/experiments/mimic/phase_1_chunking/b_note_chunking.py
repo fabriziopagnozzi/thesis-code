@@ -12,19 +12,16 @@ from helpers.chunks_classes import MimicIVChunk
 
 chunking_cfg = NoteChunkingCfg.load()
 
-BHC_SUBPROBLEM_RE = re.compile(r'(?:(?<=\s)|^)#\s*(?=[A-Za-z]{2})')
 TRANSITIONAL_RE = re.compile(
     r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
     re.IGNORECASE,
 )
-
 CHUNK_SCHEMA = {
     'chunk_id': pl.Utf8,
     'note_id': pl.Utf8,
     'subject_id': pl.Int64,
     'hadm_id': pl.Int64,
     'section_name': pl.Utf8,
-    'subsection_name': pl.Utf8,
     'text': pl.Utf8,
     'char_count': pl.Int32,
     'approx_tokens': pl.Int32,
@@ -136,7 +133,7 @@ def parse_note(
 
     # BHC from target column
     if target_text:
-        for subsection_name, subtext in _split_bhc(target_text):
+        for subtext in _split_bhc(target_text):
             for sub_text in _fixed_chunk(subtext):
                 seq += 1
                 chunks.append(
@@ -148,7 +145,6 @@ def parse_note(
                         subject_id=subject_id,
                         hadm_id=hadm_id,
                         section_name='BRIEF HOSPITAL COURSE',
-                        subsection_name=subsection_name,
                         char_count=len(sub_text),
                         approx_tokens=_count_tokens(sub_text),
                     )
@@ -175,39 +171,13 @@ def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
-def _split_bhc(text: str) -> list[tuple[str | None, str]]:
-    """Split BHC target text by inline # problem markers.
-    Returns list of (subsection_name_or_None, text).
-    """
-    # Truncate at TRANSITIONAL ISSUES
+def _split_bhc(text: str) -> list[str]:
+    """Truncate at TRANSITIONAL ISSUES and return the cleaned BHC text as one block."""
     trans_match = TRANSITIONAL_RE.search(text)
     if trans_match:
         text = text[: trans_match.start()]
-
-    splits = list(BHC_SUBPROBLEM_RE.finditer(text))
-    if not splits:
-        stripped = text.strip()
-        return [(None, stripped)] if stripped else []
-
-    chunks: list[tuple[str | None, str]] = []
-
-    # Preamble before first # marker
-    preamble = text[: splits[0].start()].strip()
-    if preamble:
-        chunks.append((None, preamble))
-
-    for i, m in enumerate(splits):
-        start = m.end()
-        end = splits[i + 1].start() if i + 1 < len(splits) else len(text)
-        body = text[start:end].strip()
-        if not body:
-            continue
-        # Extract label: text up to first period or end of body
-        dot_pos = body.find('.')
-        label = body[:dot_pos].strip().rstrip(':') if dot_pos > 0 else None
-        chunks.append((label, body))
-
-    return chunks
+    stripped = text.strip()
+    return [stripped] if stripped else []
 
 
 def _load_tokenizer(model_name: str) -> Tokenizer:
