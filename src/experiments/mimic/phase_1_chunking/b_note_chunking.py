@@ -146,6 +146,9 @@ def parse_note(
                     )
                 )
 
+    # Drop chunks that are still too short after merging
+    chunks = [c for c in chunks if c.approx_tokens >= chunking_cfg.min_chunk_tokens]
+
     return chunks
 
 
@@ -184,7 +187,8 @@ def _extract_bhc_from_discharge(discharge_text: str) -> str | None:
 
 
 def _split_bhc(text: str) -> list[str]:
-    """Truncate at TRANSITIONAL ISSUES, then split on # problem markers."""
+    """Truncate at TRANSITIONAL ISSUES, split on # problem markers,
+    then merge header-only fragments forward into the next sub-problem."""
 
     TRANSITIONAL_RE = re.compile(
         r'(?:(?<=\s)|^)\*{0,2}(?:TRANSITIONAL|TRANISTIONAL|TRANSITION)\s*ISSUES\b',
@@ -197,8 +201,26 @@ def _split_bhc(text: str) -> list[str]:
         text = text[: trans_match.start()]
 
     parts = BHC_PROBLEM_RE.split(text)
-    result = [p.strip() for p in parts if p.strip()]
-    return result
+    parts = [p.strip() for p in parts if p.strip()]
+
+    # Merge short fragments (bare problem headers) into the next sub-problem
+    merged: list[str] = []
+    buf = ''
+    for p in parts:
+        if buf:
+            p = buf + '\n' + p
+            buf = ''
+        if _count_tokens(p) < chunking_cfg.min_chunk_tokens:
+            buf = p
+        else:
+            merged.append(p)
+    if buf:
+        if merged:
+            merged[-1] = merged[-1] + '\n' + buf
+        else:
+            merged.append(buf)
+
+    return merged
 
 
 def _load_tokenizer(model_name: str) -> Tokenizer:

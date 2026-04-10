@@ -80,6 +80,7 @@ class NoteChunkingCfg(BaseModel):
     embedding_model: str
     max_tokens: int = 512
     stride_tokens: int = 128
+    min_chunk_tokens: int = 15
 
     @computed_field
     @property
