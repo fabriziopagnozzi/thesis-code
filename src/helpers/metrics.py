@@ -1,17 +1,16 @@
 from collections import Counter
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-
-from helpers.chunks_classes import Chunk
 
 
 # ---------------------------------------------------------------------------
 # Document / Fact Recovery (HotpotQA)
 def doc_rec(
     selected_indices: NDArray[np.intp],
-    chunks: Sequence[Chunk],
+    chunks: Sequence[Any],
     gold_doc_titles: set[str],
 ) -> float:
     """Fraction of gold documents that have at least one selected chunk.
@@ -26,7 +25,7 @@ def doc_rec(
 
 def fact_rec(
     selected_indices: NDArray[np.intp],
-    chunks: Sequence[Chunk],
+    chunks: Sequence[Any],
     gold_facts: list[tuple[str, int]],
 ) -> float:
     """Fraction of gold supporting facts recovered.
@@ -56,7 +55,7 @@ def fact_rec(
 # ---------------------------------------------------------------------------
 def hit_rate(
     selected_indices: NDArray[np.intp],
-    chunks: Sequence[Chunk],
+    chunks: Sequence[Any],
     answer: str | list[str],
 ) -> float:
     """1 if any gold alias appears in the concatenated selected context, else 0."""
@@ -173,7 +172,7 @@ def token_f1(prediction: str, ground_truth: str) -> float:
 # Gold-Alias Metrics (TriviaQA)
 def gold_concat(
     selected_indices: NDArray[np.intp],
-    chunks: Sequence[Chunk],
+    chunks: Sequence[Any],
     aliases: list[str],
 ) -> float:
     """
@@ -188,12 +187,12 @@ def gold_concat(
 
 def gold_per_chunk(
     selected_indices: NDArray[np.intp],
-    chunks: Sequence[Chunk],
+    chunks: Sequence[Any],
     aliases: list[str],
 ) -> float:
     """
     Average per-chunk count of distinct gold aliases found.
-    Gold/Chunk(q) = (1/|S_q|) * sum_{j in S_q} |{a ∈ A(q) : a ⊆ chunk_j}|
+    Gold/Any(q) = (1/|S_q|) * sum_{j in S_q} |{a ∈ A(q) : a ⊆ chunk_j}|
     """
     if not aliases or len(selected_indices) == 0:
         return 0.0
@@ -218,7 +217,7 @@ def jaccard(
 
 def compute_metrics(
     selected_indices: NDArray[np.intp],
-    chunks: Sequence[Chunk],
+    chunks: Sequence[Any],
     answer: str | list[str],
     gold_doc_titles: set[str],
     gold_facts: list[tuple[str, int]],
