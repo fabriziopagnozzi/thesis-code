@@ -59,7 +59,7 @@ def run_evaluate(
     results.write_parquet(out_path)
     print(f'\nSaved {len(results):,} result rows to {out_path}')
 
-    print_summary(results)
+    store_eval_stats(results)
     return results
 
 
@@ -238,9 +238,10 @@ def gold_recall(selected_chunk_ids: set[str], all_gold_ids: set[str], pool_ids: 
     return len(selected_chunk_ids & reachable_gold) / len(reachable_gold)
 
 
-def print_summary(results_df: pl.DataFrame) -> None:
+def store_eval_stats(results_df: pl.DataFrame) -> None:
     print('\n=== Evaluation Summary ===\n')
 
+    summaries = []
     for k in sorted(results_df['k'].unique().to_list()):
         print(f'--- k = {k} ---')
         subset = results_df.filter(pl.col('k') == k)
@@ -259,8 +260,14 @@ def print_summary(results_df: pl.DataFrame) -> None:
             )
             .sort('strategy', 'lam')
         )
+        summaries.append(summary.with_columns(pl.lit(k).alias('k')))
         print(summary)
         print()
+
+    stats_df = pl.concat(summaries)
+    stats_path = MIMIC_RESULTS_DIR / 'evaluation_stats.parquet'
+    stats_df.write_parquet(stats_path)
+    print(f'Saved summary to {stats_path}')
 
 
 if __name__ == '__main__':
