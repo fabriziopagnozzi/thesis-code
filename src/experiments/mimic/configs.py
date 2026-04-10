@@ -195,6 +195,7 @@ class GoldAnnotationCfg(BaseModel):
     top_p: float | None = None
     top_k: int | None = None
     think: bool = False
+    stream: bool = False
     map_system_prompt: str
     map_user_template: str
 

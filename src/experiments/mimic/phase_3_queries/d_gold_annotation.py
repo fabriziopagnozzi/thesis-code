@@ -263,6 +263,7 @@ def annotate_batch(
             num_ctx=gold_annotation_cfg.num_ctx,
             num_predict=gold_annotation_cfg.num_predict,
             think=gold_annotation_cfg.think,
+            stream=gold_annotation_cfg.stream,
         )
     except Exception as e:
         print(

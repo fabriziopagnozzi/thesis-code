@@ -5,7 +5,6 @@ build_query_prompts:
   high_value_sections:
     - BRIEF HOSPITAL COURSE
     - HISTORY OF PRESENT ILLNESS
-    - PERTINENT RESULTS
     - DISCHARGE DIAGNOSIS
     - DISCHARGE MEDICATIONS
 
@@ -79,7 +78,8 @@ gold_annotation:
   temperature: 0.3
   top_p: 0.95
   top_k: 64
-  think: false
+  think: true
+  stream: false
   map_system_prompt: >-
     You are a clinical information analyst. You will be given a QUESTION and a batch of
     discharge note excerpts. Your job is to find which chunks contain substantive information
