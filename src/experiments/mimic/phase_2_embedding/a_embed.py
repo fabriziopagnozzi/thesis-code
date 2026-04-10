@@ -21,9 +21,9 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
     metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
 
-    relevant = _relevant_hadm_ids()
+    relevant_hadm_ids = get_top_hadm_ids()
     n_before = len(chunks)
-    chunks = chunks.filter(pl.col('hadm_id').is_in(relevant))
+    chunks = chunks.filter(pl.col('hadm_id').is_in(relevant_hadm_ids))
     print(
         f'Filtered to {len(chunks):,}/{n_before:,} chunks ({global_cfg.num_conditions} conditions)'
     )
@@ -60,7 +60,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
 
 
 def build_contextual_prefix(meta_row: dict) -> str:
-    age_grp = _age_group(meta_row.get('age'))
+    age_grp = get_age_group(meta_row.get('age'))
     gender = meta_row.get('gender', 'unknown')
     gender_label = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown gender'
     race = meta_row.get('race', 'unknown')
@@ -99,7 +99,7 @@ def prepare_texts(
     return joined, texts
 
 
-def _relevant_hadm_ids() -> set[int]:
+def get_top_hadm_ids() -> set[int]:
     """Return hadm_ids that have any ICD-10 diagnosis matching a top condition."""
     conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
     top_icd3 = conditions.head(global_cfg.num_conditions)['icd10_3char'].to_list()
@@ -115,7 +115,7 @@ def _relevant_hadm_ids() -> set[int]:
     return {r[0] for r in rows}
 
 
-def _age_group(age: float | None) -> str:
+def get_age_group(age: float | None) -> str:
     if age is None:
         return 'unknown age'
     if age < 30:

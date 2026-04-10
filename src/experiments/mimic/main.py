@@ -14,7 +14,7 @@ from experiments.mimic.phase_3_queries.orchestrator import run_phase_3
 from experiments.mimic.phase_4_evaluation.a_evaluate import run_evaluate
 
 PHASES = {
-    1: lambda _: run_phase_1(init_sql=True),
+    1: lambda: run_phase_1(init_sql=True),
     2: run_embed,
     3: run_phase_3,
     4: run_evaluate,
