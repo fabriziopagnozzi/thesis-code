@@ -120,14 +120,6 @@ def evaluate(
     return pl.DataFrame(all_rows)
 
 
-def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
-    """AR(S) = |{f in F : S ∩ G_f ≠ ∅}| / |F|"""
-    if not facets:
-        return 0.0
-    covered = sum(1 for cids in facets.values() if selected_chunk_ids & set(cids))
-    return covered / len(facets)
-
-
 def evaluate_query(
     pool: CandidatePool,
     query_vec: np.ndarray,
@@ -160,11 +152,16 @@ def evaluate_query(
     sim_matrix = pool.sim_matrix()
 
     chunk_id_to_idx: dict[str, int] = {cid: i for i, cid in enumerate(pool.chunk_ids)}
+    pool_id_set = set(pool.chunk_ids)
+    all_gold_ids = {cid for cids in facets.values() for cid in cids}
 
     metrics = []
     for r in retrieval_results:
         selected_set = set(r.selected_chunk_ids)
         ar = aspect_recall(selected_set, facets)
+        war = weighted_aspect_recall(selected_set, facets)
+        gp = gold_precision(selected_set, all_gold_ids)
+        gr = gold_recall(selected_set, all_gold_ids, pool_id_set)
 
         eval_indices = np.array(
             [chunk_id_to_idx[cid] for cid in r.selected_chunk_ids if cid in chunk_id_to_idx],
@@ -194,6 +191,9 @@ def evaluate_query(
                 'k': r.k,
                 'lam': r.lam,
                 'aspect_recall': ar,
+                'weighted_aspect_recall': war,
+                'gold_precision': gp,
+                'gold_recall': gr,
                 'fac_cov_score': fac,
                 'avg_cos': ac,
                 'jaccard_vs_topk': jac,
@@ -202,6 +202,40 @@ def evaluate_query(
         )
 
     return metrics
+
+
+def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
+    """AR(S) = |{f in F : S ∩ G_f ≠ ∅}| / |F|"""
+    if not facets:
+        return 0.0
+    covered = sum(1 for cids in facets.values() if selected_chunk_ids & set(cids))
+    return covered / len(facets)
+
+
+def weighted_aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
+    """WAR(S) = (1/|F|) * Σ_f |S ∩ G_f| / |G_f|"""
+    if not facets:
+        return 0.0
+    total = 0.0
+    for cids in facets.values():
+        gold_set = set(cids)
+        total += len(selected_chunk_ids & gold_set) / len(gold_set)
+    return total / len(facets)
+
+
+def gold_precision(selected_chunk_ids: set[str], all_gold_ids: set[str]) -> float:
+    """Fraction of retrieved chunks that are gold."""
+    if not selected_chunk_ids:
+        return 0.0
+    return len(selected_chunk_ids & all_gold_ids) / len(selected_chunk_ids)
+
+
+def gold_recall(selected_chunk_ids: set[str], all_gold_ids: set[str], pool_ids: set[str]) -> float:
+    """Fraction of gold chunks (that exist in the pool) that are retrieved."""
+    reachable_gold = all_gold_ids & pool_ids
+    if not reachable_gold:
+        return 0.0
+    return len(selected_chunk_ids & reachable_gold) / len(reachable_gold)
 
 
 def print_summary(results_df: pl.DataFrame) -> None:
@@ -214,11 +248,14 @@ def print_summary(results_df: pl.DataFrame) -> None:
         summary = (
             subset.group_by('strategy', 'lam')
             .agg(
-                pl.col('aspect_recall').mean().alias('AR_mean'),
-                pl.col('fac_cov_score').mean().alias('fac_mean'),
-                pl.col('avg_cos').mean().alias('cos_mean'),
-                pl.col('jaccard_vs_topk').mean().alias('jac_mean'),
-                pl.col('aspect_recall').count().alias('n_queries'),
+                pl.col('aspect_recall').mean().alias('AR'),
+                pl.col('weighted_aspect_recall').mean().alias('WAR'),
+                pl.col('gold_precision').mean().alias('GP'),
+                pl.col('gold_recall').mean().alias('GR'),
+                pl.col('fac_cov_score').mean().alias('fac'),
+                pl.col('avg_cos').mean().alias('cos'),
+                pl.col('jaccard_vs_topk').mean().alias('jac'),
+                pl.col('aspect_recall').count().alias('n'),
             )
             .sort('strategy', 'lam')
         )
