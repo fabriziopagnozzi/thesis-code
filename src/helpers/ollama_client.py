@@ -23,10 +23,7 @@ def generate(
     think: bool = False,
     stream: bool = False,
 ) -> str:
-    messages = []
-    if system:
-        messages.append({'role': 'system', 'content': system})
-    messages.append({'role': 'user', 'content': prompt})
+    messages = [{'role': 'user', 'content': system + '\n\n' + prompt}]
 
     opts: dict = {'temperature': temperature}
     if top_p is not None:
@@ -40,13 +37,16 @@ def generate(
     if think:
         opts['think'] = True
 
+    # format='json' enables constrained decoding which suppresses thinking
+    fmt: str | None = 'json' if json_mode and not think else None
+
     if stream:
         content_parts: list[str] = []
         thinking_done = False
         for chunk in ollama_client.chat(
             model=model if model else OLLAMA_DEFAULT_MODEL,
             messages=messages,
-            format='json' if json_mode else '',
+            format=fmt,
             options=opts,
             think=think,
             stream=True,
@@ -67,7 +67,7 @@ def generate(
     resp = ollama_client.chat(
         model=model if model else OLLAMA_DEFAULT_MODEL,
         messages=messages,
-        format='json' if json_mode else '',
+        format=fmt,
         options=opts,
         think=think,
     )
@@ -122,35 +122,31 @@ def generate_json(
     max_retries: int = 2,
     model: str | None = None,
     think: bool = False,
+    stream: bool = False,
 ) -> dict | list:
-    messages = []
-    if system:
-        messages.append({'role': 'system', 'content': system})
-    messages.append({'role': 'user', 'content': prompt})
-
-    opts: dict = {'temperature': temperature}
-    if top_p is not None:
-        opts['top_p'] = top_p
-    if top_k is not None:
-        opts['top_k'] = top_k
-    if num_ctx is not None:
-        opts['num_ctx'] = num_ctx
-    if num_predict is not None:
-        opts['num_predict'] = num_predict
-    if think:
-        opts['think'] = True
-
-    _model = model if model else OLLAMA_DEFAULT_MODEL
+    extra_messages: list[dict] = []
 
     for attempt in range(max_retries + 1):
-        resp = ollama_client.chat(
-            model=_model,
-            messages=messages,
-            format='json',
-            options=opts,
+        full_prompt = prompt
+        if extra_messages:
+            # For retries, append correction context directly to the prompt
+            for msg in extra_messages:
+                full_prompt += f'\n\n[{msg["role"].upper()}]: {msg["content"]}'
+
+        raw = generate(
+            full_prompt,
+            system=system,
+            temperature=temperature,
+            top_p=top_p,
+            top_k=top_k,
+            num_ctx=num_ctx,
+            num_predict=num_predict,
+            model=model,
             think=think,
+            json_mode=True,
+            stream=stream,
         )
-        text = _strip_code_fences(resp.message.content or '')
+        text = _strip_code_fences(raw)
 
         if not text.strip():
             print(f'[generate_json] empty response (attempt {attempt + 1}/{max_retries + 1})')
@@ -167,8 +163,8 @@ def generate_json(
                 print(f'[generate_json] model returned text instead of JSON: {preview!r}')
                 if attempt == max_retries:
                     raise
-                messages.append({'role': 'assistant', 'content': resp.message.content or ''})
-                messages.append(
+                extra_messages.append({'role': 'assistant', 'content': raw})
+                extra_messages.append(
                     {
                         'role': 'user',
                         'content': 'You must respond with only valid JSON. No prose, no explanation. Output the JSON array now.',
@@ -189,9 +185,8 @@ def generate_json(
             if attempt == max_retries:
                 raise
 
-            # Feed the bad output back so the model can self-correct
-            messages.append({'role': 'assistant', 'content': resp.message.content or ''})
-            messages.append(
+            extra_messages.append({'role': 'assistant', 'content': raw})
+            extra_messages.append(
                 {
                     'role': 'user',
                     'content': (

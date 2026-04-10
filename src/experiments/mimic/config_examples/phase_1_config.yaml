@@ -5,10 +5,10 @@ note_chunking:
   embedding_model: multi-qa-mpnet-base-cos-v1
   keep_sections:
     - HISTORY OF PRESENT ILLNESS
-    - PERTINENT RESULTS
     - DISCHARGE MEDICATIONS
     - DISCHARGE DIAGNOSIS
   skip_sections:
+    - PERTINENT RESULTS
     - SEX
     - SERVICE
     - ALLERGIES
