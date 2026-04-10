@@ -81,19 +81,21 @@ gold_annotation:
   top_k: 64
   think: false
   map_system_prompt: >-
-    You are a clinical information analyst extracting structured evidence from discharge notes.
-    Your task: for a given clinical question, identify which chunks contain SUBSTANTIVE information
-    and group them under a small set of high-level INFORMATION TYPE facets.
-    A facet is a TYPE OF INFORMATION — not a specific drug, lab value, or patient scenario.
-    Use the fewest facets that completely cover the answer.
+    You are a clinical information analyst. You will be given a QUESTION and a batch of
+    discharge note excerpts. Your job is to find which chunks contain substantive information
+    that DIRECTLY helps answer the given question, and group them under information-type facets.
 
-    IMPORTANT: Only tag a chunk if it provides substantive, specific information that
-    directly helps answer the question — not just a passing mention of a related term.
+    Everything you do must be in service of answering the question. A chunk is relevant ONLY if
+    it contains specific information that a person would use to construct an answer to the question.
+    Ignore chunks that are unrelated to the question, even if they contain clinical detail.
+
+    Only tag a chunk if it provides substantive, specific detail — not a passing mention.
     A chunk that says "continued home medications" is NOT substantive.
-    A chunk that says "started metoprolol 25mg for rate control given new-onset AFib" IS substantive.
+    A chunk that says "started metoprolol 25mg for rate control given new-onset AFib" IS substantive,
+    but ONLY if the question asks about medications, cardiac management, or something this chunk informs.
     When in doubt, do NOT tag the chunk.
   map_user_template: |
-    Question: {query_text}
+    QUESTION: {query_text}
 
     Below are excerpts from clinical discharge notes. Each is prefixed with its chunk ID, section, and patient context.
 
@@ -101,25 +103,28 @@ gold_annotation:
     {chunks_block}
     <END DISCHARGE NOTES BLOCK>
 
-    Identify the information aspects (facets) needed to fully answer the question. For each facet:
-    1. Assign a short snake_case label describing the INFORMATION TYPE, not a specific drug or value.
+    For the QUESTION above, identify the information aspects (facets) needed to fully answer it.
+    For each facet:
+    1. Assign a short snake_case label describing the INFORMATION TYPE relevant to the question.
        Good labels: "medication", "lab_result", "procedure", "complication", "clinical_reasoning", "disposition"
        Bad labels: "insulin_dose_reduction_for_ckd", "metformin_contraindication", "creatinine_monitoring"
     2. State one representative fact for this facet (one sentence)
-    3. List ALL chunk_ids in this batch that provide evidence for this facet
+    3. List ALL chunk_ids in this batch that provide SUBSTANTIVE evidence for this facet
 
     Rules:
+    - A chunk must directly help answer the QUESTION to be tagged. Clinical detail that is
+      unrelated to the question is NOT relevant, no matter how specific.
     - Use at most 6 facet labels across your entire response
-    - Merge facts that address the same decision category under one label
+    - Merge facts that address the same information type under one label
     - Only cite chunk_ids that appear in this batch
     - Check the patient metadata line (age, gender, comorbidities) on each chunk.
       Only tag a chunk if the patient profile matches what the question asks about.
-    - Only tag chunks that provide SUBSTANTIVE detail: specific drugs with doses, specific lab values
+    - Only tag chunks with substantive detail: specific drugs with doses, specific lab values
       with clinical interpretation, specific procedures with rationale, or explicit clinical reasoning.
       Do NOT tag chunks that merely mention a condition, list a medication name without context,
       or contain boilerplate text.
 
     Return a JSON array. Example:
-    [{{"facet_label": "dose_adjustment", "fact": "Insulin dose reduced by 20-30% when CrCl < 30 to avoid hypoglycemia", "chunk_ids": ["chunk_42", "chunk_87"]}}]
+    [{{"facet_label": "medication", "fact": "Insulin dose reduced by 20-30% when CrCl < 30 to avoid hypoglycemia", "chunk_ids": ["chunk_42", "chunk_87"]}}]
 
-    If no chunks in this batch are relevant, return an empty array: []. Stick strictly to these instructions.
+    If no chunks in this batch are relevant to the QUESTION, return an empty array: []. Stick strictly to these instructions.
