@@ -180,6 +180,25 @@ def annotate(
         else:
             new_row.write_parquet(out_path)
 
+        # Also append to JSONL for partial-run inspection
+        jsonl_path = MIMIC_RESULTS_DIR / 'gold_annotations.jsonl'
+        with jsonl_path.open('a') as f:
+            f.write(
+                json.dumps(
+                    {
+                        'query_id': query_id,
+                        'icd10_3char': icd3,
+                        'condition_name': row.get('condition_name', ''),
+                        'modifier_text': row.get('modifier_text', ''),
+                        'query_text': query_text,
+                        'facets_json': json.dumps(facets),
+                        'n_facets': len(facets),
+                        'n_gold_chunks': len(all_gold_chunks),
+                    }
+                )
+                + '\n'
+            )
+
     return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 
 
