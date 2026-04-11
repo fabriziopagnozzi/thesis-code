@@ -70,12 +70,17 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     """).fetchall()
 
     all_chunks: list[MimicIVNoteChunk] = []
+    global_seq = 0
 
     for note_id, subject_id, hadm_id, input_text, discharge_text in tqdm(
         rows, desc='Parsing notes'
     ):
         bhc_text = _extract_bhc_from_discharge(discharge_text)
-        all_chunks.extend(parse_note(note_id, subject_id, hadm_id, input_text, bhc_text))
+        note_chunks = parse_note(note_id, subject_id, hadm_id, input_text, bhc_text)
+        for chunk in note_chunks:
+            chunk.chunk_id = str(global_seq)
+            global_seq += 1
+        all_chunks.extend(note_chunks)
 
     df = pl.DataFrame(
         all_chunks,
