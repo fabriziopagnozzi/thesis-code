@@ -18,7 +18,6 @@ def generate(
     top_k: int | None = None,
     num_ctx: int | None = None,
     num_predict: int | None = None,
-    json_mode: bool = False,
     model: str | None = None,
     think: bool = False,
     stream: bool = False,
@@ -37,16 +36,16 @@ def generate(
     if think:
         opts['think'] = True
 
-    # format='json' enables constrained decoding which suppresses thinking
-    fmt: str | None = 'json' if json_mode and not think else None
+    used_model = model if model else OLLAMA_DEFAULT_MODEL
+    prompt_chars = sum(len(m['content']) for m in messages)
+    print(f'[ollama] {used_model} | ~{prompt_chars // 4} tokens | think={think}', flush=True)
 
     if stream:
         content_parts: list[str] = []
         thinking_done = False
         for chunk in ollama_client.chat(
-            model=model if model else OLLAMA_DEFAULT_MODEL,
+            model=used_model,
             messages=messages,
-            format=fmt,
             options=opts,
             think=think,
             stream=True,
@@ -65,21 +64,19 @@ def generate(
         return ''.join(content_parts)
 
     resp = ollama_client.chat(
-        model=model if model else OLLAMA_DEFAULT_MODEL,
+        model=used_model,
         messages=messages,
-        format=fmt,
         options=opts,
         think=think,
     )
     content = resp.message.content or ''
+    print(f'[ollama] response: {len(content)} chars', flush=True)
     if not content:
         thinking = getattr(resp.message, 'thinking', None)
         if thinking:
             print(f'[ollama] WARNING: empty content, thinking={len(thinking)} chars')
         else:
-            print(
-                f'[ollama] WARNING: empty content, no thinking. Raw status={getattr(resp, "status_code", "?")}'
-            )
+            print(f'[ollama] WARNING: empty content, no thinking. Raw={resp!r}')
     return content
 
 
@@ -98,7 +95,6 @@ def _salvage_truncated_json(text: str) -> list | dict | None:
     text = text.strip()
     if not text.startswith('['):
         return None
-    # Find the last complete object boundary: "},\n  {" or "}\n]"
     last_close = text.rfind('}')
     if last_close == -1:
         return None
@@ -129,7 +125,6 @@ def generate_json(
     for attempt in range(max_retries + 1):
         full_prompt = prompt
         if extra_messages:
-            # For retries, append correction context directly to the prompt
             for msg in extra_messages:
                 full_prompt += f'\n\n[{msg["role"].upper()}]: {msg["content"]}'
 
@@ -143,7 +138,6 @@ def generate_json(
             num_predict=num_predict,
             model=model,
             think=think,
-            json_mode=True,
             stream=stream,
         )
         text = _strip_code_fences(raw)
