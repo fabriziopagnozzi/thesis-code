@@ -69,7 +69,7 @@ build_query_prompts:
 
 gen_queries_llm:
   save_every: 25
-  model: gemma4:26b
+  model: gemma4:31b
   temperature: 1.0
   top_p: 0.95
   top_k: 64
@@ -84,13 +84,13 @@ filter_queries:
 gold_annotation:
   prefilter_n: 900
   batch_size: 30
-  num_ctx: 32768
-  num_predict: 16384
-  model: gemma4:26b
-  temperature: 0.3
+  num_ctx: 64_000
+  num_predict: -1
+  model: gemma4:31b
+  temperature: 0.35
   top_p: 0.95
-  top_k: 64
-  think: true
+  top_k: 40
+  think: false
   stream: false
   map_system_prompt: >-
     You are a clinical information analyst. You will be given a QUESTION and a batch of
