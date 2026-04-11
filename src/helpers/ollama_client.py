@@ -7,7 +7,7 @@ import ollama
 OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_DEFAULT_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma4:26b')
 
-ollama_client = ollama.Client(host=OLLAMA_HOST, timeout=300)
+ollama_client = ollama.Client(host=OLLAMA_HOST)
 
 
 def generate(
