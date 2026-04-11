@@ -90,13 +90,7 @@ def evaluate(
             continue
 
         query_vec = builder.embed_query(query_text)
-        pool = builder.for_query_stratified(
-            icd3,
-            query_vec,
-            prefilter_n=prefilter_n,
-            modifier_text=modifier_text,
-            strata_other_frac=evaluate_cfg.strata_other_frac,
-        )
+        pool = builder.for_query_cosine(query_vec, n=prefilter_n)
 
         query_metrics = evaluate_query(
             pool,

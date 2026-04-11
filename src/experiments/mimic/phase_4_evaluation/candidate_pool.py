@@ -6,14 +6,22 @@ filtered by hadm_id sets derived from DuckDB. Strategy: one global vector
 store, per-query metadata filtering.
 """
 
+import operator
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any, ClassVar
 
 import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
-from experiments.mimic.configs import VECTOR_DB_DIR, BuildQueryPromptsCfg, EvaluateCfg
+from experiments.mimic.configs import (
+    MIMIC_RESULTS_DIR,
+    VECTOR_DB_DIR,
+    BuildQueryPromptsCfg,
+    EvaluateCfg,
+)
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
@@ -145,12 +153,26 @@ class CandidatePool:
 
 
 class CandidatePoolBuilder:
+    _OPS: ClassVar[dict[str, Callable[[Any, Any], bool]]] = {
+        '>': operator.gt,
+        '<': operator.lt,
+        '>=': operator.ge,
+        '<=': operator.le,
+        '==': operator.eq,
+    }
+
     def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str = 'cuda'):
         self._con = con
         self._embedder = Embedder(cfg.embedding_model, device=device, batch_size=1)
         self._condition_to_hadm_ids_cache: dict[str, set[int]] = {}
-        self._comorbidity_to_hadm_ids_cache: dict[str, set[int]] = {}
-        self._charlson_label_to_col_name = BuildQueryPromptsCfg.load().label_to_charlson_col
+        self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
+
+        prompts_cfg = BuildQueryPromptsCfg.load()
+        self._charlson_label_to_col_name = prompts_cfg.label_to_charlson_col
+        self._demographic_filters = prompts_cfg.demographic_filters
+
+        meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
+        self._admissions_meta = pl.read_parquet(meta_path) if meta_path.exists() else None
 
         import lancedb
 
@@ -166,6 +188,40 @@ class CandidatePoolBuilder:
 
         self._corpus_df = pl.DataFrame(arrow_table.drop('vector'))
         self._hadm_id_array: NDArray[np.int64] = self._corpus_df['hadm_id'].to_numpy()
+
+    def for_query_filtered(
+        self,
+        icd3: str,
+        query_vec: NDArray[np.float32],
+        n: int,
+        modifier_text: str | None = None,
+    ) -> CandidatePool:
+        """Top-N by cosine from chunks belonging to patients with the condition+modifier."""
+        hadm_ids = self._condition_hadm_ids(icd3)
+        if modifier_text:
+            modifier_ids = self._modifier_hadm_ids(modifier_text)
+            if modifier_ids:
+                hadm_ids = hadm_ids & modifier_ids
+        pool = self._build_pool(hadm_ids)
+        return pool.top_k_by_similarity(query_vec, n)
+
+    def for_query_cosine(
+        self,
+        query_vec: NDArray[np.float32],
+        n: int,
+    ) -> CandidatePool:
+        """Build a candidate pool from the top-N most similar chunks in the full corpus."""
+        sim = self._corpus_vectors @ query_vec
+        take = min(n, len(sim))
+        top_idx = np.argsort(sim)[::-1][:take].copy()
+        return CandidatePool(
+            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx],
+            hadm_ids=self._hadm_id_array[top_idx],
+            vectors=self._corpus_vectors[top_idx],
+            texts=[self._corpus_df['text'][i] for i in top_idx],
+            section_names=[self._corpus_df['section_name'][i] for i in top_idx],
+            metadata_df=self._corpus_df[top_idx.tolist()],
+        )
 
     def for_query_stratified(
         self,
@@ -187,7 +243,7 @@ class CandidatePoolBuilder:
         primary_hadm_ids = self._condition_hadm_ids(icd3)
 
         if modifier_text:
-            modifier = self._comorbidity_hadm_ids(modifier_text)
+            modifier = self._modifier_hadm_ids(modifier_text)
             if modifier:
                 intersection_ids = primary_hadm_ids & modifier
                 primary_only_ids = primary_hadm_ids - modifier
@@ -258,20 +314,36 @@ class CandidatePoolBuilder:
             metadata_df=pool_df,
         )
 
-    def _comorbidity_hadm_ids(self, modifier_text: str) -> set[int]:
-        """All hadm_ids carrying this comorbidity (via Charlson table)."""
-        if modifier_text not in self._comorbidity_to_hadm_ids_cache:
-            col = self._charlson_label_to_col_name.get(modifier_text)
-            if col is None:
-                self._comorbidity_to_hadm_ids_cache[modifier_text] = set()
-            else:
-                hadm_ids = self._con.execute(f"""--sql
-                    SELECT DISTINCT charlson.hadm_id
-                    FROM charlson
-                    WHERE charlson.{col} > 0
-                """).pl()['hadm_id']
-                self._comorbidity_to_hadm_ids_cache[modifier_text] = set(hadm_ids.to_list())
-        return self._comorbidity_to_hadm_ids_cache[modifier_text]
+    def _modifier_hadm_ids(self, modifier_text: str) -> set[int]:
+        """hadm_ids matching a modifier — tries Charlson comorbidity first, then demographic."""
+        if modifier_text in self._modifier_to_hadm_ids_cache:
+            return self._modifier_to_hadm_ids_cache[modifier_text]
+
+        # Comorbidity modifier (Charlson table)
+        col = self._charlson_label_to_col_name.get(modifier_text)
+        if col is not None:
+            hadm_ids = self._con.execute(f"""--sql
+                SELECT DISTINCT charlson.hadm_id
+                FROM charlson
+                WHERE charlson.{col} > 0
+            """).pl()['hadm_id']
+            result = set(hadm_ids.to_list())
+            self._modifier_to_hadm_ids_cache[modifier_text] = result
+            return result
+
+        # Demographic modifier (admissions_metadata)
+        demo = self._demographic_filters.get(modifier_text)
+        if demo is not None and self._admissions_meta is not None:
+            column, op_str, value = demo
+            op_fn = self._OPS.get(op_str)
+            if op_fn is not None:
+                filtered = self._admissions_meta.filter(op_fn(pl.col(column), value))
+                result = set(filtered['hadm_id'].to_list())
+                self._modifier_to_hadm_ids_cache[modifier_text] = result
+                return result
+
+        self._modifier_to_hadm_ids_cache[modifier_text] = set()
+        return set()
 
     def embed_query(self, query_text: str) -> NDArray[np.float32]:
         return self._embedder.embed_corpus([query_text])[0]
