@@ -12,12 +12,12 @@ Output: gold_annotations.parquet
 """
 
 import json
+from pathlib import Path
 
 import duckdb
 import numpy as np
 import polars as pl
 from pydantic import BaseModel, field_validator
-from tqdm import tqdm
 
 from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnotationCfg
 from experiments.mimic.duck_db_init import (
@@ -110,24 +110,29 @@ def annotate(
     """
 
     out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
+    prompt_dump_dir = MIMIC_RESULTS_DIR / '_prompt_dump'
+    prompt_dump_dir.mkdir(parents=True, exist_ok=True)
 
-    for i, row in enumerate(
-        tqdm(queries_df.iter_rows(named=True), total=len(queries_df), desc='Gold annotation')
-    ):
+    total = len(queries_df)
+    n_done = len(done_texts)
+
+    for i, row in enumerate(queries_df.iter_rows(named=True)):
         icd3 = row['icd10_3char']
         query_text = row['query_text']
 
         if query_text in done_texts:
             continue
 
+        n_done += 1
+        print(f'\n{"=" * 60}\n  Query {n_done}/{total} (idx {i})\n  {query_text}\n{"=" * 60}')
+
         modifier_text = row.get('modifier_text')
         query_vec = builder.embed_query(query_text)
 
-        # Pool is already stratified and prefiltered
-        work_pool = builder.for_query_stratified(
+        work_pool = builder.for_query_filtered(
             icd3,
             query_vec,
-            prefilter_n=gold_annotation_cfg.prefilter_n,
+            n=gold_annotation_cfg.prefilter_n,
             modifier_text=modifier_text,
         )
 
@@ -142,7 +147,9 @@ def annotate(
             work_pool,
             batch_size=gold_annotation_cfg.batch_size,
             patient_meta=patient_meta,
-        )  # type: ignore
+            prompt_dump_dir=prompt_dump_dir,
+            query_idx=i,
+        )
 
         all_gold_chunks = set()
         for cids in facets.values():
@@ -181,6 +188,8 @@ def annotate_query(
     pool: CandidatePool,
     batch_size: int = 40,
     patient_meta: dict[int, str] | None = None,
+    prompt_dump_dir: Path | None = None,
+    query_idx: int = 0,
 ) -> dict[str, list[str]]:
     """Full map-reduce annotation for one query.
 
@@ -208,6 +217,8 @@ def annotate_query(
             batch_idx=i,
             n_batches=n_batches,
             existing_facets=accumulated_facets,
+            prompt_dump_dir=prompt_dump_dir,
+            query_idx=query_idx,
         )
         all_batch_results.append(batch_result)
         accumulated_facets.update(item['facet_label'] for item in batch_result)
@@ -228,6 +239,8 @@ def annotate_batch(
     batch_idx: int = 0,
     n_batches: int = 1,
     existing_facets: set[str] | None = None,
+    prompt_dump_dir: Path | None = None,
+    query_idx: int = 0,
 ) -> list[dict]:
     """Run map-phase annotation on a single batch of chunks.
 
@@ -249,6 +262,12 @@ def annotate_batch(
             f'Only create a new label if none of them fit.'
         )
     prompt_chars = len(prompt)
+
+    if prompt_dump_dir is not None:
+        dump_path = prompt_dump_dir / f'q{query_idx:03d}_b{batch_idx:03d}.txt'
+        dump_path.write_text(
+            f'=== SYSTEM ===\n{gold_annotation_cfg.map_system_prompt}\n\n=== USER ===\n{prompt}'
+        )
 
     valid_ids = set(chunk_ids)
 
