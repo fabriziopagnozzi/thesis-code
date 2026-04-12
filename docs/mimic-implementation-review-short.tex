@@ -1,0 +1,56 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{titlesec}
+\usepackage{url}
+\newcommand{\fname}[1]{\path{#1}}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{\textbf{MIMIC-IV QA Benchmark: Implementation Summary}}
+\author{Fabrizio Pagnozzi\\MSc Thesis --- Politecnico di Milano}
+\date{April 2026}
+
+\begin{document}
+\setlength{\emergencystretch}{2em}
+\maketitle
+
+\section{Phase 1 --- Corpus Construction}
+
+\textbf{1a. Condition selection.} We restrict the corpus to conditions likely to produce multi-cluster candidate pools --- the structural prerequisite for coverage to outperform dispersion. Conditions are ranked by $N_{\text{admissions}} \times \bar{c}^{2}$, where $\bar{c}$ is mean Charlson comorbidity count per admission. The quadratic weight on comorbidity richness selects conditions whose patients present diverse, co-occurring clinical problems: each active comorbidity is a potential cluster in the embedding space. Output: \fname{conditions_stats.parquet}.
+
+\textbf{1b. Note chunking.} Chunks should align with individual clinical problems so that each problem can occupy a distinct region of embedding space. We parse section structure and keep only high-value sections (BHC, HPI, Pertinent Results, Discharge Diagnosis). The Brief Hospital Course gets the most attention: complex admissions structure it as a \texttt{\#}-delimited problem list, so we split on those markers to produce one chunk per active clinical issue. Simple admissions with no \texttt{\#} markers produce a single BHC chunk --- analogous to single-hop queries where coverage adds nothing. The Transitional Issues sub-block (post-discharge follow-up, not clinical reasoning) is stripped. Output: \fname{chunks.parquet}.
+
+\textbf{1c. Admission metadata.} We build a per-admission table of demographics, top-5 ICD diagnoses, and Charlson comorbidity flags. Used in Phase~2 for contextual embedding prefixes and in Phase~3 to filter candidates by condition and modifier. Output: \fname{admissions_metadata.parquet}.
+
+\textbf{1d. Deduplication.} Sections like Past Medical History and Allergies are often copied verbatim across a patient's repeated admissions, which would create artificially inflated clusters that any retrieval method covers for free. One copy per (patient, section, content hash) is retained. Clinical sections (BHC entries) are untouched. Output: \fname{chunks.parquet} updated in place.
+
+\section{Phase 2 --- Embeddings}
+
+Raw chunks are too patient-specific to match condition-level queries. Following the Contextual Retrieval approach (Anthropic, 2024), we prepend a structured prefix to each chunk before embedding: age group, sex, race, primary diagnosis, chief complaint, and active comorbidities. This bridges patient-specific narrative to condition-level semantics. Unlike the original method, we use a deterministic template instead of an LLM-generated prefix since MIMIC metadata is already structured in relational tables. Output: LanceDB vector table with one embedding per chunk.
+
+\section{Phase 3 --- Query Generation and Annotation}
+
+\textbf{3a. Grounded prompts.} Queries must require multi-source synthesis --- if they can be answered from a textbook or a single note, coverage adds nothing. For each (condition, modifier) pair, we inject real BHC excerpts from patients at the condition+modifier intersection into a prompt template. This grounds the LLM in the actual clinical language of the data. Modifiers are either the top-3 co-occurring Charlson comorbidities (producing multi-cluster pools: condition-only vs.\ condition+modifier patients) or demographic axes (age groups). The prompt explicitly requires the question to connect $\geq 2$ clinical aspects, ensuring a multi-facet gold set. Output: \fname{queries_prompts.parquet}.
+
+\textbf{3b. Query generation.} Each prompt is sent to a local LLM to produce the question text. Output: \fname{queries.parquet}.
+
+\textbf{3c. Divergence pre-filter.} A query where facility-location picks nearly the same chunks as top-$k$ provides no signal for the comparison. We keep only queries where coverage diverges: for each query we run both methods on a cosine top-$N$ pool from the full corpus (same as evaluation) and compute Jaccard divergence $1 - |S_{\text{FL}} \cap S_{\text{top-k}}| / |S_{\text{FL}} \cup S_{\text{top-k}}|$ and FL gap $\text{FL}(S_{\text{FL}}) - \text{FL}(S_{\text{top-k}})$. Using the full-corpus pool here (not condition-filtered) ensures the filter is directly predictive of the evaluation outcome. Output: \fname{divergence_stats.parquet} with a \fname{passes_filter} flag.
+
+\textbf{3d. Gold annotation (map-reduce LLM).} For each filtered query, a local LLM reads the condition-filtered candidate pool in batches and produces (fact, facet\_label, chunk\_ids) triples. Facet labels are not pre-defined --- the LLM generates them, and labels seen in earlier batches are fed back into subsequent ones to maintain consistency. The design requires exhaustive tagging: all chunks supporting a facet are tagged, not just the best one, so aspect recall is a fair metric. A reduce step merges batch results into a final (facet $\to$ chunk IDs) mapping. Output: \fname{gold_annotations.parquet}.
+
+\section{Phase 4 --- Evaluation}
+
+\textbf{Candidate pool.} For each query the pool is the top-$N$ chunks from the full corpus by cosine similarity, unrestricted by condition. This is deliberate: the pool must contain the redundant dominant cluster (many similar notes on the primary condition) and the complementary clusters (notes from patients with different comorbidities) --- exactly the structure where coverage is hypothesized to win.
+
+\textbf{Strategies.} Top-$k$ (baseline), MMR and gMMR (dispersion), facility-location (coverage) are compared at each $(k, \lambda)$.
+
+\textbf{Metrics.} Primary: \textbf{Aspect Recall} $|\{f \in F : S \cap G_f \neq \emptyset\}|/|F|$ --- fraction of gold facets with at least one gold chunk retrieved. Also: Weighted AR, Gold Precision/Recall, FL coverage score (geometry-based, annotation-independent), and Jaccard vs.\ top-$k$. Outputs: \fname{evaluation_results.parquet} and \fname{evaluation_stats.parquet}.
+
+\end{document}
