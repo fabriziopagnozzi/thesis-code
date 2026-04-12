@@ -8,25 +8,6 @@ build_query_prompts:
     - DISCHARGE DIAGNOSIS
     - DISCHARGE MEDICATIONS
 
-  charlson_labels:
-    myocardial_infarct: prior myocardial infarction
-    congestive_heart_failure: congestive heart failure
-    peripheral_vascular_disease: peripheral vascular disease
-    cerebrovascular_disease: cerebrovascular disease
-    dementia: dementia
-    chronic_pulmonary_disease: chronic pulmonary disease (COPD)
-    rheumatic_disease: rheumatic disease
-    peptic_ulcer_disease: peptic ulcer disease
-    mild_liver_disease: mild liver disease
-    diabetes_without_cc: diabetes without complications
-    diabetes_with_cc: diabetes with chronic complications
-    paraplegia: hemiplegia or paraplegia
-    renal_disease: chronic kidney disease
-    malignant_cancer: malignancy
-    severe_liver_disease: severe liver disease (cirrhosis)
-    metastatic_solid_tumor: metastatic cancer
-    aids: HIV/AIDS
-
   demographic_modifiers:
     - text: "the patient is elderly (age > 75)"
       column: age
@@ -79,10 +60,8 @@ filter_queries:
   k: 10
   lam: 0.35
   jaccard_threshold: 0.8
-  prefilter_n: 900
 
 gold_annotation:
-  prefilter_n: 900
   batch_size: 30
   num_ctx: 64_000
   num_predict: -1

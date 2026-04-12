@@ -47,13 +47,7 @@ def run_evaluate(
 
     builder = CandidatePoolBuilder(con, cfg=evaluate_cfg, device=evaluate_cfg.device)
 
-    results = evaluate(
-        annotations_df,
-        builder,
-        strategies=evaluate_cfg.strategies,
-        k_values=evaluate_cfg.k_values,
-        lam_values=evaluate_cfg.lam_values,
-    )
+    results = evaluate(annotations_df, builder)
 
     out_path = MIMIC_RESULTS_DIR / 'evaluation_results.parquet'
     results.write_parquet(out_path)
@@ -66,16 +60,7 @@ def run_evaluate(
 def evaluate(
     annotations_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
-    strategies: list[ScoringFunction] | None = None,
-    k_values: list[int] | None = None,
-    lam_values: list[float] | None = None,
-    prefilter_n: int | None = None,
 ) -> pl.DataFrame:
-    """Full evaluation across all annotated queries."""
-    strategies = strategies or evaluate_cfg.strategies
-    k_values = k_values or evaluate_cfg.k_values
-    lam_values = lam_values or evaluate_cfg.lam_values
-    prefilter_n = prefilter_n or evaluate_cfg.prefilter_n
     all_rows = []
 
     for row in tqdm(
@@ -83,22 +68,20 @@ def evaluate(
     ):
         icd3 = row['icd10_3char']
         query_text = row['query_text']
-        modifier_text = row.get('modifier_text')
         facets = json.loads(row['facets_json'])
-
         if not facets:
             continue
 
         query_vec = builder.embed_query(query_text)
-        pool = builder.for_query_cosine(query_vec, n=prefilter_n)
+        pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
 
         query_metrics = evaluate_query(
             pool,
             query_vec,
             facets,
-            strategies=strategies,
-            k_values=k_values,
-            lam_values=lam_values,
+            strategies=evaluate_cfg.strategies,
+            k_values=evaluate_cfg.k_values,
+            lam_values=evaluate_cfg.lam_values,
         )
 
         for m in query_metrics:
@@ -138,9 +121,9 @@ def evaluate_query(
 
     # Find top_k results for Jaccard comparison
     topk_by_k: dict[int, RetrievalResult] = {}
-    for r in retrieval_results:
-        if r.strategy == 'top_k':
-            topk_by_k[r.k] = r
+    for result in retrieval_results:
+        if result.strategy == 'top_k':
+            topk_by_k[result.k] = result
 
     sim_to_query = pool.sim_to_query(query_vec)
     sim_matrix = pool.sim_matrix()
@@ -150,23 +133,23 @@ def evaluate_query(
     all_gold_ids = {cid for cids in facets.values() for cid in cids}
 
     metrics = []
-    for r in retrieval_results:
-        selected_set = set(r.selected_chunk_ids)
+    for result in retrieval_results:
+        selected_set = set(result.selected_chunk_ids)
         ar = aspect_recall(selected_set, facets)
         war = weighted_aspect_recall(selected_set, facets)
         gp = gold_precision(selected_set, all_gold_ids)
         gr = gold_recall(selected_set, all_gold_ids, pool_id_set)
 
         eval_indices = np.array(
-            [chunk_id_to_idx[cid] for cid in r.selected_chunk_ids if cid in chunk_id_to_idx],
+            [chunk_id_to_idx[cid] for cid in result.selected_chunk_ids if cid in chunk_id_to_idx],
             dtype=np.intp,
         )
 
         fac = fac_cov_score(eval_indices, sim_matrix) if len(eval_indices) > 0 else 0.0
         ac = avg_cos(eval_indices, sim_to_query) if len(eval_indices) > 0 else 0.0
 
-        topk_ref = topk_by_k.get(r.k)
-        if topk_ref is not None and r.strategy != 'top_k':
+        topk_ref = topk_by_k.get(result.k)
+        if topk_ref is not None and result.strategy != 'top_k':
             topk_eval_idx = np.array(
                 [
                     chunk_id_to_idx[cid]
@@ -181,9 +164,9 @@ def evaluate_query(
 
         metrics.append(
             {
-                'strategy': r.strategy,
-                'k': r.k,
-                'lam': r.lam,
+                'strategy': result.strategy,
+                'k': result.k,
+                'lam': result.lam,
                 'aspect_recall': ar,
                 'weighted_aspect_recall': war,
                 'gold_precision': gp,
@@ -191,7 +174,7 @@ def evaluate_query(
                 'fac_cov_score': fac,
                 'avg_cos': ac,
                 'jaccard_vs_topk': jac,
-                'n_unique_hadms': len(set(r.selected_hadm_ids)),
+                'n_unique_hadms': len(set(result.selected_hadm_ids)),
             }
         )
 

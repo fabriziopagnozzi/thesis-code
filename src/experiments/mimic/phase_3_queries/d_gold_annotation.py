@@ -19,7 +19,7 @@ import numpy as np
 import polars as pl
 from pydantic import BaseModel, field_validator
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnotationCfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnotationCfg, global_cfg
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -68,7 +68,11 @@ def run_gold_annotation(
 
     # Load patient metadata for chunk context
     meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
-    patient_meta = _build_patient_meta(meta_path) if meta_path.exists() else None
+    patient_meta = (
+        _build_patient_meta(meta_path, global_cfg.shared_queries_cfg.charlson_labels)
+        if meta_path.exists()
+        else None
+    )
     if patient_meta:
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
 
@@ -119,7 +123,6 @@ def annotate(
     for i, row in enumerate(queries_df.iter_rows(named=True)):
         icd3 = row['icd10_3char']
         query_text = row['query_text']
-
         if query_text in done_texts:
             continue
 
@@ -132,7 +135,7 @@ def annotate(
         work_pool = builder.for_query_filtered(
             icd3,
             query_vec,
-            n=gold_annotation_cfg.prefilter_n,
+            n=global_cfg.shared_queries_cfg.prefilter_n,
             modifier_text=modifier_text,
         )
 
@@ -179,25 +182,7 @@ def annotate(
             pl.concat([existing, new_row]).write_parquet(out_path)
         else:
             new_row.write_parquet(out_path)
-
-        # Also append to JSONL for partial-run inspection
-        jsonl_path = MIMIC_RESULTS_DIR / 'gold_annotations.jsonl'
-        with jsonl_path.open('a') as f:
-            f.write(
-                json.dumps(
-                    {
-                        'query_id': query_id,
-                        'icd10_3char': icd3,
-                        'condition_name': row.get('condition_name', ''),
-                        'modifier_text': row.get('modifier_text', ''),
-                        'query_text': query_text,
-                        'facets_json': json.dumps(facets),
-                        'n_facets': len(facets),
-                        'n_gold_chunks': len(all_gold_chunks),
-                    }
-                )
-                + '\n'
-            )
+    # end for i, row in enumerate(queries_df.iter_rows(named=True))
 
     return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 
@@ -240,6 +225,12 @@ def annotate_query(
             query_idx=query_idx,
         )
         all_batch_results.append(batch_result)
+
+        # Append to JSONL for sequential inspection
+        jsonl_path = MIMIC_RESULTS_DIR / 'gold_annotations.jsonl'
+        with jsonl_path.open('a') as f:
+            f.write(json.dumps(batch_result) + '\n')
+
         accumulated_facets.update(item['facet_label'] for item in batch_result)
 
     facets = reduce_facets(all_batch_results)
@@ -362,23 +353,8 @@ def _format_chunk_batch(
     return '\n---\n'.join(parts)
 
 
-def _build_patient_meta(meta_path) -> dict[int, str]:
+def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int, str]:
     meta = pl.read_parquet(meta_path)
-
-    charlson_cols = {
-        'myocardial_infarct': 'myocardial infarction',
-        'congestive_heart_failure': 'congestive heart failure',
-        'peripheral_vascular_disease': 'peripheral vascular disease',
-        'cerebrovascular_disease': 'cerebrovascular disease',
-        'chronic_pulmonary_disease': 'chronic pulmonary disease',
-        'diabetes_without_cc': 'diabetes',
-        'diabetes_with_cc': 'diabetes with complications',
-        'renal_disease': 'renal disease',
-        'mild_liver_disease': 'liver disease',
-        'severe_liver_disease': 'severe liver disease',
-        'malignant_cancer': 'cancer',
-        'metastatic_solid_tumor': 'metastatic cancer',
-    }
 
     lookup: dict[int, str] = {}
     for row in meta.iter_rows(named=True):
@@ -387,7 +363,7 @@ def _build_patient_meta(meta_path) -> dict[int, str]:
         age_str = f'age {age}' if age is not None else 'age unknown'
 
         comorbidities = [
-            label for col, label in charlson_cols.items() if row.get(col) and row[col] > 0
+            label for col, label in charlson_labels.items() if row.get(col) and row[col] > 0
         ]
         primary = row.get('primary_icd_description', '')
 
