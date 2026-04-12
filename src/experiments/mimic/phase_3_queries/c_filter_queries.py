@@ -13,7 +13,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, FilterQueriesCfg
+from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, FilterQueriesCfg, global_cfg
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -65,23 +65,15 @@ def filter_queries(
         filter_queries_cfg.k,
         filter_queries_cfg.lam,
         filter_queries_cfg.jaccard_threshold,
-        filter_queries_cfg.prefilter_n,
+        global_cfg.shared_queries_cfg.prefilter_n,
     )
     results = []
 
     for row in tqdm(
         queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
     ):
-        icd3 = row['icd10_3char']
-        modifier_text = row.get('modifier_text')
-
         query_vec = builder.embed_query(row['query_text'])
-        pool = builder.for_query_stratified(
-            icd3,
-            query_vec,
-            prefilter_n=prefilter_n,
-            modifier_text=modifier_text,
-        )
+        pool = builder.for_query_cosine(query_vec, prefilter_n)
 
         div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
         passes = div['jaccard'] < jaccard_threshold

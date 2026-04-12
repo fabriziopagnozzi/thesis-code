@@ -21,6 +21,7 @@ from experiments.mimic.configs import (
     VECTOR_DB_DIR,
     BuildQueryPromptsCfg,
     EvaluateCfg,
+    global_cfg,
 )
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
@@ -168,7 +169,7 @@ class CandidatePoolBuilder:
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
 
         prompts_cfg = BuildQueryPromptsCfg.load()
-        self._charlson_label_to_col_name = prompts_cfg.label_to_charlson_col
+        self._charlson_label_to_col_name = global_cfg.shared_queries_cfg.label_to_charlson_col
         self._demographic_filters = prompts_cfg.demographic_filters
 
         meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
@@ -214,80 +215,15 @@ class CandidatePoolBuilder:
         sim = self._corpus_vectors @ query_vec
         take = min(n, len(sim))
         top_idx = np.argsort(sim)[::-1][:take].copy()
+        top_idx_list = top_idx.tolist()
         return CandidatePool(
-            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx],
+            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
             hadm_ids=self._hadm_id_array[top_idx],
             vectors=self._corpus_vectors[top_idx],
-            texts=[self._corpus_df['text'][i] for i in top_idx],
-            section_names=[self._corpus_df['section_name'][i] for i in top_idx],
-            metadata_df=self._corpus_df[top_idx.tolist()],
+            texts=[self._corpus_df['text'][i] for i in top_idx_list],
+            section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
+            metadata_df=self._corpus_df[top_idx_list],
         )
-
-    def for_query_stratified(
-        self,
-        icd3: str,
-        query_vec: NDArray[np.float32],
-        prefilter_n: int,
-        modifier_text: str | None = None,
-        strata_other_frac: float = 0.2,
-    ) -> CandidatePool:
-        """Build a stratified candidate pool that preserves multi-cluster structure.
-
-        For comorbidity modifiers, splits hadm_ids into three strata:
-        intersection (primary & modifier), primary-only, modifier-only.
-        Allocates prefilter_n slots proportionally and fills each stratum
-        by cosine similarity to the query, then concatenates.
-
-        For demographic/unknown modifiers, falls back to a single stratum.
-        """
-        primary_hadm_ids = self._condition_hadm_ids(icd3)
-
-        if modifier_text:
-            modifier = self._modifier_hadm_ids(modifier_text)
-            if modifier:
-                intersection_ids = primary_hadm_ids & modifier
-                primary_only_ids = primary_hadm_ids - modifier
-                modifier_only_ids = modifier - primary_hadm_ids
-
-                n_other = int(prefilter_n * strata_other_frac)
-                n_intersection = prefilter_n - 2 * n_other
-
-                strata = [
-                    ('intersection', intersection_ids, n_intersection),
-                    ('primary_only', primary_only_ids, n_other),
-                    ('modifier_only', modifier_only_ids, n_other),
-                ]
-
-                pools: list[tuple[CandidatePool, str, int]] = []
-                unused = 0
-                for name, hadm_ids, budget in strata:
-                    if not hadm_ids:
-                        unused += budget
-                        continue
-                    stratum_pool = self._build_pool(hadm_ids)
-                    take = min(budget, stratum_pool.n)
-                    if take < budget:
-                        unused += budget - take
-                    pools.append((stratum_pool.top_k_by_similarity(query_vec, take), name, take))
-
-                # Redistribute unused slots to intersection pool
-                if unused > 0 and pools:
-                    _, first_name, first_take = pools[0]
-                    parent_pool = self._build_pool(
-                        intersection_ids if first_name == 'intersection' else primary_hadm_ids
-                    )
-                    new_take = min(first_take + unused, parent_pool.n)
-                    pools[0] = (
-                        parent_pool.top_k_by_similarity(query_vec, new_take),
-                        first_name,
-                        new_take,
-                    )
-
-                return CandidatePool.concat([p for p, _, _ in pools])
-
-        # Fallback: single stratum (demographic modifier or no modifier)
-        pool = self._build_pool(primary_hadm_ids)
-        return pool.top_k_by_similarity(query_vec, prefilter_n)
 
     def _condition_hadm_ids(self, icd3: str) -> set[int]:
         if icd3 not in self._condition_to_hadm_ids_cache:

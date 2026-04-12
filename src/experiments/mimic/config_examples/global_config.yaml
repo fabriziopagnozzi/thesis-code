@@ -1,3 +1,24 @@
 n_conditions: 5
 # results_subdir: my_experiment  # optional: write all results to _results/<subdir>/
 # vector_db_dir: '_results' # relative to experiments/mimic
+
+phase_3_shared:
+    prefilter_n: 900
+    charlson_labels:
+        myocardial_infarct: prior myocardial infarction
+        congestive_heart_failure: congestive heart failure
+        peripheral_vascular_disease: peripheral vascular disease
+        cerebrovascular_disease: cerebrovascular disease
+        dementia: dementia
+        chronic_pulmonary_disease: chronic pulmonary disease (COPD)
+        rheumatic_disease: rheumatic disease
+        peptic_ulcer_disease: peptic ulcer disease
+        mild_liver_disease: mild liver disease
+        severe_liver_disease: severe liver disease (cirrhosis)
+        diabetes_without_cc: diabetes without complications
+        diabetes_with_cc: diabetes with chronic complications
+        paraplegia: hemiplegia or paraplegia
+        renal_disease: chronic kidney disease
+        malignant_cancer: malignancy
+        metastatic_solid_tumor: metastatic cancer
+        aids: HIV/AIDS

@@ -1,6 +1,7 @@
 import argparse
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, PositiveInt, computed_field
@@ -12,14 +13,27 @@ DEFAULT_CONFIGS_DIR = MIMIC_IV_DIR / '_configs'
 RESULTS_BASE_DIR = MIMIC_IV_DIR / '_results'
 
 
+class SharedQueriesCfg(BaseModel):
+    charlson_labels: dict[str, str]
+    prefilter_n: int
+
+    @computed_field
+    @property
+    def label_to_charlson_col(self) -> dict[str, str]:
+        return {v: k for k, v in self.charlson_labels.items()}
+
+
 class GlobalCfg(BaseModel):
     num_conditions: PositiveInt
+    embedding_model: str
     vector_db_dir: str
     results_subdir: str | None
+    shared_queries_cfg: SharedQueriesCfg
 
 
 def load_global_cfg(
-    path: Path = DEFAULT_CONFIGS_DIR / 'global_config.yaml', cfg: GlobalCfg | None = None
+    path: Path = DEFAULT_CONFIGS_DIR / 'global_config.yaml',
+    cfg: GlobalCfg | None = None,
 ):
     global global_cfg
 
@@ -32,6 +46,8 @@ def load_global_cfg(
 
     global_cfg = GlobalCfg(
         num_conditions=_loaded_cfg['n_conditions'],
+        embedding_model=_loaded_cfg['embedding_model'],
+        shared_queries_cfg=SharedQueriesCfg(**_loaded_cfg['phase_3_shared']),
         vector_db_dir=_loaded_cfg['vector_db_dir'],
         results_subdir=_loaded_cfg.get('results_subdir'),
     )
@@ -45,7 +61,7 @@ MIMIC_RESULTS_DIR = RESULTS_BASE_DIR / RESULTS_SUBDIR if RESULTS_SUBDIR else RES
 VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
 
 
-def load_default_config(phase: int, path: str | Path | None = None) -> dict:
+def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
     if path is None:
         path = DEFAULT_CONFIGS_DIR / f'phase_{phase}_config.yaml'
     with open(path) as f:
@@ -77,7 +93,7 @@ class NoteChunkingCfg(BaseModel):
     keep_sections: set[str]
     skip_sections: set[str]
     metadata_only_sections: set[str]
-    embedding_model: str
+    embedding_model: str = ''
     max_tokens: int = 512
     stride_tokens: int = 128
     min_chunk_tokens: int = 15
@@ -97,7 +113,9 @@ class NoteChunkingCfg(BaseModel):
 
     @classmethod
     def load(cls) -> NoteChunkingCfg:
-        return cls(**load_default_config(phase=1)['note_chunking'])
+        data = load_default_config(phase=1)['note_chunking']
+        data.setdefault('embedding_model', global_cfg.embedding_model)
+        return cls(**data)
 
 
 class DedupCfg(BaseModel):
@@ -115,14 +133,16 @@ class DedupCfg(BaseModel):
 
 # -- Phase 2 --
 class EmbedCfg(BaseModel):
-    model_name: str
+    model_name: str = ''
     batch_size: int
     commit_every: int
     device: str
 
     @classmethod
     def load(cls) -> EmbedCfg:
-        return cls(**load_default_config(phase=2)['embed'])
+        data = load_default_config(phase=2)['embed']
+        data.setdefault('model_name', global_cfg.embedding_model)
+        return cls(**data)
 
 
 # -- Phase 3 --
@@ -137,7 +157,6 @@ class BuildQueryPromptsCfg(BaseModel):
     n_grounding_patients: int
     max_modifiers: int
     high_value_sections: list[str]
-    charlson_labels: dict[str, str]
     demographic_modifiers: list[DemographicModifier]
     prompt_template: str
 
@@ -150,11 +169,6 @@ class BuildQueryPromptsCfg(BaseModel):
     @property
     def demographic_filters(self) -> dict[str, tuple]:
         return {m.text: (m.column, m.op, m.value) for m in self.demographic_modifiers}
-
-    @computed_field
-    @property
-    def label_to_charlson_col(self) -> dict[str, str]:
-        return {v: k for k, v in self.charlson_labels.items()}
 
     @classmethod
     def load(cls) -> BuildQueryPromptsCfg:
@@ -178,7 +192,6 @@ class FilterQueriesCfg(BaseModel):
     k: int
     lam: float
     jaccard_threshold: float
-    prefilter_n: int
 
     @classmethod
     def load(cls) -> FilterQueriesCfg:
@@ -186,7 +199,6 @@ class FilterQueriesCfg(BaseModel):
 
 
 class GoldAnnotationCfg(BaseModel):
-    prefilter_n: int
     batch_size: int
     num_ctx: int | None = None
     num_predict: int | None = None
@@ -206,7 +218,7 @@ class GoldAnnotationCfg(BaseModel):
 
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
-    embedding_model: str
+    embedding_model: str = ''
     strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]
@@ -216,4 +228,6 @@ class EvaluateCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EvaluateCfg:
-        return cls(**load_default_config(phase=4)['evaluate'])
+        data = load_default_config(phase=4)['evaluate']
+        data.setdefault('embedding_model', global_cfg.embedding_model)
+        return cls(**data)

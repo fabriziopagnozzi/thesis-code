@@ -140,7 +140,7 @@ def _find_top_comorbidity_modifiers(
     con, condition_icd3: str, n: int = 3
 ) -> list[tuple[str, str, float]]:
     """Most common co-occurring Charlson categories for a condition. Returns (col, label, rate)."""
-    charlson_cols = list(query_prompts_cfg.charlson_labels.keys())
+    charlson_cols = list(global_cfg.shared_queries_cfg.charlson_labels.keys())
     col_list = ', '.join(f'AVG(ch.{c}) AS {c}' for c in charlson_cols)
 
     rates = con.execute(f"""--sql
@@ -151,7 +151,7 @@ def _find_top_comorbidity_modifiers(
     """).fetchone()
 
     scored = [
-        (col, query_prompts_cfg.charlson_labels[col], float(rate))
+        (col, global_cfg.shared_queries_cfg.charlson_labels[col], float(rate))
         for col, rate in zip(charlson_cols, rates, strict=True)
         if rate and rate > 0.05
     ]
@@ -181,7 +181,7 @@ def _get_modifier_hadm_ids(
 
 
 def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
-    col = query_prompts_cfg.label_to_charlson_col.get(modifier_text)
+    col = global_cfg.shared_queries_cfg.label_to_charlson_col.get(modifier_text)
     if col is None:
         return set()
     placeholders = ','.join(str(h) for h in condition_hadm_ids)

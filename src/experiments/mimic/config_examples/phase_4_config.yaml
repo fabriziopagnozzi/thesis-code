@@ -1,12 +1,11 @@
 evaluate:
-  embedding_model: multi-qa-mpnet-base-cos-v1
   strategies:
     - top_k
     - mmr
-    - gmmr
     - facility_location
-  k_values: [5, 10, 20]
-  lam_values: [0.3, 0.5, 0.7]
+    # - gmmr
+  k_values: [5, 10, 20, 30]
+  lam_values: [0.3, 0.5, 0.7, 0.8]
   prefilter_n: 3000
   strata_other_frac: 0.2
   device: cuda

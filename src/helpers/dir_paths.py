@@ -18,16 +18,12 @@ DATASETS_DIR = (
     else Path('/DATA/pagnozzi/datasets')
 )
 
-DATASETS_PREVIEW_DIR = ROOT_DIR / 'data' / 'previews'
-
-# MIMIC-IV Experiments dir
+# MIMIC-IV code dirs
 MIMIC_IV_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic'
+MIMIR_REPO_CODE_DIR = MIMIC_IV_DIR / 'mimic_code'  # MIT Repo with utils
 
 # MIMIC-IV data
 HOSP_DIR = DATASETS_DIR / 'mimic-iv' / 'hosp'
 ICU_DIR = DATASETS_DIR / 'mimic-iv' / 'icu'
 NOTE_DIR = DATASETS_DIR / 'mimic-iv' / 'note'
 BHC_DIR = DATASETS_DIR / 'mimic-iv' / 'ext-bhc'
-
-# MIT repo
-MIMIR_REPO_CODE_DIR = MIMIC_IV_DIR / 'mimic_code'
