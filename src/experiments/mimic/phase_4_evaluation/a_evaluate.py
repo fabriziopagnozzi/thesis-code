@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg
+from experiments.mimic.configs import EvaluateCfg, get_parquet_path, global_cfg
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -27,6 +27,9 @@ from .candidate_pool import (
     RetrievalResult,
     run_retrieval,
 )
+
+# n used during gold annotation (must match phase_3_shared.prefilter_n)
+_GOLD_PREFILTER_N = global_cfg.shared_queries_cfg.prefilter_n
 
 evaluate_cfg = EvaluateCfg.load()
 
@@ -41,7 +44,7 @@ def run_evaluate(
     if con is None:
         con = connect_mimic_duckdb()
 
-    annotations_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'gold_annotations.parquet')
+    annotations_df = pl.read_parquet(get_parquet_path('gold_annotations'))
     annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
     print(f'Loaded {len(annotations_df):,} annotated queries with facets')
 
@@ -49,7 +52,7 @@ def run_evaluate(
 
     results = evaluate(annotations_df, builder)
 
-    out_path = MIMIC_RESULTS_DIR / 'evaluation_results.parquet'
+    out_path = get_parquet_path('evaluation_results')
     results.write_parquet(out_path)
     print(f'\nSaved {len(results):,} result rows to {out_path}')
 
@@ -72,8 +75,17 @@ def evaluate(
         if not facets:
             continue
 
+        modifier_text = row.get('modifier_text')
         query_vec = builder.embed_query(query_text)
-        pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
+
+        # Full-corpus top-N pool (used for retrieval)
+        cosine_pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
+        # Condition-filtered pool that was used during gold annotation, guarantees
+        # all gold chunks are reachable in the evaluation pool.
+        gold_pool = builder.for_query_filtered(
+            icd3, query_vec, n=_GOLD_PREFILTER_N, modifier_text=modifier_text
+        )
+        pool = CandidatePool.merge([cosine_pool, gold_pool])
 
         query_metrics = evaluate_query(
             pool,
@@ -242,13 +254,10 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         print()
 
     stats_df = pl.concat(summaries)
-    stats_path = MIMIC_RESULTS_DIR / 'evaluation_stats.parquet'
+    stats_path = get_parquet_path('evaluation_stats')
     stats_df.write_parquet(stats_path)
     print(f'Saved summary to {stats_path}')
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
-
-    raw = load_config_from_main(phase=4)
-    run_evaluate(cfg=EvaluateCfg(**raw['evaluate']))
+    run_evaluate(cfg=EvaluateCfg.load())

@@ -15,7 +15,7 @@ Uses the Charlson SQL from mimic-code.
 import duckdb
 import polars as pl
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, ConditionsStatsCfg
+from experiments.mimic.configs import ConditionsStatsCfg, get_parquet_path
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -29,8 +29,8 @@ def run_conditions_stats(
         con = connect_mimic_duckdb()
 
     df = select_conditions(con=con, min_admissions=cfg.min_admissions)
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = MIMIC_RESULTS_DIR / 'conditions_stats.parquet'
+    out_path = get_parquet_path('conditions_stats')
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     df.write_parquet(out_path)
     print(f'\nSaved {len(df)} conditions to {out_path}')
 

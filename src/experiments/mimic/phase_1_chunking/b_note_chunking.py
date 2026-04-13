@@ -6,7 +6,7 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, NoteChunkingCfg, global_cfg
+from experiments.mimic.configs import NoteChunkingCfg, get_parquet_path, global_cfg
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
 chunking_cfg = NoteChunkingCfg.load()
@@ -37,9 +37,8 @@ def run_note_chunking(
 
     if con is None:
         con = connect_mimic_duckdb()
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    out_path = MIMIC_RESULTS_DIR / 'chunks.parquet'
+    out_path = get_parquet_path('chunks')
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     df = parse_all_notes(con)
     df.write_parquet(out_path)
@@ -49,7 +48,7 @@ def run_note_chunking(
 
 def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     top_icd3 = (
-        pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
+        pl.read_parquet(get_parquet_path('conditions_stats'))
         .head(global_cfg.num_conditions)['icd10_3char']
         .to_list()
     )
@@ -268,9 +267,4 @@ def _fixed_chunk(text: str) -> list[str]:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
-
-    raw = load_config_from_main(phase=1)
-    run_note_chunking(
-        cfg=NoteChunkingCfg(**raw['note_chunking']),
-    )
+    run_note_chunking(cfg=NoteChunkingCfg.load())

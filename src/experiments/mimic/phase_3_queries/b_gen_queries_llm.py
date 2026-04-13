@@ -12,7 +12,7 @@ import sys
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, GenQueriesCfg
+from experiments.mimic.configs import GenQueriesCfg, get_parquet_path
 from helpers.ollama_client import generate
 
 gen_queries_cfg = GenQueriesCfg.load()
@@ -23,9 +23,9 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
     if cfg is not None:
         gen_queries_cfg = cfg
 
-    prompts_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries_prompts.parquet')
+    prompts_df = pl.read_parquet(get_parquet_path('queries_prompts'))
 
-    out_path = MIMIC_RESULTS_DIR / 'queries.parquet'
+    out_path = get_parquet_path('queries')
     resume_df = None
     if out_path.exists():
         resume_df = pl.read_parquet(out_path)

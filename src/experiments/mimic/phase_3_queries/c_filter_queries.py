@@ -13,7 +13,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, FilterQueriesCfg, global_cfg
+from experiments.mimic.configs import EvaluateCfg, FilterQueriesCfg, get_parquet_path, global_cfg
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -34,13 +34,13 @@ def run_filter_queries(
     if con is None:
         con = connect_mimic_duckdb()
 
-    queries_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
+    queries_df = pl.read_parquet(get_parquet_path('queries'))
     print(f'Loaded {len(queries_df):,} queries')
 
     builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
     result = filter_queries(queries_df, builder)
 
-    out_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'
+    out_path = get_parquet_path('divergence_stats')
     result.write_parquet(out_path)
 
     n_pass = result.filter(pl.col('passes_filter')).height

@@ -14,27 +14,14 @@ def generate(
     prompt: str,
     system: str = '',
     temperature: float = 0.1,
-    top_p: float | None = None,
-    top_k: int | None = None,
-    num_ctx: int | None = None,
-    num_predict: int | None = None,
     model: str | None = None,
     think: bool = False,
     stream: bool = False,
+    **opts_kwargs: int | float | None,
 ) -> str:
     messages = [{'role': 'user', 'content': system + '\n\n' + prompt}]
 
-    opts: dict = {'temperature': temperature}
-    if top_p is not None:
-        opts['top_p'] = top_p
-    if top_k is not None:
-        opts['top_k'] = top_k
-    if num_ctx is not None:
-        opts['num_ctx'] = num_ctx
-    if num_predict is not None:
-        opts['num_predict'] = num_predict
-    if think:
-        opts['think'] = True
+    opts: dict = {'temperature': temperature, **opts_kwargs, **({'think': True} if think else {})}
 
     used_model = model if model else OLLAMA_DEFAULT_MODEL
     prompt_chars = sum(len(m['content']) for m in messages)
@@ -111,14 +98,11 @@ def generate_json(
     prompt: str,
     system: str = '',
     temperature: float = 0.1,
-    top_p: float | None = None,
-    top_k: int | None = None,
-    num_ctx: int | None = None,
-    num_predict: int | None = None,
     max_retries: int = 2,
     model: str | None = None,
     think: bool = False,
     stream: bool = False,
+    **opts_kwargs: int | float,
 ) -> dict | list:
     extra_messages: list[dict] = []
 
@@ -132,13 +116,10 @@ def generate_json(
             full_prompt,
             system=system,
             temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            num_ctx=num_ctx,
-            num_predict=num_predict,
             model=model,
             think=think,
             stream=stream,
+            **opts_kwargs,
         )
         text = _strip_code_fences(raw)
 

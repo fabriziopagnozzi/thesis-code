@@ -17,14 +17,16 @@ from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
 from experiments.mimic.configs import (
-    MIMIC_RESULTS_DIR,
     VECTOR_DB_DIR,
     BuildQueryPromptsCfg,
     EvaluateCfg,
+    get_parquet_path,
     global_cfg,
 )
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
+
+MAX_CANDIDATES = 15000
 
 
 @dataclass
@@ -55,26 +57,29 @@ def run_retrieval(
 
     sim_matrix = pool.sim_matrix()
 
+    valid_k_values = [k for k in k_values if k <= pool.n]
+    if not valid_k_values:
+        return []
+    max_k = max(valid_k_values)
+
     results = []
     for strategy in strategies:
         needs_lambda = strategy in ('mmr', 'gmmr', 'facility_location')
         lams = lam_values if needs_lambda else [None]
 
         for lam in lams:
-            for k in k_values:
-                if k > pool.n:
-                    break
+            all_selected = select(
+                strategy=strategy,
+                sim_to_query=sim_to_query,
+                k=max_k,
+                sim_matrix=sim_matrix,
+                embeddings=pool.vectors,
+                query_embedding=query_vec,
+                lam=lam if lam is not None else 0.5,
+            )
 
-                selected = select(
-                    strategy=strategy,
-                    sim_to_query=sim_to_query,
-                    k=k,
-                    sim_matrix=sim_matrix,
-                    embeddings=pool.vectors,
-                    query_embedding=query_vec,
-                    lam=lam if lam is not None else 0.5,
-                )
-
+            for k in valid_k_values:
+                selected = all_selected[:k]
                 results.append(
                     RetrievalResult(
                         strategy=strategy,
@@ -105,13 +110,11 @@ class CandidatePool:
     def n(self) -> int:
         return self.vectors.shape[0]
 
-    MAX_SIM_MATRIX_SIZE = 5_000
-
     def sim_matrix(self) -> NDArray[np.float32]:
         """Pairwise cosine similarity (cached, vectors assumed normalized)."""
 
         if self._sim_matrix is None:
-            if self.n > self.MAX_SIM_MATRIX_SIZE:
+            if self.n > MAX_CANDIDATES:
                 raise ValueError(
                     'Exceeded size {MAX_SIM_MATRIX_SIZE}. Apply prefilter_n to reduce pool size first.'
                 )
@@ -152,6 +155,18 @@ class CandidatePool:
             metadata_df=pl.concat([p.metadata_df for p in pools]),
         )
 
+    @classmethod
+    def merge(cls, pools: list[CandidatePool]) -> CandidatePool:
+        """Concatenate pools and deduplicate by chunk_id, keeping first occurrence."""
+        merged = cls.concat(pools)
+        seen: set[str] = set()
+        keep: list[int] = []
+        for i, cid in enumerate(merged.chunk_ids):
+            if cid not in seen:
+                seen.add(cid)
+                keep.append(i)
+        return merged.slice(np.array(keep, dtype=np.intp))
+
 
 class CandidatePoolBuilder:
     _OPS: ClassVar[dict[str, Callable[[Any, Any], bool]]] = {
@@ -172,7 +187,7 @@ class CandidatePoolBuilder:
         self._charlson_label_to_col_name = global_cfg.shared_queries_cfg.label_to_charlson_col
         self._demographic_filters = prompts_cfg.demographic_filters
 
-        meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
+        meta_path = get_parquet_path('admissions_metadata')
         self._admissions_meta = pl.read_parquet(meta_path) if meta_path.exists() else None
 
         import lancedb
@@ -180,14 +195,16 @@ class CandidatePoolBuilder:
         db = lancedb.connect(VECTOR_DB_DIR)
         arrow_table = db.open_table('chunks').to_arrow()
 
-        vec_column = arrow_table.column('vector')
+        vec_col = cfg.vector_col
+        print(f'[CandidatePoolBuilder] using vector column: {vec_col!r}')
+        vec_column = arrow_table.column(vec_col)
         combined = vec_column.combine_chunks()
         dim = combined.type.list_size
         self._corpus_vectors = (
             combined.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
         )
 
-        self._corpus_df = pl.DataFrame(arrow_table.drop('vector'))
+        self._corpus_df = pl.DataFrame(arrow_table.drop(vec_col))
         self._hadm_id_array: NDArray[np.int64] = self._corpus_df['hadm_id'].to_numpy()
 
     def for_query_filtered(

@@ -1,4 +1,5 @@
 evaluate:
+  # vector_col: vector   # name of the embedding column to load from the chunks table
   strategies:
     - top_k
     - mmr
@@ -7,5 +8,4 @@ evaluate:
   k_values: [5, 10, 20, 30]
   lam_values: [0.3, 0.5, 0.7, 0.8]
   prefilter_n: 3000
-  strata_other_frac: 0.2
   device: cuda

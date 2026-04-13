@@ -40,31 +40,34 @@ def mmr(
     Maximal Marginal Relevance.
     score(i) = lam * cos(q, i) - (1-lam) * max_{j in W} cos(i, j)
     W = last `window` selected items (None = all selected).
+
+    Vectorized: for window=None, tracks running max similarity to selected set
+    with O(k*n) numpy ops instead of a Python inner loop.
     """
     n = len(sim_to_query)
     k = min(k, n)
     selected: list[int] = []
-    remaining = set(range(n))
+    candidate_mask = np.ones(n, dtype=bool)
+    # Running max similarity of each item to the selected set (window=None only)
+    max_sim_to_sel = np.zeros(n, dtype=np.float32)
 
-    for _ in range(k):
-        best_score = -np.inf
-        best_idx = -1
+    for step in range(k):
+        if step == 0:
+            scores = lam * sim_to_query
+        elif window is None:
+            scores = lam * sim_to_query - (1 - lam) * max_sim_to_sel
+        else:
+            w = selected[-window:]
+            scores = lam * sim_to_query - (1 - lam) * sim_matrix[:, w].max(axis=1)
 
-        for i in remaining:
-            relevance = lam * sim_to_query[i]
-            if selected:
-                w = selected[-window:] if window else selected
-                redundancy = (1 - lam) * max(sim_matrix[i, j] for j in w)
-            else:
-                redundancy = 0.0
-            score = relevance - redundancy
+        scores = scores.copy()
+        scores[~candidate_mask] = -np.inf
+        best = int(np.argmax(scores))
+        selected.append(best)
+        candidate_mask[best] = False
 
-            if score > best_score:
-                best_score = score
-                best_idx = i
-
-        selected.append(best_idx)
-        remaining.discard(best_idx)
+        if window is None:
+            max_sim_to_sel = np.maximum(max_sim_to_sel, sim_matrix[:, best])
 
     return np.array(selected, dtype=np.intp)
 

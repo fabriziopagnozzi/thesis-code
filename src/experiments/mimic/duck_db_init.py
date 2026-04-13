@@ -1,6 +1,6 @@
 import duckdb
 
-from experiments.mimic.configs import DEFAULT_CONFIGS_DIR, MIMIC_RESULTS_DIR
+from experiments.mimic.configs import CONFIG_FILES_DIR, get_parquet_path
 from helpers.dir_paths import (
     BHC_DIR,
     HOSP_DIR,
@@ -9,7 +9,7 @@ from helpers.dir_paths import (
     NOTE_DIR,
 )
 
-INIT_SQL_PATH = DEFAULT_CONFIGS_DIR / '_mimic_init.sql'
+INIT_SQL_PATH = CONFIG_FILES_DIR / '_mimic_init.sql'
 DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
 
 HOSP_TABLES = {
@@ -76,7 +76,7 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
             con.execute(statement)
 
     for table in RESULT_TABLES:
-        parquet_file = MIMIC_RESULTS_DIR / f'{table}.parquet'
+        parquet_file = get_parquet_path(table)
         if parquet_file.exists():
             con.execute(
                 f"CREATE VIEW IF NOT EXISTS mimic_results.{table} AS SELECT * FROM read_parquet('{parquet_file}')"
@@ -89,10 +89,9 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
 
 def _load_derived_concepts(con: duckdb.DuckDBPyConnection):
     """Load derived concept tables (age, charlson) from parquet or compute and save them."""
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
     for table, sql_rel in DERIVED_CONCEPTS.items():
-        parquet_path = MIMIC_RESULTS_DIR / f'{table}.parquet'
+        parquet_path = get_parquet_path(table)
+        parquet_path.parent.mkdir(parents=True, exist_ok=True)
         if parquet_path.exists():
             con.execute(
                 f"CREATE VIEW IF NOT EXISTS mimiciv_derived.{table} AS SELECT * FROM read_parquet('{parquet_path}')"
