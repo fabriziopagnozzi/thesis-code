@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, VECTOR_DB_DIR, EmbedCfg, global_cfg
+from experiments.mimic.configs import VECTOR_DB_DIR, EmbedCfg, get_parquet_path, global_cfg
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
@@ -16,10 +16,8 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     if cfg is not None:
         embed_cfg = cfg
 
-    MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-
-    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
-    metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
+    chunks = pl.read_parquet(get_parquet_path('chunks'))
+    metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
 
     relevant_hadm_ids = get_top_hadm_ids()
     n_before = len(chunks)
@@ -56,7 +54,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
 
         print(f'  Committed {end:,}/{total:,} chunks')
 
-    print(f'Saved {total:,} rows to {MIMIC_RESULTS_DIR}/_lancedb/chunks')
+    print(f'Saved {total:,} rows to {VECTOR_DB_DIR}/chunks')
 
 
 def build_contextual_prefix(meta_row: dict) -> str:
@@ -101,7 +99,7 @@ def prepare_texts(
 
 def get_top_hadm_ids() -> set[int]:
     """Return hadm_ids that have any ICD-10 diagnosis matching a top condition."""
-    conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
+    conditions = pl.read_parquet(get_parquet_path('conditions_stats'))
     top_icd3 = conditions.head(global_cfg.num_conditions)['icd10_3char'].to_list()
     placeholders = ','.join(f"'{c}'" for c in top_icd3)
 
@@ -130,7 +128,4 @@ def get_age_group(age: float | None) -> str:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.configs import load_config_from_main
-
-    raw = load_config_from_main(phase=2)
-    run_embed(cfg=EmbedCfg(**raw['embed']))
+    run_embed(cfg=EmbedCfg.load())

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, PositiveInt, computed_field
+from pydantic import BaseModel, Field, PositiveInt, computed_field
 
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
@@ -21,15 +21,18 @@ class SharedQueriesCfg(BaseModel):
 
 
 class GlobalCfg(BaseModel):
-    num_conditions: PositiveInt
+    model_config = {'populate_by_name': True, 'extra': 'ignore'}
+
+    num_conditions: PositiveInt = Field(alias='n_conditions')
     embedding_model: str
     vector_db_dir: str
-    results_subdir: str | None
-    shared_queries_cfg: SharedQueriesCfg
+    shared_queries_cfg: SharedQueriesCfg = Field(alias='phase_3_shared')
+    results_subdir: str
+    result_dir_overrides: dict[str, str] = {}
 
 
 def load_global_cfg(
-    path: Path = MIMIC_IV_DIR / '_configs' / 'global_config.yaml',
+    path: Path = MIMIC_IV_DIR / 'global_config.yaml',
     cfg: GlobalCfg | None = None,
 ):
     global global_cfg
@@ -41,28 +44,20 @@ def load_global_cfg(
     with open(path) as f:
         _loaded_cfg = yaml.safe_load(f)
 
-    global_cfg = GlobalCfg(
-        num_conditions=_loaded_cfg['n_conditions'],
-        embedding_model=_loaded_cfg['embedding_model'],
-        shared_queries_cfg=SharedQueriesCfg(**_loaded_cfg['phase_3_shared']),
-        vector_db_dir=_loaded_cfg['vector_db_dir'],
-        results_subdir=_loaded_cfg.get('results_subdir'),
-    )
+    global_cfg = GlobalCfg.model_validate(_loaded_cfg)
     return
 
 
 load_global_cfg()
 
-RESULTS_BASE_DIR = MIMIC_IV_DIR / '_results'
 VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
-RESULTS_SUBDIR = global_cfg.results_subdir
-MIMIC_RESULTS_DIR = RESULTS_BASE_DIR / RESULTS_SUBDIR if RESULTS_SUBDIR else RESULTS_BASE_DIR
-DEFAULT_CONFIGS_DIR = MIMIC_RESULTS_DIR / '_configs'
+MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / global_cfg.results_subdir
+CONFIG_FILES_DIR = MIMIC_RESULTS_DIR / '_configs'
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
     if path is None:
-        path = DEFAULT_CONFIGS_DIR / f'phase_{phase}_config.yaml'
+        path = CONFIG_FILES_DIR / f'phase_{phase}_config.yaml'
     with open(path) as f:
         return yaml.safe_load(f)
 
@@ -74,6 +69,17 @@ def load_config_from_main(phase: int) -> dict:
     )
     args, _ = parser.parse_known_args()
     return load_default_config(phase, path=args.config)
+
+
+def get_result_dir(table: str) -> Path:
+    subdir = global_cfg.result_dir_overrides.get(table)
+    if subdir is not None:
+        return MIMIC_IV_DIR / '_results' / subdir
+    return MIMIC_RESULTS_DIR
+
+
+def get_parquet_path(table: str) -> Path:
+    return get_result_dir(table) / f'{table}.parquet'
 
 
 # PYDANTIC MODELS FOR CONFIGS
@@ -218,11 +224,11 @@ class GoldAnnotationCfg(BaseModel):
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
     embedding_model: str = ''
+    vector_col: str = 'vector'
     strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]
     prefilter_n: int
-    strata_other_frac: float = 0.2
     device: str
 
     @classmethod

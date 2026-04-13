@@ -19,7 +19,13 @@ import numpy as np
 import polars as pl
 from pydantic import BaseModel, field_validator
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, EvaluateCfg, GoldAnnotationCfg, global_cfg
+from experiments.mimic.configs import (
+    EvaluateCfg,
+    GoldAnnotationCfg,
+    get_parquet_path,
+    get_result_dir,
+    global_cfg,
+)
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -59,15 +65,15 @@ def run_gold_annotation(
         con = connect_mimic_duckdb()
 
     # Load filtered queries
-    filtered_queries_path = MIMIC_RESULTS_DIR / 'divergence_stats.parquet'
+    filtered_queries_path = get_parquet_path('divergence_stats')
     if filtered_queries_path.exists():
         all_queries = pl.read_parquet(filtered_queries_path)
         queries_df = all_queries.filter(pl.col('passes_filter'))
     else:
-        queries_df = pl.read_parquet(MIMIC_RESULTS_DIR / 'queries.parquet')
+        queries_df = pl.read_parquet(get_parquet_path('queries'))
 
     # Load patient metadata for chunk context
-    meta_path = MIMIC_RESULTS_DIR / 'admissions_metadata.parquet'
+    meta_path = get_parquet_path('admissions_metadata')
     patient_meta = (
         _build_patient_meta(meta_path, global_cfg.shared_queries_cfg.charlson_labels)
         if meta_path.exists()
@@ -77,7 +83,7 @@ def run_gold_annotation(
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
 
     # Resume from previous run if output exists
-    out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
+    out_path = get_parquet_path('gold_annotations')
     done_texts: set[str] = set()
     if out_path.exists():
         prev = pl.read_parquet(out_path)
@@ -88,8 +94,6 @@ def run_gold_annotation(
 
     builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
     result = annotate(queries_df, builder, patient_meta, done_texts)
-
-    out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
     result.write_parquet(out_path)
 
     print(
@@ -113,8 +117,8 @@ def annotate(
         query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
     """
 
-    out_path = MIMIC_RESULTS_DIR / 'gold_annotations.parquet'
-    prompt_dump_dir = MIMIC_RESULTS_DIR / '_prompt_dump'
+    out_path = get_parquet_path('gold_annotations')
+    prompt_dump_dir = get_result_dir('gold_annotations') / '_prompt_dump'
     prompt_dump_dir.mkdir(parents=True, exist_ok=True)
 
     total = len(queries_df)
@@ -227,7 +231,7 @@ def annotate_query(
         all_batch_results.append(batch_result)
 
         # Append to JSONL for sequential inspection
-        jsonl_path = MIMIC_RESULTS_DIR / 'gold_annotations.jsonl'
+        jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
         with jsonl_path.open('a') as f:
             f.write(json.dumps(batch_result) + '\n')
 

@@ -13,7 +13,7 @@ import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
-from experiments.mimic.configs import MIMIC_RESULTS_DIR, BuildQueryPromptsCfg, global_cfg
+from experiments.mimic.configs import BuildQueryPromptsCfg, get_parquet_path, global_cfg
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -32,9 +32,9 @@ def run_build_query_prompts(
     if con is None:
         con = connect_mimic_duckdb()
 
-    conditions = pl.read_parquet(MIMIC_RESULTS_DIR / 'conditions_stats.parquet')
-    chunks = pl.read_parquet(MIMIC_RESULTS_DIR / 'chunks.parquet')
-    metadata = pl.read_parquet(MIMIC_RESULTS_DIR / 'admissions_metadata.parquet')
+    conditions = pl.read_parquet(get_parquet_path('conditions_stats'))
+    chunks = pl.read_parquet(get_parquet_path('chunks'))
+    metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
 
     print(
         f'Loaded {len(conditions):,} conditions, {len(chunks):,} chunks, {len(metadata):,} admissions'
@@ -42,7 +42,7 @@ def run_build_query_prompts(
 
     df = build_query_prompts(conditions, chunks, metadata, con)
 
-    out_path = MIMIC_RESULTS_DIR / 'queries_prompts.parquet'
+    out_path = get_parquet_path('queries_prompts')
     df.write_parquet(out_path)
 
     return df

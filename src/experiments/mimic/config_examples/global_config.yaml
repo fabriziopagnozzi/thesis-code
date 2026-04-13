@@ -1,6 +1,19 @@
-n_conditions: 5
-# results_subdir: my_experiment  # optional: write all results to _results/<subdir>/
-# vector_db_dir: '_results' # relative to experiments/mimic
+n_conditions: 8
+# embedding_model: multi-qa-mpnet-base-cos-v1
+# vector_db_dir: "_results/_shared_0/_lancedb" # relative to src/experiments/mimic
+
+# results_subdir: "2026-04-13-2-k-extended-eval"
+# Per-table result directory overrides. Tables not listed here are read/written from results_subdir.
+# result_dir_overrides:
+#     age: 2026-04-13_shared
+#     charlson: 2026-04-13_shared
+#     conditions_stats: 2026-04-13_shared
+#     chunks: 2026-04-13_shared
+#     admissions_metadata: 2026-04-13_shared
+#     queries_prompts: 2026-04-13_shared
+#     queries: 2026-04-13_shared
+#     divergence_stats: 2026-04-13_shared
+#     gold_anntations: 2026-04-13_shared
 
 phase_3_shared:
     prefilter_n: 900
