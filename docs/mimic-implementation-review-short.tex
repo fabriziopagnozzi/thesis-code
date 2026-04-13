@@ -41,7 +41,7 @@ Output: LanceDB vector table (all chunk columns + \fname{vector}, a float32 embe
 
 \section{Phase 3: Query Generation and Annotation}
 
-\textbf{3a. Grounded prompts.} This step builds the prompts to be used in the actual queries generation in the next step.
+\textbf{3a. Query prompts generation.} This step builds the prompts to be used in the actual queries generation in the next step.
 Queries must require multi-source synthesis, so e3ach query is scoped to a (condition, modifier) pair. A \emph{modifier} is a secondary clinical axis that partitions the condition's patient population into distinguishable sub-groups; each group should form a distinct cluster in the candidate pool.\\
 Modifiers are of two types: the top-3 co-occurring Charlson comorbidities computed dynamically per condition and fixed demographic thresholds (age $>75$, age $<40$).
 For each (condition, modifier) pair, real chunk excerpts from patients at the condition+modifier intersection are injected into the prompt, grounding the LLM in the actual content present in the data, to generate queries that are actually answerable given the dataset. The prompt explicitly requires the question to connect $\geq 2$ clinical aspects, ensuring the gold annotation will produce a multi-facet structure.\\
@@ -50,10 +50,10 @@ Output: \fname{queries_prompts.parquet} (\fname{icd10_3char}, \fname{condition_n
 \textbf{3b. Query generation.} Each prompt is sent to a local LLM to produce the question text. Earlier runs used simpler queries and produced no measurable signal, so the queries that are produced in this run are complicated and span different aspects (all medical though)\\
 Output: \fname{queries.parquet} (same as above minus \fname{full_prompt}, plus \fname{query_text}).
 
-\textbf{3c. Divergence pre-filter.} We keep only queries where coverage diverges: for each query we run both methods on a cosine top-$N$ pool from the full corpus (N = 3000 in the experiment) and compute Jaccard divergence and Facility-Location score. We keep only queries for which the jaccard similarity is under a ceretain thershold.\\
+\textbf{3c. Queries pre-filtering.} We keep only queries where coverage diverges: for each query we run both methods on a cosine top-$N$ pool from the full corpus (N = 3000 in the experiment) and compute Jaccard divergence and Facility-Location score. We keep only queries for which the jaccard similarity is under a ceretain thershold.\\
 Output: \fname{divergence_stats.parquet} (queries columns + \fname{jaccard_div}, \fname{fac_gap}, \fname{fac_topk}, \fname{fac_fl}, \fname{pool_size}, \fname{passes_filter}).
 
-\textbf{3d. Gold annotation (map-reduce LLM).} For each filtered query, a local LLM (gemma4:31b) reads the condition-filtered candidate pool in batches and produces (\fname{fact}, \fname{facet_label}, \fname{chunk_ids}) triples. Facet labels are LLM-generated. A reduce step merges batch results into a final (facet $\to$ chunk IDs) mapping.
+\textbf{3d. Gold annotation (map-reduce via LLM).} For each filtered query, a local LLM (gemma4:31b) reads the condition-filtered candidate pool in batches and produces (\fname{fact}, \fname{facet_label}, \fname{chunk_ids}) triples. Facet labels are LLM-generated. A reduce step merges batch results into a final (facet $\to$ chunk IDs) mapping.
 \\Note: This candidate pool over which the gold annotation runs is filtered exactly by condition+modifier metadata, it's not a top-N cosine similarity result. This is intentional, since only these filtered chunks will contain gold answers. The evaluation step won't run on the filtered chunks, but will run on a restricted candidate pool (3000 chunks in this run) retrieved by cosine similarity over the whole corpus.\\
 Output: \fname{gold_annotations.parquet} (\fname{query_id}, \fname{icd10_3char}, \fname{condition_name}, \fname{modifier_text}, \fname{query_text}, \fname{facets_json}, \fname{n_facets}, \fname{n_gold_chunks}).
 
