@@ -9,9 +9,6 @@ from pydantic import BaseModel, PositiveInt, computed_field
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
 
-DEFAULT_CONFIGS_DIR = MIMIC_IV_DIR / '_configs'
-RESULTS_BASE_DIR = MIMIC_IV_DIR / '_results'
-
 
 class SharedQueriesCfg(BaseModel):
     charlson_labels: dict[str, str]
@@ -32,7 +29,7 @@ class GlobalCfg(BaseModel):
 
 
 def load_global_cfg(
-    path: Path = DEFAULT_CONFIGS_DIR / 'global_config.yaml',
+    path: Path = MIMIC_IV_DIR / '_configs' / 'global_config.yaml',
     cfg: GlobalCfg | None = None,
 ):
     global global_cfg
@@ -56,9 +53,11 @@ def load_global_cfg(
 
 load_global_cfg()
 
+RESULTS_BASE_DIR = MIMIC_IV_DIR / '_results'
+VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
 RESULTS_SUBDIR = global_cfg.results_subdir
 MIMIC_RESULTS_DIR = RESULTS_BASE_DIR / RESULTS_SUBDIR if RESULTS_SUBDIR else RESULTS_BASE_DIR
-VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
+DEFAULT_CONFIGS_DIR = MIMIC_RESULTS_DIR / '_configs'
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
