@@ -1,0 +1,57 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[italian]{babel}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{titlesec}
+\usepackage{url}
+\newcommand{\fname}[1]{\path{#1}}
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{\textbf{MIMIC-IV QA Benchmark: Riepilogo dell'implementazione}}
+\author{Fabrizio Pagnozzi\\Tesi Magistrale --- Politecnico di Milano}
+\date{Aprile 2026}
+
+\begin{document}
+\setlength{\emergencystretch}{2em}
+\maketitle
+
+\section{Fase 1 --- Costruzione del corpus}
+
+\textbf{1a. Selezione delle condizioni.} Il corpus è ristretto alle condizioni che con maggiore probabilità producono pool di candidati multi-cluster --- il prerequisito strutturale affinché la copertura superi la dispersione. Le condizioni sono classificate in base a $N_{\text{ricoveri}} \times \bar{c}^{2}$, dove $\bar{c}$ è il numero medio di comorbilità di Charlson per ricovero. Il peso quadratico sulla ricchezza di comorbilità seleziona le condizioni i cui pazienti presentano problemi clinici diversi e co-occorrenti: ciascuna comorbilità attiva è un potenziale cluster nello spazio degli embedding. Output: \fname{conditions_stats.parquet}.
+
+\textbf{1b. Chunking delle note.} I chunk devono allinearsi ai singoli problemi clinici, in modo che ciascun problema possa occupare una regione distinta dello spazio degli embedding. Viene analizzata la struttura delle sezioni, mantenendo solo quelle ad alto valore (BHC, HPI, Pertinent Results, Discharge Diagnosis). Il Brief Hospital Course riceve maggiore attenzione: nelle ammissioni complesse è strutturato come un elenco di problemi delimitato da \texttt{\#}, pertanto si divide su tali marcatori per produrre un chunk per ciascun problema clinico attivo. Le ammissioni semplici prive di marcatori \texttt{\#} producono un unico chunk BHC --- analoghe alle query single-hop in cui la copertura non aggiunge nulla. Il sottoblocco Transitional Issues (follow-up post-dimissione, non ragionamento clinico) viene rimosso. Output: \fname{chunks.parquet}.
+
+\textbf{1c. Metadati dei ricoveri.} Viene costruita una tabella per ricovero contenente dati demografici, le prime 5 diagnosi ICD e i flag di comorbilità di Charlson. Utilizzata nella Fase~2 per i prefissi di embedding contestuali e nella Fase~3 per filtrare i candidati per condizione e modificatore. Output: \fname{admissions_metadata.parquet}.
+
+\textbf{1d. Deduplicazione.} Sezioni come Past Medical History e Allergies vengono spesso copiate verbatim tra i ricoveri ripetuti di uno stesso paziente, generando cluster artificialmente gonfiati che qualsiasi metodo di recupero copre gratuitamente. Viene mantenuta una sola copia per (paziente, sezione, hash del contenuto). Le sezioni cliniche (voci BHC) non vengono modificate. Output: \fname{chunks.parquet} aggiornato in loco.
+
+\section{Fase 2 --- Embedding}
+
+I chunk grezzi sono troppo specifici per il singolo paziente per corrispondere a query a livello di condizione. Seguendo l'approccio Contextual Retrieval (Anthropic, 2024), a ciascun chunk viene anteposto un prefisso strutturato prima dell'embedding: fascia d'età, sesso, etnia, diagnosi primaria, motivo principale di ricovero e comorbilità attive. Questo collega la narrativa specifica del paziente alla semantica a livello di condizione. A differenza del metodo originale, si utilizza un template deterministico anziché un prefisso generato da un LLM, poiché i metadati MIMIC sono già strutturati in tabelle relazionali. Output: tabella vettoriale LanceDB con un embedding per chunk.
+
+\section{Fase 3 --- Generazione delle query e annotazione}
+
+\textbf{3a. Prompt fondati sui dati.} Le query devono richiedere una sintesi multi-sorgente --- se possono essere soddisfatte da un libro di testo o da una singola nota, la copertura non aggiunge nulla. Per ciascuna coppia (condizione, modificatore), vengono iniettati estratti BHC reali di pazienti all'intersezione condizione+modificatore in un template di prompt. Questo radica l'LLM nel linguaggio clinico effettivo dei dati. I modificatori sono o le 3 principali comorbilità di Charlson co-occorrenti (che producono pool multi-cluster: pazienti solo-condizione vs.\ condizione+modificatore) o assi demografici (fasce d'età). Il prompt richiede esplicitamente che la domanda connetta $\geq 2$ aspetti clinici, garantendo un insieme gold multi-sfaccettato. Output: \fname{queries_prompts.parquet}.
+
+\textbf{3b. Generazione delle query.} Ciascun prompt viene inviato a un LLM locale per produrre il testo della domanda. Output: \fname{queries.parquet}.
+
+\textbf{3c. Pre-filtro di divergenza.} Una query in cui la facility-location seleziona quasi gli stessi chunk del top-$k$ non fornisce alcun segnale utile al confronto. Vengono mantenute solo le query in cui la copertura diverge: per ciascuna query, entrambi i metodi vengono applicati su un pool coseno top-$N$ dell'intero corpus (identico alla valutazione) e si calcolano la divergenza di Jaccard $1 - |S_{\text{FL}} \cap S_{\text{top-k}}| / |S_{\text{FL}} \cup S_{\text{top-k}}|$ e il gap FL $\text{FL}(S_{\text{FL}}) - \text{FL}(S_{\text{top-k}})$. L'utilizzo del pool sull'intero corpus (non filtrato per condizione) garantisce che il filtro sia direttamente predittivo dell'esito della valutazione. Output: \fname{divergence_stats.parquet} con un flag \fname{passes_filter}.
+
+\textbf{3d. Annotazione gold (map-reduce LLM).} Per ciascuna query filtrata, un LLM locale legge il pool di candidati filtrati per condizione in lotti e produce triple (fatto, etichetta\_sfaccettatura, chunk\_ids). Le etichette delle sfaccettature non sono predefinite --- l'LLM le genera, e le etichette presenti nei lotti precedenti vengono reintrodotte in quelli successivi per mantenere la coerenza. Il progetto richiede un'etichettatura esaustiva: tutti i chunk che supportano una sfaccettatura vengono etichettati, non solo il migliore, affinché il recall per aspetto sia una metrica equa. Una fase di riduzione fonde i risultati dei lotti in una mappatura finale (sfaccettatura $\to$ ID dei chunk). Output: \fname{gold_annotations.parquet}.
+
+\section{Fase 4 --- Valutazione}
+
+\textbf{Pool di candidati.} Per ciascuna query, il pool è costituito dai top-$N$ chunk dell'intero corpus per similarità coseno, senza restrizioni per condizione. Questa scelta è deliberata: il pool deve contenere il cluster dominante ridondante (molte note simili sulla condizione primaria) e i cluster complementari (note di pazienti con comorbilità diverse) --- esattamente la struttura in cui si ipotizza che la copertura prevalga.
+
+\textbf{Strategie.} Top-$k$ (baseline), MMR e gMMR (dispersione), facility-location (copertura) vengono confrontate per ogni $(k, \lambda)$.
+
+\textbf{Metriche.} Primaria: \textbf{Aspect Recall} $|\{f \in F : S \cap G_f \neq \emptyset\}|/|F|$ --- frazione delle sfaccettature gold con almeno un chunk gold recuperato. Inoltre: AR pesato, Precisione/Recall Gold, punteggio di copertura FL (geometrico, indipendente dall'annotazione) e Jaccard rispetto al top-$k$. Output: \fname{evaluation_results.parquet} e \fname{evaluation_stats.parquet}.
+
+\end{document}
