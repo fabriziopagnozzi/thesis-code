@@ -51,6 +51,13 @@ def load_global_cfg(
 load_global_cfg()
 
 VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
+
+
+def col_for_model(model_name: str) -> str:
+    safe = re.sub(r'[/\-.]', '_', model_name)
+    return f'vector_{safe}'
+
+
 MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / global_cfg.results_subdir
 CONFIG_FILES_DIR = MIMIC_RESULTS_DIR / '_configs'
 
@@ -223,7 +230,6 @@ class GoldAnnotationCfg(BaseModel):
 
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
-    embedding_model: str = ''
     vector_col: str = 'vector'
     strategies: list[ScoringFunction]
     k_values: list[int]
@@ -235,4 +241,5 @@ class EvaluateCfg(BaseModel):
     def load(cls) -> EvaluateCfg:
         data = load_default_config(phase=4)['evaluate']
         data.setdefault('embedding_model', global_cfg.embedding_model)
+        data.setdefault('vector_col', col_for_model(global_cfg.embedding_model))
         return cls(**data)

@@ -1,6 +1,6 @@
 import duckdb
 
-from experiments.mimic.configs import CONFIG_FILES_DIR, get_parquet_path
+from experiments.mimic.configs import MIMIC_IV_DIR, get_parquet_path
 from helpers.dir_paths import (
     BHC_DIR,
     HOSP_DIR,
@@ -9,7 +9,7 @@ from helpers.dir_paths import (
     NOTE_DIR,
 )
 
-INIT_SQL_PATH = CONFIG_FILES_DIR / '_mimic_init.sql'
+INIT_SQL_PATH = MIMIC_IV_DIR / '_mimic_init.sql'
 DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
 
 HOSP_TABLES = {
