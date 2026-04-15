@@ -82,7 +82,7 @@ Outputs:
 \begin{center}
 	\rule{16cm}{0.1mm}
 \end{center}
-
+\newpage
 \section{Experiment Results (n = 13 queries)}
 
 \textbf{Setup.} 8 conditions (ICD-10 3-char prefixes) $\times$ up to 5 modifiers each = 40 generated queries; 13 passed the divergence filter (Jaccard threshold $= 0.8$ at $k=10$, $\lambda=0.35$). Gold annotation used a condition-filtered top-900 cosine pool (Phase~3d); evaluation used the full-corpus top-3000 cosine pool. Embedding model: \fname{multi-qa-mpnet-base-cos-v1}.
@@ -112,6 +112,30 @@ Generated question: ``\textit{In patients with Type 2 diabetes and advanced kidn
 		30 & top-$k$             & 0.751 & 0.035 & 0.149 & 0.040 & 1.000 & 0.826 \\
 		& FL $(\lambda=0.5)$  & 0.751 & 0.034 & 0.144 & 0.039 & 0.971 & 0.829 \\
 		& MMR $(\lambda=0.8)$ & 0.800 & 0.032 & 0.136 & 0.037 & 0.538 & 0.827 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\begin{table}[H]
+	\centering
+	\caption{Comparison of strategies across distinct $\lambda$ values best $k$ selected per method by AR}
+	\begin{tabular}{@{}clrrrrrr@{}}
+		\toprule
+		$\lambda$ & Strategy & AR & WAR & GP & GR & jac & fac \\
+		\midrule
+		& top-$k$ ($k=30$)          & 0.751 & 0.035 & 0.149 & 0.040 & 1.000 & 0.826 \\
+		\midrule
+		0.3 & FL  ($k=30$)              & 0.736 & 0.032 & 0.136 & 0.037 & 0.890 & 0.834 \\
+		& MMR ($k=30$)              & 0.367 & 0.011 & 0.036 & 0.011 & 0.018 & 0.783 \\
+		\midrule
+		0.5 & FL  ($k=30$)              & 0.751 & 0.034 & 0.144 & 0.039 & 0.971 & 0.829 \\
+		& MMR ($k=30$)              & 0.394 & 0.015 & 0.046 & 0.015 & 0.072 & 0.797 \\
+		\midrule
+		0.7 & FL  ($k=30$)              & 0.751 & 0.035 & 0.146 & 0.040 & 0.980 & 0.828 \\
+		& MMR ($k=30$)              & 0.714 & 0.027 & 0.108 & 0.027 & 0.348 & 0.821 \\
+		\midrule
+		0.8 & FL  ($k=30$)              & 0.751 & 0.035 & 0.146 & 0.040 & 0.990 & 0.828 \\
+		& MMR ($k=30$)              & 0.800 & 0.032 & 0.136 & 0.037 & 0.538 & 0.827 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
