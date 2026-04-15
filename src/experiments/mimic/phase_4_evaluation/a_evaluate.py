@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg, get_parquet_path, global_cfg
+from experiments.mimic.configs import EvaluateCfg, get_parquet_path
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -27,9 +27,6 @@ from .candidate_pool import (
     RetrievalResult,
     run_retrieval,
 )
-
-# n used during gold annotation (must match phase_3_shared.prefilter_n)
-_GOLD_PREFILTER_N = global_cfg.shared_queries_cfg.prefilter_n
 
 evaluate_cfg = EvaluateCfg.load()
 
@@ -75,16 +72,12 @@ def evaluate(
         if not facets:
             continue
 
-        modifier_text = row.get('modifier_text')
         query_vec = builder.embed_query(query_text)
 
         # Full-corpus top-N pool (used for retrieval)
         cosine_pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
-        # Condition-filtered pool that was used during gold annotation, guarantees
-        # all gold chunks are reachable in the evaluation pool.
-        gold_pool = builder.for_query_filtered(
-            icd3, query_vec, n=_GOLD_PREFILTER_N, modifier_text=modifier_text
-        )
+        all_gold_ids = {cid for cids in facets.values() for cid in cids}
+        gold_pool = builder.for_gold_chunks(all_gold_ids)
         pool = CandidatePool.merge([cosine_pool, gold_pool])
 
         query_metrics = evaluate_query(

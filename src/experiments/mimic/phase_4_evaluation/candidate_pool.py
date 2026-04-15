@@ -179,7 +179,7 @@ class CandidatePoolBuilder:
 
     def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str = 'cuda'):
         self._con = con
-        self._embedder = Embedder(cfg.embedding_model, device=device, batch_size=1)
+        self._embedder = Embedder(global_cfg.embedding_model, device=device, batch_size=1)
         self._condition_to_hadm_ids_cache: dict[str, set[int]] = {}
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
 
@@ -206,6 +206,9 @@ class CandidatePoolBuilder:
 
         self._corpus_df = pl.DataFrame(arrow_table.drop(vec_col))
         self._hadm_id_array: NDArray[np.int64] = self._corpus_df['hadm_id'].to_numpy()
+        self._chunk_id_to_idx: dict[str, int] = {
+            cid: i for i, cid in enumerate(self._corpus_df['chunk_id'].to_list())
+        }
 
     def for_query_filtered(
         self,
@@ -240,6 +243,30 @@ class CandidatePoolBuilder:
             texts=[self._corpus_df['text'][i] for i in top_idx_list],
             section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
             metadata_df=self._corpus_df[top_idx_list],
+        )
+
+    def for_gold_chunks(self, gold_chunk_ids: set[str]) -> CandidatePool:
+        indices = np.array(
+            [self._chunk_id_to_idx[cid] for cid in gold_chunk_ids if cid in self._chunk_id_to_idx],
+            dtype=np.intp,
+        )
+        if indices.size == 0:
+            return CandidatePool(
+                chunk_ids=[],
+                hadm_ids=np.empty(0, dtype=np.int64),
+                vectors=np.empty((0, self._corpus_vectors.shape[1]), dtype=np.float32),
+                texts=[],
+                section_names=[],
+                metadata_df=self._corpus_df.clear(),
+            )
+        idx_list = indices.tolist()
+        return CandidatePool(
+            chunk_ids=[self._corpus_df['chunk_id'][i] for i in idx_list],
+            hadm_ids=self._hadm_id_array[indices],
+            vectors=self._corpus_vectors[indices],
+            texts=[self._corpus_df['text'][i] for i in idx_list],
+            section_names=[self._corpus_df['section_name'][i] for i in idx_list],
+            metadata_df=self._corpus_df[idx_list],
         )
 
     def _condition_hadm_ids(self, icd3: str) -> set[int]:

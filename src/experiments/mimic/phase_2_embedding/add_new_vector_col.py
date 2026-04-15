@@ -2,11 +2,6 @@
 
 Reads text chunks from the table in batches, re-embeds them with the specified
 model, and writes the result as a new column alongside the existing data.
-
-Usage:
-    python add_new_vector_col.py --model <model_name> [--col <col_name>]
-                                 [--batch-size 256] [--device cpu]
-                                 [--table chunks] [--text-col text]
 """
 
 import argparse
@@ -59,7 +54,7 @@ def add_vector_column(
 
     for start in range(0, total, batch_size):
         end = min(start + batch_size, total)
-        batch = table.search().limit(end).offset(start).select([text_col]).to_arrow()
+        batch = table.search().limit(batch_size).offset(start).select([text_col]).to_arrow()
         texts: list[str] = batch[text_col].to_pylist()
 
         embs = embedder.embed_corpus(texts)
@@ -72,7 +67,13 @@ def add_vector_column(
         type=pa.list_(pa.float32(), embedder.dim),
     )
 
-    table.add_columns({col_name: emb_array})
+    print('Writing column to table...')
+    full_data = table.to_arrow()
+    new_data = full_data.append_column(
+        pa.field(col_name, pa.list_(pa.float32(), embedder.dim)),
+        pa.chunked_array([emb_array]),
+    )
+    db.create_table(f'{table_name}', new_data, mode='overwrite')
 
     print(f"\nDone. Column '{col_name}' ({embedder.dim}-dim) added to '{table_name}'.")
 
@@ -89,7 +90,7 @@ def main() -> None:
         '--batch-size', type=int, default=256, help='Embedding batch size (default: 256)'
     )
     parser.add_argument(
-        '--device', default='cpu', help='Torch device: cpu / cuda / mps (default: cpu)'
+        '--device', default='cuda', help='Torch device: cpu / cuda / mps (default: cuda)'
     )
     parser.add_argument('--table', default='chunks', help='LanceDB table name (default: chunks)')
     parser.add_argument(
