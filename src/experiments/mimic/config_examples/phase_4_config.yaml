@@ -3,9 +3,11 @@ evaluate:
   strategies:
     - top_k
     - mmr
+    - gmmr
     - facility_location
-    # - gmmr
-  k_values: [5, 10, 20, 30]
-  lam_values: [0.3, 0.5, 0.7, 0.8]
+  k_values: [ 5, 10, 20, 30 ]
+  lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
   prefilter_n: 3000
   device: cuda
+  # pool_mode: cosine          # default: full-corpus top-prefilter_n cosine pool (+ gold chunks set merged in)
+  # pool_mode: gold_filtered   # condition+modifier filtered pool: same candidates as gold annotation

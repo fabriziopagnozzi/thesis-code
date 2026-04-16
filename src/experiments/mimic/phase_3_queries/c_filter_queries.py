@@ -3,8 +3,6 @@ Step 4.1: Divergence pre-filter.
 
 For each query, run top_k and facility_location on its condition's candidate
 pool. Keep only queries where coverage diverges from top_k
-
-TODO: understand if this is good
 """
 
 import duckdb
@@ -59,14 +57,14 @@ def filter_queries(
 ) -> pl.DataFrame:
     """
     Adds columns: jaccard_div, fac_gap, passes_filter, pool_size.
-    Queries with jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
+    Divergence is averaged across all (k, lam) combinations in filter_queries_cfg.
+    Queries with mean_jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
     """
-    k, lam, jaccard_threshold, prefilter_n = (
-        filter_queries_cfg.k,
-        filter_queries_cfg.lam,
-        filter_queries_cfg.jaccard_threshold,
-        global_cfg.shared_queries_cfg.prefilter_n,
-    )
+    k_values = filter_queries_cfg.k_values
+    lam_values = filter_queries_cfg.lam_values
+    jaccard_threshold = filter_queries_cfg.jaccard_threshold
+    prefilter_n = global_cfg.shared_queries_cfg.prefilter_n
+
     results = []
 
     for row in tqdm(
@@ -75,17 +73,26 @@ def filter_queries(
         query_vec = builder.embed_query(row['query_text'])
         pool = builder.for_query_cosine(query_vec, prefilter_n)
 
-        div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
-        passes = div['jaccard'] < jaccard_threshold
+        all_jaccards, all_fac_gaps, all_fac_topks, all_fac_fls = [], [], [], []
+        for k in k_values:
+            for lam in lam_values:
+                div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
+                all_jaccards.append(div['jaccard'])
+                all_fac_gaps.append(div['fac_gap'])
+                all_fac_topks.append(div['fac_topk'])
+                all_fac_fls.append(div['fac_fl'])
+
+        mean_jaccard = float(np.mean(all_jaccards))
+        passes = mean_jaccard < jaccard_threshold
 
         results.append(
             {
                 **{c: row[c] for c in queries_df.columns},
-                'jaccard_div': div['jaccard_div'],
-                'fac_gap': div['fac_gap'],
-                'fac_topk': div['fac_topk'],
-                'fac_fl': div['fac_fl'],
-                'pool_size': div['pool_size'],
+                'jaccard_div': 1.0 - mean_jaccard,
+                'fac_gap': float(np.mean(all_fac_gaps)),
+                'fac_topk': float(np.mean(all_fac_topks)),
+                'fac_fl': float(np.mean(all_fac_fls)),
+                'pool_size': pool.n,
                 'passes_filter': passes,
             }
         )

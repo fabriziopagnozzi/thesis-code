@@ -1,10 +1,10 @@
 import argparse
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, PositiveInt, computed_field
+from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
 
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
@@ -201,9 +201,18 @@ class GenQueriesCfg(BaseModel):
 
 
 class FilterQueriesCfg(BaseModel):
-    k: int
-    lam: float
+    k_values: list[int]
+    lam_values: list[float]
     jaccard_threshold: float
+
+    @model_validator(mode='before')
+    @classmethod
+    def _compat_single_k_lam(cls, data: dict) -> dict:
+        if 'k' in data and 'k_values' not in data:
+            data['k_values'] = [data.pop('k')]
+        if 'lam' in data and 'lam_values' not in data:
+            data['lam_values'] = [data.pop('lam')]
+        return data
 
     @classmethod
     def load(cls) -> FilterQueriesCfg:
@@ -230,12 +239,18 @@ class GoldAnnotationCfg(BaseModel):
 
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
-    vector_col: str = 'vector'
+    vector_col: str
     strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]
     prefilter_n: int
     device: str
+    pool_mode: Literal['cosine', 'pool_filtered'] = 'cosine'
+    """
+    'cosine'        - full-corpus top-prefilter_n by cosine similarity (default).
+    'gold_filtered' - condition+modifier filtered top-prefilter_n pool, matching
+                      the exact candidate pool used during gold annotation.
+    """
 
     @classmethod
     def load(cls) -> EvaluateCfg:
