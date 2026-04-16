@@ -11,6 +11,7 @@
 \usepackage{microtype}
 \usepackage{caption}
 \usepackage{float}
+\usepackage{longtable}
 
 \newcommand{\fname}[1]{\path{#1}}
 \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
@@ -82,63 +83,95 @@ Outputs:
 \begin{center}
 	\rule{16cm}{0.1mm}
 \end{center}
-\newpage
+
 \section{Experiment Results (n = 13 queries)}
 
-\textbf{Setup.} 8 conditions (ICD-10 3-char prefixes) $\times$ up to 5 modifiers each = 40 generated queries; 13 passed the divergence filter (Jaccard threshold $= 0.8$ at $k=10$, $\lambda=0.35$). Gold annotation used a condition-filtered top-900 cosine pool (Phase~3d); evaluation used the full-corpus top-3000 cosine pool. Embedding model: \fname{multi-qa-mpnet-base-cos-v1}.
+\textbf{Setup.} 8 conditions (ICD-10 3-char prefixes) $\times$ up to 5 modifiers each = 40 generated queries; 13 passed the divergence filter (Jaccard threshold $= 0.8$, averaged across $k \in \{5,10,20,30\}$ and $\lambda \in \{0.3,0.5,0.7,0.8\}$). Gold annotation used a condition+modifier filtered top-900 cosine pool (Phase~3d); evaluation used the full-corpus top-3000 cosine pool (\fname{pool_mode=cosine}). Embedding model: \fname{multi-qa-mpnet-base-cos-v1}.
 
 \textbf{Example query.} Condition: \textit{Type 2 diabetes mellitus} (\fname{E11}), modifier type: comorbidity, modifier: \textit{chronic kidney disease} (Charlson category \fname{renal_disease}).\\
 Generated question: ``\textit{In patients with Type 2 diabetes and advanced kidney disease, how do clinicians manage the transition between pharmacological management of glycemic control and the initiation of renal replacement therapy, such as dialysis, and what specific lab values or symptoms typically trigger these changes?}'' Gold facets: \fname{glycemic_management_transition} and \fname{rrt_initiation_triggers} ($n_{\text{gold}} = 133$ chunks across both facets).
 
-\begin{table}[H]
-	\centering
-	\caption{Comparison of strategies across distinct $k$ Values (given k, only the top performing $\lambda$ value is reported for MMR and FL)}
-	\begin{tabular}{@{}clrrrrrr@{}}
-		\toprule
-		$k$ & Strategy & AR & WAR & GP & GR & jac & fac \\
-		\midrule
-		5  & top-$k$             & 0.244 & 0.008 & 0.138 & 0.009 & 1.000 & 0.777 \\
-		& FL $(\lambda=0.5)$  & 0.282 & 0.008 & 0.169 & 0.010 & 0.718 & 0.795 \\
-		& MMR $(\lambda=0.7)$ & 0.301 & 0.010 & 0.154 & 0.010 & 0.320 & 0.772 \\
-		\midrule
-		10 & top-$k$             & 0.387 & 0.014 & 0.138 & 0.019 & 1.000 & 0.795 \\
-		& FL $(\lambda=0.7)$  & 0.372 & 0.013 & 0.131 & 0.018 & 0.904 & 0.802 \\
-		& MMR $(\lambda=0.7)$ & 0.462 & 0.013 & 0.115 & 0.013 & 0.260 & 0.791 \\
-		\midrule
-		20 & top-$k$             & 0.576 & 0.024 & 0.142 & 0.029 & 1.000 & 0.815 \\
-		& FL $(\lambda=0.3)$  & 0.621 & 0.026 & 0.150 & 0.031 & 0.796 & 0.827 \\
-		& MMR $(\lambda=0.8)$ & 0.669 & 0.023 & 0.135 & 0.028 & 0.535 & 0.815 \\
-		\midrule
-		30 & top-$k$             & 0.751 & 0.035 & 0.149 & 0.040 & 1.000 & 0.826 \\
-		& FL $(\lambda=0.5)$  & 0.751 & 0.034 & 0.144 & 0.039 & 0.971 & 0.829 \\
-		& MMR $(\lambda=0.8)$ & 0.800 & 0.032 & 0.136 & 0.037 & 0.538 & 0.827 \\
-		\bottomrule
-	\end{tabular}
-\end{table}
-
-\begin{table}[H]
-	\centering
-	\caption{Comparison of strategies across distinct $\lambda$ values best $k$ selected per method by AR}
-	\begin{tabular}{@{}clrrrrrr@{}}
-		\toprule
-		$\lambda$ & Strategy & AR & WAR & GP & GR & jac & fac \\
-		\midrule
-		& top-$k$ ($k=30$)          & 0.751 & 0.035 & 0.149 & 0.040 & 1.000 & 0.826 \\
-		\midrule
-		0.3 & FL  ($k=30$)              & 0.736 & 0.032 & 0.136 & 0.037 & 0.890 & 0.834 \\
-		& MMR ($k=30$)              & 0.367 & 0.011 & 0.036 & 0.011 & 0.018 & 0.783 \\
-		\midrule
-		0.5 & FL  ($k=30$)              & 0.751 & 0.034 & 0.144 & 0.039 & 0.971 & 0.829 \\
-		& MMR ($k=30$)              & 0.394 & 0.015 & 0.046 & 0.015 & 0.072 & 0.797 \\
-		\midrule
-		0.7 & FL  ($k=30$)              & 0.751 & 0.035 & 0.146 & 0.040 & 0.980 & 0.828 \\
-		& MMR ($k=30$)              & 0.714 & 0.027 & 0.108 & 0.027 & 0.348 & 0.821 \\
-		\midrule
-		0.8 & FL  ($k=30$)              & 0.751 & 0.035 & 0.146 & 0.040 & 0.990 & 0.828 \\
-		& MMR ($k=30$)              & 0.800 & 0.032 & 0.136 & 0.037 & 0.538 & 0.827 \\
-		\bottomrule
-	\end{tabular}
-\end{table}
+\begin{longtable}{@{}cclrrrrrr@{}}
+	\caption{Unified comparison grouped by $\lambda$ (sections) and $k$ (sub-groups); top-$k$ baseline repeated per $\lambda$ for direct comparison. Run: 2026-04-13, \protect\fname{multi-qa-mpnet-base-cos-v1}.} \\
+	\toprule
+	$\lambda$ & $k$ & Strategy & AR & WAR & GP & GR & jac & fac \\
+	\midrule
+	\endfirsthead
+	\multicolumn{9}{l}{\small\itshape (continued)} \\
+	$\lambda$ & $k$ & Strategy & AR & WAR & GP & GR & jac & fac \\
+	\midrule
+	\endhead
+	\multicolumn{9}{r}{\small\itshape (continued on next page)} \\
+	\endfoot
+	\bottomrule
+	\endlastfoot
+	0.3 & 5  & top-$k$ & 0.244 & 0.008 & 0.138 & 0.009 & 1.000 & 0.777 \\
+	&    & FL      & 0.233 & 0.007 & 0.138 & 0.009 & 0.525 & 0.803 \\
+	&    & MMR     & 0.141 & 0.006 & 0.062 & 0.007 & 0.111 & 0.742 \\
+	\cmidrule(l){2-9}
+	& 10 & top-$k$ & 0.387 & 0.014 & 0.138 & 0.019 & 1.000 & 0.795 \\
+	&    & FL      & 0.351 & 0.013 & 0.138 & 0.019 & 0.617 & 0.815 \\
+	&    & MMR     & 0.195 & 0.007 & 0.046 & 0.008 & 0.053 & 0.755 \\
+	\cmidrule(l){2-9}
+	& 20 & top-$k$ & 0.576 & 0.024 & 0.142 & 0.029 & 1.000 & 0.815 \\
+	&    & FL      & 0.621 & 0.026 & \textbf{0.150} & 0.031 & 0.796 & 0.827 \\
+	&    & MMR     & 0.297 & 0.009 & 0.038 & 0.009 & 0.026 & 0.772 \\
+	\cmidrule(l){2-9}
+	& 30 & top-$k$ & \textbf{0.751} & \textbf{0.035} & 0.149 & \textbf{0.040} & 1.000 & 0.826 \\
+	&    & FL      & 0.736 & 0.032 & 0.136 & 0.037 & 0.890 & \textbf{0.834} \\
+	&    & MMR     & 0.367 & 0.011 & 0.036 & 0.011 & 0.018 & 0.783 \\
+	\midrule
+	% lambda=0.5: best AR=0.751(30,top_k+FL tie), WAR=0.035(30,top_k), GP=0.169(5,FL), GR=0.040(30,top_k), fac=0.829(30,FL)
+	0.5 & 5  & top-$k$ & 0.244 & 0.008 & 0.138 & 0.009 & 1.000 & 0.777 \\
+	&    & FL      & 0.282 & 0.008 & \textbf{0.169} & 0.010 & 0.718 & 0.795 \\
+	&    & MMR     & 0.122 & 0.005 & 0.077 & 0.007 & 0.146 & 0.750 \\
+	\cmidrule(l){2-9}
+	& 10 & top-$k$ & 0.387 & 0.014 & 0.138 & 0.019 & 1.000 & 0.795 \\
+	&    & FL      & 0.333 & 0.013 & 0.131 & 0.018 & 0.787 & 0.809 \\
+	&    & MMR     & 0.246 & 0.011 & 0.085 & 0.011 & 0.085 & 0.766 \\
+	\cmidrule(l){2-9}
+	& 20 & top-$k$ & 0.576 & 0.024 & 0.142 & 0.029 & 1.000 & 0.815 \\
+	&    & FL      & 0.601 & 0.025 & 0.146 & 0.030 & 0.914 & 0.821 \\
+	&    & MMR     & 0.349 & 0.014 & 0.058 & 0.013 & 0.071 & 0.785 \\
+	\cmidrule(l){2-9}
+	& 30 & top-$k$ & \textbf{0.751} & \textbf{0.035} & 0.149 & \textbf{0.040} & 1.000 & 0.826 \\
+	&    & FL      & \textbf{0.751} & 0.034 & 0.144 & 0.039 & 0.971 & \textbf{0.829} \\
+	&    & MMR     & 0.394 & 0.015 & 0.046 & 0.015 & 0.072 & 0.797 \\
+	\midrule
+	% lambda=0.7: best AR=0.751(30,top_k+FL tie), WAR=0.035(30,top_k+FL tie), GP=0.154(5,FL+MMR tie), GR=0.040(30,top_k+FL tie), fac=0.828(30,FL)
+	0.7 & 5  & top-$k$ & 0.244 & 0.008 & 0.138 & 0.009 & 1.000 & 0.777 \\
+	&    & FL      & 0.244 & 0.008 & \textbf{0.154} & 0.010 & 0.769 & 0.788 \\
+	&    & MMR     & 0.301 & 0.010 & \textbf{0.154} & 0.010 & 0.320 & 0.772 \\
+	\cmidrule(l){2-9}
+	& 10 & top-$k$ & 0.387 & 0.014 & 0.138 & 0.019 & 1.000 & 0.795 \\
+	&    & FL      & 0.372 & 0.013 & 0.131 & 0.018 & 0.904 & 0.802 \\
+	&    & MMR     & 0.462 & 0.013 & 0.115 & 0.013 & 0.260 & 0.791 \\
+	\cmidrule(l){2-9}
+	& 20 & top-$k$ & 0.576 & 0.024 & 0.142 & 0.029 & 1.000 & 0.815 \\
+	&    & FL      & 0.576 & 0.025 & 0.142 & 0.029 & 0.927 & 0.820 \\
+	&    & MMR     & 0.644 & 0.021 & 0.119 & 0.021 & 0.316 & 0.812 \\
+	\cmidrule(l){2-9}
+	& 30 & top-$k$ & \textbf{0.751} & \textbf{0.035} & 0.149 & \textbf{0.040} & 1.000 & 0.826 \\
+	&    & FL      & \textbf{0.751} & \textbf{0.035} & 0.146 & \textbf{0.040} & 0.980 & \textbf{0.828} \\
+	&    & MMR     & 0.714 & 0.027 & 0.108 & 0.027 & 0.348 & 0.821 \\
+	\midrule
+	% lambda=0.8: best AR=0.800(30,MMR), WAR=0.035(30,top_k+FL tie), GP=0.149(30,top_k), GR=0.040(30,top_k+FL tie), fac=0.828(30,FL)
+	0.8 & 5  & top-$k$ & 0.244 & 0.008 & 0.138 & 0.009 & 1.000 & 0.777 \\
+	&    & FL      & 0.244 & 0.008 & 0.138 & 0.009 & 0.897 & 0.780 \\
+	&    & MMR     & 0.192 & 0.008 & 0.108 & 0.008 & 0.512 & 0.775 \\
+	\cmidrule(l){2-9}
+	& 10 & top-$k$ & 0.387 & 0.014 & 0.138 & 0.019 & 1.000 & 0.795 \\
+	&    & FL      & 0.372 & 0.013 & 0.131 & 0.018 & 0.932 & 0.798 \\
+	&    & MMR     & 0.442 & 0.014 & 0.131 & 0.014 & 0.403 & 0.796 \\
+	\cmidrule(l){2-9}
+	& 20 & top-$k$ & 0.576 & 0.024 & 0.142 & 0.029 & 1.000 & 0.815 \\
+	&    & FL      & 0.576 & 0.025 & 0.146 & 0.030 & 0.949 & 0.818 \\
+	&    & MMR     & 0.669 & 0.023 & 0.135 & 0.028 & 0.535 & 0.815 \\
+	\cmidrule(l){2-9}
+	& 30 & top-$k$ & 0.751 & \textbf{0.035} & \textbf{0.149} & \textbf{0.040} & 1.000 & 0.826 \\
+	&    & FL      & 0.751 & \textbf{0.035} & 0.146 & \textbf{0.040} & 0.990 & \textbf{0.828} \\
+	&    & MMR     & \textbf{0.800} & 0.032 & 0.136 & 0.037 & 0.538 & 0.827 \\
+\end{longtable}
 
 \textbf{Why failure?} FL beats top-$k$ at $k=5$ and $k=20$, but falls below top-$k$ at $k=10$ (0.372 vs.\ 0.387) and ties at $k=30$. The failure at $k=10$: with a pool of 3000 and only 10 selections, FL's coverage objective allocates picks to represent the full pool geometry, but maybe the pool contains many near-condition non-gold chunks. At $k=20$ the budget is large enough for FL to cover the high-similarity region and still reach complementary facets. At $k=30$, top-$k$ finds most facets by sheer volume, and aggressive coverage ($\lambda=0.3$) actively hurts (AR$=0.736 <$ top-$k=0.751$) by forcing picks into the pool periphery.
 

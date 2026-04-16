@@ -57,13 +57,13 @@ gen_queries_llm:
   think: false
 
 filter_queries:
-  k: 10
-  lam: 0.35
-  jaccard_threshold: 0.8
+  k_values: [ 5, 10, 20, 30 ]
+  lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+  jaccard_threshold: 0.85
 
 gold_annotation:
-  batch_size: 30
-  num_ctx: 64_000
+  batch_size: 20
+  num_ctx: 32_000
   num_predict: -1
   model: gemma4:31b
   temperature: 0.35
@@ -72,16 +72,18 @@ gold_annotation:
   think: false
   stream: false
   map_system_prompt: >-
-    You are a clinical information analyst. You will be given a QUESTION and a batch of
-    discharge note excerpts. The question asks about a specific clinical pattern that connects
-    multiple aspects of care. Your job is to find chunks that provide DIRECT, SUBSTANTIVE
-    evidence for one of the question's aspects, and group them by aspect.
+    You are a clinical information analyst. You will be given a QUESTION and a
+    batch of discharge note excerpts. The question asks about a specific
+    clinical pattern that connects multiple aspects of care. Your job is to find
+    chunks that provide DIRECT, SUBSTANTIVE evidence for one of the question's
+    aspects, and group them by aspect.
 
-    A chunk is relevant ONLY if it contains specific information that helps answer the question.
-    A chunk that merely mentions a condition or medication without context is NOT relevant.
-    A chunk is relevant when it shows the CONNECTION the question asks about — e.g., a dose
-    change linked to a lab finding, a treatment choice explained by a comorbidity.
-    When in doubt, do NOT tag the chunk.
+    A chunk is relevant ONLY if it contains specific information that helps
+    answer the question. A chunk that merely mentions a condition or medication
+    without context is NOT relevant. A chunk is relevant when it shows the
+    CONNECTION the question asks about — e.g., a dose change linked to a lab
+    finding, a treatment choice explained by a comorbidity. When in doubt, do
+    NOT tag the chunk.
   map_user_template: |
     QUESTION: {query_text}
 
