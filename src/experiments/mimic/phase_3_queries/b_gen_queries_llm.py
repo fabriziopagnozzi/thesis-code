@@ -12,7 +12,7 @@ import sys
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import GenQueriesCfg, get_parquet_path
+from experiments.mimic.configs import GenQueriesCfg, get_parquet_path, setup_logging
 from helpers.ollama_client import generate
 
 gen_queries_cfg = GenQueriesCfg.load()
@@ -88,6 +88,7 @@ def query_generator(
 
 
 if __name__ == '__main__':
+    setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)

@@ -9,7 +9,7 @@ import argparse
 import lancedb
 import pyarrow as pa
 
-from experiments.mimic.configs import VECTOR_DB_DIR
+from experiments.mimic.configs import VECTOR_DB_DIR, setup_logging
 from helpers.embedder import Embedder
 
 
@@ -111,4 +111,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    setup_logging()
     main()

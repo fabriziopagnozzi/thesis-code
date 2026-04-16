@@ -25,6 +25,7 @@ from experiments.mimic.configs import (
     get_parquet_path,
     get_result_dir,
     global_cfg,
+    setup_logging,
 )
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
@@ -396,6 +397,7 @@ def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
 
 
 if __name__ == '__main__':
+    setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)

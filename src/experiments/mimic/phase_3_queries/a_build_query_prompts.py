@@ -13,7 +13,7 @@ import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
-from experiments.mimic.configs import BuildQueryPromptsCfg, get_parquet_path, global_cfg
+from experiments.mimic.configs import BuildQueryPromptsCfg, get_parquet_path, global_cfg, setup_logging
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -297,6 +297,7 @@ def _format_chunks_block(samples: list[dict]) -> str:
 
 
 if __name__ == '__main__':
+    setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=3)

@@ -15,7 +15,7 @@ Uses the Charlson SQL from mimic-code.
 import duckdb
 import polars as pl
 
-from experiments.mimic.configs import ConditionsStatsCfg, get_parquet_path
+from experiments.mimic.configs import ConditionsStatsCfg, get_parquet_path, setup_logging
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -114,6 +114,7 @@ def select_conditions(
 
 
 if __name__ == '__main__':
+    setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=1)

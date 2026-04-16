@@ -1,6 +1,6 @@
 import duckdb
 
-from experiments.mimic.configs import MIMIC_IV_DIR, get_parquet_path
+from experiments.mimic.configs import MIMIC_IV_DIR, get_parquet_path, setup_logging
 from helpers.dir_paths import (
     BHC_DIR,
     HOSP_DIR,
@@ -148,4 +148,5 @@ def run_sql_concept_script(con: duckdb.DuckDBPyConnection, *relative_paths: str)
 
 
 if __name__ == '__main__':
+    setup_logging()
     generate_init_sql()

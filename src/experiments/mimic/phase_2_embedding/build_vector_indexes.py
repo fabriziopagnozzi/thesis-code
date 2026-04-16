@@ -4,7 +4,7 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import VECTOR_DB_DIR
+from experiments.mimic.configs import VECTOR_DB_DIR, setup_logging
 
 
 def build_indexes(
@@ -57,4 +57,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    setup_logging()
     main()

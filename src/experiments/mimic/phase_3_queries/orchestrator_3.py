@@ -8,6 +8,7 @@ from experiments.mimic.configs import (
     FilterQueriesCfg,
     GenQueriesCfg,
     GoldAnnotationCfg,
+    setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
@@ -48,6 +49,7 @@ def run_phase_3(
 
 
 if __name__ == '__main__':
+    setup_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--from',
