@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from experiments.mimic.configs import VECTOR_DB_DIR, EmbedCfg, get_parquet_path, global_cfg
+from experiments.mimic.configs import VECTOR_DB_DIR, EmbedCfg, get_parquet_path, global_cfg, setup_logging
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
@@ -128,4 +128,5 @@ def get_age_group(age: float | None) -> str:
 
 
 if __name__ == '__main__':
+    setup_logging()
     run_embed(cfg=EmbedCfg.load())

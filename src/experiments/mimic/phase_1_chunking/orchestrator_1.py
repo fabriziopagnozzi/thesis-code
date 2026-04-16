@@ -7,6 +7,7 @@ from experiments.mimic.configs import (
     ConditionsStatsCfg,
     DedupCfg,
     NoteChunkingCfg,
+    setup_logging,
 )
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
@@ -60,6 +61,7 @@ def run_phase_1(
 
 
 if __name__ == '__main__':
+    setup_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--init-sql',

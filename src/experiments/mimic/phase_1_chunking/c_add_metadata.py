@@ -6,7 +6,7 @@ into a single metadata table keyed by hadm_id.
 import duckdb
 import polars as pl
 
-from experiments.mimic.configs import get_parquet_path
+from experiments.mimic.configs import get_parquet_path, setup_logging
 
 
 def run_add_metadata(con: duckdb.DuckDBPyConnection | None = None) -> pl.DataFrame:
@@ -79,4 +79,5 @@ def build_admissions_metadata(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
+    setup_logging()
     run_add_metadata()

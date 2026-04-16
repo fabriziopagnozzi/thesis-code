@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg, get_parquet_path
+from experiments.mimic.configs import EvaluateCfg, get_parquet_path, setup_logging
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -260,4 +260,5 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
 
 
 if __name__ == '__main__':
+    setup_logging()
     run_evaluate(cfg=EvaluateCfg.load())

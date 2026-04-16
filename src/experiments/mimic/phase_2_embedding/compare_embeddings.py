@@ -13,7 +13,7 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import VECTOR_DB_DIR, col_for_model
+from experiments.mimic.configs import VECTOR_DB_DIR, col_for_model, setup_logging
 from helpers.embedder import Embedder
 
 DEFAULT_MODELS = [
@@ -97,4 +97,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    setup_logging()
     main()

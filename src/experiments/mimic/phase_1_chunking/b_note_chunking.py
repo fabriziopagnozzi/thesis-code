@@ -6,7 +6,7 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from experiments.mimic.configs import NoteChunkingCfg, get_parquet_path, global_cfg
+from experiments.mimic.configs import NoteChunkingCfg, get_parquet_path, global_cfg, setup_logging
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
 chunking_cfg = NoteChunkingCfg.load()
@@ -33,7 +33,7 @@ def run_note_chunking(
     if cfg is not None:
         chunking_cfg = cfg
 
-    tokenizer = _load_tokenizer(chunking_cfg.embedding_model)
+    tokenizer = _load_tokenizer(global_cfg.embedding_model)
 
     if con is None:
         con = connect_mimic_duckdb()
@@ -267,4 +267,5 @@ def _fixed_chunk(text: str) -> list[str]:
 
 
 if __name__ == '__main__':
+    setup_logging()
     run_note_chunking(cfg=NoteChunkingCfg.load())

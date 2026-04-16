@@ -8,7 +8,7 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.configs import DedupCfg, get_parquet_path
+from experiments.mimic.configs import DedupCfg, get_parquet_path, setup_logging
 
 dedup_cfg = DedupCfg.load()
 
@@ -57,6 +57,7 @@ def _content_hash(text: str) -> str:
 
 
 if __name__ == '__main__':
+    setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
     raw = load_config_from_main(phase=1)

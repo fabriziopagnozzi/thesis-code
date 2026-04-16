@@ -2,6 +2,7 @@ import argparse
 import re
 from pathlib import Path
 from typing import Any, Literal
+from uuid import uuid4
 
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
@@ -36,14 +37,12 @@ def load_global_cfg(
     cfg: GlobalCfg | None = None,
 ):
     global global_cfg
-
     if cfg is not None:
         global_cfg = cfg
         return
 
     with open(path) as f:
         _loaded_cfg = yaml.safe_load(f)
-
     global_cfg = GlobalCfg.model_validate(_loaded_cfg)
     return
 
@@ -51,15 +50,9 @@ def load_global_cfg(
 load_global_cfg()
 
 VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
-
-
-def col_for_model(model_name: str) -> str:
-    safe = re.sub(r'[/\-.]', '_', model_name)
-    return f'vector_{safe}'
-
-
 MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / global_cfg.results_subdir
 CONFIG_FILES_DIR = MIMIC_RESULTS_DIR / '_configs'
+LOGS_DIR = MIMIC_RESULTS_DIR / '_logs'
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
@@ -105,7 +98,6 @@ class NoteChunkingCfg(BaseModel):
     keep_sections: set[str]
     skip_sections: set[str]
     metadata_only_sections: set[str]
-    embedding_model: str = ''
     max_tokens: int = 512
     stride_tokens: int = 128
     min_chunk_tokens: int = 15
@@ -126,7 +118,6 @@ class NoteChunkingCfg(BaseModel):
     @classmethod
     def load(cls) -> NoteChunkingCfg:
         data = load_default_config(phase=1)['note_chunking']
-        data.setdefault('embedding_model', global_cfg.embedding_model)
         return cls(**data)
 
 
@@ -258,3 +249,32 @@ class EvaluateCfg(BaseModel):
         data.setdefault('embedding_model', global_cfg.embedding_model)
         data.setdefault('vector_col', col_for_model(global_cfg.embedding_model))
         return cls(**data)
+
+
+def col_for_model(model_name: str) -> str:
+    safe = re.sub(r'[/\-.]', '_', model_name)
+    return f'vector_{safe}'
+
+
+def setup_logging() -> None:
+    import sys
+
+    main = sys.modules['__main__']
+    script_name = Path(main.__file__ if main.__file__ else f'unknown_script_{uuid4()}').stem
+    log_path = LOGS_DIR / f'{script_name}.log'
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    class _Tee:
+        def __init__(self, filepath: Path):
+            self._terminal = sys.stdout
+            self._file = open(filepath, 'a')  # noqa: SIM115
+
+        def write(self, msg: str) -> None:
+            self._terminal.write(msg)
+            self._file.write(msg)
+
+        def flush(self) -> None:
+            self._terminal.flush()
+            self._file.flush()
+
+    sys.stdout = _Tee(log_path)
