@@ -27,9 +27,7 @@ from experiments.mimic.configs import (
     global_cfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import (
-    connect_mimic_duckdb,
-)
+from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from helpers.ollama_client import generate_json
 
@@ -93,7 +91,7 @@ def run_gold_annotation(
             f'Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
         )
 
-    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
+    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cpu')
     result = annotate(queries_df, builder, patient_meta, done_texts)
     result.write_parquet(out_path)
 

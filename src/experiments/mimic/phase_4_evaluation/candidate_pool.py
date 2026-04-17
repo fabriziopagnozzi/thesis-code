@@ -1,11 +1,3 @@
-"""
-Candidate pool construction for MIMIC-IV retrieval experiments.
-
-Builds per-condition candidate pools from the existing LanceDB embeddings,
-filtered by hadm_id sets derived from DuckDB. Strategy: one global vector
-store, per-query metadata filtering.
-"""
-
 import operator
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -177,9 +169,11 @@ class CandidatePoolBuilder:
         '==': operator.eq,
     }
 
-    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str = 'cuda'):
+    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str | None):
         self._con = con
-        self._embedder = Embedder(global_cfg.embedding_model, device=device, batch_size=1)
+        self._embedder = Embedder(
+            global_cfg.embedding_model, device=device if device else cfg.device, batch_size=1
+        )
         self._condition_to_hadm_ids_cache: dict[str, set[int]] = {}
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
 
