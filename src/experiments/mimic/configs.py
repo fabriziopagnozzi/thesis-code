@@ -220,8 +220,10 @@ class GoldAnnotationCfg(BaseModel):
     top_k: int | None = None
     think: bool = False
     stream: bool = False
-    map_system_prompt: str
-    map_user_template: str
+    aspect_discovery_system_prompt: str
+    aspect_discovery_user_template: str
+    tagging_system_prompt: str
+    tagging_user_template: str
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:

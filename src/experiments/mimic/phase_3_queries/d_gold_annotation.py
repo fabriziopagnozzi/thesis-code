@@ -1,12 +1,10 @@
 """
-Step 4.2: Gold facet annotation via map-reduce LLM calls.
+Step 4.2: Gold facet annotation via three-phase pipeline.
 
-For each query + its candidate pool, annotates which chunks support which
-facets (aspects of the answer). Uses ollama for local inference.
-
-STEPS:
-    Map: batches of N chunks --> LLM extracts facts + facet labels + chunk citations
-    Reduce: merge facet labels across batches (deterministic)
+For each query + its candidate pool:
+  1. Aspect discovery (one LLM call, no chunks): enumerate 2-6 clinical aspects the query connects.
+  2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision per chunk per aspect.
+  3. Reduce (deterministic): union of relevant chunk_ids per aspect across batches.
 
 Output: gold_annotations.parquet
 """
@@ -34,23 +32,20 @@ from helpers.ollama_client import generate_json
 gold_annotation_cfg = GoldAnnotationCfg.load()
 
 
-class _Annotation(BaseModel):
-    fact: str
+class _Aspect(BaseModel):
     facet_label: str
-    chunk_ids: list[str]
+    description: str
 
     @field_validator('facet_label')
     @classmethod
     def normalize_label(cls, v: str) -> str:
-        return v.strip().lower().replace(' ', '_').replace(' ', '_')
+        return v.strip().lower().replace(' ', '_')
 
-    @field_validator('fact')
-    @classmethod
-    def nonempty_fact(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError('empty fact')
-        return v
+
+class _TagDecision(BaseModel):
+    chunk_id: str
+    relevant: bool
+    why: str = ''
 
 
 def run_gold_annotation(
@@ -113,7 +108,7 @@ def annotate(
 ) -> pl.DataFrame:
     """Annotate all queries.
     Returns DataFrame with columns:
-        query_id, icd10_3char, query_text, facets_json, n_facets, n_gold_chunks
+        query_id, icd10_3char, query_text, aspects_json, facets_json, n_facets, n_gold_chunks
     """
 
     out_path = get_parquet_path('gold_annotations')
@@ -142,13 +137,12 @@ def annotate(
             modifier_text=modifier_text,
         )
 
-        # Sort by descending similarity so most relevant chunks are in
-        # the first batches (shapes the accumulated facet vocabulary)
+        # Sort by descending similarity so most relevant chunks are in first batches
         sim_to_query = work_pool.sim_to_query(query_vec)
         sorted_indices = np.argsort(sim_to_query)[::-1]
         work_pool = work_pool.slice(sorted_indices.copy())
 
-        facets = annotate_query(
+        aspects, facets = annotate_query(
             query_text,
             work_pool,
             batch_size=gold_annotation_cfg.batch_size,
@@ -172,6 +166,7 @@ def annotate(
                     'condition_name': row.get('condition_name', ''),
                     'modifier_text': row.get('modifier_text', ''),
                     'query_text': query_text,
+                    'aspects_json': json.dumps([a.model_dump() for a in aspects]),
                     'facets_json': json.dumps(facets),
                     'n_facets': len(facets),
                     'n_gold_chunks': len(all_gold_chunks),
@@ -197,17 +192,24 @@ def annotate_query(
     patient_meta: dict[int, str] | None = None,
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
-) -> dict[str, list[str]]:
-    """Full map-reduce annotation for one query.
+) -> tuple[list[_Aspect], dict[str, list[str]]]:
+    """Three-phase annotation for one query.
 
-    Returns {facet_label: [chunk_id, ...]}.
+    Returns (aspects, facets) where facets is {facet_label: [chunk_id, ...]}.
     """
+    # Phase 1: discover aspects (one call, no chunks)
+    aspects = discover_aspects(query_text, prompt_dump_dir=prompt_dump_dir, query_idx=query_idx)
+    if not aspects:
+        print('  [WARN] no aspects discovered, skipping tagging')
+        return [], {}
+
+    # Phase 2: per-aspect tagging across batches
     n = pool.n
     n_batches = (n + batch_size - 1) // batch_size
-    all_batch_results = []
-    accumulated_facets: set[str] = set()
+    aspect_relevant: dict[str, set[str]] = {a.facet_label: set() for a in aspects}
+    jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
 
-    for i, start in enumerate(range(0, n, batch_size)):
+    for batch_idx, start in enumerate(range(0, n, batch_size)):
         end = min(start + batch_size, n)
         batch_ids = pool.chunk_ids[start:end]
         batch_texts = pool.texts[start:end]
@@ -215,71 +217,115 @@ def annotate_query(
         batch_hadm_ids = pool.hadm_ids[start:end].tolist()
         batch_meta = [patient_meta.get(h, '') for h in batch_hadm_ids] if patient_meta else None
 
-        batch_result = annotate_batch(
-            query_text,
-            batch_ids,
-            batch_texts,
-            batch_sections=batch_sections,
-            batch_meta=batch_meta,
-            batch_idx=i,
-            n_batches=n_batches,
-            existing_facets=accumulated_facets,
-            prompt_dump_dir=prompt_dump_dir,
-            query_idx=query_idx,
-        )
-        all_batch_results.append(batch_result)
+        for aspect in aspects:
+            decisions = tag_batch_for_aspect(
+                query_text,
+                aspect,
+                batch_ids,
+                batch_texts,
+                batch_sections=batch_sections,
+                batch_meta=batch_meta,
+                batch_idx=batch_idx,
+                n_batches=n_batches,
+                prompt_dump_dir=prompt_dump_dir,
+                query_idx=query_idx,
+            )
+            for d in decisions:
+                if d.relevant:
+                    aspect_relevant[aspect.facet_label].add(d.chunk_id)
 
-        # Append to JSONL for sequential inspection
-        jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
-        with jsonl_path.open('a') as f:
-            f.write(json.dumps(batch_result) + '\n')
+            with jsonl_path.open('a') as f:
+                f.write(
+                    json.dumps(
+                        {
+                            'query_idx': query_idx,
+                            'batch_idx': batch_idx,
+                            'facet_label': aspect.facet_label,
+                            'decisions': [d.model_dump() for d in decisions],
+                        }
+                    )
+                    + '\n'
+                )
 
-        accumulated_facets.update(item['facet_label'] for item in batch_result)
-
-    facets = reduce_facets(all_batch_results)
-    total_facts = sum(len(b) for b in all_batch_results)
+    # Phase 3: reduce — drop empty facets, sort chunk_ids
+    facets = {label: sorted(cids) for label, cids in aspect_relevant.items() if cids}
     all_gold = {cid for cids in facets.values() for cid in cids}
-    print(f'    reduce: {total_facts} facts --> {len(facets)} facets, {len(all_gold)} gold chunks')
-    return facets
+    print(
+        f'  reduce: {len(aspects)} aspects --> {len(facets)} non-empty facets, {len(all_gold)} gold chunks'
+    )
+    return aspects, facets
 
 
-def annotate_batch(
+def discover_aspects(
     query_text: str,
+    prompt_dump_dir: Path | None = None,
+    query_idx: int = 0,
+) -> list[_Aspect]:
+    """Phase 1: enumerate 2-6 clinical aspects the query connects (no chunks)."""
+    prompt = gold_annotation_cfg.aspect_discovery_user_template.format(query_text=query_text)
+
+    if prompt_dump_dir is not None:
+        dump_path = prompt_dump_dir / f'q{query_idx:03d}_aspects.txt'
+        dump_path.write_text(
+            f'=== SYSTEM ===\n{gold_annotation_cfg.aspect_discovery_system_prompt}\n\n=== USER ===\n{prompt}'
+        )
+
+    try:
+        result = generate_json(
+            prompt,
+            *gold_annotation_cfg,
+            system=gold_annotation_cfg.aspect_discovery_system_prompt,
+        )
+    except Exception as e:
+        print(f'[ERROR] aspect discovery q{query_idx}: {e}')
+        return []
+
+    raw_aspects: list = []
+    if isinstance(result, dict):
+        raw_aspects = result.get('aspects', [])
+    elif isinstance(result, list):
+        raw_aspects = result
+
+    aspects: list[_Aspect] = []
+    for item in raw_aspects:
+        try:
+            aspects.append(_Aspect.model_validate(item))
+        except Exception:
+            continue
+
+    aspects = aspects[:6]
+    print(f'  [aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
+    return aspects
+
+
+def tag_batch_for_aspect(
+    query_text: str,
+    aspect: _Aspect,
     chunk_ids: list[str],
     texts: list[str],
     batch_sections: list[str] | None = None,
     batch_meta: list[str] | None = None,
     batch_idx: int = 0,
     n_batches: int = 1,
-    existing_facets: set[str] | None = None,
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
-) -> list[dict]:
-    """Run map-phase annotation on a single batch of chunks.
-
-    Returns list of {fact, facet_label, chunk_ids} dicts.
-    """
+) -> list[_TagDecision]:
+    """Phase 2 map: yes/no tagging for one (aspect, chunk-batch) pair."""
     chunks_block = _format_chunk_batch(
         chunk_ids, texts, sections=batch_sections, meta_lines=batch_meta
     )
-    prompt = gold_annotation_cfg.map_user_template.format(
-        query_text=query_text, chunks_block=chunks_block
+    prompt = gold_annotation_cfg.tagging_user_template.format(
+        query_text=query_text,
+        facet_label=aspect.facet_label,
+        facet_description=aspect.description,
+        chunks_block=chunks_block,
     )
-
-    if existing_facets:
-        facet_list = ', '.join(sorted(existing_facets))
-        prompt += (
-            f'\nThe following facet labels have already been identified in previous batches: '
-            f'{facet_list}\n'
-            f'Reuse these labels when a fact addresses the same clinical aspect. '
-            f'Only create a new label if none of them fit.'
-        )
     prompt_chars = len(prompt)
 
     if prompt_dump_dir is not None:
-        dump_path = prompt_dump_dir / f'q{query_idx:03d}_b{batch_idx:03d}.txt'
+        dump_path = prompt_dump_dir / f'q{query_idx:03d}_b{batch_idx:03d}_{aspect.facet_label}.txt'
         dump_path.write_text(
-            f'=== SYSTEM ===\n{gold_annotation_cfg.map_system_prompt}\n\n=== USER ===\n{prompt}'
+            f'=== SYSTEM ===\n{gold_annotation_cfg.tagging_system_prompt}\n\n=== USER ===\n{prompt}'
         )
 
     valid_ids = set(chunk_ids)
@@ -287,56 +333,43 @@ def annotate_batch(
     try:
         result = generate_json(
             prompt,
-            system=gold_annotation_cfg.map_system_prompt,
-            model=gold_annotation_cfg.model or None,
-            temperature=gold_annotation_cfg.temperature,
-            top_p=gold_annotation_cfg.top_p,
-            top_k=gold_annotation_cfg.top_k,
-            num_ctx=gold_annotation_cfg.num_ctx,
-            num_predict=gold_annotation_cfg.num_predict,
-            think=gold_annotation_cfg.think,
-            stream=gold_annotation_cfg.stream,
+            *gold_annotation_cfg,
+            system=gold_annotation_cfg.tagging_system_prompt,
         )
     except Exception as e:
         print(
-            f'[ERROR] batch {batch_idx + 1}/{n_batches} FAILED ({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens): {e}'
+            f'[ERROR] tagging q{query_idx} b{batch_idx + 1}/{n_batches} {aspect.facet_label}: {e}'
         )
         return []
 
-    if not isinstance(result, list):
-        # LLM sometimes wraps in {"annotations": [...]}
-        if isinstance(result, dict):
-            for key in ('annotations', 'facts', 'results'):
-                if key in result and isinstance(result[key], list):
-                    result = result[key]
-                    break
-            else:
-                return []
-        else:
-            return []
+    raw: list = []
+    if isinstance(result, dict):
+        raw = result.get('decisions', [])
+    elif isinstance(result, list):
+        raw = result
 
-    cleaned = []
+    seen_ids: set[str] = set()
+    decisions: list[_TagDecision] = []
     n_dropped = 0
-    for item in result:
+    for item in raw:
         try:
-            ann = _Annotation.model_validate(item)
+            d = _TagDecision.model_validate(item)
         except Exception:
             n_dropped += 1
             continue
-        ann.chunk_ids = [c for c in ann.chunk_ids if c in valid_ids]
-        if not ann.chunk_ids:
+        if d.chunk_id not in valid_ids or d.chunk_id in seen_ids:
             n_dropped += 1
             continue
-        cleaned.append(ann.model_dump())
+        seen_ids.add(d.chunk_id)
+        decisions.append(d)
 
-    facet_labels = {item['facet_label'] for item in cleaned}
+    n_relevant = sum(1 for d in decisions if d.relevant)
     print(
-        f'[INFO] batch {batch_idx + 1}/{n_batches}: '
-        f'{len(cleaned)} facts, {len(facet_labels)} facets, '
-        f'{n_dropped} dropped '
-        f'({len(chunk_ids)} chunks, ~{prompt_chars // 4} tokens)'
+        f'    [tag] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: '
+        f'{n_relevant}/{len(decisions)} relevant, {n_dropped} dropped '
+        f'(~{prompt_chars // 4} tokens)'
     )
-    return cleaned
+    return decisions
 
 
 def _format_chunk_batch(
@@ -379,19 +412,6 @@ def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int,
         lookup[row['hadm_id']] = 'Patient: ' + ' | '.join(parts)
 
     return lookup
-
-
-def reduce_facets(all_batch_results: list[list[dict]]) -> dict[str, list[str]]:
-    facet_to_chunks: dict[str, set[str]] = {}
-
-    for batch in all_batch_results:
-        for item in batch:
-            label = item['facet_label']
-            if label not in facet_to_chunks:
-                facet_to_chunks[label] = set()
-            facet_to_chunks[label].update(item['chunk_ids'])
-
-    return {label: sorted(cids) for label, cids in facet_to_chunks.items()}
 
 
 if __name__ == '__main__':

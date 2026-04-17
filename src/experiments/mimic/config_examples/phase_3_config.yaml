@@ -35,7 +35,7 @@ build_query_prompts:
     - "What anticoagulation strategies are used at discharge for heart failure patients with atrial fibrillation, and how does renal function influence the choice?"
     - "What fluid management strategies are documented for COPD exacerbation patients with concurrent heart failure, and what clinical signs trigger a change in approach?"
 
-    Bad examples (too broad — just listing):
+    Bad examples (too broad - just listing):
     - "What medications are prescribed for T2DM patients with CHF?"
     - "What complications are seen in heart failure patients?"
     - "What labs are monitored for patients with renal disease?"
@@ -43,7 +43,7 @@ build_query_prompts:
     Requirements:
     - Must connect two or more clinical aspects (treatment + reasoning, drug + monitoring, procedure + outcome)
     - Can be answered by reading across many discharge notes (not from a textbook)
-    - Requires evidence from multiple patients — no single note fully answers it
+    - Requires evidence from multiple patients - no single note fully answers it
     - Should ask about observable patterns in the data, not about what "should" be done
 
     Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
@@ -63,60 +63,49 @@ filter_queries:
 
 gold_annotation:
   batch_size: 20
-  num_ctx: 32_000
-  num_predict: -1
+  num_ctx: 8_000
+  num_predict: 2000
   model: gemma4:31b
   temperature: 0.35
   top_p: 0.95
   top_k: 40
   think: false
   stream: false
-  map_system_prompt: >-
-    You are a clinical information analyst. You will be given a QUESTION and a
-    batch of discharge note excerpts. The question asks about a specific
-    clinical pattern that connects multiple aspects of care. Your job is to find
-    chunks that provide DIRECT, SUBSTANTIVE evidence for one of the question's
-    aspects, and group them by aspect.
-
-    A chunk is relevant ONLY if it contains specific information that helps
-    answer the question. A chunk that merely mentions a condition or medication
-    without context is NOT relevant. A chunk is relevant when it shows the
-    CONNECTION the question asks about — e.g., a dose change linked to a lab
-    finding, a treatment choice explained by a comorbidity. When in doubt, do
-    NOT tag the chunk.
-  map_user_template: |
+  aspect_discovery_system_prompt: >-
+    You are a clinical information analyst. Given a clinical question, identify
+    the distinct aspects of care it asks about. Each aspect is one facet of the
+    answer - a specific clinical dimension that must be covered to fully answer
+    the question.
+  aspect_discovery_user_template: |
     QUESTION: {query_text}
 
-    Below are excerpts from clinical discharge notes. Each is prefixed with its chunk ID, section, and patient context.
+    The question asks about a clinical pattern that connects several aspects of care.
+    List 2-6 aspects that a complete answer must cover.
 
-    <START DISCHARGE NOTES BLOCK>
+    For each aspect produce:
+    - facet_label: short snake_case identifier (e.g., "insulin_adjustment", "renal_monitoring")
+    - description: one sentence defining what evidence would count as substantive for this aspect
+
+    Return JSON: {{"aspects": [{{"facet_label": "...", "description": "..."}}, ...]}}
+    Return ONLY the JSON, nothing else.
+  tagging_system_prompt: >-
+    You are a clinical information analyst. You will be given a clinical
+    question, one specific aspect of that question, and a batch of discharge
+    note excerpts. Decide whether each chunk contains substantive evidence for
+    the specified aspect only.
+  tagging_user_template: |
+    QUESTION: {query_text}
+    ASPECT: {facet_label} - {facet_description}
+
+    For each chunk below, decide whether it contains SUBSTANTIVE evidence for THIS aspect only.
+    Substantive = specific drugs with doses, specific labs with clinical interpretation,
+    specific procedures with rationale, or explicit reasoning linking this aspect to the question.
+    Mere mentions of a condition or drug without context are NOT substantive.
+
+    <CHUNKS>
     {chunks_block}
-    <END DISCHARGE NOTES BLOCK>
+    </CHUNKS>
 
-    The QUESTION above asks about a clinical pattern that connects multiple aspects of care.
-    First, identify what those aspects are. Then, for each aspect, find chunks that provide
-    substantive evidence.
-
-    For each aspect:
-    1. Assign a short snake_case label that matches the aspect of the question.
-       For example, if the question asks "How is insulin adjusted when renal function declines,
-       and what electrolytes are monitored?", good labels would be:
-       "insulin_adjustment", "renal_function_change", "electrolyte_monitoring"
-    2. State one representative fact for this aspect (one sentence)
-    3. List ALL chunk_ids in this batch that provide SUBSTANTIVE evidence for this aspect
-
-    Rules:
-    - A chunk must help answer a specific aspect of the QUESTION to be tagged.
-      Clinical detail unrelated to the question is NOT relevant.
-    - Use at most 6 aspect labels
-    - Merge facts about the same aspect under one label
-    - Only cite chunk_ids that appear in this batch
-    - Only tag chunks with substantive detail: specific drugs with doses, specific lab values
-      with clinical interpretation, specific procedures with rationale, or explicit clinical
-      reasoning that shows the connection the question asks about.
-      Do NOT tag chunks that merely mention a condition or list a medication without context.
-
-    Return a JSON array. Example:
-    [{{"facet_label": "insulin_adjustment", "fact": "Insulin dose reduced by 20-30% when CrCl < 30 to avoid hypoglycemia", "chunk_ids": ["5", "17"]}}]
-
-    If no chunks in this batch are relevant to the QUESTION, return an empty array: []. Stick strictly to these instructions. DO NOT tag chunks just for the sake of it, they MUST carry exactly the information required by the query.
+    Return JSON: {{"decisions": [{{"chunk_id": "<id>", "relevant": true, "why": "<up to 15 words>"}}, ...]}}
+    Include exactly one decision per chunk shown above. If none are relevant, return relevant=false for all.
+    Return ONLY the JSON, nothing else.
