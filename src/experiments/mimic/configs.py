@@ -1,7 +1,7 @@
 import argparse
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
 import yaml
@@ -212,6 +212,9 @@ class FilterQueriesCfg(BaseModel):
 
 class GoldAnnotationCfg(BaseModel):
     batch_size: int
+    wide_pool_n: int = 10000
+    final_pool_n: int = 3000
+    min_per_modifier: int = 50
     num_ctx: int | None = None
     num_predict: int | None = None
     model: str | None = None
@@ -220,8 +223,6 @@ class GoldAnnotationCfg(BaseModel):
     top_k: int | None = None
     think: bool = False
     stream: bool = False
-    aspect_discovery_system_prompt: str
-    aspect_discovery_user_template: str
     tagging_system_prompt: str
     tagging_user_template: str
 
@@ -238,12 +239,6 @@ class EvaluateCfg(BaseModel):
     lam_values: list[float]
     prefilter_n: int
     device: str
-    pool_mode: Literal['cosine', 'gold_filtered'] = 'cosine'
-    """
-    'cosine'        - full-corpus top-prefilter_n by cosine similarity (default).
-    'gold_filtered' - condition+modifier filtered top-prefilter_n pool, matching
-                      the exact candidate pool used during gold annotation.
-    """
 
     @classmethod
     def load(cls) -> EvaluateCfg:

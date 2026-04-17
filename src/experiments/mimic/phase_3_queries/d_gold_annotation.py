@@ -1,15 +1,18 @@
 """
-Step 4.2: Gold facet annotation via three-phase pipeline.
+Step 4.2: Gold facet annotation via two-phase pipeline.
 
 For each query + its candidate pool:
-  1. Aspect discovery (one LLM call, no chunks): enumerate 2-6 clinical aspects the query connects.
-  2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision per chunk per aspect.
+  1. Build facet vocabulary deterministically from the query's modifier list.
+  2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision per chunk per aspect,
+     gated by a HARD structural prior: a chunk is only shown to the LLM for aspect X if its
+     hadm_id belongs to modifier X's hadm_id set (Charlson / age tables).
   3. Reduce (deterministic): union of relevant chunk_ids per aspect across batches.
 
 Output: gold_annotations.parquet
 """
 
 import json
+import re
 from pathlib import Path
 
 import duckdb
@@ -108,9 +111,9 @@ def annotate(
 ) -> pl.DataFrame:
     """Annotate all queries.
     Returns DataFrame with columns:
-        query_id, icd10_3char, query_text, aspects_json, facets_json, n_facets, n_gold_chunks
+        query_id, icd10_3char, condition_name, modifiers_json, query_text,
+        facets_json, n_facets, n_gold_chunks
     """
-
     out_path = get_parquet_path('gold_annotations')
     prompt_dump_dir = get_result_dir('gold_annotations') / '_prompt_dump'
     prompt_dump_dir.mkdir(parents=True, exist_ok=True)
@@ -127,23 +130,28 @@ def annotate(
         n_done += 1
         print(f'\n{"=" * 60}\n  Query {n_done}/{total} (idx {i})\n  {query_text}\n{"=" * 60}')
 
-        modifier_text = row.get('modifier_text')
+        modifiers_json_str = row.get('modifiers_json', '[]')
+        modifiers_json: list[dict] = json.loads(modifiers_json_str) if modifiers_json_str else []
+        if not modifiers_json:
+            print('  [WARN] no modifiers_json for this query, skipping')
+            continue
+
+        aspects = aspects_from_modifiers(modifiers_json)
+        print(f'  [aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
+
+        # Precompute structural prior: hadm_id set per modifier-facet
+        aspect_hadm_sets: dict[str, set[int]] = {}
+        for aspect, modifier in zip(aspects, modifiers_json, strict=True):
+            aspect_hadm_sets[aspect.facet_label] = builder.modifier_hadm_ids(modifier['text'])
+
         query_vec = builder.embed_query(query_text)
 
-        work_pool = builder.for_query_filtered(
-            icd3,
-            query_vec,
-            n=global_cfg.shared_queries_cfg.prefilter_n,
-            modifier_text=modifier_text,
-        )
+        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets)
 
-        # Sort by descending similarity so most relevant chunks are in first batches
-        sim_to_query = work_pool.sim_to_query(query_vec)
-        sorted_indices = np.argsort(sim_to_query)[::-1]
-        work_pool = work_pool.slice(sorted_indices.copy())
-
-        aspects, facets = annotate_query(
+        facets = annotate_query(
             query_text,
+            aspects,
+            aspect_hadm_sets,
             work_pool,
             batch_size=gold_annotation_cfg.batch_size,
             patient_meta=patient_meta,
@@ -155,7 +163,7 @@ def annotate(
         for cids in facets.values():
             all_gold_chunks.update(cids)
 
-        query_id = f'{icd3}_{row.get("modifier_text", "")}_{i}'
+        query_id = f'{icd3}_{i}'
         query_id = query_id.replace(' ', '_')[:120]
 
         new_row = pl.DataFrame(
@@ -164,9 +172,8 @@ def annotate(
                     'query_id': query_id,
                     'icd10_3char': icd3,
                     'condition_name': row.get('condition_name', ''),
-                    'modifier_text': row.get('modifier_text', ''),
+                    'modifiers_json': modifiers_json_str,
                     'query_text': query_text,
-                    'aspects_json': json.dumps([a.model_dump() for a in aspects]),
                     'facets_json': json.dumps(facets),
                     'n_facets': len(facets),
                     'n_gold_chunks': len(all_gold_chunks),
@@ -185,25 +192,50 @@ def annotate(
     return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 
 
+def _build_stratified_pool(
+    builder: CandidatePoolBuilder,
+    query_vec: np.ndarray,
+    aspect_hadm_sets: dict[str, set[int]],
+) -> CandidatePool:
+    """Wide cosine pool with guaranteed per-modifier chunk quota, capped at final_pool_n.
+
+    1. Fetch top-wide_pool_n by cosine similarity (already sorted descending).
+    2. For each modifier, reserve up to min_per_modifier chunks from that modifier's hadm_id set.
+    3. Fill remaining slots from the top of the cosine ranking.
+    4. Cap at final_pool_n and return.
+    """
+    wide_pool = builder.for_query_cosine(query_vec, n=gold_annotation_cfg.wide_pool_n)
+    hadm_list = wide_pool.hadm_ids.tolist()
+
+    guaranteed: set[int] = set()
+    for label, hadm_set in aspect_hadm_sets.items():
+        mod_indices = [i for i, h in enumerate(hadm_list) if h in hadm_set]
+        take = min(gold_annotation_cfg.min_per_modifier, len(mod_indices))
+        guaranteed.update(mod_indices[:take])
+        print(f'  [pool] {label}: {len(mod_indices)} in wide pool, guaranteed {take}')
+
+    remaining = gold_annotation_cfg.final_pool_n - len(guaranteed)
+    fill = [i for i in range(wide_pool.n) if i not in guaranteed][: max(0, remaining)]
+
+    keep = np.array(sorted(guaranteed | set(fill)), dtype=np.intp)
+    pool = wide_pool.slice(keep)
+    print(f'  [pool] stratified: {len(guaranteed)} guaranteed + {len(fill)} fill = {pool.n} total')
+    return pool
+
+
 def annotate_query(
     query_text: str,
+    aspects: list[_Aspect],
+    aspect_hadm_sets: dict[str, set[int]],
     pool: CandidatePool,
     batch_size: int = 40,
     patient_meta: dict[int, str] | None = None,
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
-) -> tuple[list[_Aspect], dict[str, list[str]]]:
-    """Three-phase annotation for one query.
-
-    Returns (aspects, facets) where facets is {facet_label: [chunk_id, ...]}.
+) -> dict[str, list[str]]:
+    """Two-phase annotation for one query.
+    Returns {facet_label: [chunk_id, ...]}, only non-empty facets.
     """
-    # Phase 1: discover aspects (one call, no chunks)
-    aspects = discover_aspects(query_text, prompt_dump_dir=prompt_dump_dir, query_idx=query_idx)
-    if not aspects:
-        print('  [WARN] no aspects discovered, skipping tagging')
-        return [], {}
-
-    # Phase 2: per-aspect tagging across batches
     n = pool.n
     n_batches = (n + batch_size - 1) // batch_size
     aspect_relevant: dict[str, set[str]] = {a.facet_label: set() for a in aspects}
@@ -218,13 +250,26 @@ def annotate_query(
         batch_meta = [patient_meta.get(h, '') for h in batch_hadm_ids] if patient_meta else None
 
         for aspect in aspects:
+            eligible_hadm_set = aspect_hadm_sets.get(aspect.facet_label, set())
+
+            # HARD structural prior: only chunks whose hadm_id is in the modifier's set
+            eligible_mask = [hid in eligible_hadm_set for hid in batch_hadm_ids]
+            if not any(eligible_mask):
+                continue  # skip LLM call, no eligible chunks for this aspect in this batch
+
+            eligible_indices = [j for j, m in enumerate(eligible_mask) if m]
+            eligible_ids = [batch_ids[j] for j in eligible_indices]
+            eligible_texts = [batch_texts[j] for j in eligible_indices]
+            eligible_sections = [batch_sections[j] for j in eligible_indices]
+            eligible_meta = [batch_meta[j] for j in eligible_indices] if batch_meta else None
+
             decisions = tag_batch_for_aspect(
                 query_text,
                 aspect,
-                batch_ids,
-                batch_texts,
-                batch_sections=batch_sections,
-                batch_meta=batch_meta,
+                eligible_ids,
+                eligible_texts,
+                batch_sections=eligible_sections,
+                batch_meta=eligible_meta,
                 batch_idx=batch_idx,
                 n_batches=n_batches,
                 prompt_dump_dir=prompt_dump_dir,
@@ -247,55 +292,13 @@ def annotate_query(
                     + '\n'
                 )
 
-    # Phase 3: reduce — drop empty facets, sort chunk_ids
+    # Reduce - drop empty facets, sort chunk_ids
     facets = {label: sorted(cids) for label, cids in aspect_relevant.items() if cids}
     all_gold = {cid for cids in facets.values() for cid in cids}
     print(
         f'  reduce: {len(aspects)} aspects --> {len(facets)} non-empty facets, {len(all_gold)} gold chunks'
     )
-    return aspects, facets
-
-
-def discover_aspects(
-    query_text: str,
-    prompt_dump_dir: Path | None = None,
-    query_idx: int = 0,
-) -> list[_Aspect]:
-    """Phase 1: enumerate 2-6 clinical aspects the query connects (no chunks)."""
-    prompt = gold_annotation_cfg.aspect_discovery_user_template.format(query_text=query_text)
-
-    if prompt_dump_dir is not None:
-        dump_path = prompt_dump_dir / f'q{query_idx:03d}_aspects.txt'
-        dump_path.write_text(
-            f'=== SYSTEM ===\n{gold_annotation_cfg.aspect_discovery_system_prompt}\n\n=== USER ===\n{prompt}'
-        )
-
-    try:
-        result = generate_json(
-            prompt,
-            *gold_annotation_cfg,
-            system=gold_annotation_cfg.aspect_discovery_system_prompt,
-        )
-    except Exception as e:
-        print(f'[ERROR] aspect discovery q{query_idx}: {e}')
-        return []
-
-    raw_aspects: list = []
-    if isinstance(result, dict):
-        raw_aspects = result.get('aspects', [])
-    elif isinstance(result, list):
-        raw_aspects = result
-
-    aspects: list[_Aspect] = []
-    for item in raw_aspects:
-        try:
-            aspects.append(_Aspect.model_validate(item))
-        except Exception:
-            continue
-
-    aspects = aspects[:6]
-    print(f'  [aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
-    return aspects
+    return facets
 
 
 def tag_batch_for_aspect(
@@ -310,7 +313,7 @@ def tag_batch_for_aspect(
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
 ) -> list[_TagDecision]:
-    """Phase 2 map: yes/no tagging for one (aspect, chunk-batch) pair."""
+    """Yes/no tagging for one (aspect, structurally-eligible chunk sub-batch) pair."""
     chunks_block = _format_chunk_batch(
         chunk_ids, texts, sections=batch_sections, meta_lines=batch_meta
     )
@@ -333,8 +336,15 @@ def tag_batch_for_aspect(
     try:
         result = generate_json(
             prompt,
-            *gold_annotation_cfg,
             system=gold_annotation_cfg.tagging_system_prompt,
+            model=gold_annotation_cfg.model or None,
+            temperature=gold_annotation_cfg.temperature,
+            top_p=gold_annotation_cfg.top_p,
+            top_k=gold_annotation_cfg.top_k,
+            num_ctx=gold_annotation_cfg.num_ctx,
+            num_predict=gold_annotation_cfg.num_predict,
+            think=gold_annotation_cfg.think,
+            stream=gold_annotation_cfg.stream,
         )
     except Exception as e:
         print(
@@ -412,6 +422,21 @@ def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int,
         lookup[row['hadm_id']] = 'Patient: ' + ' | '.join(parts)
 
     return lookup
+
+
+def _modifier_to_snake_label(text: str) -> str:
+    s = re.sub(r'\([^)]*\)', '', text)
+    s = re.sub(r'[^a-zA-Z0-9\s]', ' ', s.lower())
+    s = re.sub(r'\b(?:the|a|an)\b', '', s)
+    tokens = [t for t in s.split() if t]
+    return '_'.join(tokens[:6])
+
+
+def aspects_from_modifiers(modifiers_json: list[dict]) -> list[_Aspect]:
+    return [
+        _Aspect(facet_label=_modifier_to_snake_label(m['text']), description=m['text'])
+        for m in modifiers_json
+    ]
 
 
 if __name__ == '__main__':

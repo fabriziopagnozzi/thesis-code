@@ -174,7 +174,6 @@ class CandidatePoolBuilder:
         self._embedder = Embedder(
             global_cfg.embedding_model, device=device if device else cfg.device, batch_size=1
         )
-        self._condition_to_hadm_ids_cache: dict[str, set[int]] = {}
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
 
         prompts_cfg = BuildQueryPromptsCfg.load()
@@ -203,22 +202,6 @@ class CandidatePoolBuilder:
         self._chunk_id_to_idx: dict[str, int] = {
             cid: i for i, cid in enumerate(self._corpus_df['chunk_id'].to_list())
         }
-
-    def for_query_filtered(
-        self,
-        icd3: str,
-        query_vec: NDArray[np.float32],
-        n: int,
-        modifier_text: str | None = None,
-    ) -> CandidatePool:
-        """Top-N by cosine from chunks belonging to patients with the condition+modifier."""
-        hadm_ids = self._condition_hadm_ids(icd3)
-        if modifier_text:
-            modifier_ids = self._modifier_hadm_ids(modifier_text)
-            if modifier_ids:
-                hadm_ids = hadm_ids & modifier_ids
-        pool = self._build_pool(hadm_ids)
-        return pool.top_k_by_similarity(query_vec, n)
 
     def for_query_cosine(
         self,
@@ -263,32 +246,7 @@ class CandidatePoolBuilder:
             metadata_df=self._corpus_df[idx_list],
         )
 
-    def _condition_hadm_ids(self, icd3: str) -> set[int]:
-        if icd3 not in self._condition_to_hadm_ids_cache:
-            hadm_ids = self._con.execute(f"""--sql
-                SELECT DISTINCT diagnoses_icd.hadm_id
-                FROM diagnoses_icd
-                WHERE diagnoses_icd.icd_version = 10
-                AND SUBSTR(diagnoses_icd.icd_code, 1, 3) = '{icd3}'
-            """).pl()['hadm_id']
-            self._condition_to_hadm_ids_cache[icd3] = set(hadm_ids.to_list())
-        return self._condition_to_hadm_ids_cache[icd3]
-
-    def _build_pool(self, hadm_ids: set[int]) -> CandidatePool:
-        mask = np.isin(self._hadm_id_array, np.fromiter(hadm_ids, dtype=np.int64))
-        pool_df = self._corpus_df.filter(pl.Series(mask))
-        pool_vectors = self._corpus_vectors[mask]
-
-        return CandidatePool(
-            chunk_ids=pool_df['chunk_id'].to_list(),
-            hadm_ids=pool_df['hadm_id'].to_numpy(),
-            vectors=pool_vectors,
-            texts=pool_df['text'].to_list(),
-            section_names=pool_df['section_name'].to_list(),
-            metadata_df=pool_df,
-        )
-
-    def _modifier_hadm_ids(self, modifier_text: str) -> set[int]:
+    def modifier_hadm_ids(self, modifier_text: str) -> set[int]:
         """hadm_ids matching a modifier — tries Charlson comorbidity first, then demographic."""
         if modifier_text in self._modifier_to_hadm_ids_cache:
             return self._modifier_to_hadm_ids_cache[modifier_text]

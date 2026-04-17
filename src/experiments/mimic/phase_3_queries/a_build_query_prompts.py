@@ -2,21 +2,27 @@
 Step 3.1: Build grounded LLM prompts for query generation.
 
 For each top condition (by frequency x comorbidity richness):
-    1. Enumerate (condition, modifier) pairs - comorbidity axes from Charlson + demographic modifiers
-    2. Sample real BHC chunks from the condition+modifier intersection
-    3. Assemble a full prompt grounded in real clinical data
+    1. Enumerate all modifiers for the condition (Charlson comorbidities + demographic thresholds).
+    2. Sample real BHC chunks from the condition's admissions, with a per-modifier quota so each
+       modifier is represented in the grounding examples.
+    3. Assemble one full prompt per condition.
 
-Output: queries_prompts.parquet
+Output: queries_prompts.parquet — one row per condition.
 """
+
+import json
 
 import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
-from experiments.mimic.configs import BuildQueryPromptsCfg, get_parquet_path, global_cfg, setup_logging
-from experiments.mimic.duck_db_init import (
-    connect_mimic_duckdb,
+from experiments.mimic.configs import (
+    BuildQueryPromptsCfg,
+    get_parquet_path,
+    global_cfg,
+    setup_logging,
 )
+from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
 query_prompts_cfg = BuildQueryPromptsCfg.load()
 
@@ -72,19 +78,17 @@ def build_query_prompts(
     results = []
     skipped = 0
 
-    # OUTER LOOP: iterate over top N conditions from condition_stats (N defined in global_cfg)
+    # OUTER LOOP: one row per condition (N defined by global_cfg.num_conditions)
     for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
         icd3 = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd3
         cond_hadm_ids = _get_condition_hadm_ids(con, icd3)
 
-        # FIND MODIFIERS
-        # find dynamically the comborbidity modifier for current condition
+        # Enumerate all modifiers for this condition
         comorbidity_mods = _find_top_comorbidity_modifiers(
             con, icd3, n=query_prompts_cfg.max_modifiers
         )
         modifiers = [(disease_label, 'comorbidity') for _, disease_label, _ in comorbidity_mods]
-        # use the hardocoded modifiers for demographics in the config
         modifiers.extend(
             [
                 (demo_modifier, 'demographic')
@@ -92,50 +96,47 @@ def build_query_prompts(
             ]
         )
 
-        # INNER LOOP 1: iterate over the modifiers
-        for modifier_text, modifier_type in modifiers:
-            candidate_hadm_ids = _get_modifier_hadm_ids(
-                con, cond_hadm_ids, modifier_text, modifier_type
-            )
-            if not candidate_hadm_ids:
-                continue
+        if not modifiers:
+            skipped += 1
+            continue
 
-            # SAMPLE: use examples from the data to guide the LLM in the prompt
-            seed = hash((icd3, modifier_text, modifier_type)) & 0xFFFFFFFF
-            data_samples = _sample_grounding_chunks(
-                chunks_by_hadm_id,
-                meta_by_hadm_id,
-                candidate_hadm_ids,
-                seed=seed,
-            )
-            if not data_samples:
-                continue
+        # Sample grounding chunks with per-modifier quota
+        data_samples = _sample_grounding_chunks_per_modifier(
+            chunks_by_hadm_id, meta_by_hadm_id, cond_hadm_ids, modifiers, con
+        )
+        if not data_samples:
+            skipped += 1
+            continue
 
-            full_prompt = query_prompts_cfg.prompt_template.format(
-                condition=cond_name,
-                modifier=modifier_text,
-                chunks_block=_format_chunks_block(data_samples),
-            )
-            results.append(
-                {
-                    'icd10_3char': icd3,
-                    'condition_name': cond_name,
-                    'modifier_text': modifier_text,
-                    'modifier_type': modifier_type,
-                    'n_grounding_chunks': len(data_samples),
-                    'n_intersection_admissions': len(candidate_hadm_ids),
-                    'grounding_hadm_ids': [s['hadm_id'] for s in data_samples],
-                    'full_prompt': full_prompt,
-                }
-            )
-        # END INNER LOOP 1: iterate over the modifiers
-    # END OUTER iterate over top N conditions (defined in global_cfg)
+        modifier_list = '\n'.join(f'- {text}' for text, _ in modifiers)
 
-    print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} (no intersection chunks)')
+        full_prompt = query_prompts_cfg.prompt_template.format(
+            condition=cond_name,
+            modifier_list=modifier_list,
+            chunks_block=_format_chunks_block(data_samples),
+        )
+
+        results.append(
+            {
+                'icd10_3char': icd3,
+                'condition_name': cond_name,
+                'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
+                'n_modifiers': len(modifiers),
+                'n_condition_admissions': len(cond_hadm_ids),
+                'n_grounding_chunks': len(data_samples),
+                'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
+                'full_prompt': full_prompt,
+            }
+        )
+    # END OUTER LOOP
+
+    print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} (no modifiers or samples)')
     return pl.DataFrame(results)
 
 
-# -- Step 1: enumerate (condition, modifier) specs --
+# -- Step 1: enumerate modifiers for a condition --
+
+
 def _find_top_comorbidity_modifiers(
     con, condition_icd3: str, n: int = 3
 ) -> list[tuple[str, str, float]]:
@@ -159,7 +160,9 @@ def _find_top_comorbidity_modifiers(
     return scored[:n]
 
 
-# -- Step 2: sample grounding chunks and assemble full prompts --
+# -- Step 2: sample grounding chunks --
+
+
 def _get_condition_hadm_ids(con, icd3: str) -> set[int]:
     rows = con.execute(f"""--sql
         SELECT DISTINCT diagnoses_icd.hadm_id
@@ -209,6 +212,36 @@ def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -
         AND age.age {op} {val}
     """).fetchall()
     return {r[0] for r in rows}
+
+
+def _sample_grounding_chunks_per_modifier(
+    chunks_by_hadm: dict[int, pl.DataFrame],
+    meta_by_hadm: dict[int, dict],
+    cond_hadm_ids: set[int],
+    modifiers: list[tuple[str, str]],
+    con,
+) -> list[dict]:
+    """Sample 1 representative patient per modifier (condition ∩ modifier), deduplicated."""
+    seen_hadm: set[int] = set()
+    samples: list[dict] = []
+
+    for mod_text, mod_type in modifiers:
+        mod_hadm_ids = _get_modifier_hadm_ids(con, cond_hadm_ids, mod_text, mod_type)
+        if not mod_hadm_ids:
+            continue
+        # Candidates not yet sampled
+        candidates = mod_hadm_ids - seen_hadm
+        if not candidates:
+            continue
+        bhc_candidates = _hadm_ids_with_bhc(chunks_by_hadm, candidates)
+        if not bhc_candidates:
+            continue
+        # Take the patient with the longest BHC chunk
+        chosen_hid = bhc_candidates[0]
+        seen_hadm.add(chosen_hid)
+        samples.extend(_sample_patient(chosen_hid, chunks_by_hadm, meta_by_hadm))
+
+    return samples
 
 
 def _sample_grounding_chunks(

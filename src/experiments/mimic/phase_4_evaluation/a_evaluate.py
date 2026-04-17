@@ -68,24 +68,16 @@ def evaluate(
     ):
         icd3 = row['icd10_3char']
         query_text = row['query_text']
-        modifier_text = row.get('modifier_text')
         facets = json.loads(row['facets_json'])
         if not facets:
             continue
 
         query_vec = builder.embed_query(query_text)
 
-        if evaluate_cfg.pool_mode == 'gold_filtered':
-            # Use the same condition+modifier filtered top-N pool as gold annotation
-            pool = builder.for_query_filtered(
-                icd3, query_vec, n=evaluate_cfg.prefilter_n, modifier_text=modifier_text
-            )
-        else:
-            # Full-corpus top-N pool; merge with gold chunks so none are structurally absent.
-            cosine_pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
-            all_gold_ids = {cid for cids in facets.values() for cid in cids}
-            gold_pool = builder.for_gold_chunks(all_gold_ids)
-            pool = CandidatePool.merge([cosine_pool, gold_pool])
+        cosine_pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
+        all_gold_ids = {cid for cids in facets.values() for cid in cids}
+        gold_pool = builder.for_gold_chunks(all_gold_ids)
+        pool = CandidatePool.merge([cosine_pool, gold_pool])
 
         query_metrics = evaluate_query(
             pool,

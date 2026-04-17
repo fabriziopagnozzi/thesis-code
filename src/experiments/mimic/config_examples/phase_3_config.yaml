@@ -19,32 +19,30 @@ build_query_prompts:
       value: 40
 
   prompt_template: |
-    Below are excerpts from real discharge summaries of patients admitted for {condition} where {modifier} was also present.
+    Below are excerpts from real discharge summaries of patients admitted for {condition}.
 
     <START DISCHARGE SUMMARIES EXAMPLES>
     {chunks_block}
     <END DISCHARGE SUMMARIES EXAMPLES>
 
-    Using these real cases as background, generate ONE question about {condition} where {modifier} is present.
-    The question MUST ask about a specific clinical decision or treatment pattern that connects
-    at least two different aspects of care. For example, a drug adjustment AND the lab finding
-    that triggered it, or a procedure AND the complication that followed it.
+    Using these real cases as background, generate ONE question about patients with {condition}
+    that asks for clinical patterns across multiple aspects of care.
+    The question must be generic enough that answering it requires reading across several patients;
+    it must explicitly touch at least three of these aspects:
+
+    {modifier_list}
 
     Good examples:
-    - "How is insulin dosing adjusted in T2DM patients with declining renal function, and what electrolyte abnormalities are monitored alongside these changes?"
-    - "What anticoagulation strategies are used at discharge for heart failure patients with atrial fibrillation, and how does renal function influence the choice?"
-    - "What fluid management strategies are documented for COPD exacerbation patients with concurrent heart failure, and what clinical signs trigger a change in approach?"
-
-    Bad examples (too broad - just listing):
-    - "What medications are prescribed for T2DM patients with CHF?"
-    - "What complications are seen in heart failure patients?"
-    - "What labs are monitored for patients with renal disease?"
+    - "For patients with type 2 diabetes, what are the typical differences in glycemic management,
+       renal monitoring, and medication choice between elderly patients, those with CKD, and those with CHF?"
+    - "What clinical patterns are documented in COPD exacerbation care regarding oxygen therapy,
+       steroid dosing, and management when concurrent heart failure or elderly age are present?"
 
     Requirements:
-    - Must connect two or more clinical aspects (treatment + reasoning, drug + monitoring, procedure + outcome)
+    - Asks about observable patterns in the data, not what "should" be done
     - Can be answered by reading across many discharge notes (not from a textbook)
     - Requires evidence from multiple patients - no single note fully answers it
-    - Should ask about observable patterns in the data, not about what "should" be done
+    - Touches multiple aspects from the list above
 
     Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
 
@@ -63,6 +61,9 @@ filter_queries:
 
 gold_annotation:
   batch_size: 20
+  wide_pool_n: 10000
+  final_pool_n: 3000
+  min_per_modifier: 50
   num_ctx: 8_000
   num_predict: 2000
   model: gemma4:31b
@@ -71,23 +72,6 @@ gold_annotation:
   top_k: 40
   think: false
   stream: false
-  aspect_discovery_system_prompt: >-
-    You are a clinical information analyst. Given a clinical question, identify
-    the distinct aspects of care it asks about. Each aspect is one facet of the
-    answer - a specific clinical dimension that must be covered to fully answer
-    the question.
-  aspect_discovery_user_template: |
-    QUESTION: {query_text}
-
-    The question asks about a clinical pattern that connects several aspects of care.
-    List 2-6 aspects that a complete answer must cover.
-
-    For each aspect produce:
-    - facet_label: short snake_case identifier (e.g., "insulin_adjustment", "renal_monitoring")
-    - description: one sentence defining what evidence would count as substantive for this aspect
-
-    Return JSON: {{"aspects": [{{"facet_label": "...", "description": "..."}}, ...]}}
-    Return ONLY the JSON, nothing else.
   tagging_system_prompt: >-
     You are a clinical information analyst. You will be given a clinical
     question, one specific aspect of that question, and a batch of discharge

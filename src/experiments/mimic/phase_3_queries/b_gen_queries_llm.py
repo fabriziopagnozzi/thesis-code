@@ -48,10 +48,10 @@ def query_generator(
     prompts_df: pl.DataFrame,
     resume_df: pl.DataFrame | None = None,
 ):
-    already_done: set[tuple] = set()
+    already_done: set[str] = set()
     if resume_df is not None:
         for row in resume_df.iter_rows(named=True):
-            already_done.add((row['icd10_3char'], row['modifier_text']))
+            already_done.add(row['icd10_3char'])
 
     for i, row in enumerate(
         tqdm(
@@ -61,7 +61,7 @@ def query_generator(
             file=sys.stderr,
         )
     ):
-        key = (row['icd10_3char'], row['modifier_text'])
+        key = row['icd10_3char']
         if key in already_done:
             continue
 
