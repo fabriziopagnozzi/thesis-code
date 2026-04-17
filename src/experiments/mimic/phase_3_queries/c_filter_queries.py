@@ -11,7 +11,13 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg, FilterQueriesCfg, get_parquet_path, global_cfg, setup_logging
+from experiments.mimic.configs import (
+    EvaluateCfg,
+    FilterQueriesCfg,
+    get_parquet_path,
+    global_cfg,
+    setup_logging,
+)
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )

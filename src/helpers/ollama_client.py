@@ -102,7 +102,7 @@ def generate_json(
     model: str | None = None,
     think: bool = False,
     stream: bool = False,
-    **opts_kwargs: int | float,
+    **opts_kwargs: int | float | None,
 ) -> dict | list:
     extra_messages: list[dict] = []
 

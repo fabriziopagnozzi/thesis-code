@@ -2,7 +2,14 @@
 
 import polars as pl
 
-from experiments.mimic.configs import VECTOR_DB_DIR, EmbedCfg, get_parquet_path, global_cfg, setup_logging
+from experiments.mimic.configs import (
+    VECTOR_DB_DIR,
+    EmbedCfg,
+    col_for_model,
+    get_parquet_path,
+    global_cfg,
+    setup_logging,
+)
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
@@ -45,7 +52,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         batch_df = joined.slice(start, end - start)
 
         embeddings = embedder.embed_corpus(batch_texts)
-        batch_df = batch_df.with_columns(pl.Series('vector', embeddings.tolist()))
+        batch_df = batch_df.with_columns(pl.Series(col_for_model(global_cfg.embedding_model)), embeddings.tolist())
 
         if table is None:
             table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')

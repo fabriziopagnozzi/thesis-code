@@ -236,7 +236,7 @@ class EvaluateCfg(BaseModel):
     lam_values: list[float]
     prefilter_n: int
     device: str
-    pool_mode: Literal['cosine', 'pool_filtered'] = 'cosine'
+    pool_mode: Literal['cosine', 'gold_filtered'] = 'cosine'
     """
     'cosine'        - full-corpus top-prefilter_n by cosine similarity (default).
     'gold_filtered' - condition+modifier filtered top-prefilter_n pool, matching
