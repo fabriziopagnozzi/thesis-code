@@ -65,6 +65,7 @@ filter_queries:
 
 gold_annotation:
   batch_size: 30
+  # resume_batch_size: 30  # set to OLD batch_size when resuming a run with a changed batch_size
   wide_pool_n: 5_000
   final_pool_n: 1_000
   min_per_modifier: 50

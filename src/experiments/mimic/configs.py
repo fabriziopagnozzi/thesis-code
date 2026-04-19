@@ -215,6 +215,7 @@ class FilterQueriesCfg(BaseModel):
 
 class GoldAnnotationCfg(BaseModel):
     batch_size: int
+    resume_batch_size: int | None = None
     wide_pool_n: int = 10000
     final_pool_n: int = 3000
     min_per_modifier: int = 50
@@ -228,8 +229,6 @@ class GoldAnnotationCfg(BaseModel):
     stream: bool = False
     tagging_system_prompt: str
     tagging_user_template: str
-    tagging_multi_facet_system_prompt: str | None = None
-    tagging_multi_facet_user_template: str | None = None
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:

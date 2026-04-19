@@ -104,8 +104,13 @@ def run_gold_annotation(
 
 def _load_prior_decisions(
     jsonl_path: Path,
+    resume_batch_size: int,
 ) -> dict[tuple[int, int, str], list[_TagDecision]]:
-    """Load already-completed (query_idx, batch_idx, facet_label) entries from jsonl."""
+    """Load completed entries keyed by (query_idx, chunk_start, facet_label).
+
+    chunk_start = batch_idx * resume_batch_size — absolute pool position, independent of
+    current batch_size so the cache survives a batch_size change mid-run.
+    """
     prior: dict[tuple[int, int, str], list[_TagDecision]] = {}
     if not jsonl_path.exists():
         return prior
@@ -115,9 +120,10 @@ def _load_prior_decisions(
             if not line:
                 continue
             entry = json.loads(line)
-            key = (entry['query_idx'], entry['batch_idx'], entry['facet_label'])
+            chunk_start = entry['batch_idx'] * resume_batch_size
+            key = (entry['query_idx'], chunk_start, entry['facet_label'])
             prior[key] = [_TagDecision.model_validate(d) for d in entry.get('decisions', [])]
-    print(f'[resume] loaded {len(prior)} cached (query, batch, facet) entries from jsonl')
+    print(f'[resume] loaded {len(prior)} cached entries from jsonl')
     return prior
 
 
@@ -137,7 +143,8 @@ def annotate(
     prompt_dump_dir.mkdir(parents=True, exist_ok=True)
 
     jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
-    prior_decisions = _load_prior_decisions(jsonl_path)
+    old_bs = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
+    prior_decisions = _load_prior_decisions(jsonl_path, old_bs)
 
     total = len(queries_df)
     n_done = len(done_texts)
@@ -287,15 +294,17 @@ def annotate_query(
             if not any(eligible_mask):
                 continue  # skip LLM call, no eligible chunks for this aspect in this batch
 
-            prior_key = (query_idx, batch_idx, aspect.facet_label)
-            if prior_decisions is not None and prior_key in prior_decisions:
-                cached = prior_decisions[prior_key]
-                for d in cached:
-                    aspect_relevant[aspect.facet_label].add(d.chunk_id)
-                print(
-                    f'    [resume] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: {len(cached)} (cached)'
-                )
-                continue
+            if prior_decisions is not None:
+                old_bs = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
+                sub_keys = [(query_idx, s, aspect.facet_label) for s in range(start, end, old_bs)]
+                if all(k in prior_decisions for k in sub_keys):
+                    cached = [d for k in sub_keys for d in prior_decisions[k]]
+                    for d in cached:
+                        aspect_relevant[aspect.facet_label].add(d.chunk_id)
+                    print(
+                        f'    [resume] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: {len(cached)} (cached)'
+                    )
+                    continue
 
             eligible_indices = [j for j, m in enumerate(eligible_mask) if m]
             eligible_ids = [batch_ids[j] for j in eligible_indices]
