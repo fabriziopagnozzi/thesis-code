@@ -46,7 +46,9 @@ build_query_prompts:
     - Asks about observable patterns in the data, not what "should" be done
     - Can be answered by reading across many discharge notes, not from a textbook
 
-    Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
+    Keep the question to 1-2 sentences. Return ONLY a JSON object in this exact format:
+    {{"query": "<your question here>", "covered_modifiers": ["<exact modifier text 1>", "<exact modifier text 2>", ...]}}
+    covered_modifiers must list the exact modifier texts copied verbatim from the list above that the question explicitly addresses.
 
 gen_queries_llm:
   save_every: 25

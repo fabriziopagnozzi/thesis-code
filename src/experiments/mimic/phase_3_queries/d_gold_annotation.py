@@ -102,6 +102,25 @@ def run_gold_annotation(
     return result
 
 
+def _load_prior_decisions(
+    jsonl_path: Path,
+) -> dict[tuple[int, int, str], list[_TagDecision]]:
+    """Load already-completed (query_idx, batch_idx, facet_label) entries from jsonl."""
+    prior: dict[tuple[int, int, str], list[_TagDecision]] = {}
+    if not jsonl_path.exists():
+        return prior
+    with jsonl_path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            entry = json.loads(line)
+            key = (entry['query_idx'], entry['batch_idx'], entry['facet_label'])
+            prior[key] = [_TagDecision.model_validate(d) for d in entry.get('decisions', [])]
+    print(f'[resume] loaded {len(prior)} cached (query, batch, facet) entries from jsonl')
+    return prior
+
+
 def annotate(
     queries_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
@@ -117,6 +136,9 @@ def annotate(
     prompt_dump_dir = get_result_dir('gold_annotations') / '_prompt_dump'
     prompt_dump_dir.mkdir(parents=True, exist_ok=True)
 
+    jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
+    prior_decisions = _load_prior_decisions(jsonl_path)
+
     total = len(queries_df)
     n_done = len(done_texts)
 
@@ -131,6 +153,13 @@ def annotate(
 
         modifiers_json_str = row.get('modifiers_json', '[]')
         modifiers_json: list[dict] = json.loads(modifiers_json_str) if modifiers_json_str else []
+
+        covered_str = row.get('covered_modifiers_json', '')
+        if covered_str:
+            covered = set(json.loads(covered_str))
+            modifiers_json = [m for m in modifiers_json if m['text'] in covered]
+            modifiers_json_str = json.dumps(modifiers_json)
+
         if not modifiers_json:
             print('  [WARN] no modifiers_json for this query, skipping')
             continue
@@ -156,6 +185,7 @@ def annotate(
             patient_meta=patient_meta,
             prompt_dump_dir=prompt_dump_dir,
             query_idx=i,
+            prior_decisions=prior_decisions,
         )
 
         all_gold_chunks = set()
@@ -231,6 +261,7 @@ def annotate_query(
     patient_meta: dict[int, str] | None = None,
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
+    prior_decisions: dict[tuple[int, int, str], list[_TagDecision]] | None = None,
 ) -> dict[str, list[str]]:
     """Two-phase annotation for one query.
     Returns {facet_label: [chunk_id, ...]}, only non-empty facets.
@@ -255,6 +286,16 @@ def annotate_query(
             eligible_mask = [hid in eligible_hadm_set for hid in batch_hadm_ids]
             if not any(eligible_mask):
                 continue  # skip LLM call, no eligible chunks for this aspect in this batch
+
+            prior_key = (query_idx, batch_idx, aspect.facet_label)
+            if prior_decisions is not None and prior_key in prior_decisions:
+                cached = prior_decisions[prior_key]
+                for d in cached:
+                    aspect_relevant[aspect.facet_label].add(d.chunk_id)
+                print(
+                    f'    [resume] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: {len(cached)} (cached)'
+                )
+                continue
 
             eligible_indices = [j for j, m in enumerate(eligible_mask) if m]
             eligible_ids = [batch_ids[j] for j in eligible_indices]

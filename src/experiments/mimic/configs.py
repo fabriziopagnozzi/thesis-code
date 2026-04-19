@@ -228,6 +228,8 @@ class GoldAnnotationCfg(BaseModel):
     stream: bool = False
     tagging_system_prompt: str
     tagging_user_template: str
+    tagging_multi_facet_system_prompt: str | None = None
+    tagging_multi_facet_user_template: str | None = None
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:

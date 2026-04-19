@@ -7,13 +7,14 @@ Output: queries.parquet - all original columns + query_text.
 If queries.parquet is already existing, it appends the new queries there.
 """
 
+import json
 import sys
 
 import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.configs import GenQueriesCfg, get_parquet_path, setup_logging
-from helpers.ollama_client import generate
+from helpers.ollama_client import generate_json
 
 gen_queries_cfg = GenQueriesCfg.load()
 
@@ -66,7 +67,7 @@ def query_generator(
             continue
 
         try:
-            query_text = generate(
+            result = generate_json(
                 row['full_prompt'],
                 model=gen_queries_cfg.model or None,
                 temperature=gen_queries_cfg.temperature,
@@ -74,17 +75,25 @@ def query_generator(
                 top_k=gen_queries_cfg.top_k,
                 think=gen_queries_cfg.think,
                 stream=True,
-            ).strip()
+            )
         except Exception as e:
             print(f'  Error on row {i}: {e}')
             continue
 
+        if not isinstance(result, dict):
+            print(f'  Unexpected result type on row {i}: {type(result)}')
+            continue
+
+        query_text = result.get('query', '').strip()
+        covered_modifiers = result.get('covered_modifiers', [])
+
         if not query_text:
             continue
 
-        result = {k: v for k, v in row.items() if k != 'full_prompt'}
-        result['query_text'] = query_text
-        yield result
+        out = {k: v for k, v in row.items() if k != 'full_prompt'}
+        out['query_text'] = query_text
+        out['covered_modifiers_json'] = json.dumps(covered_modifiers)
+        yield out
 
 
 if __name__ == '__main__':
