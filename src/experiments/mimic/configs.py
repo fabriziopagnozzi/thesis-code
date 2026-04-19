@@ -1,5 +1,7 @@
 import argparse
+import io
 import re
+from os import getenv
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -28,12 +30,17 @@ class GlobalCfg(BaseModel):
     embedding_model: str
     vector_db_dir: str
     shared_queries_cfg: SharedQueriesCfg = Field(alias='phase_3_shared')
-    results_subdir: str
     result_dir_overrides: dict[str, str] = {}
 
 
+exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
+MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / exp_name
+CONFIG_FILES_DIR = MIMIC_RESULTS_DIR / '_configs'
+LOGS_DIR = MIMIC_RESULTS_DIR / '_logs'
+
+
 def load_global_cfg(
-    path: Path = MIMIC_IV_DIR / 'global_config.yaml',
+    path: Path = CONFIG_FILES_DIR / 'global_config.yaml',
     cfg: GlobalCfg | None = None,
 ):
     global global_cfg
@@ -48,11 +55,7 @@ def load_global_cfg(
 
 
 load_global_cfg()
-
 VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
-MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / global_cfg.results_subdir
-CONFIG_FILES_DIR = MIMIC_RESULTS_DIR / '_configs'
-LOGS_DIR = MIMIC_RESULTS_DIR / '_logs'
 
 
 def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
@@ -261,14 +264,15 @@ def setup_logging() -> None:
     log_path = LOGS_DIR / f'{script_name}.log'
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
-    class _Tee:
+    class _Tee(io.TextIOBase):
         def __init__(self, filepath: Path):
             self._terminal = sys.stdout
             self._file = open(filepath, 'a')  # noqa: SIM115
 
-        def write(self, msg: str) -> None:
+        def write(self, msg: str) -> int:
             self._terminal.write(msg)
             self._file.write(msg)
+            return len(msg)
 
         def flush(self) -> None:
             self._terminal.flush()

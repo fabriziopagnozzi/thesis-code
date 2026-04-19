@@ -1,9 +1,10 @@
+# Run each command with the environment variable EXP_NAME to save results and logs to the corresponding subdirectory under _results.
+
 n_conditions: 8
 # embedding_model: multi-qa-mpnet-base-cos-v1
 # vector_db_dir: "_results/_shared_0/_lancedb" # relative to src/experiments/mimic
 
-# results_subdir: "2026-04-13-2-k-extended-eval"
-# Per-table result directory overrides. Tables not listed here are read/written from results_subdir.
+# Per-table result directory overrides. Tables not listed here are read/written from _results/EXP_NAME
 # result_dir_overrides:
 #     age: 2026-04-13_shared
 #     charlson: 2026-04-13_shared
@@ -15,7 +16,7 @@ n_conditions: 8
 #     divergence_stats: 2026-04-13_shared
 #     gold_anntations: 2026-04-13_shared
 
-phase_3_shared:
+shared_queries_config:
     prefilter_n: 900
     charlson_labels:
         myocardial_infarct: prior myocardial infarction

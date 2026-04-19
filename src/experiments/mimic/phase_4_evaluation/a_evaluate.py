@@ -54,6 +54,7 @@ def run_evaluate(
     print(f'\nSaved {len(results):,} result rows to {out_path}')
 
     store_eval_stats(results)
+    store_best_per_metric(results)
     return results
 
 
@@ -249,6 +250,41 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
     stats_path = get_parquet_path('evaluation_stats')
     stats_df.write_parquet(stats_path)
     print(f'Saved summary to {stats_path}')
+
+
+def store_best_per_metric(results_df: pl.DataFrame) -> None:
+    """For each (k, lam) pair and each metric, find the strategy with the best mean value."""
+    metric_cols = ['AR', 'WAR', 'GP', 'GR']
+
+    summary = results_df.group_by('k', 'lam', 'strategy').agg(
+        pl.col('aspect_recall').mean().alias('AR'),
+        pl.col('weighted_aspect_recall').mean().alias('WAR'),
+        pl.col('gold_precision').mean().alias('GP'),
+        pl.col('gold_recall').mean().alias('GR'),
+    )
+
+    best_rows = []
+    for (k, lam), group in summary.group_by('k', 'lam'):
+        for col in metric_cols:
+            best = group.sort(col, descending=True).row(0, named=True)
+            best_rows.append({'k': k, 'lam': lam, 'best_for': col, **best})
+
+    best_df = pl.DataFrame(best_rows).sort('k', 'lam', 'best_for')
+    best_path = get_parquet_path('evaluation_best_per_metric')
+    best_df.write_parquet(best_path)
+    print(f'Saved best-per-metric summary to {best_path}')
+
+    # For each fixed lambda, find the best (strategy, k) pair per metric
+    best_fixed_lam_rows = []
+    for (lam,), group in summary.group_by('lam'):
+        for col in metric_cols:
+            best = group.sort(col, descending=True).row(0, named=True)
+            best_fixed_lam_rows.append({'lam': lam, 'best_for': col, **best})
+
+    best_fixed_lam_df = pl.DataFrame(best_fixed_lam_rows).sort('lam', 'best_for')
+    best_fixed_lam_path = get_parquet_path('evaluation_best_per_metric_fixed_lam')
+    best_fixed_lam_df.write_parquet(best_fixed_lam_path)
+    print(f'Saved best-per-metric (fixed lam) summary to {best_fixed_lam_path}')
 
 
 if __name__ == '__main__':

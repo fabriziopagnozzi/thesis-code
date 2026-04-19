@@ -25,71 +25,75 @@ build_query_prompts:
     {chunks_block}
     <END DISCHARGE SUMMARIES EXAMPLES>
 
-    Using these real cases as background, generate ONE question about patients with {condition}
+    The examples above are provided ONLY so you understand what kinds of clinical information the dataset contains.
+    Do NOT generate a question about these specific patients or these specific notes.
+    Using the above as background context only, generate ONE generic question about patients with {condition}
     that asks for clinical patterns across multiple aspects of care.
-    The question must be generic enough that answering it requires reading across several patients;
-    it must explicitly touch at least three of these aspects:
+    The question must be answerable by reading across many different patients in the dataset - not just the examples above.
 
+    It must explicitly touch at least two of these aspects:
     {modifier_list}
 
-    Good examples:
-    - "For patients with type 2 diabetes, what are the typical differences in glycemic management,
-       renal monitoring, and medication choice between elderly patients, those with CKD, and those with CHF?"
-    - "What clinical patterns are documented in COPD exacerbation care regarding oxygen therapy,
-       steroid dosing, and management when concurrent heart failure or elderly age are present?"
+    Good examples (2 aspects):
+    - "For patients admitted with sepsis, how does antibiotic management differ between those with chronic kidney disease and elderly patients over 75?"
+    - "For patients with acute myocardial infarction, how do discharge medications and follow-up plans differ between those with chronic kidney disease and elderly patients?"
+
+    Good examples (3 aspects):
+    - "For patients hospitalized with pneumonia, how does clinical management differ between those with chronic kidney disease, those with heart failure, and elderly patients?"
+    - "For patients with decompensated heart failure, how do diuretic regimens and length of stay differ between those with diabetes, those with chronic kidney disease, and elderly patients?"
 
     Requirements:
     - Asks about observable patterns in the data, not what "should" be done
-    - Can be answered by reading across many discharge notes (not from a textbook)
-    - Requires evidence from multiple patients - no single note fully answers it
-    - Touches multiple aspects from the list above
+    - Can be answered by reading across many discharge notes, not from a textbook
 
     Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
 
 gen_queries_llm:
   save_every: 25
-  model: gemma4:31b
+  model: gemma4-31b-text
   temperature: 1.0
   top_p: 0.95
   top_k: 64
   think: false
 
 filter_queries:
-  k_values: [ 5, 10, 20, 30 ]
+  k_values: [ 5, 10, 20, 30, 100, 500 ]
   lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
-  jaccard_threshold: 0.85
+  jaccard_threshold: 0.90
 
 gold_annotation:
-  batch_size: 20
-  wide_pool_n: 10000
-  final_pool_n: 3000
+  batch_size: 30
+  wide_pool_n: 5_000
+  final_pool_n: 1_000
   min_per_modifier: 50
-  num_ctx: 8_000
-  num_predict: 2000
-  model: gemma4:31b
-  temperature: 0.35
+  num_ctx: 16_000
+  num_predict: -1
+  model: gemma4-31b-text
+  temperature: 0.40
   top_p: 0.95
-  top_k: 40
+  top_k: 64
   think: false
   stream: false
   tagging_system_prompt: >-
     You are a clinical information analyst. You will be given a clinical
-    question, one specific aspect of that question, and a batch of discharge
-    note excerpts. Decide whether each chunk contains substantive evidence for
-    the specified aspect only.
+    question, a patient subgroup modifier (a comorbidity or demographic trait on
+    top of the primary diagnosis), and discharge note excerpts from patients who
+    have that modifier. Decide whether each chunk contains substantive evidence
+    of how that modifier affects the clinical picture described in the question.
   tagging_user_template: |
     QUESTION: {query_text}
-    ASPECT: {facet_label} - {facet_description}
+    PATIENT SUBGROUP MODIFIER: {facet_description}
 
-    For each chunk below, decide whether it contains SUBSTANTIVE evidence for THIS aspect only.
-    Substantive = specific drugs with doses, specific labs with clinical interpretation,
-    specific procedures with rationale, or explicit reasoning linking this aspect to the question.
-    Mere mentions of a condition or drug without context are NOT substantive.
+    For each chunk below, decide whether it contains SUBSTANTIVE evidence of how
+    this subgroup modifier affects the clinical management or outcomes described in the question.
+    Mere mentions of the condition or drug without context are NOT substantive. 
+    They must directly provide useful information to answer the given QUESTION.
 
     <CHUNKS>
     {chunks_block}
     </CHUNKS>
 
-    Return JSON: {{"decisions": [{{"chunk_id": "<id>", "relevant": true, "why": "<up to 15 words>"}}, ...]}}
-    Include exactly one decision per chunk shown above. If none are relevant, return relevant=false for all.
-    Return ONLY the JSON, nothing else.
+    Return a JSON array of relevant chunks only:
+      [{{"chunk_id": "<id>", "reason": "<up to 15 words>"}}, ...]
+    If none relevant: [].
+    Return ONLY the JSON array, nothing else.

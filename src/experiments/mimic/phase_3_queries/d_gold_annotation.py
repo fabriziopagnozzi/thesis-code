@@ -47,7 +47,6 @@ class _Aspect(BaseModel):
 
 class _TagDecision(BaseModel):
     chunk_id: str
-    relevant: bool
     why: str = ''
 
 
@@ -276,8 +275,7 @@ def annotate_query(
                 query_idx=query_idx,
             )
             for d in decisions:
-                if d.relevant:
-                    aspect_relevant[aspect.facet_label].add(d.chunk_id)
+                aspect_relevant[aspect.facet_label].add(d.chunk_id)
 
             with jsonl_path.open('a') as f:
                 f.write(
@@ -373,10 +371,9 @@ def tag_batch_for_aspect(
         seen_ids.add(d.chunk_id)
         decisions.append(d)
 
-    n_relevant = sum(1 for d in decisions if d.relevant)
     print(
         f'    [tag] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: '
-        f'{n_relevant}/{len(decisions)} relevant, {n_dropped} dropped '
+        f'{len(decisions)} relevant, {n_dropped} dropped '
         f'(~{prompt_chars // 4} tokens)'
     )
     return decisions
