@@ -6,17 +6,17 @@ n_conditions: 8
 
 # Per-table result directory overrides. Tables not listed here are read/written from _results/EXP_NAME
 # result_dir_overrides:
-#     age: 2026-04-13_shared
-#     charlson: 2026-04-13_shared
-#     conditions_stats: 2026-04-13_shared
-#     chunks: 2026-04-13_shared
-#     admissions_metadata: 2026-04-13_shared
-#     queries_prompts: 2026-04-13_shared
-#     queries: 2026-04-13_shared
-#     divergence_stats: 2026-04-13_shared
-#     gold_anntations: 2026-04-13_shared
+#     age: _shared_2026-04-13
+#     charlson: _shared_2026-04-13
+#     conditions_stats: _shared_2026-04-13
+#     chunks: _shared_2026-04-13
+#     admissions_metadata: _shared_2026-04-13
+#     queries_prompts: _shared_2026-04-13
+#     queries: _shared_2026-04-13
+#     divergence_stats: _shared_2026-04-13
+#     gold_anntations: _shared_2026-04-13
 
-shared_queries_config:
+phase_3_shared:
     prefilter_n: 900
     charlson_labels:
         myocardial_infarct: prior myocardial infarction

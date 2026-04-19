@@ -47,7 +47,7 @@ class _Aspect(BaseModel):
 
 class _TagDecision(BaseModel):
     chunk_id: str
-    why: str = ''
+    reason: str = ''
 
 
 def run_gold_annotation(
