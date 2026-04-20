@@ -1,13 +1,14 @@
 """
 Step 3.1: Build grounded LLM prompts for query generation.
 
-For each top condition (by frequency x comorbidity richness):
-    1. Enumerate all modifiers for the condition (Charlson comorbidities + demographic thresholds).
-    2. Sample real BHC chunks from the condition's admissions, with a per-modifier quota so each
-       modifier is represented in the grounding examples.
-    3. Assemble one full prompt per condition.
+For each top Charlson-bucket condition (by n_admissions, from conditions_stats.parquet):
+    1. Enumerate co-occurring Charlson comorbidities (excluding the condition's own bucket)
+       + demographic modifiers. Build two modifier sets: [top_comorbidity, demographic] and
+       [rare_comorbidity, demographic] — exactly 2 aspects each.
+    2. Sample real BHC chunks from the condition's admissions, per-modifier quota.
+    3. Assemble one full prompt per modifier set.
 
-Output: queries_prompts.parquet — one row per condition.
+Output: queries_prompts.parquet — two rows per condition (top + rare comorbidity).
 """
 
 import json
@@ -80,7 +81,7 @@ def build_query_prompts(
     for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
         icd3 = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd3
-        cond_hadm_ids = _get_condition_hadm_ids(con, icd3)
+        cond_hadm_ids = _get_charlson_hadm_ids(con, icd3)
 
         comorbidity_mods = _find_top_comorbidity_modifiers(
             con, icd3, n=query_prompts_cfg.max_modifiers
@@ -135,22 +136,23 @@ def build_query_prompts(
 
 
 def _find_top_comorbidity_modifiers(
-    con, condition_icd3: str, n: int = 3
+    con, condition_charlson_col: str, n: int = 3
 ) -> list[tuple[str, str, float]]:
-    """Most common co-occurring Charlson categories for a condition. Returns (col, label, rate)."""
+    """Most common co-occurring Charlson categories for admissions with given Charlson condition.
+    Excludes the condition's own column. Returns (col, label, rate)."""
     charlson_cols = list(global_cfg.shared_queries_cfg.charlson_labels.keys())
-    col_list = ', '.join(f'AVG(ch.{c}) AS {c}' for c in charlson_cols)
+    other_cols = [c for c in charlson_cols if c != condition_charlson_col]
+    col_list = ', '.join(f'AVG({c}) AS {c}' for c in other_cols)
 
     rates = con.execute(f"""--sql
         SELECT {col_list}
-        FROM mimiciv_hosp.diagnoses_icd di
-        JOIN mimiciv_derived.charlson ch ON di.hadm_id = ch.hadm_id
-        WHERE di.icd_version = 10 AND SUBSTR(di.icd_code, 1, 3) = '{condition_icd3}'
+        FROM mimiciv_derived.charlson
+        WHERE {condition_charlson_col} > 0
     """).fetchone()
 
     scored = [
         (col, global_cfg.shared_queries_cfg.charlson_labels[col], float(rate))
-        for col, rate in zip(charlson_cols, rates, strict=True)
+        for col, rate in zip(other_cols, rates, strict=True)
         if rate and rate > 0.05
     ]
     scored.sort(key=lambda x: x[2], reverse=True)
@@ -160,12 +162,11 @@ def _find_top_comorbidity_modifiers(
 # -- Step 2: sample grounding chunks --
 
 
-def _get_condition_hadm_ids(con, icd3: str) -> set[int]:
+def _get_charlson_hadm_ids(con, charlson_col: str) -> set[int]:
     rows = con.execute(f"""--sql
-        SELECT DISTINCT diagnoses_icd.hadm_id
-        FROM diagnoses_icd
-        WHERE diagnoses_icd.icd_version = 10
-        AND SUBSTR(diagnoses_icd.icd_code, 1, 3) = '{icd3}'
+        SELECT DISTINCT hadm_id
+        FROM mimiciv_derived.charlson
+        WHERE {charlson_col} > 0
     """).fetchall()
     return {r[0] for r in rows}
 
