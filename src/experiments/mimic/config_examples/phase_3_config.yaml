@@ -31,24 +31,19 @@ build_query_prompts:
     that asks for clinical patterns across multiple aspects of care.
     The question must be answerable by reading across many different patients in the dataset - not just the examples above.
 
-    It must explicitly touch at least two of these aspects:
+    The question must address EXACTLY the following aspects — all of them, no others:
     {modifier_list}
 
-    Good examples (2 aspects):
+    Good examples:
     - "For patients admitted with sepsis, how does antibiotic management differ between those with chronic kidney disease and elderly patients over 75?"
     - "For patients with acute myocardial infarction, how do discharge medications and follow-up plans differ between those with chronic kidney disease and elderly patients?"
-
-    Good examples (3 aspects):
-    - "For patients hospitalized with pneumonia, how does clinical management differ between those with chronic kidney disease, those with heart failure, and elderly patients?"
-    - "For patients with decompensated heart failure, how do diuretic regimens and length of stay differ between those with diabetes, those with chronic kidney disease, and elderly patients?"
+    - "In patients hospitalized with pneumonia, how does length of stay and treatment intensity compare between those with heart failure and elderly patients?"
 
     Requirements:
     - Asks about observable patterns in the data, not what "should" be done
     - Can be answered by reading across many discharge notes, not from a textbook
 
-    Keep the question to 1-2 sentences. Return ONLY a JSON object in this exact format:
-    {{"query": "<your question here>", "covered_modifiers": ["<exact modifier text 1>", "<exact modifier text 2>", ...]}}
-    covered_modifiers must list the exact modifier texts copied verbatim from the list above that the question explicitly addresses.
+    Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
 
 gen_queries_llm:
   save_every: 25

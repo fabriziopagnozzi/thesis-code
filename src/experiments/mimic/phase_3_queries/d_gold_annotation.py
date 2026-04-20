@@ -158,19 +158,10 @@ def annotate(
         n_done += 1
         print(f'\n{"=" * 60}\n  Query {n_done}/{total} (idx {i})\n  {query_text}\n{"=" * 60}')
 
-        modifiers_json_str = row.get('modifiers_json', '[]')
-        modifiers_json: list[dict] = json.loads(modifiers_json_str) if modifiers_json_str else []
-
-        covered_str = row.get('covered_modifiers_json', '')
-        if covered_str:
-            covered = set(json.loads(covered_str))
-            modifiers_json = [m for m in modifiers_json if m['text'] in covered]
-            modifiers_json_str = json.dumps(modifiers_json)
-
+        modifiers_json: list[dict] = json.loads(row.get('modifiers_json', '') or '[]')
         if not modifiers_json:
             print('  [WARN] no modifiers_json for this query, skipping')
             continue
-
         aspects = aspects_from_modifiers(modifiers_json)
         print(f'  [aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
 
@@ -208,7 +199,7 @@ def annotate(
                     'query_id': query_id,
                     'icd10_3char': icd3,
                     'condition_name': row.get('condition_name', ''),
-                    'modifiers_json': modifiers_json_str,
+                    'modifiers_json': json.dumps(modifiers_json),
                     'query_text': query_text,
                     'facets_json': json.dumps(facets),
                     'n_facets': len(facets),

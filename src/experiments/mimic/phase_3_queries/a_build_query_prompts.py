@@ -12,7 +12,6 @@ Output: queries_prompts.parquet — one row per condition.
 
 import json
 
-import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
@@ -78,59 +77,57 @@ def build_query_prompts(
     results = []
     skipped = 0
 
-    # OUTER LOOP: one row per condition (N defined by global_cfg.num_conditions)
     for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
         icd3 = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd3
         cond_hadm_ids = _get_condition_hadm_ids(con, icd3)
 
-        # Enumerate all modifiers for this condition
         comorbidity_mods = _find_top_comorbidity_modifiers(
             con, icd3, n=query_prompts_cfg.max_modifiers
         )
-        modifiers = [(disease_label, 'comorbidity') for _, disease_label, _ in comorbidity_mods]
-        modifiers.extend(
-            [
-                (demo_modifier, 'demographic')
-                for demo_modifier in query_prompts_cfg.demographic_modifiers_text
-            ]
-        )
+        charlson = [(label, 'comorbidity') for _, label, _ in comorbidity_mods]
+        demographic = [
+            (text, 'demographic') for text in query_prompts_cfg.demographic_modifiers_text
+        ]
 
-        if not modifiers:
+        if not charlson:
             skipped += 1
             continue
 
-        # Sample grounding chunks with per-modifier quota
-        data_samples = _sample_grounding_chunks_per_modifier(
-            chunks_by_hadm_id, meta_by_hadm_id, cond_hadm_ids, modifiers, con
-        )
-        if not data_samples:
-            skipped += 1
-            continue
+        # Two queries per condition: top + rare comorbidity, each paired with one demographic — exactly 2 aspects each
+        demo = demographic[:1]
+        modifier_sets: list[list[tuple[str, str]]] = [[charlson[0], *demo]]
+        if len(charlson) >= 2:
+            modifier_sets.append([charlson[-1], *demo])
 
-        modifier_list = '\n'.join(f'- {text}' for text, _ in modifiers)
+        for modifiers in modifier_sets:
+            data_samples = _sample_grounding_chunks_per_modifier(
+                chunks_by_hadm_id, meta_by_hadm_id, cond_hadm_ids, modifiers, con,
+                n=query_prompts_cfg.n_grounding_patients,
+            )
+            if not data_samples:
+                continue
 
-        full_prompt = query_prompts_cfg.prompt_template.format(
-            condition=cond_name,
-            modifier_list=modifier_list,
-            chunks_block=_format_chunks_block(data_samples),
-        )
+            modifier_list = '\n'.join(f'- {text}' for text, _ in modifiers)
+            full_prompt = query_prompts_cfg.prompt_template.format(
+                condition=cond_name,
+                modifier_list=modifier_list,
+                chunks_block=_format_chunks_block(data_samples),
+            )
+            results.append(
+                {
+                    'icd10_3char': icd3,
+                    'condition_name': cond_name,
+                    'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
+                    'n_modifiers': len(modifiers),
+                    'n_condition_admissions': len(cond_hadm_ids),
+                    'n_grounding_chunks': len(data_samples),
+                    'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
+                    'full_prompt': full_prompt,
+                }
+            )
 
-        results.append(
-            {
-                'icd10_3char': icd3,
-                'condition_name': cond_name,
-                'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
-                'n_modifiers': len(modifiers),
-                'n_condition_admissions': len(cond_hadm_ids),
-                'n_grounding_chunks': len(data_samples),
-                'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
-                'full_prompt': full_prompt,
-            }
-        )
-    # END OUTER LOOP
-
-    print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} (no modifiers or samples)')
+    print(f'Built {len(results):,} grounded prompts, skipped {skipped:,} conditions (no charlson modifiers)')
     return pl.DataFrame(results)
 
 
@@ -220,47 +217,25 @@ def _sample_grounding_chunks_per_modifier(
     cond_hadm_ids: set[int],
     modifiers: list[tuple[str, str]],
     con,
+    n: int,
 ) -> list[dict]:
-    """Sample 1 representative patient per modifier (condition ∩ modifier), deduplicated."""
+    """Sample up to n patients, round-robin across modifiers for diversity."""
     seen_hadm: set[int] = set()
     samples: list[dict] = []
 
-    for mod_text, mod_type in modifiers:
+    for mod_text, mod_type in modifiers * n:
+        if len(seen_hadm) >= n:
+            break
         mod_hadm_ids = _get_modifier_hadm_ids(con, cond_hadm_ids, mod_text, mod_type)
         if not mod_hadm_ids:
             continue
-        # Candidates not yet sampled
-        candidates = mod_hadm_ids - seen_hadm
-        if not candidates:
-            continue
-        bhc_candidates = _hadm_ids_with_bhc(chunks_by_hadm, candidates)
+        bhc_candidates = _hadm_ids_with_bhc(chunks_by_hadm, mod_hadm_ids - seen_hadm)
         if not bhc_candidates:
             continue
-        # Take the patient with the longest BHC chunk
         chosen_hid = bhc_candidates[0]
         seen_hadm.add(chosen_hid)
         samples.extend(_sample_patient(chosen_hid, chunks_by_hadm, meta_by_hadm))
 
-    return samples
-
-
-def _sample_grounding_chunks(
-    chunks_by_hadm: dict[int, pl.DataFrame],
-    meta_by_hadm: dict[int, dict],
-    hadm_ids: set[int],
-    seed: int = 42,
-) -> list[dict]:
-    candidates = _hadm_ids_with_bhc(chunks_by_hadm, hadm_ids)
-    if not candidates:
-        return []
-    if len(candidates) > query_prompts_cfg.n_grounding_patients:
-        rng = np.random.default_rng(seed)
-        candidates = rng.choice(
-            candidates, size=query_prompts_cfg.n_grounding_patients, replace=False
-        ).tolist()
-    samples = []
-    for hid in candidates:
-        samples.extend(_sample_patient(hid, chunks_by_hadm, meta_by_hadm))
     return samples
 
 
