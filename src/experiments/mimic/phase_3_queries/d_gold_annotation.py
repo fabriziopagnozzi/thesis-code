@@ -476,7 +476,7 @@ def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int,
     return lookup
 
 
-def _modifier_to_snake_label(text: str) -> str:
+def modifier_to_snake_label(text: str) -> str:
     s = re.sub(r'\([^)]*\)', '', text)
     s = re.sub(r'[^a-zA-Z0-9\s]', ' ', s.lower())
     s = re.sub(r'\b(?:the|a|an)\b', '', s)
@@ -486,7 +486,7 @@ def _modifier_to_snake_label(text: str) -> str:
 
 def aspects_from_modifiers(modifiers_json: list[dict]) -> list[_Aspect]:
     return [
-        _Aspect(facet_label=_modifier_to_snake_label(m['text']), description=m['text'])
+        _Aspect(facet_label=modifier_to_snake_label(m['text']), description=m['text'])
         for m in modifiers_json
     ]
 

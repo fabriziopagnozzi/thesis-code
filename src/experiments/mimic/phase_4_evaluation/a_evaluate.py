@@ -1,12 +1,3 @@
-"""
-Step 4.3: Evaluation framework.
-
-Runs all retrieval strategies on annotated queries and computes metrics.
-Primary metric: aspect recall (fraction of facets covered by the retrieved set).
-
-Output: evaluation_results.parquet
-"""
-
 import json
 
 import duckdb
@@ -18,6 +9,7 @@ from experiments.mimic.configs import EvaluateCfg, get_parquet_path, setup_loggi
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
+from experiments.mimic.phase_3_queries.d_gold_annotation import modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
@@ -41,13 +33,15 @@ def run_evaluate(
     if con is None:
         con = connect_mimic_duckdb()
 
-    annotations_df = pl.read_parquet(get_parquet_path('gold_annotations'))
-    annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
-    print(f'Loaded {len(annotations_df):,} annotated queries with facets')
-
     builder = CandidatePoolBuilder(con, cfg=evaluate_cfg, device=evaluate_cfg.device)
 
-    results = evaluate(annotations_df, builder)
+    if evaluate_cfg.gold_mode == 'structural':
+        results = evaluate_structural(builder)
+    else:
+        annotations_df = pl.read_parquet(get_parquet_path('gold_annotations'))
+        annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
+        print(f'Loaded {len(annotations_df):,} annotated queries with facets')
+        results = evaluate_llm(annotations_df, builder)
 
     out_path = get_parquet_path('evaluation_results')
     results.write_parquet(out_path)
@@ -58,7 +52,7 @@ def run_evaluate(
     return results
 
 
-def evaluate(
+def evaluate_llm(
     annotations_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
 ) -> pl.DataFrame:
@@ -100,6 +94,76 @@ def evaluate(
             )
 
     return pl.DataFrame(all_rows)
+
+
+def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
+    divergence_path = get_parquet_path('divergence_stats')
+    if divergence_path.exists():
+        all_queries = pl.read_parquet(divergence_path)
+        queries_df = all_queries.filter(pl.col('passes_filter'))
+    else:
+        queries_df = pl.read_parquet(get_parquet_path('queries'))
+    print(f'Loaded {len(queries_df):,} queries for structural evaluation')
+
+    all_rows = []
+    for curr_query in tqdm(
+        queries_df.iter_rows(named=True), total=len(queries_df), desc='Evaluating (structural)'
+    ):
+        modifiers_json: list[dict] = json.loads(curr_query.get('modifiers_json', '') or '[]')
+        if not modifiers_json:
+            continue
+
+        query_vec = builder.embed_query(curr_query['query_text'])
+        pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
+
+        facets = build_structural_facets(pool, curr_query['charlson_col'], modifiers_json, builder)
+        if not facets:
+            continue
+
+        query_metrics = evaluate_query(
+            pool,
+            query_vec,
+            facets,
+            strategies=evaluate_cfg.strategies,
+            k_values=evaluate_cfg.k_values,
+            lam_values=evaluate_cfg.lam_values,
+        )
+
+        for m in query_metrics:
+            all_rows.append(
+                {
+                    'query_id': curr_query['query_id'],
+                    'charlson_col': curr_query['charlson_col'],
+                    'n_facets': len(facets),
+                    **m,
+                }
+            )
+
+    return pl.DataFrame(all_rows)
+
+
+def build_structural_facets(
+    pool: CandidatePool,
+    charlson_col: str,
+    modifiers_json: list[dict],
+    builder: CandidatePoolBuilder,
+) -> dict[str, list[str]]:
+    """Build gold facets structurally: pool chunks whose hadm_id ∈ condition_hadm_ids ∩ modifier_hadm_ids."""
+    condition_hadm_ids = builder.charlson_col_hadm_ids(charlson_col)
+
+    facets: dict[str, list[str]] = {}
+    for m in modifiers_json:
+        label = modifier_to_snake_label(m['text'])
+        qualifying = condition_hadm_ids & builder.modifier_hadm_ids(m['text'])
+        chunk_ids = [
+            cid
+            for hid, cid in zip(pool.hadm_ids.tolist(), pool.chunk_ids, strict=False)
+            if hid in qualifying
+        ]
+        if chunk_ids:
+            facets[label] = chunk_ids
+
+    return facets
 
 
 def evaluate_query(

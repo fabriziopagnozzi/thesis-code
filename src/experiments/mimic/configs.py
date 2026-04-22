@@ -3,7 +3,7 @@ import io
 import re
 from os import getenv
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 import yaml
@@ -241,6 +241,7 @@ class EvaluateCfg(BaseModel):
     lam_values: list[float]
     prefilter_n: int
     device: str
+    gold_mode: Literal['llm', 'structural'] = 'llm'
 
     @classmethod
     def load(cls) -> EvaluateCfg:
