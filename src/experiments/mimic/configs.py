@@ -55,7 +55,7 @@ def load_global_cfg(
 
 
 load_global_cfg()
-VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
+VECTOR_DB_DIR = MIMIC_IV_DIR / '_results' / global_cfg.vector_db_dir
 
 
 def load_default_config(

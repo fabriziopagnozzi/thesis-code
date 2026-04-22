@@ -3,7 +3,7 @@
 global:
     n_conditions: 17 # num. charlson buckets = 17
     embedding_model: multi-qa-mpnet-base-cos-v1 # or ["abhinand/MedEmbed-large-v0.1", "Simonlee711/Clinical_ModernBERT", ...]
-    vector_db_dir: "_results/_vector_dbs/512_token_max" # relative to src/experiments/mimic
+    vector_db_dir: "_vector_dbs/512_token_max" # relative to src/experiments/mimic
 
     # Per-table result directory overrides (if not listed here, the location is _results/EXP_NAME)
     # result_dir_overrides:
