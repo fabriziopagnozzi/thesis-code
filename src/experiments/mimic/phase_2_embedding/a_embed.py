@@ -4,7 +4,6 @@ from lancedb import connect
 from experiments.mimic.configs import (
     VECTOR_DB_DIR,
     EmbedCfg,
-    col_for_model,
     get_parquet_path,
     global_cfg,
     setup_logging,
@@ -36,7 +35,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         batch_df = metadata_joined.slice(start, end - start)
 
         embeddings = embedder.embed_corpus(chunk_texts[start:end])
-        batch_df = batch_df.with_columns(pl.Series(col_for_model(emb_model), embeddings.tolist()))
+        batch_df = batch_df.with_columns(pl.Series(global_cfg.vector_column, embeddings.tolist()))
 
         if table is None:
             table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')

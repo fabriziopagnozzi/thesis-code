@@ -1,0 +1,189 @@
+# Single master config. Copy to _results/EXP_NAME/_config.yaml and edit.
+# Run each command with EXP_NAME env var to save results under _results/EXP_NAME.
+global:
+    n_conditions: 17 # num. charlson buckets = 17
+    embedding_model: multi-qa-mpnet-base-cos-v1 # or ["abhinand/MedEmbed-large-v0.1", "Simonlee711/Clinical_ModernBERT", ...]
+    vector_db_dir: "_results/_vector_dbs/512_token_max" # relative to src/experiments/mimic
+
+    # Per-table result directory overrides (if not listed here, the location is _results/EXP_NAME)
+    # result_dir_overrides:
+    #     age: _shared_2026-04-13
+    #     charlson: _shared_2026-04-13
+    #     conditions_stats: _shared_2026-04-13
+    #     chunks: _shared_2026-04-13
+    #     admissions_metadata: _shared_2026-04-13
+    #     queries_prompts: _shared_2026-04-13
+    #     queries: _shared_2026-04-13
+    #     divergence_stats: _shared_2026-04-13
+    #     gold_annotations: _shared_2026-04-13
+
+    prefilter_n: 1_000
+    charlson_labels:
+        myocardial_infarct: prior myocardial infarction
+        congestive_heart_failure: congestive heart failure
+        peripheral_vascular_disease: peripheral vascular disease
+        cerebrovascular_disease: cerebrovascular disease
+        dementia: dementia
+        chronic_pulmonary_disease: chronic pulmonary disease (COPD)
+        rheumatic_disease: rheumatic disease
+        peptic_ulcer_disease: peptic ulcer disease
+        mild_liver_disease: mild liver disease
+        severe_liver_disease: severe liver disease (cirrhosis)
+        diabetes_without_cc: diabetes without complications
+        diabetes_with_cc: diabetes with chronic complications
+        paraplegia: hemiplegia or paraplegia
+        renal_disease: chronic kidney disease
+        malignant_cancer: malignancy
+        metastatic_solid_tumor: metastatic cancer
+        aids: HIV/AIDS
+
+# --------------------------------------------------------------------------------------------------------------
+phase_1:
+    conditions_stats:
+        min_admissions: 200
+
+    note_chunking:
+        max_tokens: 512
+        min_tokens: 15
+        stride_tokens: 128
+        keep_sections:
+            - HISTORY OF PRESENT ILLNESS
+            - DISCHARGE MEDICATIONS
+            - DISCHARGE DIAGNOSIS
+        skip_sections:
+            - PERTINENT RESULTS
+            - SEX
+            - SERVICE
+            - ALLERGIES
+            - ATTENDING
+            - SOCIAL HISTORY
+            - FOLLOWUP INSTRUCTIONS
+            - FACILITY
+            - MAJOR SURGICAL OR INVASIVE PROCEDURE
+            - FAMILY HISTORY
+            - MEDICATIONS ON ADMISSION
+            - DISCHARGE DISPOSITION
+            - DISCHARGE CONDITION
+            - DISCHARGE INSTRUCTIONS
+            - PHYSICAL EXAM
+            - PAST MEDICAL HISTORY
+        metadata_only_sections:
+            - CHIEF COMPLAINT
+
+    dedup:
+        boilerplate_sections:
+            - PAST MEDICAL HISTORY
+# --------------------------------------------------------------------------------------------------------------
+phase_2:
+    batch_size: 256
+    commit_every: 16384
+    device: cuda
+# --------------------------------------------------------------------------------------------------------------
+phase_3:
+    build_query_prompts:
+        n_grounding_patients: 6
+        max_modifiers: 3
+
+        high_value_sections:
+            - BRIEF HOSPITAL COURSE
+            - HISTORY OF PRESENT ILLNESS
+            - DISCHARGE DIAGNOSIS
+            - DISCHARGE MEDICATIONS
+
+        demographic_modifiers:
+            - text: "the patient is elderly (age > 75)"
+              column: age
+              op: ">"
+              value: 75
+            - text: "the patient is a young adult (age < 40)"
+              column: age
+              op: "<"
+              value: 40
+
+        prompt_template: |
+            Below are excerpts from real discharge summaries of patients admitted for {condition}.
+
+            <START DISCHARGE SUMMARIES EXAMPLES>
+            {chunks_block}
+            <END DISCHARGE SUMMARIES EXAMPLES>
+
+            The examples above are provided ONLY so you understand what kinds of clinical information the dataset contains.
+            Do NOT generate a question about these specific patients or these specific notes.
+            Using the above as background context only, generate ONE generic question about patients with {condition}
+            that asks for clinical patterns across multiple aspects of care.
+            The question must be answerable by reading across many different patients in the dataset - not just the examples above.
+
+            The question must address EXACTLY the following aspects — all of them, no others:
+            {modifier_list}
+
+            Good examples:
+            - "For patients admitted with sepsis, how does antibiotic management differ between those with chronic kidney disease and elderly patients over 75?"
+            - "For patients with acute myocardial infarction, how do discharge medications and follow-up plans differ between those with chronic kidney disease and elderly patients?"
+            - "In patients hospitalized with pneumonia, how does length of stay and treatment intensity compare between those with heart failure and elderly patients?"
+
+            Requirements:
+            - Asks about observable patterns in the data, not what "should" be done
+            - Can be answered by reading across many discharge notes, not from a textbook
+
+            Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
+
+    gen_queries_llm:
+        save_every: 25
+        model: gemma4-31b-text
+        temperature: 1.0
+        top_p: 0.95
+        top_k: 64
+        think: false
+
+    filter_queries:
+        k_values: [ 5, 10, 20, 30, 100, 500 ]
+        lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+        jaccard_threshold: 0.90
+
+    gold_annotation:
+        model: gemma4-31b-text
+        temperature: 0.40
+        top_p: 0.95
+        top_k: 64
+        think: false
+        stream: false
+        num_ctx: 16_000 # LLM context window
+        num_predict: -1 # -1 == no limits to prediction tokens
+        batch_size: 30 # 30 chunks included in one call
+        # resume_batch_size: 30  # set to OLD batch_size when resuming with a changed batch_size
+        wide_pool_n: 5_000
+        final_pool_n: 1_000
+        min_per_modifier: 50 # minimum number of chunks to be shown to the LLM for each modifier
+        tagging_system_prompt: >-
+            You are a clinical information analyst. You will be given a clinical
+            question, a patient subgroup modifier (a comorbidity or demographic
+            trait on top of the primary diagnosis), and discharge note excerpts
+            from patients who have that modifier. Decide whether each chunk
+            contains substantive evidence of how that modifier affects the
+            clinical picture described in the question.
+        tagging_user_template: |
+            QUESTION: {query_text}
+            PATIENT SUBGROUP MODIFIER: {facet_description}
+
+            For each chunk below, decide whether it contains SUBSTANTIVE evidence of how
+            this subgroup modifier affects the clinical management or outcomes described in the question.
+            Mere mentions of the condition or drug without context are NOT substantive.
+            They must directly provide useful information to answer the given QUESTION.
+
+            <CHUNKS>
+            {chunks_block}
+            </CHUNKS>
+
+            Return a JSON array of relevant chunks only:
+              [{{"chunk_id": "<id>", "reason": "<up to 15 words>"}}, ...]
+            If none relevant: [].
+            Return ONLY the JSON array, nothing else.
+# --------------------------------------------------------------------------------------------------------------
+phase_4:
+    strategies:
+        - top_k
+        - mmr
+        - facility_location
+    k_values: [ 5, 10, 20, 30 ]
+    lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+    device: cuda

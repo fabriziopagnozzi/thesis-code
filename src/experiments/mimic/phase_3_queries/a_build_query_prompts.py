@@ -159,7 +159,7 @@ def _get_modifier_hadm_ids(
 
 
 def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
-    col = global_cfg.shared_queries_cfg.label_to_charlson_col.get(modifier_text)
+    col = global_cfg.label_to_charlson_col.get(modifier_text)
     if col is None:
         return set()
     placeholders = ','.join(str(h) for h in condition_hadm_ids)

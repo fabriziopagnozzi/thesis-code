@@ -1,8 +1,0 @@
-evaluate:
-  strategies:
-    - top_k
-    - mmr
-    - facility_location
-  k_values: [ 5, 10, 20, 30 ]
-  lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
-  device: cuda

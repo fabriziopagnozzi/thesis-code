@@ -177,7 +177,7 @@ class CandidatePoolBuilder:
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
 
         prompts_cfg = BuildQueryPromptsCfg.load()
-        self._charlson_label_to_col_name = global_cfg.shared_queries_cfg.label_to_charlson_col
+        self._charlson_label_to_col_name = global_cfg.label_to_charlson_col
         self._demographic_filters = prompts_cfg.demographic_filters
 
         meta_path = get_parquet_path('admissions_metadata')
@@ -188,16 +188,16 @@ class CandidatePoolBuilder:
         db = lancedb.connect(VECTOR_DB_DIR)
         arrow_table = db.open_table('chunks').to_arrow()
 
-        vec_col = cfg.vector_col
-        print(f'[CandidatePoolBuilder] using vector column: {vec_col!r}')
-        vec_column = arrow_table.column(vec_col)
+        vec_col_name = global_cfg.vector_column
+        print(f'[CandidatePoolBuilder] using vector column: {vec_col_name!r}')
+        vec_column = arrow_table.column(vec_col_name)
         combined = vec_column.combine_chunks()
         dim = combined.type.list_size
         self._corpus_vectors = (
             combined.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
         )
 
-        self._corpus_df = pl.DataFrame(arrow_table.drop(vec_col))
+        self._corpus_df = pl.DataFrame(arrow_table.drop(vec_col_name))
         self._hadm_id_array: NDArray[np.int64] = self._corpus_df['hadm_id'].to_numpy()
         self._chunk_id_to_idx: dict[str, int] = {
             cid: i for i, cid in enumerate(self._corpus_df['chunk_id'].to_list())
@@ -285,7 +285,9 @@ class CandidatePoolBuilder:
         result = set(
             self._con.execute(f"""--sql
                 SELECT DISTINCT hadm_id FROM charlson WHERE {charlson_col} > 0
-            """).pl()['hadm_id'].to_list()
+            """)
+            .pl()['hadm_id']
+            .to_list()
         )
         self._modifier_to_hadm_ids_cache[cache_key] = result
         return result

@@ -13,9 +13,20 @@ from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
 
 
-class SharedQueriesCfg(BaseModel):
+class GlobalCfg(BaseModel):
+    model_config = {'populate_by_name': True, 'extra': 'ignore'}
+
+    num_conditions: PositiveInt = Field(alias='n_conditions')
+    embedding_model: str
+    vector_db_dir: str
     charlson_labels: dict[str, str]
     prefilter_n: int
+    result_dir_overrides: dict[str, str] = {}
+
+    @computed_field
+    @property
+    def vector_column(self) -> str:
+        return col_for_model(self.embedding_model)
 
     @computed_field
     @property
@@ -23,24 +34,13 @@ class SharedQueriesCfg(BaseModel):
         return {v: k for k, v in self.charlson_labels.items()}
 
 
-class GlobalCfg(BaseModel):
-    model_config = {'populate_by_name': True, 'extra': 'ignore'}
-
-    num_conditions: PositiveInt = Field(alias='n_conditions')
-    embedding_model: str
-    vector_db_dir: str
-    shared_queries_cfg: SharedQueriesCfg = Field(alias='phase_3_shared')
-    result_dir_overrides: dict[str, str] = {}
-
-
 exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
 MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / exp_name
-CONFIG_FILES_DIR = MIMIC_RESULTS_DIR / '_configs'
 LOGS_DIR = MIMIC_RESULTS_DIR / '_logs'
 
 
 def load_global_cfg(
-    path: Path = CONFIG_FILES_DIR / 'global_config.yaml',
+    path: Path = MIMIC_RESULTS_DIR / '_config.yaml',
     cfg: GlobalCfg | None = None,
 ):
     global global_cfg
@@ -50,7 +50,7 @@ def load_global_cfg(
 
     with open(path) as f:
         _loaded_cfg = yaml.safe_load(f)
-    global_cfg = GlobalCfg.model_validate(_loaded_cfg)
+    global_cfg = GlobalCfg.model_validate(_loaded_cfg['global'])
     return
 
 
@@ -58,11 +58,12 @@ load_global_cfg()
 VECTOR_DB_DIR = MIMIC_IV_DIR / global_cfg.vector_db_dir
 
 
-def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
-    if path is None:
-        path = CONFIG_FILES_DIR / f'phase_{phase}_config.yaml'
+def load_default_config(
+    phase: int, path: str | Path = MIMIC_RESULTS_DIR / '_config.yaml'
+) -> dict[str, Any]:
     with open(path) as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    return data[f'phase_{phase}']
 
 
 def load_config_from_main(phase: int) -> dict:
@@ -103,7 +104,7 @@ class NoteChunkingCfg(BaseModel):
     metadata_only_sections: set[str]
     max_tokens: int = 512
     stride_tokens: int = 128
-    min_chunk_tokens: int = 15
+    min_chunk_tokens: int = Field(alias='min_tokens', default=128)
 
     @computed_field
     @property
@@ -145,7 +146,7 @@ class EmbedCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EmbedCfg:
-        data = load_default_config(phase=2)['embed']
+        data = load_default_config(phase=2)
         return cls(**data)
 
 
@@ -235,19 +236,15 @@ class GoldAnnotationCfg(BaseModel):
 
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
-    vector_col: str
     strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]
-    prefilter_n: int
     device: str
     gold_mode: Literal['llm', 'structural'] = 'llm'
 
     @classmethod
     def load(cls) -> EvaluateCfg:
-        data = load_default_config(phase=4)['evaluate']
-        data.setdefault('embedding_model', global_cfg.embedding_model)
-        data.setdefault('vector_col', col_for_model(global_cfg.embedding_model))
+        data = load_default_config(phase=4)
         return cls(**data)
 
 

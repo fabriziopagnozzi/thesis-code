@@ -69,7 +69,7 @@ def filter_queries(
     k_values = filter_queries_cfg.k_values
     lam_values = filter_queries_cfg.lam_values
     jaccard_threshold = filter_queries_cfg.jaccard_threshold
-    prefilter_n = global_cfg.shared_queries_cfg.prefilter_n
+    prefilter_n = global_cfg.prefilter_n
 
     results = []
 

@@ -49,7 +49,7 @@ def select_conditions(
         charlson_col, condition_name, n_admissions, mean_comorbidity_count,
         top_comorbidity_mods_json
     """
-    charlson_labels = global_cfg.shared_queries_cfg.charlson_labels
+    charlson_labels = global_cfg.charlson_labels
     all_cols = list(charlson_labels.keys())
 
     rows = []

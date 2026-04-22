@@ -69,7 +69,7 @@ def run_gold_annotation(
     # Load patient metadata for chunk context
     meta_path = get_parquet_path('admissions_metadata')
     patient_meta = (
-        _build_patient_meta(meta_path, global_cfg.shared_queries_cfg.charlson_labels)
+        _build_patient_meta(meta_path, global_cfg.charlson_labels)
         if meta_path.exists()
         else None
     )

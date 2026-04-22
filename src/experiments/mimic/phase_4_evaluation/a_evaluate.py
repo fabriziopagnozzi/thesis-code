@@ -5,7 +5,12 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg, get_parquet_path, setup_logging
+from experiments.mimic.configs import (
+    EvaluateCfg,
+    get_parquet_path,
+    global_cfg,
+    setup_logging,
+)
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
@@ -69,7 +74,7 @@ def evaluate_llm(
 
         query_vec = builder.embed_query(query_text)
 
-        cosine_pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
+        cosine_pool = builder.for_query_cosine(query_vec, n=global_cfg.prefilter_n)
         all_gold_ids = {cid for cids in facets.values() for cid in cids}
         gold_pool = builder.for_gold_chunks(all_gold_ids)
         pool = CandidatePool.merge([cosine_pool, gold_pool])
@@ -114,7 +119,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
             continue
 
         query_vec = builder.embed_query(curr_query['query_text'])
-        pool = builder.for_query_cosine(query_vec, n=evaluate_cfg.prefilter_n)
+        pool = builder.for_query_cosine(query_vec, n=global_cfg.prefilter_n)
 
         facets = build_structural_facets(pool, curr_query['charlson_col'], modifiers_json, builder)
         if not facets:
