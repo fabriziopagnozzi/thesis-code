@@ -26,7 +26,7 @@ if __name__ == '__main__':
     setup_logging()
     parser = argparse.ArgumentParser(description='MIMIC-IV QA Benchmark pipeline')
     parser.add_argument(
-        'phases',
+        '--phases',
         type=int,
         nargs='*',
         default=[1, 2, 3, 4],

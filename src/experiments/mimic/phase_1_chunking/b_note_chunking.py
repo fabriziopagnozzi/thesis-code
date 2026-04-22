@@ -47,12 +47,12 @@ def run_note_chunking(
 
 
 def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
-    top_icd3 = (
+    top_cols = (
         pl.read_parquet(get_parquet_path('conditions_stats'))
-        .head(global_cfg.num_conditions)['icd10_3char']
+        .head(global_cfg.num_conditions)['charlson_col']
         .to_list()
     )
-    placeholders = ','.join(f"'{c}'" for c in top_icd3)
+    or_clause = ' OR '.join(f'{col} > 0' for col in top_cols)
 
     rows = con.execute(f"""--sql
         SELECT DISTINCT
@@ -63,9 +63,8 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
             discharge.text
         FROM bhc
         JOIN discharge ON bhc.note_id = discharge.note_id
-        JOIN diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
-        WHERE diagnoses_icd.icd_version = 10
-        AND SUBSTR(diagnoses_icd.icd_code, 1, 3) IN ({placeholders})
+        JOIN mimiciv_derived.charlson ON discharge.hadm_id = mimiciv_derived.charlson.hadm_id
+        WHERE {or_clause}
     """).fetchall()
 
     all_chunks: list[MimicIVNoteChunk] = []

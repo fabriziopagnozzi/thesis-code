@@ -3,10 +3,8 @@ Step 4.2: Gold facet annotation via two-phase pipeline.
 
 For each query + its candidate pool:
   1. Build facet vocabulary deterministically from the query's modifier list.
-  2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision per chunk per aspect,
-     gated by a HARD structural prior: a chunk is only shown to the LLM for aspect X if its
-     hadm_id belongs to modifier X's hadm_id set (Charlson / age tables).
-  3. Reduce (deterministic): union of relevant chunk_ids per aspect across batches.
+  2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision + "reason" per chunk per aspect, gated by a HARD structural prior: a chunk is only shown to the LLM for aspect X if its hadm_id belongs to modifier X's hadm_id set.
+  3. Reduce: union of relevant chunk_ids per aspect across batches.
 
 Output: gold_annotations.parquet
 """
@@ -102,31 +100,6 @@ def run_gold_annotation(
     return result
 
 
-def _load_prior_decisions(
-    jsonl_path: Path,
-    resume_batch_size: int,
-) -> dict[tuple[int, int, str], list[_TagDecision]]:
-    """Load completed entries keyed by (query_idx, chunk_start, facet_label).
-
-    chunk_start = batch_idx * resume_batch_size — absolute pool position, independent of
-    current batch_size so the cache survives a batch_size change mid-run.
-    """
-    prior: dict[tuple[int, int, str], list[_TagDecision]] = {}
-    if not jsonl_path.exists():
-        return prior
-    with jsonl_path.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            entry = json.loads(line)
-            chunk_start = entry['batch_idx'] * resume_batch_size
-            key = (entry['query_idx'], chunk_start, entry['facet_label'])
-            prior[key] = [_TagDecision.model_validate(d) for d in entry.get('decisions', [])]
-    print(f'[resume] loaded {len(prior)} cached entries from jsonl')
-    return prior
-
-
 def annotate(
     queries_df: pl.DataFrame,
     builder: CandidatePoolBuilder,
@@ -135,7 +108,7 @@ def annotate(
 ) -> pl.DataFrame:
     """Annotate all queries.
     Returns DataFrame with columns:
-        query_id, icd10_3char, condition_name, modifiers_json, query_text,
+        query_id, charlson_col, condition_name, modifiers_json, query_text,
         facets_json, n_facets, n_gold_chunks
     """
     out_path = get_parquet_path('gold_annotations')
@@ -150,7 +123,7 @@ def annotate(
     n_done = len(done_texts)
 
     for i, row in enumerate(queries_df.iter_rows(named=True)):
-        icd3 = row['icd10_3char']
+        charlson_col = row['charlson_col']
         query_text = row['query_text']
         if query_text in done_texts:
             continue
@@ -166,13 +139,18 @@ def annotate(
         print(f'  [aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
 
         # Precompute structural prior: hadm_id set per modifier-facet
+        # Intersect with condition hadm_ids so gold chunks come from patients
+        # who have BOTH the primary condition AND the modifier.
+        condition_hadm_ids = builder.charlson_col_hadm_ids(charlson_col)
         aspect_hadm_sets: dict[str, set[int]] = {}
         for aspect, modifier in zip(aspects, modifiers_json, strict=True):
-            aspect_hadm_sets[aspect.facet_label] = builder.modifier_hadm_ids(modifier['text'])
+            aspect_hadm_sets[aspect.facet_label] = (
+                builder.modifier_hadm_ids(modifier['text']) & condition_hadm_ids
+            )
 
         query_vec = builder.embed_query(query_text)
 
-        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets)
+        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets, condition_hadm_ids)
 
         facets = annotate_query(
             query_text,
@@ -190,14 +168,14 @@ def annotate(
         for cids in facets.values():
             all_gold_chunks.update(cids)
 
-        query_id = f'{icd3}_{i}'
+        query_id = f'{charlson_col}_{i}'
         query_id = query_id.replace(' ', '_')[:120]
 
         new_row = pl.DataFrame(
             [
                 {
                     'query_id': query_id,
-                    'icd10_3char': icd3,
+                    'charlson_col': charlson_col,
                     'condition_name': row.get('condition_name', ''),
                     'modifiers_json': json.dumps(modifiers_json),
                     'query_text': query_text,
@@ -223,15 +201,26 @@ def _build_stratified_pool(
     builder: CandidatePoolBuilder,
     query_vec: np.ndarray,
     aspect_hadm_sets: dict[str, set[int]],
+    condition_hadm_ids: set[int],
 ) -> CandidatePool:
-    """Wide cosine pool with guaranteed per-modifier chunk quota, capped at final_pool_n.
+    """Wide cosine pool restricted to the primary condition, with per-modifier quota.
 
-    1. Fetch top-wide_pool_n by cosine similarity (already sorted descending).
+    1. Fetch top-wide_pool_n by cosine similarity, then keep only chunks from
+       condition patients (hard filter — non-condition chunks would be skipped by
+       the per-facet prior anyway, so no information is lost).
     2. For each modifier, reserve up to min_per_modifier chunks from that modifier's hadm_id set.
     3. Fill remaining slots from the top of the cosine ranking.
     4. Cap at final_pool_n and return.
     """
-    wide_pool = builder.for_query_cosine(query_vec, n=gold_annotation_cfg.wide_pool_n)
+    wide_pool_raw = builder.for_query_cosine(query_vec, n=gold_annotation_cfg.wide_pool_n)
+    cond_indices = np.array(
+        [i for i, h in enumerate(wide_pool_raw.hadm_ids.tolist()) if h in condition_hadm_ids],
+        dtype=np.intp,
+    )
+    wide_pool = wide_pool_raw.slice(cond_indices)
+    print(
+        f'  [pool] condition filter: {wide_pool.n}/{wide_pool_raw.n} chunks from condition patients'
+    )
     hadm_list = wide_pool.hadm_ids.tolist()
 
     guaranteed: set[int] = set()
@@ -376,12 +365,12 @@ def tag_batch_for_aspect(
         result = generate_json(
             prompt,
             system=gold_annotation_cfg.tagging_system_prompt,
-            model=gold_annotation_cfg.model or None,
+            model=gold_annotation_cfg.model,
+            num_ctx=gold_annotation_cfg.num_ctx,
+            num_predict=gold_annotation_cfg.num_predict,
             temperature=gold_annotation_cfg.temperature,
             top_p=gold_annotation_cfg.top_p,
             top_k=gold_annotation_cfg.top_k,
-            num_ctx=gold_annotation_cfg.num_ctx,
-            num_predict=gold_annotation_cfg.num_predict,
             think=gold_annotation_cfg.think,
             stream=gold_annotation_cfg.stream,
         )
@@ -418,6 +407,31 @@ def tag_batch_for_aspect(
         f'(~{prompt_chars // 4} tokens)'
     )
     return decisions
+
+
+def _load_prior_decisions(
+    jsonl_path: Path,
+    resume_batch_size: int,
+) -> dict[tuple[int, int, str], list[_TagDecision]]:
+    """Load completed entries keyed by (query_idx, chunk_start, facet_label).
+
+    chunk_start = batch_idx * resume_batch_size — absolute pool position, independent of
+    current batch_size so the cache survives a batch_size change mid-run.
+    """
+    prior: dict[tuple[int, int, str], list[_TagDecision]] = {}
+    if not jsonl_path.exists():
+        return prior
+    with jsonl_path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            entry = json.loads(line)
+            chunk_start = entry['batch_idx'] * resume_batch_size
+            key = (entry['query_idx'], chunk_start, entry['facet_label'])
+            prior[key] = [_TagDecision.model_validate(d) for d in entry.get('decisions', [])]
+    print(f'[resume] loaded {len(prior)} cached entries from jsonl')
+    return prior
 
 
 def _format_chunk_batch(

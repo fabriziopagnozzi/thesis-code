@@ -67,7 +67,7 @@ def evaluate(
     for row in tqdm(
         annotations_df.iter_rows(named=True), total=len(annotations_df), desc='Evaluating'
     ):
-        icd3 = row['icd10_3char']
+        charlson_col = row['charlson_col']
         query_text = row['query_text']
         facets = json.loads(row['facets_json'])
         if not facets:
@@ -93,7 +93,7 @@ def evaluate(
             all_rows.append(
                 {
                     'query_id': row['query_id'],
-                    'icd10_3char': icd3,
+                    'charlson_col': charlson_col,
                     'n_facets': row['n_facets'],
                     **m,
                 }

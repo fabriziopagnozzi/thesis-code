@@ -277,5 +277,18 @@ class CandidatePoolBuilder:
         self._modifier_to_hadm_ids_cache[modifier_text] = set()
         return set()
 
+    def charlson_col_hadm_ids(self, charlson_col: str) -> set[int]:
+        """hadm_ids where the given Charlson column > 0. Cached."""
+        cache_key = f'__col__{charlson_col}'
+        if cache_key in self._modifier_to_hadm_ids_cache:
+            return self._modifier_to_hadm_ids_cache[cache_key]
+        result = set(
+            self._con.execute(f"""--sql
+                SELECT DISTINCT hadm_id FROM charlson WHERE {charlson_col} > 0
+            """).pl()['hadm_id'].to_list()
+        )
+        self._modifier_to_hadm_ids_cache[cache_key] = result
+        return result
+
     def embed_query(self, query_text: str) -> NDArray[np.float32]:
         return self._embedder.embed_corpus([query_text])[0]

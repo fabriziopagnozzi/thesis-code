@@ -1,6 +1,5 @@
-"""Step 2.1: Build contextual embedding prefixes and generate embeddings."""
-
 import polars as pl
+from lancedb import connect
 
 from experiments.mimic.configs import (
     VECTOR_DB_DIR,
@@ -10,81 +9,47 @@ from experiments.mimic.configs import (
     global_cfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
 embed_cfg = EmbedCfg.load()
 
 
 def run_embed(cfg: EmbedCfg | None = None) -> None:
-    import lancedb
-
     global embed_cfg
     if cfg is not None:
         embed_cfg = cfg
 
     chunks = pl.read_parquet(get_parquet_path('chunks'))
     metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
+    emb_model = global_cfg.embedding_model
 
-    relevant_hadm_ids = get_top_hadm_ids()
-    n_before = len(chunks)
-    chunks = chunks.filter(pl.col('hadm_id').is_in(relevant_hadm_ids))
-    print(
-        f'Filtered to {len(chunks):,}/{n_before:,} chunks ({global_cfg.num_conditions} conditions)'
-    )
+    print(f'Embedding full corpus: {len(chunks):,} chunks. Model: {emb_model}')
 
-    joined, texts = prepare_texts(chunks, metadata)
-
-    print(f'Embedding with {embed_cfg.model_name}...')
-    embedder = Embedder(
-        embed_cfg.model_name,
-        device=embed_cfg.device,
-        batch_size=embed_cfg.batch_size,
-    )
-
-    db = lancedb.connect(VECTOR_DB_DIR)
+    embedder = Embedder(emb_model, **embed_cfg.model_dump(exclude={'commit_every'}))
+    db = connect(VECTOR_DB_DIR)
     table = None
-    total = len(texts)
+    (metadata_joined, chunk_texts) = prepare_texts(chunks, metadata)
+    n_chunks = len(chunk_texts)
 
-    for start in range(0, total, embed_cfg.commit_every):
-        end = min(start + embed_cfg.commit_every, total)
-        batch_texts = texts[start:end]
-        batch_df = joined.slice(start, end - start)
+    for start in range(0, n_chunks, embed_cfg.commit_every):
+        end = min(start + embed_cfg.commit_every, n_chunks)
+        batch_df = metadata_joined.slice(start, end - start)
 
-        embeddings = embedder.embed_corpus(batch_texts)
-        batch_df = batch_df.with_columns(pl.Series(col_for_model(global_cfg.embedding_model)), embeddings.tolist())
+        embeddings = embedder.embed_corpus(chunk_texts[start:end])
+        batch_df = batch_df.with_columns(pl.Series(col_for_model(emb_model), embeddings.tolist()))
 
         if table is None:
             table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')
         else:
             table.add(batch_df.to_arrow())
 
-        print(f'  Committed {end:,}/{total:,} chunks')
+        print(f'  Committed {end:,}/{n_chunks:,} chunks')
+    # END for start in range(0, n_chunks, embed_cfg.commit_every)
 
-    print(f'Saved {total:,} rows to {VECTOR_DB_DIR}/chunks')
-
-
-def build_contextual_prefix(meta_row: dict) -> str:
-    age_grp = get_age_group(meta_row.get('age'))
-    gender = meta_row.get('gender', 'unknown')
-    gender_label = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown gender'
-    race = meta_row.get('race', 'unknown')
-    primary_dx = meta_row.get('primary_icd_description', 'unknown condition')
-    chief_complaint = meta_row.get('chief_complaint')
-    top_icds = meta_row.get('top_icd_descriptions', '')
-
-    prefix = f'{age_grp.capitalize()} {gender_label} ({race}) admitted for {primary_dx}.'
-    if chief_complaint:
-        prefix += f'\nChief complaint: {chief_complaint}.'
-    if top_icds:
-        prefix += f'\nComorbidities: {top_icds}.'
-    return prefix
+    print(f'Saved {n_chunks:,} rows to {VECTOR_DB_DIR}/chunks')
 
 
-def prepare_texts(
-    chunks: pl.DataFrame,
-    metadata: pl.DataFrame,
-) -> tuple[pl.DataFrame, list[str]]:
+def prepare_texts(chunks: pl.DataFrame, metadata: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
     meta_cols = [
         'hadm_id',
         'age',
@@ -104,20 +69,21 @@ def prepare_texts(
     return joined, texts
 
 
-def get_top_hadm_ids() -> set[int]:
-    """Return hadm_ids that have any ICD-10 diagnosis matching a top condition."""
-    conditions = pl.read_parquet(get_parquet_path('conditions_stats'))
-    top_icd3 = conditions.head(global_cfg.num_conditions)['icd10_3char'].to_list()
-    placeholders = ','.join(f"'{c}'" for c in top_icd3)
+def build_contextual_prefix(meta_row: dict) -> str:
+    age_grp = get_age_group(meta_row.get('age'))
+    gender = meta_row.get('gender', 'unknown')
+    gender_label = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown gender'
+    race = meta_row.get('race', 'unknown')
+    primary_dx = meta_row.get('primary_icd_description', 'unknown condition')
+    chief_complaint = meta_row.get('chief_complaint')
+    top_icds = meta_row.get('top_icd_descriptions', '')
 
-    con = connect_mimic_duckdb()
-    rows = con.execute(f"""--sql
-        SELECT DISTINCT diagnoses_icd.hadm_id
-        FROM diagnoses_icd
-        WHERE diagnoses_icd.icd_version = 10
-        AND SUBSTR(diagnoses_icd.icd_code, 1, 3) IN ({placeholders})
-    """).fetchall()
-    return {r[0] for r in rows}
+    prefix = f'{age_grp.capitalize()} {gender_label} ({race}) admitted for {primary_dx}.'
+    if chief_complaint:
+        prefix += f'\nChief complaint: {chief_complaint}.'
+    if top_icds:
+        prefix += f'\nComorbidities: {top_icds}.'
+    return prefix
 
 
 def get_age_group(age: float | None) -> str:

@@ -1,8 +1,6 @@
 .vscode/settings.json
 *.code-workspace
-**/_*/
-**/_*.sql
-.cached_embeddings/
+**/_*
 datasets/full-data/
 results/
 data/

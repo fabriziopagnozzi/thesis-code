@@ -139,7 +139,6 @@ class DedupCfg(BaseModel):
 
 # -- Phase 2 --
 class EmbedCfg(BaseModel):
-    model_name: str = ''
     batch_size: int
     commit_every: int
     device: str
@@ -147,7 +146,6 @@ class EmbedCfg(BaseModel):
     @classmethod
     def load(cls) -> EmbedCfg:
         data = load_default_config(phase=2)['embed']
-        data.setdefault('model_name', global_cfg.embedding_model)
         return cls(**data)
 
 
