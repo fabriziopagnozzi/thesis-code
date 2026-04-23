@@ -10,13 +10,14 @@ Conventions:
     - lam:          relevance-diversity trade-off (1.0 = pure relevance)
 """
 
+import heapq
 from collections.abc import Callable
 from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
-type ScoringFunction = Literal['top_k', 'mmr', 'gmmr', 'fps', 'facility_location']
+type ScoringFunction = Literal['top_k', 'mmr', 'gmmr', 'fps', 'fac_loc']
 
 
 def top_k(
@@ -40,9 +41,6 @@ def mmr(
     Maximal Marginal Relevance.
     score(i) = lam * cos(q, i) - (1-lam) * max_{j in W} cos(i, j)
     W = last `window` selected items (None = all selected).
-
-    Vectorized: for window=None, tracks running max similarity to selected set
-    with O(k*n) numpy ops instead of a Python inner loop.
     """
     n = len(sim_to_query)
     k = min(k, n)
@@ -82,7 +80,6 @@ def gmmr(
     """
     Geometric MMR (from DF-RAG).
     score(c) = lam * cos(q, c) + (1-lam) * ||c - centroid(S)||
-
     Distance is Euclidean on (possibly normalized) embeddings:
     ||c - centroid|| = sqrt(2 - 2*cos(c, centroid)) for unit vectors.
     """
@@ -126,17 +123,15 @@ def fps(
     n = len(embeddings)
     k = min(k, n)
 
-    # Seed with most relevant point
     seed = int(np.argmax(sim_to_query)) if sim_to_query is not None else 0
 
     selected = [seed]
-    # Track min squared-Euclidean distance to selected set
     min_dists = np.full(n, np.inf)
 
     for _ in range(k - 1):
         last = selected[-1]
         diff = embeddings - embeddings[last]
-        dists = np.sum(diff * diff, axis=1)  # squared Euclidean
+        dists = np.sum(diff * diff, axis=1)
         min_dists = np.minimum(min_dists, dists)
         min_dists[selected] = -1.0  # exclude already selected
         best = int(np.argmax(min_dists))
@@ -145,36 +140,75 @@ def fps(
     return np.array(selected, dtype=np.intp)
 
 
-def facility_location(
+# def fac_loc(
+#     sim_to_query: NDArray[np.float32],
+#     k: int,
+#     sim_matrix: NDArray[np.float32],
+#     lam: float = 0.5,
+#     **_kwargs: object,
+# ) -> NDArray[np.intp]:
+#     n = len(sim_to_query)
+#     k = min(k, n)
+
+#     selected: list[int] = []
+#     mask = np.ones(n, dtype=bool)
+#     m = np.zeros(n, dtype=np.float64)
+
+#     for _ in range(k):
+#         # Marginal coverage gain for each candidate j:
+#         # new_cov[j] = (1/n) * sum_i max(0, sim_matrix[i,j] - m[i])
+#         gains = np.maximum(0, sim_matrix - m[:, None])  # (n, n)
+#         marginal_cov = gains.sum(axis=0) / n  # (n,)
+
+#         scores = lam * sim_to_query + (1 - lam) * marginal_cov
+#         scores[~mask] = -np.inf
+#         best = int(np.argmax(scores))
+
+#         selected.append(best)
+#         mask[best] = False
+#         m = np.maximum(m, sim_matrix[:, best])
+
+#     return np.array(selected, dtype=np.intp)
+
+
+def fac_loc(
     sim_to_query: NDArray[np.float32],
     k: int,
     sim_matrix: NDArray[np.float32],
     lam: float = 0.5,
     **_kwargs: object,
 ) -> NDArray[np.intp]:
-    """
-    Greedy facility-location (coverage) selection.
-    """
     n = len(sim_to_query)
+    if n == 0:
+        return np.array([], dtype=np.intp)
+
     k = min(k, n)
     selected: list[int] = []
-    mask = np.ones(n, dtype=bool)
-    # m[i] = max similarity of item i to any selected item
     m = np.zeros(n, dtype=np.float64)
 
-    for _ in range(k):
-        # Marginal coverage gain for each candidate j:
-        # new_cov[j] = (1/n) * sum_i max(0, sim_matrix[i,j] - m[i])
-        gains = np.maximum(0, sim_matrix - m[:, None])  # (n, n)
-        marginal_cov = gains.sum(axis=0) / n  # (n,)
+    initial_cov = np.maximum(0, sim_matrix).sum(axis=0) / n
+    initial_gains = lam * sim_to_query + (1 - lam) * initial_cov
 
-        scores = lam * sim_to_query + (1 - lam) * marginal_cov
-        scores[~mask] = -np.inf
-        best = int(np.argmax(scores))
+    # 2. max-heap
+    queue = [(-initial_gains[i], i, 0) for i in range(n)]
+    heapq.heapify(queue)
 
-        selected.append(best)
-        mask[best] = False
-        m = np.maximum(m, sim_matrix[:, best])
+    # 3. Lazy Greedy Selection
+    for step in range(k):
+        while True:
+            # item with the highest historical gain
+            _, node, last_update = heapq.heappop(queue)
+
+            # If we already updated this item's gain during the current step,
+            # submodularity guarantees it is the absolute best possible choice.
+            if last_update == step:
+                selected.append(node)
+                m = np.maximum(m, sim_matrix[:, node])
+                break
+
+            marginal_cov = np.sum(np.maximum(0, sim_matrix[:, node] - m)) / n
+            new_gain = lam * sim_to_query[node] + (1 - lam) * marginal_cov
+            heapq.heappush(queue, (-new_gain, node, step))
 
     return np.array(selected, dtype=np.intp)
 
@@ -184,7 +218,7 @@ STRATEGIES: dict[ScoringFunction, Callable[..., NDArray[np.intp]]] = {
     'mmr': mmr,
     'gmmr': gmmr,
     'fps': fps,
-    'facility_location': facility_location,
+    'fac_loc': fac_loc,
 }
 
 

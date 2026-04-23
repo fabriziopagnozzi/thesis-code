@@ -9,6 +9,7 @@ from uuid import uuid4
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
 
+from experiments.mimic.utils import CHARLSON_LABELS, col_for_model
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
 
@@ -18,8 +19,7 @@ class GlobalCfg(BaseModel):
 
     num_conditions: PositiveInt = Field(alias='n_conditions')
     embedding_model: str
-    vector_db_dir: str
-    charlson_labels: dict[str, str]
+    chunks_vec_table: str
     prefilter_n: int
     result_dir_overrides: dict[str, str] = {}
 
@@ -30,17 +30,24 @@ class GlobalCfg(BaseModel):
 
     @computed_field
     @property
+    def charlson_labels(self) -> dict[str, str]:
+        return CHARLSON_LABELS
+
+    @computed_field
+    @property
     def label_to_charlson_col(self) -> dict[str, str]:
-        return {v: k for k, v in self.charlson_labels.items()}
+        return {v: k for k, v in CHARLSON_LABELS.items()}
 
 
 exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
-MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results' / exp_name
-LOGS_DIR = MIMIC_RESULTS_DIR / '_logs'
+MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
+VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
+MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / exp_name
+LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
 
 
 def load_global_cfg(
-    path: Path = MIMIC_RESULTS_DIR / '_config.yaml',
+    path: Path = MIMIC_EXPERIMENT_DIR / '_config.yaml',
     cfg: GlobalCfg | None = None,
 ):
     global global_cfg
@@ -55,11 +62,10 @@ def load_global_cfg(
 
 
 load_global_cfg()
-VECTOR_DB_DIR = MIMIC_IV_DIR / '_results' / global_cfg.vector_db_dir
 
 
 def load_default_config(
-    phase: int, path: str | Path = MIMIC_RESULTS_DIR / '_config.yaml'
+    phase: int, path: str | Path = MIMIC_EXPERIMENT_DIR / '_config.yaml'
 ) -> dict[str, Any]:
     with open(path) as f:
         data = yaml.safe_load(f)
@@ -78,8 +84,8 @@ def load_config_from_main(phase: int) -> dict:
 def get_result_dir(table: str) -> Path:
     subdir = global_cfg.result_dir_overrides.get(table)
     if subdir is not None:
-        return MIMIC_IV_DIR / '_results' / subdir
-    return MIMIC_RESULTS_DIR
+        return MIMIC_RESULTS_DIR / subdir
+    return MIMIC_EXPERIMENT_DIR
 
 
 def get_parquet_path(table: str) -> Path:
@@ -246,11 +252,6 @@ class EvaluateCfg(BaseModel):
     def load(cls) -> EvaluateCfg:
         data = load_default_config(phase=4)
         return cls(**data)
-
-
-def col_for_model(model_name: str) -> str:
-    safe = re.sub(r'[/\-.]', '_', model_name)
-    return f'vector_{safe}'
 
 
 def setup_logging() -> None:

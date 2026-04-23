@@ -1,7 +1,7 @@
 """
 Step 4.1: Divergence pre-filter.
 
-For each query, run top_k and facility_location on its condition's candidate
+For each query, run top_k and fac_loc on its condition's candidate
 pool. Keep only queries where coverage diverges from top_k
 """
 
@@ -124,7 +124,7 @@ def compute_divergence(
 
     topk_idx = select('top_k', sim_to_query=sim_to_query, k=k)
     fl_idx = select(
-        'facility_location',
+        'fac_loc',
         sim_to_query=sim_to_query,
         k=k,
         sim_matrix=sim_matrix,

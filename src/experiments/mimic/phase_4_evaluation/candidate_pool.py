@@ -18,7 +18,7 @@ from experiments.mimic.configs import (
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
-MAX_CANDIDATES = 15000
+MAX_CANDIDATES = 100_000
 
 
 @dataclass
@@ -56,7 +56,7 @@ def run_retrieval(
 
     results = []
     for strategy in strategies:
-        needs_lambda = strategy in ('mmr', 'gmmr', 'facility_location')
+        needs_lambda = strategy in ('mmr', 'gmmr', 'fac_loc')
         lams = lam_values if needs_lambda else [None]
 
         for lam in lams:
@@ -108,7 +108,7 @@ class CandidatePool:
         if self._sim_matrix is None:
             if self.n > MAX_CANDIDATES:
                 raise ValueError(
-                    'Exceeded size {MAX_SIM_MATRIX_SIZE}. Apply prefilter_n to reduce pool size first.'
+                    'Exceeded size {MAX_CANDIDATES}. Apply prefilter_n to reduce pool size first.'
                 )
 
             self._sim_matrix = self.vectors @ self.vectors.T
@@ -186,11 +186,11 @@ class CandidatePoolBuilder:
         import lancedb
 
         db = lancedb.connect(VECTOR_DB_DIR)
-        arrow_table = db.open_table('chunks').to_arrow()
-
+        arrow_table = db.open_table(global_cfg.chunks_vec_table).to_arrow()
         vec_col_name = global_cfg.vector_column
-        print(f'[CandidatePoolBuilder] using vector column: {vec_col_name!r}')
         vec_column = arrow_table.column(vec_col_name)
+        print(f'[CandidatePoolBuilder] using vector column: {vec_col_name!r}')
+
         combined = vec_column.combine_chunks()
         dim = combined.type.list_size
         self._corpus_vectors = (
@@ -202,6 +202,7 @@ class CandidatePoolBuilder:
         self._chunk_id_to_idx: dict[str, int] = {
             cid: i for i, cid in enumerate(self._corpus_df['chunk_id'].to_list())
         }
+        self._condition_indices_cache: dict[str, NDArray[np.intp]] = {}
 
     def for_query_cosine(
         self,
@@ -213,6 +214,46 @@ class CandidatePoolBuilder:
         take = min(n, len(sim))
         top_idx = np.argsort(sim)[::-1][:take].copy()
         top_idx_list = top_idx.tolist()
+        return CandidatePool(
+            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
+            hadm_ids=self._hadm_id_array[top_idx],
+            vectors=self._corpus_vectors[top_idx],
+            texts=[self._corpus_df['text'][i] for i in top_idx_list],
+            section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
+            metadata_df=self._corpus_df[top_idx_list],
+        )
+
+    def for_query_cosine_condition(
+        self,
+        query_vec: NDArray[np.float32],
+        charlson_col: str,
+        n: int,
+    ) -> CandidatePool:
+        """Top-N cosine pool restricted to admissions with the given Charlson condition.
+
+        Filtered index per charlson_col is computed once and cached.
+        """
+        if charlson_col not in self._condition_indices_cache:
+            condition_hadm_ids = self.charlson_col_hadm_ids(charlson_col)
+            mask = np.isin(self._hadm_id_array, np.fromiter(condition_hadm_ids, dtype=np.int64))
+            self._condition_indices_cache[charlson_col] = np.where(mask)[0].astype(np.intp)
+
+        filtered_indices = self._condition_indices_cache[charlson_col]
+        if filtered_indices.size == 0:
+            return CandidatePool(
+                chunk_ids=[],
+                hadm_ids=np.empty(0, dtype=np.int64),
+                vectors=np.empty((0, self._corpus_vectors.shape[1]), dtype=np.float32),
+                texts=[],
+                section_names=[],
+                metadata_df=self._corpus_df.clear(),
+            )
+
+        sim = self._corpus_vectors[filtered_indices] @ query_vec
+        top_local = np.argsort(sim)[::-1][: min(n, len(sim))].copy()
+        top_idx = filtered_indices[top_local]
+        top_idx_list = top_idx.tolist()
+
         return CandidatePool(
             chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
             hadm_ids=self._hadm_id_array[top_idx],
@@ -237,6 +278,7 @@ class CandidatePoolBuilder:
                 metadata_df=self._corpus_df.clear(),
             )
         idx_list = indices.tolist()
+
         return CandidatePool(
             chunk_ids=[self._corpus_df['chunk_id'][i] for i in idx_list],
             hadm_ids=self._hadm_id_array[indices],

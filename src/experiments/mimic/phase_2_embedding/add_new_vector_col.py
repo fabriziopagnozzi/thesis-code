@@ -9,7 +9,7 @@ import argparse
 import lancedb
 import pyarrow as pa
 
-from experiments.mimic.configs import VECTOR_DB_DIR, setup_logging
+from experiments.mimic.configs import VECTOR_DB_DIR, global_cfg, setup_logging
 from helpers.embedder import Embedder
 
 
@@ -18,7 +18,7 @@ def add_vector_column(
     col_name: str | None = None,
     batch_size: int = 256,
     device: str = 'cpu',
-    table_name: str = 'chunks',
+    table_name: str = global_cfg.chunks_vec_table,
     text_col: str = 'text',
 ) -> None:
     if col_name is None:

@@ -14,7 +14,7 @@ from experiments.mimic.configs import (
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
-from experiments.mimic.phase_3_queries.d_gold_annotation import modifier_to_snake_label
+from experiments.mimic.utils import modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
@@ -108,6 +108,8 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
         queries_df = all_queries.filter(pl.col('passes_filter'))
     else:
         queries_df = pl.read_parquet(get_parquet_path('queries'))
+    if 'query_id' not in queries_df.columns:
+        queries_df = queries_df.with_row_index('query_id')
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
     all_rows = []
@@ -119,7 +121,9 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
             continue
 
         query_vec = builder.embed_query(curr_query['query_text'])
-        pool = builder.for_query_cosine(query_vec, n=global_cfg.prefilter_n)
+        pool = builder.for_query_cosine_condition(
+            query_vec, curr_query['charlson_col'], n=global_cfg.prefilter_n
+        )
 
         facets = build_structural_facets(pool, curr_query['charlson_col'], modifiers_json, builder)
         if not facets:
@@ -275,14 +279,12 @@ def weighted_aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[
 
 
 def gold_precision(selected_chunk_ids: set[str], all_gold_ids: set[str]) -> float:
-    """Fraction of retrieved chunks that are gold."""
     if not selected_chunk_ids:
         return 0.0
     return len(selected_chunk_ids & all_gold_ids) / len(selected_chunk_ids)
 
 
 def gold_recall(selected_chunk_ids: set[str], all_gold_ids: set[str], pool_ids: set[str]) -> float:
-    """Fraction of gold chunks (that exist in the pool) that are retrieved."""
     reachable_gold = all_gold_ids & pool_ids
     if not reachable_gold:
         return 0.0
@@ -322,7 +324,7 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
 
 
 def store_best_per_metric(results_df: pl.DataFrame) -> None:
-    """For each (k, lam) pair and each metric, find the strategy with the best mean value."""
+    """For each (k, lam) pair and each metric, find the best strategy among top_k, mmr, fl."""
     metric_cols = ['AR', 'WAR', 'GP', 'GR']
 
     summary = results_df.group_by('k', 'lam', 'strategy').agg(
@@ -332,23 +334,50 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
         pl.col('gold_recall').mean().alias('GR'),
     )
 
+    # top_k has lam=null — it must compete against mmr/fl at every lambda value
+    top_k_s = summary.filter(pl.col('strategy') == 'top_k').drop('lam')
+    others_s = summary.filter(pl.col('strategy') != 'top_k')
+
+    # best_per_metric: at each (k, lam), top_k@k vs mmr@(k,lam) vs fl@(k,lam)
+    top_k_expanded = others_s.select('k', 'lam').unique().join(top_k_s, on='k', how='left')
+    per_k_lam = pl.concat([others_s, top_k_expanded], how='diagonal_relaxed')
+
     best_rows = []
-    for (k, lam), group in summary.group_by('k', 'lam'):
+    for (k, lam), group in per_k_lam.group_by('k', 'lam'):
         for col in metric_cols:
-            best = group.sort(col, descending=True).row(0, named=True)
-            best_rows.append({'k': k, 'lam': lam, 'best_for': col, **best})
+            best_val = group[col].max()
+            tied = group.filter(pl.col(col) == best_val)
+            best_rows.append(
+                {
+                    'k': k,
+                    'lam': lam,
+                    'best_for': col,
+                    'strategy': tied['strategy'].to_list(),
+                    **{c: best_val if c == col else tied[c][0] for c in metric_cols},
+                }
+            )
 
     best_df = pl.DataFrame(best_rows).sort('k', 'lam', 'best_for')
     best_path = get_parquet_path('evaluation_best_per_metric')
     best_df.write_parquet(best_path)
     print(f'Saved best-per-metric summary to {best_path}')
 
-    # For each fixed lambda, find the best (strategy, k) pair per metric
+    # best_fixed_lam: for each lam, best (strategy, k) — top_k competes at all k values
     best_fixed_lam_rows = []
-    for (lam,), group in summary.group_by('lam'):
+    for (lam,), group in others_s.group_by('lam'):
+        combined = pl.concat([group, top_k_s], how='diagonal_relaxed')
         for col in metric_cols:
-            best = group.sort(col, descending=True).row(0, named=True)
-            best_fixed_lam_rows.append({'lam': lam, 'best_for': col, **best})
+            best_val = combined[col].max()
+            tied = combined.filter(pl.col(col) == best_val)
+            best_fixed_lam_rows.append(
+                {
+                    'lam': lam,
+                    'best_for': col,
+                    'strategy': tied['strategy'].to_list(),
+                    'k': tied['k'].to_list(),
+                    **{c: best_val if c == col else tied[c][0] for c in metric_cols},
+                }
+            )
 
     best_fixed_lam_df = pl.DataFrame(best_fixed_lam_rows).sort('lam', 'best_for')
     best_fixed_lam_path = get_parquet_path('evaluation_best_per_metric_fixed_lam')

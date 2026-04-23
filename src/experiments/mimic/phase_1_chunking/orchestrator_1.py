@@ -3,7 +3,7 @@ import argparse
 import duckdb
 
 from experiments.mimic.configs import (
-    MIMIC_RESULTS_DIR,
+    MIMIC_EXPERIMENT_DIR,
     ConditionsStatsCfg,
     DedupCfg,
     NoteChunkingCfg,
@@ -20,7 +20,7 @@ from .b_note_chunking import run_note_chunking
 from .c_add_metadata import run_add_metadata
 from .d_dedup import run_dedup
 
-MIMIC_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+MIMIC_EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def run_phase_1(
@@ -57,7 +57,7 @@ def run_phase_1(
         chunks = run_dedup(cfg=dedup_cfg)
         register_result_view(con, 'chunks', chunks)
 
-    print(f'\n\nPhase 1 complete. Outputs in {MIMIC_RESULTS_DIR}:\n')
+    print(f'\n\nPhase 1 complete. Outputs in {MIMIC_EXPERIMENT_DIR}:\n')
 
 
 if __name__ == '__main__':

@@ -38,7 +38,9 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         batch_df = batch_df.with_columns(pl.Series(global_cfg.vector_column, embeddings.tolist()))
 
         if table is None:
-            table = db.create_table('chunks', data=batch_df.to_arrow(), mode='overwrite')
+            table = db.create_table(
+                global_cfg.chunks_vec_table, data=batch_df.to_arrow(), mode='overwrite'
+            )
         else:
             table.add(batch_df.to_arrow())
 

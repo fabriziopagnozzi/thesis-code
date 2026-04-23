@@ -28,7 +28,7 @@ class ExperimentConfig:
         default_factory=lambda: [
             'top_k',
             'mmr',
-            'facility_location',
+            'fac_loc',
         ]
     )
     k_values: list[int] = field(default_factory=lambda: [5, 10, 20])

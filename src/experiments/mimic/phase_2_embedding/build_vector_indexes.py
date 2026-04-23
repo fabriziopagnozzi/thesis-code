@@ -4,14 +4,19 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import VECTOR_DB_DIR, setup_logging
+from experiments.mimic.configs import (
+    MIMIC_RESULTS_DIR,
+    VECTOR_DB_DIR,
+    setup_logging,
+)
 
 
 def build_indexes(
     table_name: str = 'chunks',
     metric: str = 'cosine',
+    db_dir_override: str | None = None,
 ) -> None:
-    db = lancedb.connect(VECTOR_DB_DIR)
+    db = lancedb.connect(MIMIC_RESULTS_DIR / db_dir_override if db_dir_override else VECTOR_DB_DIR)
     table = db.open_table(table_name)
 
     vector_cols = [c for c in table.schema.names if c.startswith('vector_')]
@@ -42,8 +47,10 @@ def build_indexes(
     print('\nAll done.')
 
 
-def main() -> None:
+if __name__ == '__main__':
+    setup_logging()
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--vec_dir', default='chunks', help='Vector DB directory override')
     parser.add_argument('--table', default='chunks', help='LanceDB table name (default: chunks)')
     parser.add_argument(
         '--metric',
@@ -53,9 +60,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    build_indexes(table_name=args.table, metric=args.metric)
-
-
-if __name__ == '__main__':
-    setup_logging()
-    main()
+    build_indexes(
+        table_name=args.table,
+        metric=args.metric,
+        db_dir_override=args.vec_dir,
+    )

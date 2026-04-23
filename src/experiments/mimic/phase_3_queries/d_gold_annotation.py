@@ -10,13 +10,11 @@ Output: gold_annotations.parquet
 """
 
 import json
-import re
 from pathlib import Path
 
 import duckdb
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, field_validator
 
 from experiments.mimic.configs import (
     EvaluateCfg,
@@ -28,24 +26,10 @@ from experiments.mimic.configs import (
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.utils import QueryAspect, TagDecision, aspects_from_modifiers
 from helpers.ollama_client import generate_json
 
 gold_annotation_cfg = GoldAnnotationCfg.load()
-
-
-class _Aspect(BaseModel):
-    facet_label: str
-    description: str
-
-    @field_validator('facet_label')
-    @classmethod
-    def normalize_label(cls, v: str) -> str:
-        return v.strip().lower().replace(' ', '_')
-
-
-class _TagDecision(BaseModel):
-    chunk_id: str
-    reason: str = ''
 
 
 def run_gold_annotation(
@@ -69,9 +53,7 @@ def run_gold_annotation(
     # Load patient metadata for chunk context
     meta_path = get_parquet_path('admissions_metadata')
     patient_meta = (
-        _build_patient_meta(meta_path, global_cfg.charlson_labels)
-        if meta_path.exists()
-        else None
+        _build_patient_meta(meta_path, global_cfg.charlson_labels) if meta_path.exists() else None
     )
     if patient_meta:
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
@@ -186,7 +168,6 @@ def annotate(
             ]
         )
 
-        # Append to parquet on disk after every query
         if out_path.exists():
             existing = pl.read_parquet(out_path)
             pl.concat([existing, new_row]).write_parquet(out_path)
@@ -241,14 +222,14 @@ def _build_stratified_pool(
 
 def annotate_query(
     query_text: str,
-    aspects: list[_Aspect],
+    aspects: list[QueryAspect],
     aspect_hadm_sets: dict[str, set[int]],
     pool: CandidatePool,
     batch_size: int = 40,
     patient_meta: dict[int, str] | None = None,
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
-    prior_decisions: dict[tuple[int, int, str], list[_TagDecision]] | None = None,
+    prior_decisions: dict[tuple[int, int, str], list[TagDecision]] | None = None,
 ) -> dict[str, list[str]]:
     """Two-phase annotation for one query.
     Returns {facet_label: [chunk_id, ...]}, only non-empty facets.
@@ -331,7 +312,7 @@ def annotate_query(
 
 def tag_batch_for_aspect(
     query_text: str,
-    aspect: _Aspect,
+    aspect: QueryAspect,
     chunk_ids: list[str],
     texts: list[str],
     batch_sections: list[str] | None = None,
@@ -340,7 +321,7 @@ def tag_batch_for_aspect(
     n_batches: int = 1,
     prompt_dump_dir: Path | None = None,
     query_idx: int = 0,
-) -> list[_TagDecision]:
+) -> list[TagDecision]:
     """Yes/no tagging for one (aspect, structurally-eligible chunk sub-batch) pair."""
     chunks_block = _format_chunk_batch(
         chunk_ids, texts, sections=batch_sections, meta_lines=batch_meta
@@ -387,11 +368,11 @@ def tag_batch_for_aspect(
         raw = result
 
     seen_ids: set[str] = set()
-    decisions: list[_TagDecision] = []
+    decisions: list[TagDecision] = []
     n_dropped = 0
     for item in raw:
         try:
-            d = _TagDecision.model_validate(item)
+            d = TagDecision.model_validate(item)
         except Exception:
             n_dropped += 1
             continue
@@ -412,13 +393,13 @@ def tag_batch_for_aspect(
 def _load_prior_decisions(
     jsonl_path: Path,
     resume_batch_size: int,
-) -> dict[tuple[int, int, str], list[_TagDecision]]:
+) -> dict[tuple[int, int, str], list[TagDecision]]:
     """Load completed entries keyed by (query_idx, chunk_start, facet_label).
 
     chunk_start = batch_idx * resume_batch_size — absolute pool position, independent of
     current batch_size so the cache survives a batch_size change mid-run.
     """
-    prior: dict[tuple[int, int, str], list[_TagDecision]] = {}
+    prior: dict[tuple[int, int, str], list[TagDecision]] = {}
     if not jsonl_path.exists():
         return prior
     with jsonl_path.open() as f:
@@ -429,7 +410,7 @@ def _load_prior_decisions(
             entry = json.loads(line)
             chunk_start = entry['batch_idx'] * resume_batch_size
             key = (entry['query_idx'], chunk_start, entry['facet_label'])
-            prior[key] = [_TagDecision.model_validate(d) for d in entry.get('decisions', [])]
+            prior[key] = [TagDecision.model_validate(d) for d in entry.get('decisions', [])]
     print(f'[resume] loaded {len(prior)} cached entries from jsonl')
     return prior
 
@@ -474,21 +455,6 @@ def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int,
         lookup[row['hadm_id']] = 'Patient: ' + ' | '.join(parts)
 
     return lookup
-
-
-def modifier_to_snake_label(text: str) -> str:
-    s = re.sub(r'\([^)]*\)', '', text)
-    s = re.sub(r'[^a-zA-Z0-9\s]', ' ', s.lower())
-    s = re.sub(r'\b(?:the|a|an)\b', '', s)
-    tokens = [t for t in s.split() if t]
-    return '_'.join(tokens[:6])
-
-
-def aspects_from_modifiers(modifiers_json: list[dict]) -> list[_Aspect]:
-    return [
-        _Aspect(facet_label=modifier_to_snake_label(m['text']), description=m['text'])
-        for m in modifiers_json
-    ]
 
 
 if __name__ == '__main__':
