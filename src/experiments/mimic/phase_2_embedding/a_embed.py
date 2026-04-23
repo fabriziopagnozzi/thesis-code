@@ -1,5 +1,8 @@
+from typing import cast
+
 import polars as pl
 from lancedb import connect
+from pyarrow import FixedSizeListArray
 
 from experiments.mimic.configs import (
     VECTOR_DB_DIR,
@@ -8,6 +11,8 @@ from experiments.mimic.configs import (
     global_cfg,
     setup_logging,
 )
+from experiments.mimic.schemas import EmbedJoinedRow
+from experiments.mimic.utils import CHARLSON_LABELS, get_age_group, get_charlson_conditions
 from helpers.embedder import Embedder
 
 embed_cfg = EmbedCfg.load()
@@ -21,13 +26,13 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     chunks = pl.read_parquet(get_parquet_path('chunks'))
     metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
     emb_model = global_cfg.embedding_model
-
-    print(f'Embedding full corpus: {len(chunks):,} chunks. Model: {emb_model}')
-
     embedder = Embedder(emb_model, **embed_cfg.model_dump(exclude={'commit_every'}))
     db = connect(VECTOR_DB_DIR)
     table = None
-    (metadata_joined, chunk_texts) = prepare_texts(chunks, metadata)
+
+    print(f'Embedding full corpus: {len(chunks):,} chunks. Model: {emb_model}')
+
+    (metadata_joined, chunk_texts) = enrich_note_excerpts(chunks, metadata)
     n_chunks = len(chunk_texts)
 
     for start in range(0, n_chunks, embed_cfg.commit_every):
@@ -35,22 +40,23 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         batch_df = metadata_joined.slice(start, end - start)
 
         embeddings = embedder.embed_corpus(chunk_texts[start:end])
-        batch_df = batch_df.with_columns(pl.Series(global_cfg.vector_column, embeddings.tolist()))
+        v_data = FixedSizeListArray.from_arrays(embeddings.flatten(), embeddings.shape[1])
+        batch_table = batch_df.to_arrow().append_column(global_cfg.vector_column, v_data)
 
         if table is None:
-            table = db.create_table(
-                global_cfg.chunks_vec_table, data=batch_df.to_arrow(), mode='overwrite'
-            )
+            table = db.create_table(global_cfg.chunks_vec_table, data=batch_table, mode='overwrite')
         else:
-            table.add(batch_df.to_arrow())
+            table.add(batch_table)
 
         print(f'  Committed {end:,}/{n_chunks:,} chunks')
     # END for start in range(0, n_chunks, embed_cfg.commit_every)
 
-    print(f'Saved {n_chunks:,} rows to {VECTOR_DB_DIR}/chunks')
+    print(f'Saved {n_chunks:,} rows to {VECTOR_DB_DIR}/{global_cfg.chunks_vec_table}')
 
 
-def prepare_texts(chunks: pl.DataFrame, metadata: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
+def enrich_note_excerpts(
+    chunks: pl.DataFrame, metadata: pl.DataFrame
+) -> tuple[pl.DataFrame, list[str]]:
     meta_cols = [
         'hadm_id',
         'age',
@@ -58,47 +64,79 @@ def prepare_texts(chunks: pl.DataFrame, metadata: pl.DataFrame) -> tuple[pl.Data
         'race',
         'primary_icd_description',
         'top_icd_descriptions',
+        'charlson_comorbidity_index',
+        'admission_type',
+        *CHARLSON_LABELS.keys(),
     ]
     meta_subset = metadata.select(meta_cols).unique(subset=['hadm_id'])
     joined = chunks.join(meta_subset, on='hadm_id', how='left')
 
     texts: list[str] = []
     for row in joined.iter_rows(named=True):
+        row = cast(EmbedJoinedRow, row)
         prefix = build_contextual_prefix(row)
-        texts.append(f'{prefix}\nSection: {row["section_name"]}.\n{row["text"]}')
+        texts.append(
+            f'{prefix}\nExcerpt from the {row["section_name"]} section of a discharge summary.\n{row["text"]}'
+        )
 
     return joined, texts
 
 
-def build_contextual_prefix(meta_row: dict) -> str:
-    age_grp = get_age_group(meta_row.get('age'))
-    gender = meta_row.get('gender', 'unknown')
-    gender_label = 'female' if gender == 'F' else 'male' if gender == 'M' else 'unknown gender'
+def build_contextual_prefix(meta_row: EmbedJoinedRow) -> str:
+    age = meta_row.get('age')
+    if age is not None:
+        age_grp = get_age_group(age)
+        article = 'an' if age_grp[0] in 'aeiou' else 'a'
+        age_part = f'{article} {age_grp} {int(age)}-year-old'
+    else:
+        age_part = 'a'
+
+    gender = meta_row.get('gender', '')
+    if gender == 'F':
+        gender_noun, pronoun = 'woman', 'She'
+    elif gender == 'M':
+        gender_noun, pronoun = 'man', 'He'
+    else:
+        gender_noun, pronoun = 'patient', 'The patient'
+
     race = meta_row.get('race', 'unknown')
     primary_dx = meta_row.get('primary_icd_description', 'unknown condition')
-    chief_complaint = meta_row.get('chief_complaint')
-    top_icds = meta_row.get('top_icd_descriptions', '')
+    adverb = _admission_adverb(meta_row.get('admission_type'))
 
-    prefix = f'{age_grp.capitalize()} {gender_label} ({race}) admitted for {primary_dx}.'
-    if chief_complaint:
+    prefix = f'The patient is {age_part} {gender_noun} ({race}), admitted{adverb} for {primary_dx}.'
+
+    chief_complaint = meta_row.get('chief_complaint')
+    if chief_complaint and not str(chief_complaint).strip().startswith('"'):
         prefix += f'\nChief complaint: {chief_complaint}.'
+
+    conditions = get_charlson_conditions(meta_row)
+    if conditions:
+        if len(conditions) == 1:
+            cond_str = conditions[0]
+        else:
+            cond_str = ', '.join(conditions[:-1]) + f', and {conditions[-1]}'
+        prefix += f'\n{pronoun} has a history of {cond_str}.'
+    else:
+        prefix += '\nNo significant chronic comorbidities are recorded.'
+
+    top_icds = meta_row.get('top_icd_descriptions', '')
     if top_icds:
-        prefix += f'\nComorbidities: {top_icds}.'
+        prefix += f'\nAdditional co-diagnoses from this admission: {top_icds}.'
+
     return prefix
 
 
-def get_age_group(age: float | None) -> str:
-    if age is None:
-        return 'unknown age'
-    if age < 30:
-        return 'young adult'
-    if age < 50:
-        return 'middle-aged'
-    if age < 65:
-        return 'older adult'
-    if age < 80:
-        return 'elderly'
-    return 'very elderly'
+def _admission_adverb(admission_type: str | None) -> str:
+    if not admission_type:
+        return ''
+    t = admission_type.upper()
+    if 'EMER' in t:
+        return ' emergently'
+    if 'ELECTIVE' in t:
+        return ' electively'
+    if 'URGENT' in t:
+        return ' urgently'
+    return ''
 
 
 if __name__ == '__main__':

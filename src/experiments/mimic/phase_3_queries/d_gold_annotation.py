@@ -132,7 +132,7 @@ def annotate(
 
         query_vec = builder.embed_query(query_text)
 
-        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets, condition_hadm_ids)
+        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets, charlson_col)
 
         facets = annotate_query(
             query_text,
@@ -182,42 +182,36 @@ def _build_stratified_pool(
     builder: CandidatePoolBuilder,
     query_vec: np.ndarray,
     aspect_hadm_sets: dict[str, set[int]],
-    condition_hadm_ids: set[int],
+    charlson_col: str,
 ) -> CandidatePool:
-    """Wide cosine pool restricted to the primary condition, with per-modifier quota.
+    """Per-modifier direct fetch + cosine fill, capped at final_pool_n.
 
-    1. Fetch top-wide_pool_n by cosine similarity, then keep only chunks from
-       condition patients (hard filter — non-condition chunks would be skipped by
-       the per-facet prior anyway, so no information is lost).
-    2. For each modifier, reserve up to min_per_modifier chunks from that modifier's hadm_id set.
-    3. Fill remaining slots from the top of the cosine ranking.
-    4. Cap at final_pool_n and return.
+    For each modifier, fetch top-min_per_modifier chunks directly from that
+    modifier's hadm_id set — independent of the cosine ranking, so rare modifiers
+    can't be crowded out if their chunks fall below the cosine cutoff.
+    Then fill remaining budget from a condition-scoped cosine pool and cap at final_pool_n.
     """
-    wide_pool_raw = builder.for_query_cosine(query_vec, n=gold_annotation_cfg.wide_pool_n)
-    cond_indices = np.array(
-        [i for i, h in enumerate(wide_pool_raw.hadm_ids.tolist()) if h in condition_hadm_ids],
-        dtype=np.intp,
-    )
-    wide_pool = wide_pool_raw.slice(cond_indices)
-    print(
-        f'  [pool] condition filter: {wide_pool.n}/{wide_pool_raw.n} chunks from condition patients'
-    )
-    hadm_list = wide_pool.hadm_ids.tolist()
-
-    guaranteed: set[int] = set()
+    # 1. Per-modifier guaranteed pools — direct fetch, bypasses wide-pool cosine cutoff
+    modifier_pools: list[CandidatePool] = []
     for label, hadm_set in aspect_hadm_sets.items():
-        mod_indices = [i for i, h in enumerate(hadm_list) if h in hadm_set]
-        take = min(gold_annotation_cfg.min_per_modifier, len(mod_indices))
-        guaranteed.update(mod_indices[:take])
-        print(f'  [pool] {label}: {len(mod_indices)} in wide pool, guaranteed {take}')
+        mod_pool = builder.for_hadm_ids_cosine(
+            query_vec, hadm_set, gold_annotation_cfg.min_per_modifier
+        )
+        print(f'  [pool] {label}: direct fetch {mod_pool.n} chunks from {len(hadm_set)} modifier+condition patients')
+        modifier_pools.append(mod_pool)
 
-    remaining = gold_annotation_cfg.final_pool_n - len(guaranteed)
-    fill = [i for i in range(wide_pool.n) if i not in guaranteed][: max(0, remaining)]
+    # 2. Cosine pool from condition patients — fills remaining budget
+    cosine_pool = builder.for_query_cosine_condition(
+        query_vec, charlson_col, gold_annotation_cfg.wide_pool_n
+    )
+    print(f'  [pool] cosine condition pool: {cosine_pool.n} chunks')
 
-    keep = np.array(sorted(guaranteed | set(fill)), dtype=np.intp)
-    pool = wide_pool.slice(keep)
-    print(f'  [pool] stratified: {len(guaranteed)} guaranteed + {len(fill)} fill = {pool.n} total')
-    return pool
+    # 3. Merge (modifier chunks first → preserved on dedup) then cap at final_pool_n
+    merged = CandidatePool.merge(modifier_pools + [cosine_pool])
+    if merged.n > gold_annotation_cfg.final_pool_n:
+        merged = merged.slice(np.arange(gold_annotation_cfg.final_pool_n, dtype=np.intp))
+    print(f'  [pool] stratified: {merged.n} total')
+    return merged
 
 
 def annotate_query(

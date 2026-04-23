@@ -263,6 +263,37 @@ class CandidatePoolBuilder:
             metadata_df=self._corpus_df[top_idx_list],
         )
 
+    def for_hadm_ids_cosine(
+        self,
+        query_vec: NDArray[np.float32],
+        hadm_ids: set[int],
+        n: int,
+    ) -> CandidatePool:
+        """Top-N cosine pool restricted to a given hadm_id set."""
+        mask = np.isin(self._hadm_id_array, np.fromiter(hadm_ids, dtype=np.int64))
+        filtered_indices = np.where(mask)[0].astype(np.intp)
+        if filtered_indices.size == 0:
+            return CandidatePool(
+                chunk_ids=[],
+                hadm_ids=np.empty(0, dtype=np.int64),
+                vectors=np.empty((0, self._corpus_vectors.shape[1]), dtype=np.float32),
+                texts=[],
+                section_names=[],
+                metadata_df=self._corpus_df.clear(),
+            )
+        sim = self._corpus_vectors[filtered_indices] @ query_vec
+        top_local = np.argsort(sim)[::-1][: min(n, len(sim))].copy()
+        top_idx = filtered_indices[top_local]
+        top_idx_list = top_idx.tolist()
+        return CandidatePool(
+            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
+            hadm_ids=self._hadm_id_array[top_idx],
+            vectors=self._corpus_vectors[top_idx],
+            texts=[self._corpus_df['text'][i] for i in top_idx_list],
+            section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
+            metadata_df=self._corpus_df[top_idx_list],
+        )
+
     def for_gold_chunks(self, gold_chunk_ids: set[str]) -> CandidatePool:
         indices = np.array(
             [self._chunk_id_to_idx[cid] for cid in gold_chunk_ids if cid in self._chunk_id_to_idx],

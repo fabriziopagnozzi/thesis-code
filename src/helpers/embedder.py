@@ -1,20 +1,18 @@
+
 import numpy as np
 from numpy.typing import NDArray
 
 
 class Embedder:
     def __init__(
-        self,
-        model_name: str,
-        device: str = 'cpu',
-        batch_size: int = 256,
+        self, model_name: str, device: str = 'cpu', batch_size: int = 256
     ):
         from sentence_transformers import SentenceTransformer
 
-        self.model_name = model_name
-        self.device = device
-        self.batch_size = batch_size
-        self._model = SentenceTransformer(model_name, device=device)
+        self.model_name: str = model_name
+        self.device: str = device
+        self.batch_size: int = batch_size
+        self._model: SentenceTransformer = SentenceTransformer(model_name, device=device)
 
     @property
     def dim(self) -> int:
@@ -22,11 +20,7 @@ class Embedder:
         assert dim is not None
         return dim
 
-    def embed_corpus(
-        self,
-        texts: list[str],
-        normalize: bool = True,
-    ) -> NDArray[np.float32]:
+    def embed_corpus(self, texts: list[str], normalize: bool = True) -> NDArray[np.float32]:
         embs = self._model.encode(
             texts,
             batch_size=self.batch_size,
@@ -37,10 +31,7 @@ class Embedder:
         return np.asarray(embs, dtype=np.float32)
 
     def embed_qa_record(
-        self,
-        query: str,
-        chunk_texts: list[str],
-        normalize: bool = True,
+        self, query: str, chunk_texts: list[str], normalize: bool = True
     ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
         """Encode query + chunks for a record.
         Returns (query_emb [dim], chunk_embs [n_chunks, dim]).
