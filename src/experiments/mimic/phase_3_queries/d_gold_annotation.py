@@ -11,6 +11,7 @@ Output: gold_annotations.parquet
 
 import json
 from pathlib import Path
+from typing import cast
 
 import duckdb
 import numpy as np
@@ -26,6 +27,7 @@ from experiments.mimic.configs import (
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.schemas import AdmissionMetadataRow, QueryRow
 from experiments.mimic.utils import QueryAspect, TagDecision, aspects_from_modifiers
 from helpers.ollama_client import generate_json
 
@@ -105,6 +107,7 @@ def annotate(
     n_done = len(done_texts)
 
     for i, row in enumerate(queries_df.iter_rows(named=True)):
+        row = cast(QueryRow, row)
         charlson_col = row['charlson_col']
         query_text = row['query_text']
         if query_text in done_texts:
@@ -197,7 +200,9 @@ def _build_stratified_pool(
         mod_pool = builder.for_hadm_ids_cosine(
             query_vec, hadm_set, gold_annotation_cfg.min_per_modifier
         )
-        print(f'  [pool] {label}: direct fetch {mod_pool.n} chunks from {len(hadm_set)} modifier+condition patients')
+        print(
+            f'  [pool] {label}: direct fetch {mod_pool.n} chunks from {len(hadm_set)} modifier+condition patients'
+        )
         modifier_pools.append(mod_pool)
 
     # 2. Cosine pool from condition patients — fills remaining budget
@@ -207,7 +212,7 @@ def _build_stratified_pool(
     print(f'  [pool] cosine condition pool: {cosine_pool.n} chunks')
 
     # 3. Merge (modifier chunks first → preserved on dedup) then cap at final_pool_n
-    merged = CandidatePool.merge(modifier_pools + [cosine_pool])
+    merged = CandidatePool.merge([*modifier_pools, cosine_pool])
     if merged.n > gold_annotation_cfg.final_pool_n:
         merged = merged.slice(np.arange(gold_annotation_cfg.final_pool_n, dtype=np.intp))
     print(f'  [pool] stratified: {merged.n} total')
@@ -431,7 +436,8 @@ def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int,
 
     lookup: dict[int, str] = {}
     for row in meta.iter_rows(named=True):
-        age = int(row['age']) if row.get('age') is not None else None
+        row = cast(AdmissionMetadataRow, row)
+        age = int(row['age']) if row.get('age') is not None else None  # type: ignore
         gender = 'F' if row.get('gender') == 'F' else 'M'
         age_str = f'age {age}' if age is not None else 'age unknown'
 

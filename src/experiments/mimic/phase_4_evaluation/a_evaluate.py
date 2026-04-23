@@ -1,4 +1,5 @@
 import json
+from typing import cast
 
 import duckdb
 import numpy as np
@@ -13,6 +14,11 @@ from experiments.mimic.configs import (
 )
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
+)
+from experiments.mimic.schemas import (
+    DivergenceStatsRow,
+    EvaluationMetrics,
+    GoldAnnotationRow,
 )
 from experiments.mimic.utils import modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
@@ -66,6 +72,7 @@ def evaluate_llm(
     for row in tqdm(
         annotations_df.iter_rows(named=True), total=len(annotations_df), desc='Evaluating'
     ):
+        row = cast(GoldAnnotationRow, row)
         charlson_col = row['charlson_col']
         query_text = row['query_text']
         facets = json.loads(row['facets_json'])
@@ -116,6 +123,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
     for curr_query in tqdm(
         queries_df.iter_rows(named=True), total=len(queries_df), desc='Evaluating (structural)'
     ):
+        curr_query = cast(DivergenceStatsRow, curr_query)
         modifiers_json: list[dict] = json.loads(curr_query.get('modifiers_json', '') or '[]')
         if not modifiers_json:
             continue
@@ -141,7 +149,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
         for m in query_metrics:
             all_rows.append(
                 {
-                    'query_id': curr_query['query_id'],
+                    'query_id': curr_query['query_id'],  # type: ignore
                     'charlson_col': curr_query['charlson_col'],
                     'n_facets': len(facets),
                     **m,
@@ -182,7 +190,7 @@ def evaluate_query(
     strategies: list[ScoringFunction],
     k_values: list[int],
     lam_values: list[float],
-) -> list[dict]:
+) -> list[EvaluationMetrics]:
     """Evaluate all strategy x k x λ combos for a single query.
 
     Pool is assumed to be already prefiltered/stratified.

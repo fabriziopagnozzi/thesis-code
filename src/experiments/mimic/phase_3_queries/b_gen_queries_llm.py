@@ -8,11 +8,13 @@ If queries.parquet is already existing, it appends the new queries there.
 """
 
 import sys
+from typing import cast
 
 import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.configs import GenQueriesCfg, get_parquet_path, setup_logging
+from experiments.mimic.schemas import QueryPromptRow, QueryRow
 from helpers.ollama_client import generate
 
 gen_queries_cfg = GenQueriesCfg.load()
@@ -50,8 +52,9 @@ def query_generator(
 ):
     already_done: set[tuple[str, str]] = set()
     if resume_df is not None:
-        for row in resume_df.iter_rows(named=True):
-            already_done.add((row['charlson_col'], row['modifiers_json']))
+        for done_row in resume_df.iter_rows(named=True):
+            done_row = cast(QueryRow, done_row)
+            already_done.add((done_row['charlson_col'], done_row['modifiers_json']))
 
     for i, row in enumerate(
         tqdm(
@@ -61,6 +64,7 @@ def query_generator(
             file=sys.stderr,
         )
     ):
+        row = cast(QueryPromptRow, row)
         key = (row['charlson_col'], row['modifiers_json'])
         if key in already_done:
             continue

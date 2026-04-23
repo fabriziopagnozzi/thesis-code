@@ -5,6 +5,8 @@ For each query, run top_k and fac_loc on its condition's candidate
 pool. Keep only queries where coverage diverges from top_k
 """
 
+from typing import cast
+
 import duckdb
 import numpy as np
 import polars as pl
@@ -22,6 +24,7 @@ from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.schemas import DivergenceMetrics, QueryRow
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
@@ -76,6 +79,7 @@ def filter_queries(
     for row in tqdm(
         queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
     ):
+        row = cast(QueryRow, row)
         query_vec = builder.embed_query(row['query_text'])
         pool = builder.for_query_cosine(query_vec, prefilter_n)
 
@@ -112,7 +116,7 @@ def compute_divergence(
     k: int = 10,
     lam: float = 0.5,
     prefilter_n: int | None = None,
-) -> dict:
+) -> DivergenceMetrics:
     sim_to_query = pool.sim_to_query(query_vec)
 
     if prefilter_n is not None and pool.n > prefilter_n:

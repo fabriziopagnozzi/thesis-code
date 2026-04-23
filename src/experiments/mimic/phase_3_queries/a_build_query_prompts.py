@@ -12,6 +12,7 @@ Output: queries_prompts.parquet - two rows per condition (top + rare comorbidity
 """
 
 import json
+from typing import cast
 
 import polars as pl
 from duckdb import DuckDBPyConnection
@@ -23,6 +24,11 @@ from experiments.mimic.configs import (
     setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.schemas import (
+    AdmissionMetaSlimRow,
+    ConditionStatsRow,
+    GroundingChunkSample,
+)
 
 query_prompts_cfg = BuildQueryPromptsCfg.load()
 
@@ -66,8 +72,8 @@ def build_query_prompts(
     chunks_by_hadm_id: dict[int, pl.DataFrame] = {
         key[0]: grp for (key, grp) in filtered_chunks.group_by('hadm_id')
     }
-    meta_by_hadm_id: dict[int, dict] = {
-        row['hadm_id']: row
+    meta_by_hadm_id: dict[int, AdmissionMetaSlimRow] = {
+        row['hadm_id']: cast(AdmissionMetaSlimRow, row)
         for row in metadata.select('hadm_id', 'age', 'gender', 'race')
         .unique(subset=['hadm_id'])
         .iter_rows(named=True)
@@ -79,6 +85,7 @@ def build_query_prompts(
     skipped = 0
 
     for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
+        condition_row = cast(ConditionStatsRow, condition_row)
         charlson_col = condition_row['charlson_col']
         cond_name = condition_row['condition_name'] or charlson_col
         cond_hadm_ids = _get_charlson_hadm_ids(con, charlson_col)
@@ -191,15 +198,15 @@ def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -
 
 def _sample_grounding_chunks_per_modifier(
     chunks_by_hadm: dict[int, pl.DataFrame],
-    meta_by_hadm: dict[int, dict],
+    meta_by_hadm: dict[int, AdmissionMetaSlimRow],
     cond_hadm_ids: set[int],
     modifiers: list[tuple[str, str]],
     con,
     n: int,
-) -> list[dict]:
+) -> list[GroundingChunkSample]:
     """Sample up to n patients, round-robin across modifiers for diversity."""
     seen_hadm: set[int] = set()
-    samples: list[dict] = []
+    samples: list[GroundingChunkSample] = []
 
     for mod_text, mod_type in modifiers * n:
         if len(seen_hadm) >= n:
@@ -218,8 +225,10 @@ def _sample_grounding_chunks_per_modifier(
 
 
 def _sample_patient(
-    hadm_id: int, chunks_by_hadm: dict[int, pl.DataFrame], meta_by_hadm: dict[int, dict]
-) -> list[dict]:
+    hadm_id: int,
+    chunks_by_hadm: dict[int, pl.DataFrame],
+    meta_by_hadm: dict[int, AdmissionMetaSlimRow],
+) -> list[GroundingChunkSample]:
     group = chunks_by_hadm[hadm_id]
     bhc_row = (
         group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
@@ -271,7 +280,7 @@ def _hadm_ids_with_bhc(chunks_by_hadm: dict[int, pl.DataFrame], hadm_ids: set[in
     return [hid for hid, _ in result]
 
 
-def _format_chunks_block(samples: list[dict]) -> str:
+def _format_chunks_block(samples: list[GroundingChunkSample]) -> str:
     seen_hadm: dict[int, int] = {}
     parts = []
     for s in samples:

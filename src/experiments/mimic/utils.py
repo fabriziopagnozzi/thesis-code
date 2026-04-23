@@ -2,6 +2,8 @@ import re
 
 from pydantic import BaseModel, field_validator
 
+from experiments.mimic.schemas import EmbedJoinedRow
+
 
 class QueryAspect(BaseModel):
     facet_label: str
@@ -38,8 +40,26 @@ def col_for_model(model_name: str) -> str:
     return f'vector_{safe}'
 
 
+def get_age_group(age: float | None) -> str:
+    if age is None:
+        return 'unknown age'
+    if age < 30:
+        return 'young adult'
+    if age < 50:
+        return 'middle-aged'
+    if age < 65:
+        return 'older adult'
+    if age < 80:
+        return 'elderly'
+    return 'very elderly'
+
+
+def get_charlson_conditions(meta_row: EmbedJoinedRow) -> list[str]:
+    return [label for col, label in CHARLSON_LABELS.items() if meta_row.get(col) == 1]
+
+
 CHARLSON_LABELS = {
-    'myocardial_infarct': ' prior myocardial infarction',
+    'myocardial_infarct': 'prior myocardial infarction',
     'congestive_heart_failure': 'congestive heart failure',
     'peripheral_vascular_disease': 'peripheral vascular disease',
     'cerebrovascular_disease': 'cerebrovascular disease',
