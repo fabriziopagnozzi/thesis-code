@@ -1,7 +1,7 @@
 from typing import cast
 
 import polars as pl
-from lancedb import connect
+from lancedb import Table, connect
 from pyarrow import FixedSizeListArray
 
 from experiments.mimic.configs import (
@@ -28,12 +28,36 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     emb_model = global_cfg.embedding_model
     embedder = Embedder(emb_model, **embed_cfg.model_dump(exclude={'commit_every'}))
     db = connect(VECTOR_DB_DIR)
-    table = None
+    table_name = global_cfg.chunks_vec_table
 
-    print(f'Embedding full corpus: {len(chunks):,} chunks. Model: {emb_model}')
+    table: Table | None = None
+    try:
+        table = db.open_table(table_name)
+    except ValueError as ve:
+        if not str(ve).endswith('was not found'):
+            raise
 
     (metadata_joined, chunk_texts) = enrich_note_excerpts(chunks, metadata)
+
+    if table is not None:
+        existing_ids: set[str] = set(
+            table.to_lance().to_table(columns=['chunk_id'])['chunk_id'].to_pylist()
+        )
+        if existing_ids:
+            mask = ~metadata_joined['chunk_id'].is_in(existing_ids)
+            indices = [i for i, keep in enumerate(mask.to_list()) if keep]
+            metadata_joined = metadata_joined.filter(mask)
+            chunk_texts = [chunk_texts[i] for i in indices]
+            print(
+                f'Resuming: {len(existing_ids):,} already embedded, {len(chunk_texts):,} remaining'
+            )
+
     n_chunks = len(chunk_texts)
+    if n_chunks == 0:
+        print('Nothing to embed, all chunks already in the table.')
+        return
+
+    print(f'Embedding {n_chunks:,} chunks. Model: {emb_model}')
 
     for start in range(0, n_chunks, embed_cfg.commit_every):
         end = min(start + embed_cfg.commit_every, n_chunks)
@@ -44,14 +68,13 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         batch_table = batch_df.to_arrow().append_column(global_cfg.vector_column, v_data)
 
         if table is None:
-            table = db.create_table(global_cfg.chunks_vec_table, data=batch_table, mode='overwrite')
+            table = db.create_table(table_name, data=batch_table, mode='overwrite')
         else:
             table.add(batch_table)
 
         print(f'  Committed {end:,}/{n_chunks:,} chunks')
-    # END for start in range(0, n_chunks, embed_cfg.commit_every)
 
-    print(f'Saved {n_chunks:,} rows to {VECTOR_DB_DIR}/{global_cfg.chunks_vec_table}')
+    print(f'Saved {n_chunks:,} rows to {VECTOR_DB_DIR}/{table_name}')
 
 
 def enrich_note_excerpts(

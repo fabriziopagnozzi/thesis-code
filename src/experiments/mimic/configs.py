@@ -41,15 +41,13 @@ class GlobalCfg(BaseModel):
 
 exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
 MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
-VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
+VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '__vector_db'
 MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / exp_name
 LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
+CONFIG_DIR = MIMIC_EXPERIMENT_DIR / '_config.yaml'
 
 
-def load_global_cfg(
-    path: Path = MIMIC_EXPERIMENT_DIR / '_config.yaml',
-    cfg: GlobalCfg | None = None,
-):
+def load_global_cfg(path: str | Path = CONFIG_DIR, cfg: GlobalCfg | None = None):
     global global_cfg
     if cfg is not None:
         global_cfg = cfg
@@ -64,9 +62,7 @@ def load_global_cfg(
 load_global_cfg()
 
 
-def load_default_config(
-    phase: int, path: str | Path = MIMIC_EXPERIMENT_DIR / '_config.yaml'
-) -> dict[str, Any]:
+def load_default_config(phase: int, path: str | Path = CONFIG_DIR) -> dict[str, Any]:
     with open(path) as f:
         data = yaml.safe_load(f)
     return data[f'phase_{phase}']
@@ -219,6 +215,8 @@ class FilterQueriesCfg(BaseModel):
 
 
 class GoldAnnotationCfg(BaseModel):
+    model_config = {'populate_by_name': True, 'extra': 'ignore'}
+
     batch_size: int
     resume_batch_size: int | None = None
     wide_pool_n: int = 10000
