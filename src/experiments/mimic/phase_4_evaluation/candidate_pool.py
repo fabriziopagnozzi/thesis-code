@@ -172,7 +172,10 @@ class CandidatePoolBuilder:
     def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str | None):
         self._con = con
         self._embedder = Embedder(
-            global_cfg.embedding_model, device=device if device else cfg.device, batch_size=1
+            global_cfg.embedding_model,
+            device=device if device else cfg.device,
+            batch_size=1,
+            query_prompt=global_cfg.query_retrieval_instruction,
         )
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
 
@@ -226,19 +229,19 @@ class CandidatePoolBuilder:
     def for_query_cosine_condition(
         self,
         query_vec: NDArray[np.float32],
-        charlson_col: str,
+        icd10_3char: str,
         n: int,
     ) -> CandidatePool:
-        """Top-N cosine pool restricted to admissions with the given Charlson condition.
+        """Top-N cosine pool restricted to admissions with the given ICD-3 prefix.
 
-        Filtered index per charlson_col is computed once and cached.
+        Filtered index per icd10_3char is computed once and cached.
         """
-        if charlson_col not in self._condition_indices_cache:
-            condition_hadm_ids = self.charlson_col_hadm_ids(charlson_col)
+        if icd10_3char not in self._condition_indices_cache:
+            condition_hadm_ids = self.icd3_hadm_ids(icd10_3char)
             mask = np.isin(self._hadm_id_array, np.fromiter(condition_hadm_ids, dtype=np.int64))
-            self._condition_indices_cache[charlson_col] = np.where(mask)[0].astype(np.intp)
+            self._condition_indices_cache[icd10_3char] = np.where(mask)[0].astype(np.intp)
 
-        filtered_indices = self._condition_indices_cache[charlson_col]
+        filtered_indices = self._condition_indices_cache[icd10_3char]
         if filtered_indices.size == 0:
             return CandidatePool(
                 chunk_ids=[],
@@ -350,14 +353,15 @@ class CandidatePoolBuilder:
         self._modifier_to_hadm_ids_cache[modifier_text] = set()
         return set()
 
-    def charlson_col_hadm_ids(self, charlson_col: str) -> set[int]:
-        """hadm_ids where the given Charlson column > 0. Cached."""
-        cache_key = f'__col__{charlson_col}'
+    def icd3_hadm_ids(self, icd10_3char: str) -> set[int]:
+        """hadm_ids with the given ICD-10 3-char prefix. Cached."""
+        cache_key = f'__icd3__{icd10_3char}'
         if cache_key in self._modifier_to_hadm_ids_cache:
             return self._modifier_to_hadm_ids_cache[cache_key]
         result = set(
             self._con.execute(f"""--sql
-                SELECT DISTINCT hadm_id FROM charlson WHERE {charlson_col} > 0
+                SELECT DISTINCT hadm_id FROM mimiciv_hosp.diagnoses_icd
+                WHERE icd_version = 10 AND LEFT(icd_code, 3) = '{icd10_3char}'
             """)
             .pl()['hadm_id']
             .to_list()
@@ -366,4 +370,4 @@ class CandidatePoolBuilder:
         return result
 
     def embed_query(self, query_text: str) -> NDArray[np.float32]:
-        return self._embedder.embed_corpus([query_text])[0]
+        return self._embedder.embed_query(query_text)

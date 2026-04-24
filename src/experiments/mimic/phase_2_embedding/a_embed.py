@@ -26,7 +26,11 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     chunks = pl.read_parquet(get_parquet_path('chunks'))
     metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
     emb_model = global_cfg.embedding_model
-    embedder = Embedder(emb_model, **embed_cfg.model_dump(exclude={'commit_every'}))
+    embedder = Embedder(
+        emb_model,
+        **embed_cfg.model_dump(exclude={'commit_every'}),
+        query_prompt=global_cfg.query_retrieval_instruction,
+    )
     db = connect(VECTOR_DB_DIR)
     table_name = global_cfg.chunks_vec_table
 

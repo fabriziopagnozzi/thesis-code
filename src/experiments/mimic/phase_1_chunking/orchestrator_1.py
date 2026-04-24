@@ -17,8 +17,7 @@ from experiments.mimic.duck_db_init import (
 
 from .a_conditions_stats import run_conditions_stats
 from .b_note_chunking import run_note_chunking
-from .c_add_metadata import run_add_metadata
-from .d_dedup import run_dedup
+from .c_dedup import run_dedup
 
 MIMIC_EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -48,11 +47,6 @@ def run_phase_1(
         register_result_view(con, 'chunks', chunks)
 
     if from_step <= 3:
-        print('\n> Step 1.3: Building admissions metadata')
-        metadata = run_add_metadata(con)
-        register_result_view(con, 'admissions_metadata', metadata)
-
-    if from_step <= 4:
         print('\n> Step 1.4: Deduplication')
         chunks = run_dedup(cfg=dedup_cfg)
         register_result_view(con, 'chunks', chunks)
@@ -76,7 +70,7 @@ if __name__ == '__main__':
         type=int,
         default=1,
         metavar='STEP',
-        help='Resume from this step number (1-4)',
+        help='Resume from this step number (1-3)',
     )
     args = parser.parse_args()
 

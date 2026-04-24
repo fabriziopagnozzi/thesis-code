@@ -92,7 +92,7 @@ def annotate(
 ) -> pl.DataFrame:
     """Annotate all queries.
     Returns DataFrame with columns:
-        query_id, charlson_col, condition_name, modifiers_json, query_text,
+        query_id, icd10_3char, condition_name, modifiers_json, query_text,
         facets_json, n_facets, n_gold_chunks
     """
     out_path = get_parquet_path('gold_annotations')
@@ -108,7 +108,7 @@ def annotate(
 
     for i, row in enumerate(queries_df.iter_rows(named=True)):
         row = cast(QueryRow, row)
-        charlson_col = row['charlson_col']
+        icd10_3char = row['icd10_3char']
         query_text = row['query_text']
         if query_text in done_texts:
             continue
@@ -126,7 +126,7 @@ def annotate(
         # Precompute structural prior: hadm_id set per modifier-facet
         # Intersect with condition hadm_ids so gold chunks come from patients
         # who have BOTH the primary condition AND the modifier.
-        condition_hadm_ids = builder.charlson_col_hadm_ids(charlson_col)
+        condition_hadm_ids = builder.icd3_hadm_ids(icd10_3char)
         aspect_hadm_sets: dict[str, set[int]] = {}
         for aspect, modifier in zip(aspects, modifiers_json, strict=True):
             aspect_hadm_sets[aspect.facet_label] = (
@@ -135,7 +135,7 @@ def annotate(
 
         query_vec = builder.embed_query(query_text)
 
-        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets, charlson_col)
+        work_pool = _build_stratified_pool(builder, query_vec, aspect_hadm_sets, icd10_3char)
 
         facets = annotate_query(
             query_text,
@@ -153,14 +153,14 @@ def annotate(
         for cids in facets.values():
             all_gold_chunks.update(cids)
 
-        query_id = f'{charlson_col}_{i}'
+        query_id = f'{icd10_3char}_{i}'
         query_id = query_id.replace(' ', '_')[:120]
 
         new_row = pl.DataFrame(
             [
                 {
                     'query_id': query_id,
-                    'charlson_col': charlson_col,
+                    'icd10_3char': icd10_3char,
                     'condition_name': row.get('condition_name', ''),
                     'modifiers_json': json.dumps(modifiers_json),
                     'query_text': query_text,
@@ -185,7 +185,7 @@ def _build_stratified_pool(
     builder: CandidatePoolBuilder,
     query_vec: np.ndarray,
     aspect_hadm_sets: dict[str, set[int]],
-    charlson_col: str,
+    icd10_3char: str,
 ) -> CandidatePool:
     """Per-modifier direct fetch + cosine fill, capped at final_pool_n.
 
@@ -207,7 +207,7 @@ def _build_stratified_pool(
 
     # 2. Cosine pool from condition patients — fills remaining budget
     cosine_pool = builder.for_query_cosine_condition(
-        query_vec, charlson_col, gold_annotation_cfg.wide_pool_n
+        query_vec, icd10_3char, gold_annotation_cfg.wide_pool_n
     )
     print(f'  [pool] cosine condition pool: {cosine_pool.n} chunks')
 

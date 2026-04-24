@@ -1,14 +1,14 @@
 """
 Step 3.1: Build grounded LLM prompts for query generation.
 
-For each top Charlson-bucket condition (by n_admissions, from conditions_stats.parquet):
-    1. Enumerate co-occurring Charlson comorbidities (excluding the condition's own bucket)
-       + demographic modifiers. Build two modifier sets: [top_comorbidity, demographic] and
-       [rare_comorbidity, demographic] - exactly 2 aspects each.
+For each top ICD-10 3-char prefix condition (by n_admissions, from conditions_stats.parquet):
+    1. Enumerate co-occurring Charlson comorbidities + demographic modifiers.
+       Build two modifier sets: [top_comorbidity, demographic] and
+       [rare_comorbidity, demographic] — exactly 2 aspects each.
     2. Sample real BHC chunks from the condition's admissions, per-modifier quota.
     3. Assemble one full prompt per modifier set.
 
-Output: queries_prompts.parquet - two rows per condition (top + rare comorbidity).
+Output: queries_prompts.parquet — two rows per condition (top + rare comorbidity).
 """
 
 import json
@@ -86,9 +86,9 @@ def build_query_prompts(
 
     for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
         condition_row = cast(ConditionStatsRow, condition_row)
-        charlson_col = condition_row['charlson_col']
-        cond_name = condition_row['condition_name'] or charlson_col
-        cond_hadm_ids = _get_charlson_hadm_ids(con, charlson_col)
+        icd10_3char = condition_row['icd10_3char']
+        cond_name = condition_row['condition_name'] or icd10_3char
+        cond_hadm_ids = _get_icd3_hadm_ids(con, icd10_3char)
 
         top_mods = json.loads(condition_row.get('top_comorbidity_mods_json') or '[]')
         charlson = [
@@ -128,7 +128,7 @@ def build_query_prompts(
             )
             results.append(
                 {
-                    'charlson_col': charlson_col,
+                    'icd10_3char': icd10_3char,
                     'condition_name': cond_name,
                     'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
                     'n_modifiers': len(modifiers),
@@ -146,11 +146,12 @@ def build_query_prompts(
 
 
 # -- Step 2: sample grounding chunks --
-def _get_charlson_hadm_ids(con, charlson_col: str) -> set[int]:
+def _get_icd3_hadm_ids(con, icd10_3char: str) -> set[int]:
     rows = con.execute(f"""--sql
         SELECT DISTINCT hadm_id
-        FROM mimiciv_derived.charlson
-        WHERE {charlson_col} > 0
+        FROM mimiciv_hosp.diagnoses_icd
+        WHERE icd_version = 10
+        AND LEFT(icd_code, 3) = '{icd10_3char}'
     """).fetchall()
     return {r[0] for r in rows}
 

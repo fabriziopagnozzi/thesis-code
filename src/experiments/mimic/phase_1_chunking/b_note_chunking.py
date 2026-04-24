@@ -1,5 +1,7 @@
+import os
 import re
 from dataclasses import dataclass
+from multiprocessing import Pool
 
 import duckdb
 import polars as pl
@@ -23,6 +25,7 @@ class MimicIVNoteChunk:
     chief_complaint: str | None = None
     char_count: int = 0
     approx_tokens: int = 0
+    is_split: bool = False
 
 
 def run_note_chunking(
@@ -47,12 +50,11 @@ def run_note_chunking(
 
 
 def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
-    top_cols = (
+    top_codes = (
         pl.read_parquet(get_parquet_path('conditions_stats'))
-        .head(global_cfg.num_conditions)['charlson_col']
+        .head(global_cfg.num_conditions)['icd10_3char']
         .to_list()
     )
-    or_clause = ' OR '.join(f'{col} > 0' for col in top_cols)
 
     rows = con.execute(f"""--sql
         SELECT DISTINCT
@@ -63,22 +65,28 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
             discharge.text
         FROM bhc
         JOIN discharge ON bhc.note_id = discharge.note_id
-        JOIN mimiciv_derived.charlson ON discharge.hadm_id = mimiciv_derived.charlson.hadm_id
-        WHERE {or_clause}
+        JOIN mimiciv_hosp.diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
+        WHERE diagnoses_icd.icd_version = 10
+        AND LEFT(diagnoses_icd.icd_code, 3) IN ({', '.join(f"'{c}'" for c in top_codes)})
     """).fetchall()
 
-    all_chunks: list[MimicIVNoteChunk] = []
-    global_seq = 0
+    n_workers = min(os.cpu_count() or 1, len(rows))
+    with Pool(
+        processes=n_workers,
+        initializer=_worker_init,
+        initargs=(global_cfg.embedding_model, chunking_cfg),
+    ) as pool:
+        per_note = list(
+            tqdm(
+                pool.imap(_process_row, rows, chunksize=32),
+                total=len(rows),
+                desc='Parsing notes',
+            )
+        )
 
-    for note_id, subject_id, hadm_id, input_text, discharge_text in tqdm(
-        rows, desc='Parsing notes'
-    ):
-        bhc_text = _extract_bhc_from_discharge(discharge_text)
-        note_chunks = parse_note(note_id, subject_id, hadm_id, input_text, bhc_text)
-        for chunk in note_chunks:
-            chunk.chunk_id = str(global_seq)
-            global_seq += 1
-        all_chunks.extend(note_chunks)
+    all_chunks = [chunk for note_chunks in per_note for chunk in note_chunks]
+    for i, chunk in enumerate(all_chunks):
+        chunk.chunk_id = str(i)
 
     df = pl.DataFrame(
         all_chunks,
@@ -114,7 +122,9 @@ def parse_note(
         if section_name not in chunking_cfg.keep_sections:
             continue
 
-        for sub_text in _fixed_chunk(section_text):
+        sub_texts = _fixed_chunk(section_text)
+        is_split = len(sub_texts) > 1
+        for sub_text in sub_texts:
             seq += 1
             chunks.append(
                 MimicIVNoteChunk(
@@ -127,13 +137,16 @@ def parse_note(
                     chief_complaint=chief_complaint,
                     char_count=len(sub_text),
                     approx_tokens=_count_tokens(sub_text),
+                    is_split=is_split,
                 )
             )
 
     # BHC from discharge.csv (newlines preserved, split on # markers)
     if bhc_text:
         for subtext in _split_bhc(bhc_text):
-            for sub_text in _fixed_chunk(subtext):
+            sub_texts = _fixed_chunk(subtext)
+            is_split = len(sub_texts) > 1
+            for sub_text in sub_texts:
                 seq += 1
                 chunks.append(
                     MimicIVNoteChunk(
@@ -146,13 +159,26 @@ def parse_note(
                         section_name='BRIEF HOSPITAL COURSE',
                         char_count=len(sub_text),
                         approx_tokens=_count_tokens(sub_text),
+                        is_split=is_split,
                     )
                 )
 
-    # Drop chunks that are still too short after merging
-    chunks = [c for c in chunks if c.approx_tokens >= chunking_cfg.min_chunk_tokens]
+    # Drop chunks that are still too short after merging, but keep all split tails
+    chunks = [c for c in chunks if c.approx_tokens >= chunking_cfg.min_chunk_tokens or c.is_split]
 
     return chunks
+
+
+def _worker_init(model_name: str, cfg: NoteChunkingCfg) -> None:
+    global tokenizer, chunking_cfg
+    chunking_cfg = cfg
+    tokenizer = _load_tokenizer(model_name)
+
+
+def _process_row(row: tuple) -> list[MimicIVNoteChunk]:
+    note_id, subject_id, hadm_id, input_text, discharge_text = row
+    bhc_text = _extract_bhc_from_discharge(discharge_text)
+    return parse_note(note_id, subject_id, hadm_id, input_text, bhc_text)
 
 
 def _parse_tagged_sections(text: str) -> list[tuple[str, str]]:
@@ -227,11 +253,11 @@ def _split_bhc(text: str) -> list[str]:
 
 
 def _load_tokenizer(model_name: str) -> Tokenizer:
-    from sentence_transformers import SentenceTransformer
+    from transformers import AutoTokenizer
 
-    model = SentenceTransformer(model_name)
-    fast_tok: Tokenizer = model.tokenizer._tokenizer
-    del model
+    hf_tok = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+
+    fast_tok = hf_tok._tokenizer
     fast_tok.no_padding()
     fast_tok.no_truncation()
     return fast_tok

@@ -73,7 +73,7 @@ def evaluate_llm(
         annotations_df.iter_rows(named=True), total=len(annotations_df), desc='Evaluating'
     ):
         row = cast(GoldAnnotationRow, row)
-        charlson_col = row['charlson_col']
+        icd10_3char = row['icd10_3char']
         query_text = row['query_text']
         facets = json.loads(row['facets_json'])
         if not facets:
@@ -99,7 +99,7 @@ def evaluate_llm(
             all_rows.append(
                 {
                     'query_id': row['query_id'],
-                    'charlson_col': charlson_col,
+                    'icd10_3char': icd10_3char,
                     'n_facets': row['n_facets'],
                     **m,
                 }
@@ -130,10 +130,10 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
 
         query_vec = builder.embed_query(curr_query['query_text'])
         pool = builder.for_query_cosine_condition(
-            query_vec, curr_query['charlson_col'], n=global_cfg.prefilter_n
+            query_vec, curr_query['icd10_3char'], n=global_cfg.prefilter_n
         )
 
-        facets = build_structural_facets(pool, curr_query['charlson_col'], modifiers_json, builder)
+        facets = build_structural_facets(pool, curr_query['icd10_3char'], modifiers_json, builder)
         if not facets:
             continue
 
@@ -150,7 +150,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
             all_rows.append(
                 {
                     'query_id': curr_query['query_id'],  # type: ignore
-                    'charlson_col': curr_query['charlson_col'],
+                    'icd10_3char': curr_query['icd10_3char'],
                     'n_facets': len(facets),
                     **m,
                 }
@@ -161,12 +161,12 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
 
 def build_structural_facets(
     pool: CandidatePool,
-    charlson_col: str,
+    icd10_3char: str,
     modifiers_json: list[dict],
     builder: CandidatePoolBuilder,
 ) -> dict[str, list[str]]:
     """Build gold facets structurally: pool chunks whose hadm_id ∈ condition_hadm_ids ∩ modifier_hadm_ids."""
-    condition_hadm_ids = builder.charlson_col_hadm_ids(charlson_col)
+    condition_hadm_ids = builder.icd3_hadm_ids(icd10_3char)
 
     facets: dict[str, list[str]] = {}
     for m in modifiers_json:

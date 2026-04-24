@@ -15,8 +15,8 @@ from typing import TypedDict
 
 
 class ConditionStatsRow(TypedDict):
-    """conditions_stats.parquet — one row per Charlson condition bucket."""
-    charlson_col: str
+    """conditions_stats.parquet — one row per ICD-10 3-char prefix condition."""
+    icd10_3char: str
     condition_name: str
     n_admissions: int
     mean_comorbidity_count: float
@@ -131,7 +131,7 @@ class GroundingChunkSample(TypedDict):
 
 class QueryPromptRow(TypedDict):
     """queries_prompts.parquet — one row per (condition, modifier-set) prompt."""
-    charlson_col: str
+    icd10_3char: str
     condition_name: str
     modifiers_json: str      # JSON list of {text, type} dicts
     n_modifiers: int
@@ -143,7 +143,7 @@ class QueryPromptRow(TypedDict):
 
 class QueryRow(TypedDict):
     """queries.parquet — QueryPromptRow minus full_prompt, plus query_text."""
-    charlson_col: str
+    icd10_3char: str
     condition_name: str
     modifiers_json: str
     n_modifiers: int
@@ -172,7 +172,7 @@ class DivergenceStatsRow(QueryRow, total=False):
 class GoldAnnotationRow(TypedDict):
     """gold_annotations.parquet — one row per annotated query."""
     query_id: str
-    charlson_col: str
+    icd10_3char: str
     condition_name: str
     modifiers_json: str
     query_text: str
@@ -209,7 +209,7 @@ class EvaluationMetrics(TypedDict):
 class EvaluationResultRow(EvaluationMetrics, total=False):
     """evaluation_results.parquet — EvaluationMetrics plus query-level keys."""
     query_id: str
-    charlson_col: str
+    icd10_3char: str
     n_facets: int
 
 

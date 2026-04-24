@@ -18,10 +18,12 @@ class GlobalCfg(BaseModel):
     model_config = {'populate_by_name': True, 'extra': 'ignore'}
 
     num_conditions: PositiveInt = Field(alias='n_conditions')
+    result_dir_overrides: dict[str, str] = {}
+
+    prefilter_n: int
     embedding_model: str
     chunks_vec_table: str
-    prefilter_n: int
-    result_dir_overrides: dict[str, str] = {}
+    query_retrieval_instruction: str | None = None
 
     @computed_field
     @property
@@ -41,7 +43,8 @@ class GlobalCfg(BaseModel):
 
 exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
 MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
-VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '__vector_db'
+VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
+ICD_MAPPING_PATH = MIMIC_RESULTS_DIR / '_shared' / 'icd9_to_icd10_cm_gem.csv'
 MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / exp_name
 LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
 CONFIG_DIR = MIMIC_EXPERIMENT_DIR / '_config.yaml'
@@ -62,8 +65,8 @@ def load_global_cfg(path: str | Path = CONFIG_DIR, cfg: GlobalCfg | None = None)
 load_global_cfg()
 
 
-def load_default_config(phase: int, path: str | Path = CONFIG_DIR) -> dict[str, Any]:
-    with open(path) as f:
+def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
+    with open(path or CONFIG_DIR) as f:
         data = yaml.safe_load(f)
     return data[f'phase_{phase}']
 
@@ -78,13 +81,20 @@ def load_config_from_main(phase: int) -> dict:
 
 
 def get_result_dir(table: str) -> Path:
+
     subdir = global_cfg.result_dir_overrides.get(table)
     if subdir is not None:
         return MIMIC_RESULTS_DIR / subdir
+
     return MIMIC_EXPERIMENT_DIR
 
 
 def get_parquet_path(table: str) -> Path:
+    fixed_path_tables = ['admissions_metadata', 'age', 'charlson']
+
+    if table in fixed_path_tables:
+        return MIMIC_RESULTS_DIR / '_shared' / f'{table}.parquet'
+
     return get_result_dir(table) / f'{table}.parquet'
 
 
@@ -92,6 +102,7 @@ def get_parquet_path(table: str) -> Path:
 # -- Phase 1 --
 class ConditionsStatsCfg(BaseModel):
     min_admissions: int
+    cond_processing_llm: str = 'gemma4-31b-text'
 
     @classmethod
     def load(cls) -> ConditionsStatsCfg:
@@ -106,7 +117,7 @@ class NoteChunkingCfg(BaseModel):
     metadata_only_sections: set[str]
     max_tokens: int = 512
     stride_tokens: int = 128
-    min_chunk_tokens: int = Field(alias='min_tokens', default=128)
+    min_chunk_tokens: int = 128
 
     @computed_field
     @property

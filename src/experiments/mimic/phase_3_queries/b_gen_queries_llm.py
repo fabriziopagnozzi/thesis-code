@@ -54,7 +54,7 @@ def query_generator(
     if resume_df is not None:
         for done_row in resume_df.iter_rows(named=True):
             done_row = cast(QueryRow, done_row)
-            already_done.add((done_row['charlson_col'], done_row['modifiers_json']))
+            already_done.add((done_row['icd10_3char'], done_row['modifiers_json']))
 
     for i, row in enumerate(
         tqdm(
@@ -65,7 +65,7 @@ def query_generator(
         )
     ):
         row = cast(QueryPromptRow, row)
-        key = (row['charlson_col'], row['modifiers_json'])
+        key = (row['icd10_3char'], row['modifiers_json'])
         if key in already_done:
             continue
 

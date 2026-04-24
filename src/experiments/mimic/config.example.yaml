@@ -2,22 +2,28 @@
 # Copy this config file to _results/EXP_NAME/_config.yaml and edit.
 
 global:
-    n_conditions: 17
-    embedding_model: multi-qa-mpnet-base-cos-v1 # or ["abhinand/MedEmbed-large-v0.1", "Simonlee711/Clinical_ModernBERT", ...]
-    chunks_vec_table: chunks_512 # relative to src/experiments/mimic/_results
-    prefilter_n: 2_000 # pre-retrieval cosine pool. Shared between query filtering and evaluation
-    # result_dir_overrides: # Per-table result directory overrides (if not listed here, the location is _results/EXP_NAME)
-    #     age: <dir>
-    #     charlson: <dir>
+    # result_dir_overrides: # Per-table result directory overrides relative to _results 
+    # (if not listed here, their default location is _results/EXP_NAME)
     #     conditions_stats: <dir>
     #     chunks: <dir>
-    #     admissions_metadata: <dir>
     #     queries_prompts: <dir>
     #     queries: <dir>
     #     divergence_stats: <dir>
     #     gold_annotations: <dir>
 
-    # ----------------------------------------------------------------------------
+    n_conditions: 17 # number of conditions to sample from conditions_stats -->
+    # TODO: understand how to pick the conditions
+
+    # ["multi-qa-mpnet-base-cos-v1", "abhinand/MedEmbed-large-v0.1", 
+    # "Simonlee711/Clinical_ModernBERT", "Qwen/Qwen3-Embedding-8B", ...]
+    embedding_model: multi-qa-mpnet-base-cos-v1
+
+    # relative to src/experiments/mimic/_results/_vector_db
+    chunks_vec_table: chunks_512
+
+    # pre-retrieval cosine pool. Shared between query filtering and evaluation
+    prefilter_n: 2_000
+# ----------------------------------------------------------------------------
 phase_1:
     conditions_stats:
         min_admissions: 200
