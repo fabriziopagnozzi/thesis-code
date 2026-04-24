@@ -136,6 +136,8 @@ class QueryPromptRow(TypedDict):
     modifiers_json: str      # JSON list of {text, type} dicts
     n_modifiers: int
     n_condition_admissions: int
+    n_condition_chunks: int
+    modifier_stats_json: str  # JSON: {modifier_text: {n_admissions: int, n_chunks: int}}
     n_grounding_chunks: int
     grounding_hadm_ids: list[int]
     full_prompt: str
@@ -148,6 +150,8 @@ class QueryRow(TypedDict):
     modifiers_json: str
     n_modifiers: int
     n_condition_admissions: int
+    n_condition_chunks: int
+    modifier_stats_json: str  # JSON: {modifier_text: {n_admissions: int, n_chunks: int}}
     n_grounding_chunks: int
     grounding_hadm_ids: list[int]
     query_text: str

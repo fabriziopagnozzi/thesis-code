@@ -174,6 +174,12 @@ class DemographicModifier(BaseModel):
 class BuildQueryPromptsCfg(BaseModel):
     n_grounding_patients: int
     max_modifiers: int
+    min_modifier_admissions: int = 5
+    min_condition_admissions: int | None = None
+    max_condition_admissions: int | None = None
+    n_strata: int = 3
+    stratify_scale: Literal['linear', 'log'] = 'log'
+    stratify_seed: int = 42
     high_value_sections: list[str]
     demographic_modifiers: list[DemographicModifier]
     prompt_template: str

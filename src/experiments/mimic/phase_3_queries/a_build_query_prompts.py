@@ -4,16 +4,17 @@ Step 3.1: Build grounded LLM prompts for query generation.
 For each top ICD-10 3-char prefix condition (by n_admissions, from conditions_stats.parquet):
     1. Enumerate co-occurring Charlson comorbidities + demographic modifiers.
        Build two modifier sets: [top_comorbidity, demographic] and
-       [rare_comorbidity, demographic] — exactly 2 aspects each.
+       [rare_comorbidity, demographic], exactly 2 aspects each.
     2. Sample real BHC chunks from the condition's admissions, per-modifier quota.
     3. Assemble one full prompt per modifier set.
 
-Output: queries_prompts.parquet — two rows per condition (top + rare comorbidity).
+Output: queries_prompts.parquet, two rows per condition (top + rare comorbidity).
 """
 
 import json
-from typing import cast
+from typing import Literal, cast
 
+import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
@@ -60,6 +61,66 @@ def run_build_query_prompts(
     return df
 
 
+def _select_conditions_stratified(
+    conditions: pl.DataFrame,
+    num_conditions: int,
+    min_adm: int | None,
+    max_adm: int | None,
+    n_strata: int,
+    scale: Literal['linear', 'log'] = 'log',
+    seed: int = 42,
+) -> pl.DataFrame:
+    """Stratified sample of conditions by n_admissions for pool-size diversity.
+
+    Filter to [min_adm, max_adm], split the filtered range into n_strata log- or
+    linear-spaced buckets, and sample num_conditions/n_strata from each bucket
+    uniformly at random. Logs per-stratum counts.
+    """
+    filtered = conditions
+    if min_adm is not None:
+        filtered = filtered.filter(pl.col('n_admissions') >= min_adm)
+    if max_adm is not None:
+        filtered = filtered.filter(pl.col('n_admissions') <= max_adm)
+
+    if filtered.is_empty():
+        full_lo = conditions['n_admissions'].min()
+        full_hi = conditions['n_admissions'].max()
+        raise ValueError(
+            f'No conditions in range [{min_adm}, {max_adm}]. '
+            f'conditions_stats n_admissions span: [{full_lo}, {full_hi}]'
+        )
+
+    if n_strata <= 1:
+        take = min(num_conditions, len(filtered))
+        return filtered.sample(take, seed=seed)
+
+    lo = int(filtered['n_admissions'].min())  # type: ignore[arg-type]
+    hi = int(filtered['n_admissions'].max())  # type: ignore[arg-type]
+    if scale == 'log':
+        edges = np.logspace(np.log10(max(lo, 1)), np.log10(hi), n_strata + 1)
+    else:
+        edges = np.linspace(lo, hi, n_strata + 1)
+    edges[-1] = edges[-1] + 1  # make final edge inclusive via half-open intervals
+
+    per_stratum, remainder = divmod(num_conditions, n_strata)
+    parts: list[pl.DataFrame] = []
+    for i in range(n_strata):
+        bucket = filtered.filter(
+            (pl.col('n_admissions') >= edges[i])
+            & (pl.col('n_admissions') < edges[i + 1])
+        )
+        quota = per_stratum + (1 if i < remainder else 0)
+        take = min(quota, len(bucket))
+        print(
+            f'  [stratum {i + 1}/{n_strata}] n_admissions [{int(edges[i])}, {int(edges[i + 1])}): '
+            f'{len(bucket):,} available, taking {take}'
+        )
+        if take > 0:
+            parts.append(bucket.sample(take, seed=seed + i))
+
+    return pl.concat(parts) if parts else filtered.head(0)
+
+
 def build_query_prompts(
     conditions: pl.DataFrame,
     chunks: pl.DataFrame,
@@ -81,10 +142,21 @@ def build_query_prompts(
 
     print(f'Chunk index: {len(chunks_by_hadm_id):,} hadm_ids with high-value sections')
 
+    selected_conditions = _select_conditions_stratified(
+        conditions,
+        num_conditions=global_cfg.num_conditions,
+        min_adm=query_prompts_cfg.min_condition_admissions,
+        max_adm=query_prompts_cfg.max_condition_admissions,
+        n_strata=query_prompts_cfg.n_strata,
+        scale=query_prompts_cfg.stratify_scale,
+        seed=query_prompts_cfg.stratify_seed,
+    )
+    print(f'Stratified selection: {len(selected_conditions):,} conditions')
+
     results = []
     skipped = 0
 
-    for condition_row in conditions.head(global_cfg.num_conditions).iter_rows(named=True):
+    for condition_row in selected_conditions.iter_rows(named=True):
         condition_row = cast(ConditionStatsRow, condition_row)
         icd10_3char = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd10_3char
@@ -108,7 +180,28 @@ def build_query_prompts(
         if len(charlson) >= 2:
             modifier_sets.append([charlson[-1], *demo])
 
+        # Pool composition statistics, computed once per condition, before any LLM work
+        n_condition_chunks = sum(
+            len(chunks_by_hadm_id[h]) for h in cond_hadm_ids if h in chunks_by_hadm_id
+        )
+        mod_type_lookup = dict(charlson + demographic)
+        unique_mod_texts = {t for mset in modifier_sets for t, _ in mset}
+        modifier_stats: dict[str, dict] = {}
+        for mod_text in unique_mod_texts:
+            inter = _get_modifier_hadm_ids(con, cond_hadm_ids, mod_text, mod_type_lookup[mod_text])
+            n_mod_chunks = sum(len(chunks_by_hadm_id[h]) for h in inter if h in chunks_by_hadm_id)
+            modifier_stats[mod_text] = {'n_admissions': len(inter), 'n_chunks': n_mod_chunks}
+
         for modifiers in modifier_sets:
+            # Skip if any modifier has too few admissions within this condition's pool
+            if any(
+                modifier_stats.get(t, {}).get('n_admissions', 0)
+                < query_prompts_cfg.min_modifier_admissions
+                for t, _ in modifiers
+            ):
+                skipped += 1
+                continue
+
             data_samples = _sample_grounding_chunks_per_modifier(
                 chunks_by_hadm_id,
                 meta_by_hadm_id,
@@ -133,6 +226,8 @@ def build_query_prompts(
                     'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
                     'n_modifiers': len(modifiers),
                     'n_condition_admissions': len(cond_hadm_ids),
+                    'n_condition_chunks': n_condition_chunks,
+                    'modifier_stats_json': json.dumps({t: modifier_stats[t] for t, _ in modifiers}),
                     'n_grounding_chunks': len(data_samples),
                     'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
                     'full_prompt': full_prompt,
@@ -140,7 +235,8 @@ def build_query_prompts(
             )
 
     print(
-        f'Built {len(results):,} grounded prompts, skipped {skipped:,} conditions (no charlson modifiers)'
+        f'Built {len(results):,} grounded prompts, skipped {skipped:,} conditions '
+        f'(no charlson modifiers or under min_modifier_admissions={query_prompts_cfg.min_modifier_admissions})'
     )
     return pl.DataFrame(results)
 
