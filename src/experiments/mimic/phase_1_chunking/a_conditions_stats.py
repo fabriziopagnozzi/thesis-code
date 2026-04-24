@@ -1,16 +1,3 @@
-"""
-Step 1.1: Select target conditions from MIMIC-IV based on frequency and comorbidity richness.
-
-Groups ICD-10 codes by 3-char prefix (e.g. E11 = Type 2 Diabetes, I50 = Heart Failure).
-For each prefix computes:
-  - n_admissions: distinct hadm_ids with that ICD-3 code
-  - mean_comorbidity_count: avg number of Charlson flags present in those admissions
-  - top_comorbidity_mods_json: pre-ranked co-occurring Charlson categories (rate > 0.05),
-    used by phase 3.1 without re-querying DuckDB
-
-Sorted by n_admissions descending, filtered by min_admissions.
-"""
-
 import json
 
 import duckdb
@@ -18,6 +5,7 @@ import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.configs import (
+    ICD_MAPPING_PATH,
     MIMIC_EXPERIMENT_DIR,
     ConditionsStatsCfg,
     get_parquet_path,
@@ -48,6 +36,21 @@ def run_conditions_stats(
     return df
 
 
+TRANSLATE_ICDS_CTE = f"""--sql
+    (SELECT diagnoses_icd.hadm_id,
+        CASE
+            WHEN diagnoses_icd.icd_version = 10 THEN diagnoses_icd.icd_code
+            WHEN diagnoses_icd.icd_version = 9 THEN icd_crosswalk.icd10
+        END AS unified_icd10
+    FROM mimiciv_hosp.diagnoses_icd diagnoses_icd
+    LEFT JOIN
+        (SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
+        FROM read_csv_auto('{ICD_MAPPING_PATH}')
+        GROUP BY icd9) icd_crosswalk
+    ON diagnoses_icd.icd_code = icd_crosswalk.icd9 AND diagnoses_icd.icd_version = 9)
+"""
+
+
 def select_conditions(
     con: duckdb.DuckDBPyConnection,
     min_admissions: int,
@@ -60,18 +63,16 @@ def select_conditions(
     charlson_labels = global_cfg.charlson_labels
     all_cols = list(charlson_labels.keys())
 
-    """
-    NOTE: for now we only select ICD-10 codes. Selecting ICD-9 also would require mapping the codes. Generally the mapping is not 1-to-1, so leave it like this for now.
-    """
     prefix_rows = con.execute(f"""--sql
-        WITH condition_stats AS (
+        WITH unified_diagnoses AS {TRANSLATE_ICDS_CTE},
+        condition_stats AS (
             SELECT
-                LEFT(di.icd_code, 3) AS icd10_3char,
-                COUNT(DISTINCT di.hadm_id) AS n_admissions
-            FROM mimiciv_hosp.diagnoses_icd di
-            WHERE di.icd_version = 10
-            GROUP BY LEFT(di.icd_code, 3)
-            HAVING COUNT(DISTINCT di.hadm_id) >= {min_admissions}
+                LEFT(ud.unified_icd10, 3) AS icd10_3char,
+                COUNT(DISTINCT ud.hadm_id) AS n_admissions
+            FROM unified_diagnoses ud
+            WHERE ud.unified_icd10 IS NOT NULL
+            GROUP BY LEFT(ud.unified_icd10, 3)
+            HAVING COUNT(DISTINCT ud.hadm_id) >= {min_admissions}
         )
         SELECT
             condition_stats.icd10_3char,
@@ -87,7 +88,7 @@ def select_conditions(
         ORDER BY n_admissions DESC
     """).fetchall()
 
-    code_to_info = coalesce_condition_names(prefix_rows)
+    code_to_info = coalesce_condition_names_mock(prefix_rows)
     kept_rows = [
         (icd3, raw, n) for icd3, raw, n in prefix_rows if code_to_info.get(icd3, (None, True))[1]
     ]
@@ -96,15 +97,16 @@ def select_conditions(
         print(f'Filtered out {n_filtered} administrative/generic codes by LLM')
 
     charlson_rates = con.execute(f"""--sql
+        WITH unified_diagnoses AS {TRANSLATE_ICDS_CTE}
         SELECT dedup.icd10_3char, {', '.join(f'AVG(c.{col}) AS {col}' for col in all_cols)}
         FROM (
-            SELECT DISTINCT LEFT(icd_code, 3) AS icd10_3char, hadm_id
-            FROM mimiciv_hosp.diagnoses_icd
-            WHERE icd_version = 10 AND LEFT(icd_code, 3) IN ({', '.join(f"'{icd3}'" for icd3, _, _ in kept_rows)})
-        ) dedup
-        JOIN mimiciv_derived.charlson c ON dedup.hadm_id = c.hadm_id
+            SELECT DISTINCT LEFT(unified_icd10, 3) AS icd10_3char, hadm_id
+            FROM unified_diagnoses
+            WHERE LEFT(unified_icd10, 3) IN ({', '.join(f"'{icd3}'" for icd3, _, _ in kept_rows)})
+        ) dedup JOIN mimiciv_derived.charlson c ON dedup.hadm_id = c.hadm_id
         GROUP BY dedup.icd10_3char
     """).fetchall()
+
     rates_by_icd3: dict[str, tuple] = {row[0]: row[1:] for row in charlson_rates}
 
     rows = []
@@ -212,12 +214,12 @@ def coalesce_condition_names(
     return code_to_info
 
 
-# def coalesce_condition_names_mock(
-#     prefix_rows: list[tuple],
-#     batch_size: int = 10,
-# ) -> dict[str, tuple[str, bool]]:
-#     """Mock: skip LLM, keep all codes, use first title as condition_name."""
-#     return {icd3: (raw_titles if raw_titles else icd3, True) for icd3, raw_titles, _ in prefix_rows}
+def coalesce_condition_names_mock(
+    prefix_rows: list[tuple],
+    batch_size: int = 10,
+) -> dict[str, tuple[str, bool]]:
+    """Mock: skip LLM, keep all codes, use first title as condition_name."""
+    return {icd3: (raw_titles if raw_titles else icd3, True) for icd3, raw_titles, _ in prefix_rows}
 
 
 if __name__ == '__main__':
