@@ -22,31 +22,37 @@ from .c_dedup import run_dedup
 MIMIC_EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+SUBPHASES = (1, 2, 3)
+
+
 def run_phase_1(
     con: duckdb.DuckDBPyConnection | None = None,
     conditions_cfg: ConditionsStatsCfg | None = None,
     note_chunking_cfg: NoteChunkingCfg | None = None,
     dedup_cfg: DedupCfg | None = None,
-    from_step: int = 1,
+    subphases: list[int] | None = None,
     *,
     init_sql: bool,
 ):
+    if subphases is None:
+        subphases = list(SUBPHASES)
+
     if con is None:
-        if from_step == 1 or init_sql:
+        if 1 in subphases or init_sql:
             generate_init_sql(force=True)
         con = connect_mimic_duckdb()
 
-    if from_step <= 1:
+    if 1 in subphases:
         print('\n> Step 1.1: Condition selection')
         conditions = run_conditions_stats(con, cfg=conditions_cfg)
         register_result_view(con, 'conditions_stats', conditions)
 
-    if from_step <= 2:
+    if 2 in subphases:
         print('\n> Step 1.2: Parsing discharge notes')
         chunks = run_note_chunking(con, cfg=note_chunking_cfg)
         register_result_view(con, 'chunks', chunks)
 
-    if from_step <= 3:
+    if 3 in subphases:
         print('\n> Step 1.4: Deduplication')
         chunks = run_dedup(cfg=dedup_cfg)
         register_result_view(con, 'chunks', chunks)
@@ -65,13 +71,13 @@ if __name__ == '__main__':
         help='Whether to init the _mimic_init.sql file',
     )
     parser.add_argument(
-        '--from',
-        dest='from_step',
+        '--subphases',
         type=int,
-        default=1,
-        metavar='STEP',
-        help='Resume from this step number (1-3)',
+        nargs='*',
+        default=list(SUBPHASES),
+        choices=SUBPHASES,
+        help='Subphase(s) to run (default: all)',
     )
     args = parser.parse_args()
 
-    run_phase_1(from_step=args.from_step, init_sql=args.init_sql)
+    run_phase_1(subphases=sorted(args.subphases), init_sql=args.init_sql)

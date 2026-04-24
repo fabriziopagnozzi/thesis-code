@@ -18,6 +18,39 @@ from helpers.ollama_client import generate_json
 conditions_stats_cfg = ConditionsStatsCfg.load()
 
 
+TRANSLATE_ICDS_CTE = f"""--sql
+    (SELECT diagnoses_icd.hadm_id,
+        CASE
+            WHEN diagnoses_icd.icd_version = 10 THEN diagnoses_icd.icd_code
+            WHEN diagnoses_icd.icd_version = 9 THEN icd_crosswalk.icd10
+        END AS unified_icd10
+    FROM mimiciv_hosp.diagnoses_icd diagnoses_icd
+    LEFT JOIN
+        (SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
+        FROM read_csv_auto('{ICD_MAPPING_PATH}')
+        GROUP BY icd9) icd_crosswalk
+    ON diagnoses_icd.icd_code = icd_crosswalk.icd9 AND diagnoses_icd.icd_version = 9)
+"""
+
+
+_COALESCE_SYSTEM = """
+You are a medical coding expert helping build a clinical QA benchmark.
+
+Given a list of ICD-10 sub-code descriptions sharing the same 3-character prefix, you must:\n
+    1. Produce a single concise clinical label (up to 20 words) representing the group in a semantically meaningful way,
+    focusing on the main condition shared by all sub-labels.\n
+    2. Decide whether this code group is USEFUL for a multi-document clinical QA benchmark.
+Set keep=false for codes that are administrative, procedural, or too vague to anchor a
+meaningful clinical question requiring multi-source synthesis.
+
+Examples of codes to exclude: do-not-resuscitate orders (Z66), encounter/screening codes (Z00-Z13),
+external cause codes (V/W/X/Y), morphology/histology codes, unspecified injury catch-alls,
+codes whose group contains only generic 'unspecified' or 'other' entries with no clear clinical entity.\n
+Prefer the most specific / prevalent clinical entity over generic catch-alls when naming.
+"""
+CONDITION_FILTERING_JSONL = MIMIC_EXPERIMENT_DIR / 'condition_filtering.jsonl'
+
+
 def run_conditions_stats(
     con: duckdb.DuckDBPyConnection | None = None, cfg: ConditionsStatsCfg | None = None
 ) -> pl.DataFrame:
@@ -34,21 +67,6 @@ def run_conditions_stats(
     print(f'\nSaved {len(df)} conditions to {out_path}')
 
     return df
-
-
-TRANSLATE_ICDS_CTE = f"""--sql
-    (SELECT diagnoses_icd.hadm_id,
-        CASE
-            WHEN diagnoses_icd.icd_version = 10 THEN diagnoses_icd.icd_code
-            WHEN diagnoses_icd.icd_version = 9 THEN icd_crosswalk.icd10
-        END AS unified_icd10
-    FROM mimiciv_hosp.diagnoses_icd diagnoses_icd
-    LEFT JOIN
-        (SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
-        FROM read_csv_auto('{ICD_MAPPING_PATH}')
-        GROUP BY icd9) icd_crosswalk
-    ON diagnoses_icd.icd_code = icd_crosswalk.icd9 AND diagnoses_icd.icd_version = 9)
-"""
 
 
 def select_conditions(
@@ -139,25 +157,6 @@ def select_conditions(
         f'ICD-3 conditions with >= {min_admissions} admissions: {len(df)}\n{df.select("icd10_3char", "n_admissions", "mean_comorbidity_count")}'
     )
     return df
-
-
-_COALESCE_SYSTEM = """
-You are a medical coding expert helping build a clinical QA benchmark.
-
-Given a list of ICD-10 sub-code descriptions sharing the same 3-character prefix, you must:\n
-    1. Produce a single concise clinical label (up to 10 words) fully representing the group in a semantically meaningful way.\n
-    2. Decide whether this code group is USEFUL for a multi-document clinical QA benchmark.
-Set keep=false for codes that are administrative, procedural, or too vague to anchor a
-meaningful clinical question requiring multi-source synthesis.
-
-Examples of codes to exclude: do-not-resuscitate orders (Z66), encounter/screening codes (Z00-Z13),
-external cause codes (V/W/X/Y), morphology/histology codes, unspecified injury catch-alls,
-codes whose group contains only generic 'unspecified' or 'other' entries with no clear clinical entity.\n
-Prefer the most specific / prevalent clinical entity over generic catch-alls when naming.
-"""
-
-
-CONDITION_FILTERING_JSONL = MIMIC_EXPERIMENT_DIR / 'condition_filtering.jsonl'
 
 
 def coalesce_condition_names(
