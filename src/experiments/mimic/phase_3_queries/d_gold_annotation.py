@@ -20,8 +20,8 @@ import polars as pl
 from experiments.mimic.configs import (
     EvaluateCfg,
     GoldAnnotationCfg,
-    get_parquet_path,
     get_result_dir,
+    get_table_path,
     setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
@@ -49,21 +49,21 @@ def run_gold_annotation(
         con = connect_mimic_duckdb()
 
     # Load filtered queries
-    filtered_queries_path = get_parquet_path('divergence_stats')
+    filtered_queries_path = get_table_path('divergence_stats')
     if filtered_queries_path.exists():
         all_queries = pl.read_parquet(filtered_queries_path)
         queries_df = all_queries.filter(pl.col('passes_filter'))
     else:
-        queries_df = pl.read_parquet(get_parquet_path('queries'))
+        queries_df = pl.read_parquet(get_table_path('queries'))
 
     # Load patient metadata for chunk context
-    meta_path = get_parquet_path('admissions_metadata')
+    meta_path = get_table_path('admissions_metadata')
     patient_meta = _build_patient_meta(meta_path, CHARLSON_LABELS) if meta_path.exists() else None
     if patient_meta:
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
 
     # Resume from previous run if output exists
-    out_path = get_parquet_path('gold_annotations')
+    out_path = get_table_path('gold_annotations')
     done_texts: set[str] = set()
     if out_path.exists():
         prev = pl.read_parquet(out_path)
@@ -97,11 +97,11 @@ def annotate(
         query_id, icd10_3char, condition_name, modifiers_json, query_text,
         facets_json, n_facets, n_gold_chunks
     """
-    out_path = get_parquet_path('gold_annotations')
+    out_path = get_table_path('gold_annotations')
     prompt_dump_dir = get_result_dir('gold_annotations') / '_prompt_dump'
     prompt_dump_dir.mkdir(parents=True, exist_ok=True)
 
-    jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
+    jsonl_path = get_table_path('gold_annotations', ext='jsonl')
     old_bs = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
     prior_decisions = _load_prior_decisions(jsonl_path, old_bs)
 

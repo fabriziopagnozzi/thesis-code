@@ -8,7 +8,7 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from experiments.mimic.configs import NoteChunkingCfg, get_parquet_path, global_cfg, setup_logging
+from experiments.mimic.configs import NoteChunkingCfg, get_table_path, global_cfg, setup_logging
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 
 chunking_cfg = NoteChunkingCfg.load()
@@ -40,7 +40,7 @@ def run_note_chunking(
 
     if con is None:
         con = connect_mimic_duckdb()
-    out_path = get_parquet_path('chunks')
+    out_path = get_table_path('chunks')
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     df = parse_all_notes(con)
@@ -53,13 +53,13 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     con.execute('SET arrow_large_buffer_size=true')
 
     df_top_codes = (  # noqa: F841
-        pl.read_parquet(get_parquet_path('conditions_stats'))
+        pl.read_parquet(get_table_path('conditions_stats'))
         .head(global_cfg.num_conditions)
         .select(pl.col('icd10_3char').alias('code'))
     )
 
     # Pull into Polars (arrow) then convert to tuples for multiprocessing
-    notes_df = con.execute(f"""--sql
+    notes_df = con.execute("""--sql
         WITH target_admissions AS (
             SELECT DISTINCT ud.hadm_id
             FROM unified_diagnoses AS ud

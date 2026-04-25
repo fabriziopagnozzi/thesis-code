@@ -18,7 +18,7 @@ from pyarrow import FixedSizeListArray
 from experiments.mimic.configs import (
     VECTOR_DB_DIR,
     EmbedCfg,
-    get_parquet_path,
+    get_table_path,
     global_cfg,
     setup_logging,
 )
@@ -35,8 +35,8 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
         embed_cfg = cfg
 
     # 1. Get selected ICD-3 codes from generated queries (or fall back to prompts)
-    queries_path = get_parquet_path('queries')
-    source_path = queries_path if queries_path.exists() else get_parquet_path('queries_prompts')
+    queries_path = get_table_path('queries')
+    source_path = queries_path if queries_path.exists() else get_table_path('queries_prompts')
     if not source_path.exists():
         raise FileNotFoundError(
             'Neither queries.parquet nor queries_prompts.parquet found at expected paths. '
@@ -60,7 +60,7 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
     print(f'[selective embed] {len(condition_hadm_ids):,} admissions for selected conditions')
 
     # 3. Filter chunks to relevant admissions - Polars join, no SQL IN on hadm_ids
-    all_chunks = pl.read_parquet(get_parquet_path('chunks'))
+    all_chunks = pl.read_parquet(get_table_path('chunks'))
     relevant_chunks = all_chunks.join(condition_hadm_ids, on='hadm_id', how='inner')
     print(
         f'[selective embed] {len(relevant_chunks):,} relevant chunks '
@@ -91,7 +91,7 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
         return
 
     # 5. Enrich with contextual prefix metadata
-    metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
+    metadata = pl.read_parquet(get_table_path('admissions_metadata'))
     emb_model = global_cfg.embedding_model
     embedder = Embedder(
         emb_model,

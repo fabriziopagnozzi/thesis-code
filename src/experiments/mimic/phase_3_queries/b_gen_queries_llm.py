@@ -13,7 +13,7 @@ from typing import cast
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import GenQueriesCfg, get_parquet_path, setup_logging
+from experiments.mimic.configs import GenQueriesCfg, get_table_path, setup_logging
 from experiments.mimic.schemas import QueryPromptRow, QueryRow
 from helpers.ollama_client import generate
 
@@ -25,9 +25,9 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
     if cfg is not None:
         gen_queries_cfg = cfg
 
-    prompts_df = pl.read_parquet(get_parquet_path('queries_prompts'))
+    prompts_df = pl.read_parquet(get_table_path('queries_prompts'))
 
-    out_path = get_parquet_path('queries')
+    out_path = get_table_path('queries')
     resume_df = None
     if out_path.exists():
         resume_df = pl.read_parquet(out_path)
@@ -35,9 +35,9 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
 
     results: list[dict] = resume_df.to_dicts() if resume_df is not None else []
 
-    for curr_query in query_generator(prompts_df, resume_df):
+    for new_count, curr_query in enumerate(query_generator(prompts_df, resume_df), start=1):
         results.append(curr_query)
-        if len(results) % gen_queries_cfg.save_every == 0:
+        if new_count % gen_queries_cfg.save_every == 0:
             pl.DataFrame(results).write_parquet(out_path)
 
     df = pl.DataFrame(results)

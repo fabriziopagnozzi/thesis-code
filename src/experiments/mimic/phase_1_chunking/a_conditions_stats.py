@@ -7,7 +7,7 @@ from tqdm import tqdm
 from experiments.mimic.configs import (
     MIMIC_EXPERIMENT_DIR,
     ConditionsStatsCfg,
-    get_parquet_path,
+    get_table_path,
     setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
@@ -15,7 +15,6 @@ from experiments.mimic.utils import CHARLSON_LABELS
 from helpers.ollama_client import generate_json
 
 conditions_stats_cfg = ConditionsStatsCfg.load()
-
 
 
 _COALESCE_SYSTEM = """
@@ -53,7 +52,7 @@ def run_conditions_stats(
         con = connect_mimic_duckdb()
 
     df = select_conditions(con=con, min_admissions=conditions_stats_cfg.min_admissions)
-    out_path = get_parquet_path('conditions_stats')
+    out_path = get_table_path('conditions_stats')
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.write_parquet(out_path)
     print(f'\nSaved {len(df)} conditions to {out_path}')

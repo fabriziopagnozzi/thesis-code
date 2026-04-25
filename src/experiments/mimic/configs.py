@@ -87,7 +87,10 @@ def get_result_dir(table: str) -> Path:
     return MIMIC_EXPERIMENT_DIR
 
 
-def get_parquet_path(table: str) -> Path:
+def get_table_path(
+    table: str,
+    ext: Literal['csv', 'jsonl', 'json', 'parquet'] = 'parquet',
+) -> Path:
     fixed_path_tables = [
         'admissions_metadata',
         'age',
@@ -96,9 +99,9 @@ def get_parquet_path(table: str) -> Path:
         'icd9_to_icd10_cm_gem',
     ]
     if table in fixed_path_tables:
-        return MIMIC_RESULTS_DIR / '_shared' / f'{table}.parquet'
+        return MIMIC_RESULTS_DIR / '_shared' / f'{table}.{ext}'
 
-    return get_result_dir(table) / f'{table}.parquet'
+    return get_result_dir(table) / f'{table}.{ext}'
 
 
 # PYDANTIC MODELS FOR CONFIGS

@@ -5,7 +5,7 @@ from pyarrow import FixedSizeListArray
 from experiments.mimic.configs import (
     VECTOR_DB_DIR,
     EmbedCfg,
-    get_parquet_path,
+    get_table_path,
     global_cfg,
     setup_logging,
 )
@@ -21,8 +21,8 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     if cfg is not None:
         embed_cfg = cfg
 
-    chunks = pl.read_parquet(get_parquet_path('chunks'))
-    metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
+    chunks = pl.read_parquet(get_table_path('chunks'))
+    metadata = pl.read_parquet(get_table_path('admissions_metadata'))
     emb_model = global_cfg.embedding_model
     embedder = Embedder(
         emb_model,

@@ -16,7 +16,7 @@ from tqdm import tqdm
 from experiments.mimic.configs import (
     EvaluateCfg,
     FilterQueriesCfg,
-    get_parquet_path,
+    get_table_path,
     global_cfg,
     setup_logging,
 )
@@ -41,13 +41,13 @@ def run_filter_queries(
     if con is None:
         con = connect_mimic_duckdb()
 
-    queries_df = pl.read_parquet(get_parquet_path('queries'))
+    queries_df = pl.read_parquet(get_table_path('queries'))
     print(f'Loaded {len(queries_df):,} queries')
 
     builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
     result = filter_queries(queries_df, builder)
 
-    out_path = get_parquet_path('divergence_stats')
+    out_path = get_table_path('divergence_stats')
     result.write_parquet(out_path)
 
     n_pass = result.filter(pl.col('passes_filter')).height

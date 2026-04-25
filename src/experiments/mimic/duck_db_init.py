@@ -2,7 +2,7 @@ import duckdb
 
 from experiments.mimic.configs import (
     MIMIC_IV_DIR,
-    get_parquet_path,
+    get_table_path,
     setup_logging,
 )
 from helpers.dir_paths import (
@@ -80,7 +80,7 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
             con.execute(statement)
 
     for table in RESULT_TABLES:
-        parquet_file = get_parquet_path(table)
+        parquet_file = get_table_path(table)
         if parquet_file.exists():
             con.execute(
                 f"CREATE VIEW IF NOT EXISTS mimic_results.{table} AS SELECT * FROM read_parquet('{parquet_file}')"
@@ -95,7 +95,7 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
 def _load_derived_concepts(con: duckdb.DuckDBPyConnection):
     """Load derived concept tables (age, charlson) from parquet or compute and save them."""
     for table, sql_rel in DERIVED_CONCEPTS.items():
-        parquet_path = get_parquet_path(table)
+        parquet_path = get_table_path(table)
         parquet_path.parent.mkdir(parents=True, exist_ok=True)
         if parquet_path.exists():
             con.execute(
@@ -113,7 +113,7 @@ def _ensure_unified_diagnoses(con: duckdb.DuckDBPyConnection) -> None:
     Rows where no ICD-9→10 crosswalk entry exists are dropped, so every row in the
     materialized table has a valid unified_icd10 code.
     """
-    parquet_path = get_parquet_path('unified_diagnoses')
+    parquet_path = get_table_path('unified_diagnoses')
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
     if not parquet_path.exists():
         print('Materializing unified_diagnoses (ICD-9+10 → ICD-10) ...')
@@ -129,7 +129,7 @@ def _ensure_unified_diagnoses(con: duckdb.DuckDBPyConnection) -> None:
                     FROM mimiciv_hosp.diagnoses_icd d
                     LEFT JOIN (
                         SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
-                        FROM read_parquet('{get_parquet_path('icd9_to_icd10_cm_gem')}')
+                        FROM read_parquet('{get_table_path('icd9_to_icd10_cm_gem')}')
                         WHERE regexp_matches(icd10cm, '^[A-Z][0-9]')
                         GROUP BY icd9
                     ) AS crosswalk ON d.icd_code = crosswalk.icd9 AND d.icd_version = 9

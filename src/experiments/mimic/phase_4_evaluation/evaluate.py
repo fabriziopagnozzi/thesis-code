@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from experiments.mimic.configs import (
     EvaluateCfg,
-    get_parquet_path,
+    get_table_path,
     global_cfg,
     setup_logging,
 )
@@ -49,12 +49,12 @@ def run_evaluate(
     if evaluate_cfg.gold_mode == 'structural':
         results = evaluate_structural(builder)
     else:
-        annotations_df = pl.read_parquet(get_parquet_path('gold_annotations'))
+        annotations_df = pl.read_parquet(get_table_path('gold_annotations'))
         annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
         print(f'Loaded {len(annotations_df):,} annotated queries with facets')
         results = evaluate_llm(annotations_df, builder)
 
-    out_path = get_parquet_path('evaluation_results')
+    out_path = get_table_path('evaluation_results')
     results.write_parquet(out_path)
     print(f'\nSaved {len(results):,} result rows to {out_path}')
 
@@ -109,12 +109,12 @@ def evaluate_llm(
 
 
 def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
-    divergence_path = get_parquet_path('divergence_stats')
+    divergence_path = get_table_path('divergence_stats')
     if divergence_path.exists():
         all_queries = pl.read_parquet(divergence_path)
         queries_df = all_queries.filter(pl.col('passes_filter'))
     else:
-        queries_df = pl.read_parquet(get_parquet_path('queries'))
+        queries_df = pl.read_parquet(get_table_path('queries'))
     if 'query_id' not in queries_df.columns:
         queries_df = queries_df.with_row_index('query_id')
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
@@ -326,7 +326,7 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         print()
 
     stats_df = pl.concat(summaries)
-    stats_path = get_parquet_path('evaluation_stats')
+    stats_path = get_table_path('evaluation_stats')
     stats_df.write_parquet(stats_path)
     print(f'Saved summary to {stats_path}')
 
@@ -366,7 +366,7 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
             )
 
     best_df = pl.DataFrame(best_rows).sort('k', 'lam', 'best_for')
-    best_path = get_parquet_path('evaluation_best_per_metric')
+    best_path = get_table_path('evaluation_best_per_metric')
     best_df.write_parquet(best_path)
     print(f'Saved best-per-metric summary to {best_path}')
 
@@ -388,7 +388,7 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
             )
 
     best_fixed_lam_df = pl.DataFrame(best_fixed_lam_rows).sort('lam', 'best_for')
-    best_fixed_lam_path = get_parquet_path('evaluation_best_per_metric_fixed_lam')
+    best_fixed_lam_path = get_table_path('evaluation_best_per_metric_fixed_lam')
     best_fixed_lam_df.write_parquet(best_fixed_lam_path)
     print(f'Saved best-per-metric (fixed lam) summary to {best_fixed_lam_path}')
 

@@ -141,6 +141,7 @@ class QueryPromptRow(TypedDict):
 
     icd10_3char: str
     condition_name: str
+    stratum: int
     modifiers_json: str  # JSON list of {text, type} dicts
     n_modifiers: int
     n_condition_admissions: int
@@ -156,6 +157,7 @@ class QueryRow(TypedDict):
 
     icd10_3char: str
     condition_name: str
+    stratum: int
     modifiers_json: str
     n_modifiers: int
     n_condition_admissions: int

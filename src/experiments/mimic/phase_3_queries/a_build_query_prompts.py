@@ -20,7 +20,7 @@ from duckdb import DuckDBPyConnection
 
 from experiments.mimic.configs import (
     BuildQueryPromptsCfg,
-    get_parquet_path,
+    get_table_path,
     global_cfg,
     setup_logging,
 )
@@ -45,9 +45,9 @@ def run_build_query_prompts(
     if con is None:
         con = connect_mimic_duckdb()
 
-    conditions = pl.read_parquet(get_parquet_path('conditions_stats'))
-    chunks = pl.read_parquet(get_parquet_path('chunks'))
-    metadata = pl.read_parquet(get_parquet_path('admissions_metadata'))
+    conditions = pl.read_parquet(get_table_path('conditions_stats'))
+    chunks = pl.read_parquet(get_table_path('chunks'))
+    metadata = pl.read_parquet(get_table_path('admissions_metadata'))
 
     print(
         f'Loaded {len(conditions):,} conditions, {len(chunks):,} chunks, {len(metadata):,} admissions'
@@ -55,7 +55,7 @@ def run_build_query_prompts(
 
     df = build_query_prompts(conditions, chunks, metadata, con)
 
-    out_path = get_parquet_path('queries_prompts')
+    out_path = get_table_path('queries_prompts')
     df.write_parquet(out_path)
 
     return df
@@ -100,6 +100,7 @@ def build_query_prompts(
         condition_row = cast(ConditionStatsRow, condition_row)
         icd10_3char = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd10_3char
+        stratum = condition_row.get('stratum', 1)
         cond_hadm_ids = _get_icd3_hadm_ids(con, icd10_3char)
 
         top_mods = json.loads(condition_row.get('top_comorbidity_mods_json') or '[]')
@@ -163,6 +164,7 @@ def build_query_prompts(
                 {
                     'icd10_3char': icd10_3char,
                     'condition_name': cond_name,
+                    'stratum': stratum,
                     'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
                     'n_modifiers': len(modifiers),
                     'n_condition_admissions': len(cond_hadm_ids),
@@ -210,7 +212,7 @@ def _select_conditions_stratified(
 
     if n_strata <= 1:
         take = min(num_conditions, len(filtered))
-        return filtered.sample(take, seed=seed)
+        return filtered.sample(take, seed=seed).with_columns(pl.lit(1).alias('stratum'))
 
     lo = int(filtered['n_admissions'].min())  # type: ignore[arg-type]
     hi = int(filtered['n_admissions'].max())  # type: ignore[arg-type]
@@ -233,7 +235,9 @@ def _select_conditions_stratified(
             f'{len(bucket):,} available, taking {take}'
         )
         if take > 0:
-            parts.append(bucket.sample(take, seed=seed + i))
+            parts.append(
+                bucket.sample(take, seed=seed + i).with_columns(pl.lit(i + 1).alias('stratum'))
+            )
 
     return pl.concat(parts) if parts else filtered.head(0)
 
