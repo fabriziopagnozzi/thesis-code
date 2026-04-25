@@ -41,12 +41,19 @@ Given a list of ICD-10 sub-code descriptions sharing the same 3-character prefix
     1. Produce a single concise clinical label (up to 20 words) representing the group in a semantically meaningful way,
     focusing on the main condition shared by all sub-labels.\n
     2. Decide whether this code group is USEFUL for a multi-document clinical QA benchmark.
-Set keep=false for codes that are administrative, procedural, or too vague to anchor a
+Set "keep": false for codes that are administrative, procedural, or too vague to anchor a
 meaningful clinical question requiring multi-source synthesis.
 
-Examples of codes to exclude: do-not-resuscitate orders (Z66), encounter/screening codes (Z00-Z13),
-external cause codes (V/W/X/Y), morphology/histology codes, unspecified injury catch-alls,
-codes whose group contains only generic 'unspecified' or 'other' entries with no clear clinical entity.\n
+Examples of codes to EXCLUDE ("keep": false):
+- Intraoperative, postprocedural, and iatrogenic complications (e.g., T-codes, and specific complication blocks like L76, G97, N99)
+- Do-not-resuscitate orders (Z66) and Encounter/screening codes (Z00-Z13)
+- External cause codes (V/W/X/Y)
+- Morphology/histology codes
+- Unspecified injury catch-alls
+- Codes whose group contains only generic 'unspecified' or 'other' entries with no clear clinical entity.
+- Standalone symptom/sign codes (R-codes), UNLESS they represent a life-threatening acute state (e.g., Coma, Shock) or a complex syndrome.
+- Drug poisoning/adverse effect groups (T-codes).
+
 Prefer the most specific / prevalent clinical entity over generic catch-alls when naming.
 """
 CONDITION_FILTERING_JSONL = MIMIC_EXPERIMENT_DIR / 'condition_filtering.jsonl'
@@ -162,7 +169,7 @@ def select_conditions(
 
 def coalesce_condition_names(
     prefix_rows: list[tuple],
-    batch_size: int = 2,
+    batch_size: int = 3,
 ) -> dict[str, tuple[str, bool]]:
     """Call local LLM in batches; returns {code: (condition_name, keep)} per ICD-10 3-char code.
 
