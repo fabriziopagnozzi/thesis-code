@@ -22,13 +22,17 @@ from experiments.mimic.configs import (
     GoldAnnotationCfg,
     get_parquet_path,
     get_result_dir,
-    global_cfg,
     setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from experiments.mimic.schemas import AdmissionMetadataRow, QueryRow
-from experiments.mimic.utils import QueryAspect, TagDecision, aspects_from_modifiers
+from experiments.mimic.utils import (
+    CHARLSON_LABELS,
+    QueryAspect,
+    TagDecision,
+    aspects_from_modifiers,
+)
 from helpers.ollama_client import generate_json
 
 gold_annotation_cfg = GoldAnnotationCfg.load()
@@ -54,9 +58,7 @@ def run_gold_annotation(
 
     # Load patient metadata for chunk context
     meta_path = get_parquet_path('admissions_metadata')
-    patient_meta = (
-        _build_patient_meta(meta_path, global_cfg.charlson_labels) if meta_path.exists() else None
-    )
+    patient_meta = _build_patient_meta(meta_path, CHARLSON_LABELS) if meta_path.exists() else None
     if patient_meta:
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
 
@@ -105,6 +107,8 @@ def annotate(
 
     total = len(queries_df)
     n_done = len(done_texts)
+
+    completed_rows: list[dict] = []
 
     for i, row in enumerate(queries_df.iter_rows(named=True)):
         row = cast(QueryRow, row)
@@ -156,27 +160,31 @@ def annotate(
         query_id = f'{icd10_3char}_{i}'
         query_id = query_id.replace(' ', '_')[:120]
 
-        new_row = pl.DataFrame(
-            [
-                {
-                    'query_id': query_id,
-                    'icd10_3char': icd10_3char,
-                    'condition_name': row.get('condition_name', ''),
-                    'modifiers_json': json.dumps(modifiers_json),
-                    'query_text': query_text,
-                    'facets_json': json.dumps(facets),
-                    'n_facets': len(facets),
-                    'n_gold_chunks': len(all_gold_chunks),
-                }
-            ]
+        completed_rows.append(
+            {
+                'query_id': query_id,
+                'icd10_3char': icd10_3char,
+                'condition_name': row.get('condition_name', ''),
+                'modifiers_json': json.dumps(modifiers_json),
+                'query_text': query_text,
+                'facets_json': json.dumps(facets),
+                'n_facets': len(facets),
+                'n_gold_chunks': len(all_gold_chunks),
+            }
         )
+    # end for i, row in enumerate(queries_df.iter_rows(named=True)):
+
+    if completed_rows:
+        new_df = pl.DataFrame(completed_rows)
 
         if out_path.exists():
             existing = pl.read_parquet(out_path)
-            pl.concat([existing, new_row]).write_parquet(out_path)
+            final_df = pl.concat([existing, new_df])
         else:
-            new_row.write_parquet(out_path)
-    # end for i, row in enumerate(queries_df.iter_rows(named=True))
+            final_df = new_df
+
+        final_df.write_parquet(out_path)
+        return final_df
 
     return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 

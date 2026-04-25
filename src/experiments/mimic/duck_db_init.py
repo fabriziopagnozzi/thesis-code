@@ -1,6 +1,10 @@
 import duckdb
 
-from experiments.mimic.configs import MIMIC_IV_DIR, get_parquet_path, setup_logging
+from experiments.mimic.configs import (
+    MIMIC_IV_DIR,
+    get_parquet_path,
+    setup_logging,
+)
 from helpers.dir_paths import (
     BHC_DIR,
     HOSP_DIR,
@@ -83,6 +87,7 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
             )
 
     _load_derived_concepts(con)
+    _ensure_unified_diagnoses(con)
 
     return con
 
@@ -100,6 +105,44 @@ def _load_derived_concepts(con: duckdb.DuckDBPyConnection):
             print(f'Materializing mimiciv_derived.{table} --> {parquet_path.name} ...')
             run_sql_concept_script(con, sql_rel)
             con.execute(f"COPY mimiciv_derived.{table} TO '{parquet_path}' (FORMAT PARQUET)")
+
+
+def _ensure_unified_diagnoses(con: duckdb.DuckDBPyConnection) -> None:
+    """Materialize unified_diagnoses (ICD-9 + ICD-10 → ICD-10) once, then register as view.
+
+    Rows where no ICD-9→10 crosswalk entry exists are dropped, so every row in the
+    materialized table has a valid unified_icd10 code.
+    """
+    parquet_path = get_parquet_path('unified_diagnoses')
+    parquet_path.parent.mkdir(parents=True, exist_ok=True)
+    if not parquet_path.exists():
+        print('Materializing unified_diagnoses (ICD-9+10 → ICD-10) ...')
+        con.execute(f"""--sql
+            COPY (
+                SELECT hadm_id, unified_icd10
+                FROM (
+                    SELECT d.hadm_id,
+                        CASE
+                            WHEN d.icd_version = 10 THEN d.icd_code
+                            WHEN d.icd_version = 9  THEN crosswalk.icd10
+                        END AS unified_icd10
+                    FROM mimiciv_hosp.diagnoses_icd d
+                    LEFT JOIN (
+                        SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
+                        FROM read_parquet('{get_parquet_path('icd9_to_icd10_cm_gem')}')
+                        WHERE regexp_matches(icd10cm, '^[A-Z][0-9]')
+                        GROUP BY icd9
+                    ) AS crosswalk ON d.icd_code = crosswalk.icd9 AND d.icd_version = 9
+                )
+                WHERE unified_icd10 IS NOT NULL
+                AND regexp_matches(unified_icd10, '^[A-Z][0-9]')
+            ) TO '{parquet_path}' (FORMAT PARQUET)
+        """)
+        print(f'  Saved {parquet_path}')
+    con.execute(
+        f'CREATE VIEW IF NOT EXISTS unified_diagnoses AS '
+        f"SELECT * FROM read_parquet('{parquet_path}')"
+    )
 
 
 def register_result_view(con: duckdb.DuckDBPyConnection, name: str, df) -> None:

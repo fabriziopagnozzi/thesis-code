@@ -61,66 +61,6 @@ def run_build_query_prompts(
     return df
 
 
-def _select_conditions_stratified(
-    conditions: pl.DataFrame,
-    num_conditions: int,
-    min_adm: int | None,
-    max_adm: int | None,
-    n_strata: int,
-    scale: Literal['linear', 'log'] = 'log',
-    seed: int = 42,
-) -> pl.DataFrame:
-    """Stratified sample of conditions by n_admissions for pool-size diversity.
-
-    Filter to [min_adm, max_adm], split the filtered range into n_strata log- or
-    linear-spaced buckets, and sample num_conditions/n_strata from each bucket
-    uniformly at random. Logs per-stratum counts.
-    """
-    filtered = conditions
-    if min_adm is not None:
-        filtered = filtered.filter(pl.col('n_admissions') >= min_adm)
-    if max_adm is not None:
-        filtered = filtered.filter(pl.col('n_admissions') <= max_adm)
-
-    if filtered.is_empty():
-        full_lo = conditions['n_admissions'].min()
-        full_hi = conditions['n_admissions'].max()
-        raise ValueError(
-            f'No conditions in range [{min_adm}, {max_adm}]. '
-            f'conditions_stats n_admissions span: [{full_lo}, {full_hi}]'
-        )
-
-    if n_strata <= 1:
-        take = min(num_conditions, len(filtered))
-        return filtered.sample(take, seed=seed)
-
-    lo = int(filtered['n_admissions'].min())  # type: ignore[arg-type]
-    hi = int(filtered['n_admissions'].max())  # type: ignore[arg-type]
-    if scale == 'log':
-        edges = np.logspace(np.log10(max(lo, 1)), np.log10(hi), n_strata + 1)
-    else:
-        edges = np.linspace(lo, hi, n_strata + 1)
-    edges[-1] = edges[-1] + 1  # make final edge inclusive via half-open intervals
-
-    per_stratum, remainder = divmod(num_conditions, n_strata)
-    parts: list[pl.DataFrame] = []
-    for i in range(n_strata):
-        bucket = filtered.filter(
-            (pl.col('n_admissions') >= edges[i])
-            & (pl.col('n_admissions') < edges[i + 1])
-        )
-        quota = per_stratum + (1 if i < remainder else 0)
-        take = min(quota, len(bucket))
-        print(
-            f'  [stratum {i + 1}/{n_strata}] n_admissions [{int(edges[i])}, {int(edges[i + 1])}): '
-            f'{len(bucket):,} available, taking {take}'
-        )
-        if take > 0:
-            parts.append(bucket.sample(take, seed=seed + i))
-
-    return pl.concat(parts) if parts else filtered.head(0)
-
-
 def build_query_prompts(
     conditions: pl.DataFrame,
     chunks: pl.DataFrame,
@@ -188,7 +128,7 @@ def build_query_prompts(
         unique_mod_texts = {t for mset in modifier_sets for t, _ in mset}
         modifier_stats: dict[str, dict] = {}
         for mod_text in unique_mod_texts:
-            inter = _get_modifier_hadm_ids(con, cond_hadm_ids, mod_text, mod_type_lookup[mod_text])
+            inter = _get_modifier_hadm_ids(con, icd10_3char, mod_text, mod_type_lookup[mod_text])
             n_mod_chunks = sum(len(chunks_by_hadm_id[h]) for h in inter if h in chunks_by_hadm_id)
             modifier_stats[mod_text] = {'n_admissions': len(inter), 'n_chunks': n_mod_chunks}
 
@@ -205,7 +145,7 @@ def build_query_prompts(
             data_samples = _sample_grounding_chunks_per_modifier(
                 chunks_by_hadm_id,
                 meta_by_hadm_id,
-                cond_hadm_ids,
+                icd10_3char,
                 modifiers,
                 con,
                 n=query_prompts_cfg.n_grounding_patients,
@@ -241,54 +181,108 @@ def build_query_prompts(
     return pl.DataFrame(results)
 
 
+def _select_conditions_stratified(
+    conditions: pl.DataFrame,
+    num_conditions: int,
+    min_adm: int | None,
+    max_adm: int | None,
+    n_strata: int,
+    scale: Literal['linear', 'log'] = 'log',
+    seed: int = 42,
+) -> pl.DataFrame:
+    """Stratified sample of conditions by n_admissions for pool-size diversity.
+
+    Filter to [min_adm, max_adm], split the filtered range into n_strata log- or
+    linear-spaced buckets, and sample num_conditions/n_strata from each bucket
+    uniformly at random. Logs per-stratum counts.
+    """
+    filtered = conditions
+    if min_adm is not None:
+        filtered = filtered.filter(pl.col('n_admissions') >= min_adm)
+    if max_adm is not None:
+        filtered = filtered.filter(pl.col('n_admissions') <= max_adm)
+
+    if filtered.is_empty():
+        raise ValueError(
+            f'No conditions in range [{min_adm}, {max_adm}]. '
+            f'conditions_stats n_admissions span: [{conditions["n_admissions"].min()}, {conditions["n_admissions"].max()}]'
+        )
+
+    if n_strata <= 1:
+        take = min(num_conditions, len(filtered))
+        return filtered.sample(take, seed=seed)
+
+    lo = int(filtered['n_admissions'].min())  # type: ignore[arg-type]
+    hi = int(filtered['n_admissions'].max())  # type: ignore[arg-type]
+    if scale == 'log':
+        edges = np.logspace(np.log10(max(lo, 1)), np.log10(hi), n_strata + 1)
+    else:
+        edges = np.linspace(lo, hi, n_strata + 1)
+    edges[-1] = edges[-1] + 1  # make final edge inclusive via half-open intervals
+
+    per_stratum, remainder = divmod(num_conditions, n_strata)
+    parts: list[pl.DataFrame] = []
+    for i in range(n_strata):
+        bucket = filtered.filter(
+            (pl.col('n_admissions') >= edges[i]) & (pl.col('n_admissions') < edges[i + 1])
+        )
+        quota = per_stratum + (1 if i < remainder else 0)
+        take = min(quota, len(bucket))
+        print(
+            f'  [stratum {i + 1}/{n_strata}] n_admissions [{int(edges[i])}, {int(edges[i + 1])}): '
+            f'{len(bucket):,} available, taking {take}'
+        )
+        if take > 0:
+            parts.append(bucket.sample(take, seed=seed + i))
+
+    return pl.concat(parts) if parts else filtered.head(0)
+
+
 # -- Step 2: sample grounding chunks --
 def _get_icd3_hadm_ids(con, icd10_3char: str) -> set[int]:
     rows = con.execute(f"""--sql
         SELECT DISTINCT hadm_id
-        FROM mimiciv_hosp.diagnoses_icd
-        WHERE icd_version = 10
-        AND LEFT(icd_code, 3) = '{icd10_3char}'
+        FROM unified_diagnoses
+        WHERE LEFT(unified_icd10, 3) = '{icd10_3char}'
     """).fetchall()
     return {r[0] for r in rows}
 
 
 def _get_modifier_hadm_ids(
-    con, condition_hadm_ids: set[int], modifier_text: str, modifier_type: str
+    con, icd10_3char: str, modifier_text: str, modifier_type: str
 ) -> set[int]:
     if modifier_type == 'comorbidity':
-        return _filter_comorbidity(con, condition_hadm_ids, modifier_text)
+        return _filter_comorbidity(con, icd10_3char, modifier_text)
     if modifier_type == 'demographic':
-        return _filter_demographic(con, condition_hadm_ids, modifier_text)
+        return _filter_demographic(con, icd10_3char, modifier_text)
     return set()
 
 
-def _filter_comorbidity(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
+def _filter_comorbidity(con, icd10_3char: str, modifier_text: str) -> set[int]:
     col = global_cfg.label_to_charlson_col.get(modifier_text)
     if col is None:
         return set()
-    placeholders = ','.join(str(h) for h in condition_hadm_ids)
-
     rows = con.execute(f"""--sql
-        SELECT charlson.hadm_id
-        FROM charlson
-        WHERE charlson.hadm_id IN ({placeholders})
-        AND charlson.{col} > 0
+        SELECT DISTINCT ud.hadm_id
+        FROM unified_diagnoses ud
+        JOIN charlson c ON ud.hadm_id = c.hadm_id
+        WHERE LEFT(ud.unified_icd10, 3) = '{icd10_3char}'
+        AND c.{col} > 0
     """).fetchall()
     return {r[0] for r in rows}
 
 
-def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -> set[int]:
+def _filter_demographic(con, icd10_3char: str, modifier_text: str) -> set[int]:
     filt = query_prompts_cfg.demographic_filters.get(modifier_text)
     if filt is None:
         return set()
     _, op, val = filt
-    placeholders = ','.join(str(h) for h in condition_hadm_ids)
-
     rows = con.execute(f"""--sql
-        SELECT age.hadm_id
-        FROM age
-        WHERE age.hadm_id IN ({placeholders})
-        AND age.age {op} {val}
+        SELECT DISTINCT ud.hadm_id
+        FROM unified_diagnoses ud
+        JOIN age a ON ud.hadm_id = a.hadm_id
+        WHERE LEFT(ud.unified_icd10, 3) = '{icd10_3char}'
+        AND a.age {op} {val}
     """).fetchall()
     return {r[0] for r in rows}
 
@@ -296,7 +290,7 @@ def _filter_demographic(con, condition_hadm_ids: set[int], modifier_text: str) -
 def _sample_grounding_chunks_per_modifier(
     chunks_by_hadm: dict[int, pl.DataFrame],
     meta_by_hadm: dict[int, AdmissionMetaSlimRow],
-    cond_hadm_ids: set[int],
+    icd10_3char: str,
     modifiers: list[tuple[str, str]],
     con,
     n: int,
@@ -308,7 +302,7 @@ def _sample_grounding_chunks_per_modifier(
     for mod_text, mod_type in modifiers * n:
         if len(seen_hadm) >= n:
             break
-        mod_hadm_ids = _get_modifier_hadm_ids(con, cond_hadm_ids, mod_text, mod_type)
+        mod_hadm_ids = _get_modifier_hadm_ids(con, icd10_3char, mod_text, mod_type)
         if not mod_hadm_ids:
             continue
         bhc_candidates = _hadm_ids_with_bhc(chunks_by_hadm, mod_hadm_ids - seen_hadm)

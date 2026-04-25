@@ -10,7 +10,6 @@ from tqdm import tqdm
 
 from experiments.mimic.configs import NoteChunkingCfg, get_parquet_path, global_cfg, setup_logging
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.phase_1_chunking.a_conditions_stats import TRANSLATE_ICDS_CTE
 
 chunking_cfg = NoteChunkingCfg.load()
 
@@ -61,12 +60,11 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
 
     # Pull into Polars (arrow) then convert to tuples for multiprocessing
     notes_df = con.execute(f"""--sql
-        WITH unified_conditions_icds AS {TRANSLATE_ICDS_CTE},
-        target_admissions AS (
-            SELECT DISTINCT u.hadm_id
-            FROM unified_conditions_icds AS u
+        WITH target_admissions AS (
+            SELECT DISTINCT ud.hadm_id
+            FROM unified_diagnoses AS ud
             JOIN df_top_codes
-              ON LEFT(u.unified_icd10, 3) = df_top_codes.code
+              ON LEFT(ud.unified_icd10, 3) = df_top_codes.code
         )
         SELECT
             bhc.note_id,

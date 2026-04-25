@@ -35,7 +35,7 @@ def aspects_from_modifiers(modifiers_json: list[dict]) -> list[QueryAspect]:
     ]
 
 
-def col_for_model(model_name: str) -> str:
+def get_vec_col_name(model_name: str) -> str:
     safe = re.sub(r'[/\-.]', '_', model_name)
     return f'vector_{safe}'
 

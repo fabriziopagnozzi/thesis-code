@@ -360,8 +360,8 @@ class CandidatePoolBuilder:
             return self._modifier_to_hadm_ids_cache[cache_key]
         result = set(
             self._con.execute(f"""--sql
-                SELECT DISTINCT hadm_id FROM mimiciv_hosp.diagnoses_icd
-                WHERE icd_version = 10 AND LEFT(icd_code, 3) = '{icd10_3char}'
+                SELECT DISTINCT hadm_id FROM unified_diagnoses
+                WHERE LEFT(unified_icd10, 3) = '{icd10_3char}'
             """)
             .pl()['hadm_id']
             .to_list()

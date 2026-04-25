@@ -10,9 +10,9 @@ import argparse
 
 from experiments.mimic.configs import setup_logging
 from experiments.mimic.phase_1_chunking.orchestrator_1 import run_phase_1
-from experiments.mimic.phase_2_embedding.a_embed import run_embed
+from experiments.mimic.phase_2_embedding.embed_whole_corpus import run_embed
 from experiments.mimic.phase_3_queries.orchestrator_3 import run_phase_3
-from experiments.mimic.phase_4_evaluation.a_evaluate import run_evaluate
+from experiments.mimic.phase_4_evaluation.evaluate import run_evaluate
 
 PHASES = {
     1: lambda: run_phase_1(init_sql=True),
@@ -21,6 +21,7 @@ PHASES = {
     4: run_evaluate,
 }
 
+# TODO: don't use run_embed
 
 if __name__ == '__main__':
     setup_logging()

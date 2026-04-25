@@ -9,7 +9,7 @@ from uuid import uuid4
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
 
-from experiments.mimic.utils import CHARLSON_LABELS, col_for_model
+from experiments.mimic.utils import CHARLSON_LABELS, get_vec_col_name
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
 
@@ -23,17 +23,16 @@ class GlobalCfg(BaseModel):
     prefilter_n: int
     embedding_model: str
     chunks_vec_table: str
-    query_retrieval_instruction: str | None = None
+    query_retrieval_instruction: str | None = (
+        'Instruct: Given a multi-aspect clinical query comparing patient cohorts, '
+        'retrieve relevant hospital discharge summaries containing matching patient '
+        'demographics, comorbidities, and treatment outcomes.\nQuery: '
+    )
 
     @computed_field
     @property
     def vector_column(self) -> str:
-        return col_for_model(self.embedding_model)
-
-    @computed_field
-    @property
-    def charlson_labels(self) -> dict[str, str]:
-        return CHARLSON_LABELS
+        return get_vec_col_name(self.embedding_model)
 
     @computed_field
     @property
@@ -44,7 +43,6 @@ class GlobalCfg(BaseModel):
 exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
 MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
 VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
-ICD_MAPPING_PATH = MIMIC_RESULTS_DIR / '_shared' / 'icd9_to_icd10_cm_gem.csv'
 MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / exp_name
 LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
 CONFIG_DIR = MIMIC_EXPERIMENT_DIR / '_config.yaml'
@@ -90,8 +88,13 @@ def get_result_dir(table: str) -> Path:
 
 
 def get_parquet_path(table: str) -> Path:
-    fixed_path_tables = ['admissions_metadata', 'age', 'charlson']
-
+    fixed_path_tables = [
+        'admissions_metadata',
+        'age',
+        'charlson',
+        'unified_diagnoses',
+        'icd9_to_icd10_cm_gem',
+    ]
     if table in fixed_path_tables:
         return MIMIC_RESULTS_DIR / '_shared' / f'{table}.parquet'
 

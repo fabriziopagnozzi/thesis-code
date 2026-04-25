@@ -13,7 +13,7 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import VECTOR_DB_DIR, col_for_model, setup_logging
+from experiments.mimic.configs import VECTOR_DB_DIR, get_vec_col_name, setup_logging
 from helpers.embedder import Embedder
 
 DEFAULT_MODELS = [
@@ -40,7 +40,7 @@ def main() -> None:
     args = parser.parse_args()
 
     models = args.models
-    cols = [col_for_model(m) for m in models]
+    cols = [get_vec_col_name(m) for m in models]
 
     db = lancedb.connect(VECTOR_DB_DIR)
     table = db.open_table(args.table)

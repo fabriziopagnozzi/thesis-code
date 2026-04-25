@@ -5,33 +5,17 @@ import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.configs import (
-    ICD_MAPPING_PATH,
     MIMIC_EXPERIMENT_DIR,
     ConditionsStatsCfg,
     get_parquet_path,
-    global_cfg,
     setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils import CHARLSON_LABELS
 from helpers.ollama_client import generate_json
 
 conditions_stats_cfg = ConditionsStatsCfg.load()
 
-
-TRANSLATE_ICDS_CTE = f"""--sql
-    (SELECT diagnoses_icd.hadm_id AS hadm_id,
-        CASE
-            WHEN diagnoses_icd.icd_version = 10 THEN diagnoses_icd.icd_code
-            WHEN diagnoses_icd.icd_version = 9 THEN icd_crosswalk.icd10
-        END AS unified_icd10
-    FROM mimiciv_hosp.diagnoses_icd diagnoses_icd
-    LEFT JOIN (
-        SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
-        FROM read_csv_auto('{ICD_MAPPING_PATH}')
-        GROUP BY icd9
-    ) AS icd_crosswalk
-    ON diagnoses_icd.icd_code = icd_crosswalk.icd9 AND diagnoses_icd.icd_version = 9)
-"""
 
 
 _COALESCE_SYSTEM = """
@@ -86,17 +70,14 @@ def select_conditions(
         icd10_3char, condition_name, n_admissions, mean_comorbidity_count, top_comorbidity_mods_json
     Sorted by n_admissions descending, filtered by min_admissions.
     """
-    charlson_labels = global_cfg.charlson_labels
-    all_cols = list(charlson_labels.keys())
+    all_cols = list(CHARLSON_LABELS.keys())
 
     prefix_rows = con.execute(f"""--sql
-        WITH unified_diagnoses AS {TRANSLATE_ICDS_CTE},
-        condition_stats AS (
+        WITH condition_stats AS (
             SELECT
                 LEFT(ud.unified_icd10, 3) AS icd10_3char,
                 COUNT(DISTINCT ud.hadm_id) AS n_admissions
             FROM unified_diagnoses ud
-            WHERE ud.unified_icd10 IS NOT NULL
             GROUP BY LEFT(ud.unified_icd10, 3)
             HAVING COUNT(DISTINCT ud.hadm_id) >= {min_admissions}
         )
@@ -123,7 +104,6 @@ def select_conditions(
         print(f'Filtered out {n_filtered} administrative/generic codes by LLM')
 
     charlson_rates = con.execute(f"""--sql
-        WITH unified_diagnoses AS {TRANSLATE_ICDS_CTE}
         SELECT dedup.icd10_3char, {', '.join(f'AVG(c.{col}) AS {col}' for col in all_cols)}
         FROM (
             SELECT DISTINCT LEFT(unified_icd10, 3) AS icd10_3char, hadm_id
@@ -144,7 +124,7 @@ def select_conditions(
         else:
             mean_comorbidity_count = round(sum(float(r) for r in rates if r is not None), 2)
             scored = [
-                {'col': col, 'label': charlson_labels[col], 'rate': round(float(r), 4)}
+                {'col': col, 'label': CHARLSON_LABELS[col], 'rate': round(float(r), 4)}
                 for col, r in zip(all_cols, rates, strict=True)
                 if r and r > 0.05
             ]
@@ -227,7 +207,7 @@ def coalesce_condition_names_mock(
     prefix_rows: list[tuple],
     batch_size: int = 10,
 ) -> dict[str, tuple[str, bool]]:
-    """Mock: skip LLM, keep all codes, use first title as condition_name."""
+    """Mock for testing: skip LLM, keep all codes."""
     return {icd3: (raw_titles if raw_titles else icd3, True) for icd3, raw_titles, _ in prefix_rows}
 
 

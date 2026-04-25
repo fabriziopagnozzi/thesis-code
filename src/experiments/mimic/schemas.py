@@ -16,6 +16,7 @@ from typing import TypedDict
 
 class ConditionStatsRow(TypedDict):
     """conditions_stats.parquet — one row per ICD-10 3-char prefix condition."""
+
     icd10_3char: str
     condition_name: str
     n_admissions: int
@@ -25,6 +26,7 @@ class ConditionStatsRow(TypedDict):
 
 class ChunkRow(TypedDict):
     """chunks.parquet — one row per overlapping text window."""
+
     text: str
     chunk_id: str
     note_id: str
@@ -38,6 +40,7 @@ class ChunkRow(TypedDict):
 
 class _AdmissionMetadataBase(TypedDict):
     """Always-present fields sourced from the admissions table."""
+
     hadm_id: int
     subject_id: int
     age: float | None
@@ -55,6 +58,7 @@ class _AdmissionMetadataBase(TypedDict):
 
 class AdmissionMetadataRow(_AdmissionMetadataBase, total=False):
     """admissions_metadata.parquet — base fields + Charlson fields (null when absent from Charlson view)."""
+
     age_score: int
     charlson_comorbidity_index: int
     myocardial_infarct: int | None
@@ -78,6 +82,7 @@ class AdmissionMetadataRow(_AdmissionMetadataBase, total=False):
 
 class AdmissionMetaSlimRow(TypedDict):
     """Slim projection of admissions_metadata used in query-prompt grounding."""
+
     hadm_id: int
     age: float | None
     gender: str
@@ -90,7 +95,8 @@ class AdmissionMetaSlimRow(TypedDict):
 
 
 class EmbedJoinedRow(ChunkRow, total=False):
-    """chunks LEFT JOIN admissions_metadata (selected cols) iterated in a_embed.py."""
+    """chunks LEFT JOIN admissions_metadata (selected cols) iterated in embed_whole_corpus.py."""
+
     age: float | None
     gender: str
     race: str
@@ -124,6 +130,7 @@ class EmbedJoinedRow(ChunkRow, total=False):
 
 class GroundingChunkSample(TypedDict):
     """Single grounding example assembled in _sample_patient."""
+
     header: str
     text: str
     hadm_id: int
@@ -131,9 +138,10 @@ class GroundingChunkSample(TypedDict):
 
 class QueryPromptRow(TypedDict):
     """queries_prompts.parquet — one row per (condition, modifier-set) prompt."""
+
     icd10_3char: str
     condition_name: str
-    modifiers_json: str      # JSON list of {text, type} dicts
+    modifiers_json: str  # JSON list of {text, type} dicts
     n_modifiers: int
     n_condition_admissions: int
     n_condition_chunks: int
@@ -145,6 +153,7 @@ class QueryPromptRow(TypedDict):
 
 class QueryRow(TypedDict):
     """queries.parquet — QueryPromptRow minus full_prompt, plus query_text."""
+
     icd10_3char: str
     condition_name: str
     modifiers_json: str
@@ -159,13 +168,14 @@ class QueryRow(TypedDict):
 
 class DivergenceStatsRow(QueryRow, total=False):
     """divergence_stats.parquet — QueryRow plus pre-filter divergence metrics."""
+
     jaccard_div: float
     fac_gap: float
     fac_topk: float
     fac_fl: float
     pool_size: int
     passes_filter: bool
-    query_id: int | str   # added by with_row_index in evaluate_structural when missing
+    query_id: int | str  # added by with_row_index in evaluate_structural when missing
 
 
 # ---------------------------------------------------------------------------
@@ -175,18 +185,20 @@ class DivergenceStatsRow(QueryRow, total=False):
 
 class GoldAnnotationRow(TypedDict):
     """gold_annotations.parquet — one row per annotated query."""
+
     query_id: str
     icd10_3char: str
     condition_name: str
     modifiers_json: str
     query_text: str
-    facets_json: str    # JSON dict: facet_label → list[chunk_id]
+    facets_json: str  # JSON dict: facet_label → list[chunk_id]
     n_facets: int
     n_gold_chunks: int
 
 
 class DivergenceMetrics(TypedDict):
     """Return type of compute_divergence in c_filter_queries.py."""
+
     jaccard: float
     jaccard_div: float
     fac_gap: float
@@ -197,6 +209,7 @@ class DivergenceMetrics(TypedDict):
 
 class EvaluationMetrics(TypedDict):
     """One element of the list returned by evaluate_query."""
+
     strategy: str
     k: int
     lam: float | None
@@ -212,6 +225,7 @@ class EvaluationMetrics(TypedDict):
 
 class EvaluationResultRow(EvaluationMetrics, total=False):
     """evaluation_results.parquet — EvaluationMetrics plus query-level keys."""
+
     query_id: str
     icd10_3char: str
     n_facets: int
@@ -219,6 +233,7 @@ class EvaluationResultRow(EvaluationMetrics, total=False):
 
 class EvaluationStatsRow(TypedDict):
     """evaluation_stats.parquet — mean metrics per (strategy, lam, k) across all queries."""
+
     strategy: str
     lam: float | None
     AR: float
@@ -234,10 +249,11 @@ class EvaluationStatsRow(TypedDict):
 
 class BestPerMetricRow(TypedDict):
     """evaluation_best_per_metric.parquet — winning (strategy, k, lam) per metric at each (k, lam)."""
+
     k: int
     lam: float | None
-    best_for: str          # 'AR' | 'WAR' | 'GP' | 'GR'
-    strategy: list[str]    # list because ties are possible
+    best_for: str  # 'AR' | 'WAR' | 'GP' | 'GR'
+    strategy: list[str]  # list because ties are possible
     AR: float
     WAR: float
     GP: float
@@ -246,10 +262,11 @@ class BestPerMetricRow(TypedDict):
 
 class BestPerMetricFixedLamRow(TypedDict):
     """evaluation_best_per_metric_fixed_lam.parquet — winning (strategy, k) per metric at each fixed lam."""
+
     lam: float | None
     best_for: str
     strategy: list[str]
-    k: list[int]           # list because ties across k values are possible
+    k: list[int]  # list because ties across k values are possible
     AR: float
     WAR: float
     GP: float

@@ -53,7 +53,7 @@ def run_phase_1(
         register_result_view(con, 'chunks', chunks)
 
     if 3 in subphases:
-        print('\n> Step 1.4: Deduplication')
+        print('\n> Step 1.3: Deduplication')
         chunks = run_dedup(cfg=dedup_cfg)
         register_result_view(con, 'chunks', chunks)
 
