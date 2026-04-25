@@ -5,19 +5,16 @@ import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.configs import (
-    MIMIC_EXPERIMENT_DIR,
     ConditionsStatsCfg,
     get_table_path,
     setup_logging,
 )
+from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.utils import CHARLSON_LABELS
 from helpers.ollama_client import generate_json
 
 conditions_stats_cfg = ConditionsStatsCfg.load()
-
-
-_COALESCE_SYSTEM = """
+LLM_CONDITIONS_SYSTEM_PROMPT = """
 You are a medical coding expert helping build a clinical QA benchmark.
 
 Given a list of ICD-10 sub-code descriptions sharing the same 3-character prefix, you must:\n
@@ -39,7 +36,6 @@ Examples of codes to EXCLUDE ("keep": false):
 
 Prefer the most specific / prevalent clinical entity over generic catch-alls when naming.
 """
-CONDITION_FILTERING_JSONL = MIMIC_EXPERIMENT_DIR / 'condition_filtering.jsonl'
 
 
 def run_conditions_stats(
@@ -69,7 +65,7 @@ def select_conditions(
         icd10_3char, condition_name, n_admissions, mean_comorbidity_count, top_comorbidity_mods_json
     Sorted by n_admissions descending, filtered by min_admissions.
     """
-    all_cols = list(CHARLSON_LABELS.keys())
+    all_cols = list(CHARLSON_LABELS_TO_STR.keys())
 
     prefix_rows = con.execute(f"""--sql
         WITH condition_stats AS (
@@ -123,7 +119,7 @@ def select_conditions(
         else:
             mean_comorbidity_count = round(sum(float(r) for r in rates if r is not None), 2)
             scored = [
-                {'col': col, 'label': CHARLSON_LABELS[col], 'rate': round(float(r), 4)}
+                {'col': col, 'label': CHARLSON_LABELS_TO_STR[col], 'rate': round(float(r), 4)}
                 for col, r in zip(all_cols, rates, strict=True)
                 if r and r > 0.05
             ]
@@ -151,23 +147,23 @@ def coalesce_condition_names(
     batch_size: int = 3,
 ) -> dict[str, tuple[str, bool]]:
     """Call local LLM in batches; returns {code: (condition_name, keep)} per ICD-10 3-char code.
-
-    Persists results incrementally to CONDITION_FILTERING_JSONL and resumes from it on restart.
+    Persists results incrementally to cond_filtering_jsonl_out_path and resumes from it on restart.
     """
     code_to_info: dict[str, tuple[str, bool]] = {}
-    CONDITION_FILTERING_JSONL.parent.mkdir(parents=True, exist_ok=True)
-    if CONDITION_FILTERING_JSONL.exists():
-        with CONDITION_FILTERING_JSONL.open() as f:
+
+    cond_filtering_jsonl_out_path = get_table_path('condition_filtering', ext='jsonl')
+    if cond_filtering_jsonl_out_path.exists():
+        with cond_filtering_jsonl_out_path.open() as f:
             for line in f:
                 item = json.loads(line)
                 code_to_info[item['code']] = (item['condition_name'], bool(item['keep']))
         print(
-            f'Resumed: {len(code_to_info)} codes already processed from {CONDITION_FILTERING_JSONL}'
+            f'Resumed: {len(code_to_info)} codes already processed from {cond_filtering_jsonl_out_path}'
         )
 
     batches = [prefix_rows[i : i + batch_size] for i in range(0, len(prefix_rows), batch_size)]
 
-    with CONDITION_FILTERING_JSONL.open('a') as jsonl_f:
+    with cond_filtering_jsonl_out_path.open('a') as jsonl_f:
         for batch in tqdm(batches, desc='Coalescing condition names'):
             payload = [
                 {'code': icd3, 'titles': raw_titles.split(' | ')[:75]}
@@ -189,7 +185,7 @@ def coalesce_condition_names(
                 model=conditions_stats_cfg.cond_processing_llm,
                 num_ctx=32_000,
                 num_predict=-1,
-                system=_COALESCE_SYSTEM,
+                system=LLM_CONDITIONS_SYSTEM_PROMPT,
                 think=False,
                 stream=False,
             )
@@ -214,5 +210,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
-    raw = load_config_from_main(phase=1)
+    raw = load_config_from_main(key='chunking')
     run_conditions_stats(cfg=ConditionsStatsCfg(**raw['conditions_stats']))

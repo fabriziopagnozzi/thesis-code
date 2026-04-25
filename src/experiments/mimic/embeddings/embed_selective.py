@@ -23,7 +23,7 @@ from experiments.mimic.configs import (
     setup_logging,
 )
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.phase_2_embedding.embed_whole_corpus import enrich_note_excerpts
+from experiments.mimic.embeddings.embed_whole_corpus import enrich_note_excerpts
 from helpers.embedder import Embedder
 
 embed_cfg = EmbedCfg.load()
@@ -34,33 +34,29 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
     if cfg is not None:
         embed_cfg = cfg
 
-    # 1. Get selected ICD-3 codes from generated queries (or fall back to prompts)
-    queries_path = get_table_path('queries')
-    source_path = queries_path if queries_path.exists() else get_table_path('queries_prompts')
-    if not source_path.exists():
-        raise FileNotFoundError(
-            'Neither queries.parquet nor queries_prompts.parquet found at expected paths. '
-            'Run phase 3.1 (a_build_query_prompts.py) before selective embed.'
-        )
-    source_df = pl.read_parquet(source_path)
-    selected_codes = source_df['icd10_3char'].unique().to_list()
+    queries_df = pl.read_parquet(get_table_path('queries'))
+    all_chunks = pl.read_parquet(get_table_path('chunks'))
+
+    # 1. Get selected ICD-3 codes from generated queries
+    selected_codes = queries_df['icd10_3char'].unique().to_list()
     print(
-        f'[selective embed] {len(selected_codes)} unique conditions from {source_path.name}: '
+        f'[selective embed] {len(selected_codes)} unique conditions from {get_table_path("queries").name}: '
         f'{selected_codes[:5]}{"..." if len(selected_codes) > 5 else ""}'
     )
 
-    # 2. Resolve hadm_ids via a small IN clause on ICD-3 codes (~dozens, not thousands)
+    # 2. Resolve hadm_ids for selected ICD-3 codes
     con = connect_mimic_duckdb()
-    codes_sql = ', '.join(f"'{c}'" for c in selected_codes)
-    condition_hadm_ids = con.execute(f"""--sql
+    condition_hadm_ids = con.execute(
+        """--sql
         SELECT DISTINCT hadm_id
         FROM unified_diagnoses
-        WHERE LEFT(unified_icd10, 3) IN ({codes_sql})
-    """).pl()
+        WHERE list_contains($1::VARCHAR[], LEFT(unified_icd10, 3))
+    """,
+        [selected_codes],
+    ).pl()
     print(f'[selective embed] {len(condition_hadm_ids):,} admissions for selected conditions')
 
-    # 3. Filter chunks to relevant admissions - Polars join, no SQL IN on hadm_ids
-    all_chunks = pl.read_parquet(get_table_path('chunks'))
+    # 3. Filter chunks to relevant admissions
     relevant_chunks = all_chunks.join(condition_hadm_ids, on='hadm_id', how='inner')
     print(
         f'[selective embed] {len(relevant_chunks):,} relevant chunks '
@@ -68,7 +64,7 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
     )
     del all_chunks
 
-    # 4. Anti-join vs existing LanceDB chunk_ids - reads one column, no vectors loaded
+    # 4. Anti-join vs existing LanceDB chunk_ids
     db = connect(VECTOR_DB_DIR)
     table_name = global_cfg.chunks_vec_table
     table: Table | None = None

@@ -18,9 +18,11 @@ DATASETS_DIR = (
     else Path('/DATA/pagnozzi/datasets')
 )
 
+THIRDPARTY_CODE_DIR = ROOT_DIR / 'src' / 'thirdparty'
+MIMIR_REPO_CODE_DIR = THIRDPARTY_CODE_DIR / 'mimic_code'  # MIT Repo with utils
+
 # MIMIC-IV code dirs
 MIMIC_IV_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic'
-MIMIR_REPO_CODE_DIR = MIMIC_IV_DIR / 'mimic_code'  # MIT Repo with utils
 
 # MIMIC-IV data
 HOSP_DIR = DATASETS_DIR / 'mimic-iv' / 'hosp'

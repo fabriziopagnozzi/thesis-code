@@ -390,5 +390,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
-    raw = load_config_from_main(phase=3)
+    raw = load_config_from_main(key='queries')
     run_build_query_prompts(cfg=BuildQueryPromptsCfg(**raw['build_query_prompts']))

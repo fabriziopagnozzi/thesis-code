@@ -23,7 +23,7 @@ from experiments.mimic.configs import (
 from experiments.mimic.duck_db_init import (
     connect_mimic_duckdb,
 )
-from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from experiments.mimic.schemas import DivergenceMetrics, QueryRow
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
@@ -153,5 +153,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
-    raw = load_config_from_main(phase=3)
+    raw = load_config_from_main(key='queries')
     run_filter_queries(cfg=FilterQueriesCfg(**raw['filter_queries']))

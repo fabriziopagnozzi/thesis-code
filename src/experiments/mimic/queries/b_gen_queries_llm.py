@@ -33,6 +33,13 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
         resume_df = pl.read_parquet(out_path)
         print(f'Resuming: {len(resume_df):,} queries already generated')
 
+    if resume_df is not None and 'stratum' not in resume_df.columns:
+        resume_df = resume_df.join(
+            prompts_df.select('icd10_3char', 'modifiers_json', 'stratum'),
+            on=['icd10_3char', 'modifiers_json'],
+            how='left',
+        )
+
     results: list[dict] = resume_df.to_dicts() if resume_df is not None else []
 
     for new_count, curr_query in enumerate(query_generator(prompts_df, resume_df), start=1):
@@ -95,5 +102,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
-    raw = load_config_from_main(phase=3)
+    raw = load_config_from_main(key='queries')
     run_gen_queries_llm(cfg=GenQueriesCfg(**raw['gen_queries_llm']))

@@ -60,5 +60,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
-    raw = load_config_from_main(phase=1)
+    raw = load_config_from_main(key='chunking')
     run_dedup(cfg=DedupCfg(**raw['dedup']))

@@ -2,8 +2,9 @@ from typing import cast
 
 import polars as pl
 
+from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
 from experiments.mimic.schemas import EmbedJoinedRow
-from experiments.mimic.utils import CHARLSON_LABELS, get_age_group, get_charlson_conditions
+from experiments.mimic.utils import get_age_group, get_charlson_conditions
 
 
 def enrich_note_excerpts(
@@ -18,7 +19,7 @@ def enrich_note_excerpts(
         'top_icd_descriptions',
         'charlson_comorbidity_index',
         'admission_type',
-        *CHARLSON_LABELS.keys(),
+        *CHARLSON_LABELS_TO_STR.keys(),
     ]
     meta_subset = metadata.select(meta_cols).unique(subset=['hadm_id'])
     joined = chunks.join(meta_subset, on='hadm_id', how='left')

@@ -9,9 +9,30 @@ from uuid import uuid4
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
 
-from experiments.mimic.utils import CHARLSON_LABELS, get_vec_col_name
+from experiments.mimic.constants import CHARLSON_LABELS_TO_STR, MimicTable
+from experiments.mimic.prompts_default import (
+    GOLD_TAGS_SYSTEM_PROMPT_DEF,
+    GOLD_TAGS_TEMPLATE_DEF,
+    QUERY_GENERATING_TEMPLATE_DEF,
+)
+from experiments.mimic.utils import get_vec_col_name
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
+
+type TopLevelConfigKeys = Literal[
+    'global',
+    'chunking',
+    'embeddings',
+    'queries',
+    'evaluation',
+]
+
+MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
+VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
+
+MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / getenv('EXP_NAME', MIMIC_IV_DIR)
+LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
+CONFIG_DIR = MIMIC_EXPERIMENT_DIR / '_config.yaml'
 
 
 class GlobalCfg(BaseModel):
@@ -37,15 +58,7 @@ class GlobalCfg(BaseModel):
     @computed_field
     @property
     def label_to_charlson_col(self) -> dict[str, str]:
-        return {v: k for k, v in CHARLSON_LABELS.items()}
-
-
-exp_name = getenv('EXP_NAME', MIMIC_IV_DIR)
-MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
-VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
-MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / exp_name
-LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
-CONFIG_DIR = MIMIC_EXPERIMENT_DIR / '_config.yaml'
+        return {v: k for k, v in CHARLSON_LABELS_TO_STR.items()}
 
 
 def load_global_cfg(path: str | Path = CONFIG_DIR, cfg: GlobalCfg | None = None):
@@ -53,9 +66,9 @@ def load_global_cfg(path: str | Path = CONFIG_DIR, cfg: GlobalCfg | None = None)
     if cfg is not None:
         global_cfg = cfg
         return
-
     with open(path) as f:
         _loaded_cfg = yaml.safe_load(f)
+
     global_cfg = GlobalCfg.model_validate(_loaded_cfg['global'])
     return
 
@@ -63,67 +76,86 @@ def load_global_cfg(path: str | Path = CONFIG_DIR, cfg: GlobalCfg | None = None)
 load_global_cfg()
 
 
-def load_default_config(phase: int, path: str | Path | None = None) -> dict[str, Any]:
+def load_default_config(key: TopLevelConfigKeys, path: str | Path | None = None) -> dict[str, Any]:
     with open(path or CONFIG_DIR) as f:
-        data = yaml.safe_load(f)
-    return data[f'phase_{phase}']
+        return yaml.safe_load(f)[key]
 
 
-def load_config_from_main(phase: int) -> dict:
+def load_config_from_main(key: TopLevelConfigKeys) -> dict:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         '--config', type=str, default=None, help='Path to a custom YAML config file'
     )
     args, _ = parser.parse_known_args()
-    return load_default_config(phase, path=args.config)
+    return load_default_config(key=key, path=args.config)
 
 
-def get_result_dir(table: str) -> Path:
-
+def get_result_dir(table: MimicTable) -> Path:
     subdir = global_cfg.result_dir_overrides.get(table)
     if subdir is not None:
         return MIMIC_RESULTS_DIR / subdir
-
-    return MIMIC_EXPERIMENT_DIR
+    else:
+        return MIMIC_EXPERIMENT_DIR
 
 
 def get_table_path(
-    table: str,
+    table: MimicTable,
     ext: Literal['csv', 'jsonl', 'json', 'parquet'] = 'parquet',
 ) -> Path:
-    fixed_path_tables = [
+    shared_tables = [
         'admissions_metadata',
         'age',
         'charlson',
-        'unified_diagnoses',
         'icd9_to_icd10_cm_gem',
+        'unified_diagnoses',
     ]
-    if table in fixed_path_tables:
+    if table in shared_tables:
         return MIMIC_RESULTS_DIR / '_shared' / f'{table}.{ext}'
-
-    return get_result_dir(table) / f'{table}.{ext}'
+    else:
+        return get_result_dir(table) / f'{table}.{ext}'
 
 
 # PYDANTIC MODELS FOR CONFIGS
 # -- Phase 1 --
 class ConditionsStatsCfg(BaseModel):
-    min_admissions: int
+    min_admissions: int = 0
     cond_processing_llm: str = 'gemma4-31b-text'
 
     @classmethod
     def load(cls) -> ConditionsStatsCfg:
-        return cls(**load_default_config(phase=1)['conditions_stats'])
+        return cls(**load_default_config(key='chunking')['conditions_stats'])
 
 
 class NoteChunkingCfg(BaseModel):
     model_config = {'arbitrary_types_allowed': True}
 
-    keep_sections: set[str]
-    skip_sections: set[str]
-    metadata_only_sections: set[str]
-    max_tokens: int = 512
-    stride_tokens: int = 128
-    min_chunk_tokens: int = 128
+    keep_sections: set[str] = {
+        'HISTORY OF PRESENT ILLNESS',
+        'DISCHARGE MEDICATIONS',
+        'DISCHARGE DIAGNOSIS',
+    }
+    skip_sections: set[str] = {
+        'PERTINENT RESULTS',
+        'SEX',
+        'SERVICE',
+        'ALLERGIES',
+        'ATTENDING',
+        'SOCIAL HISTORY',
+        'FOLLOWUP INSTRUCTIONS',
+        'FACILITY',
+        'MAJOR SURGICAL OR INVASIVE PROCEDURE',
+        'FAMILY HISTORY',
+        'MEDICATIONS ON ADMISSION',
+        'DISCHARGE DISPOSITION',
+        'DISCHARGE CONDITION',
+        'DISCHARGE INSTRUCTIONS',
+        'PHYSICAL EXAM',
+        'PAST MEDICAL HISTORY',
+    }
+    metadata_only_sections: set[str] = {'CHIEF COMPLAINT'}
+    max_tokens: int = 1024
+    stride_tokens: int = 512
+    min_chunk_tokens: int = 256
 
     @computed_field
     @property
@@ -140,8 +172,7 @@ class NoteChunkingCfg(BaseModel):
 
     @classmethod
     def load(cls) -> NoteChunkingCfg:
-        data = load_default_config(phase=1)['note_chunking']
-        return cls(**data)
+        return cls(**load_default_config(key='chunking')['note_chunking'])
 
 
 class DedupCfg(BaseModel):
@@ -154,7 +185,7 @@ class DedupCfg(BaseModel):
 
     @classmethod
     def load(cls) -> DedupCfg:
-        return cls(**load_default_config(phase=1)['dedup'])
+        return cls(**load_default_config(key='chunking')['dedup'])
 
 
 # -- Phase 2 --
@@ -165,8 +196,7 @@ class EmbedCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EmbedCfg:
-        data = load_default_config(phase=2)
-        return cls(**data)
+        return cls(**load_default_config(key='embeddings'))
 
 
 # -- Phase 3 --
@@ -186,9 +216,14 @@ class BuildQueryPromptsCfg(BaseModel):
     n_strata: int = 3
     stratify_scale: Literal['linear', 'log'] = 'log'
     stratify_seed: int = 42
-    high_value_sections: list[str]
+    high_value_sections: list[str] = [
+        'BRIEF HOSPITAL COURSE',
+        'HISTORY OF PRESENT ILLNESS',
+        'DISCHARGE DIAGNOSIS',
+        'DISCHARGE MEDICATIONS',
+    ]
     demographic_modifiers: list[DemographicModifier]
-    prompt_template: str
+    prompt_template: str = QUERY_GENERATING_TEMPLATE_DEF
 
     @computed_field
     @property
@@ -202,7 +237,7 @@ class BuildQueryPromptsCfg(BaseModel):
 
     @classmethod
     def load(cls) -> BuildQueryPromptsCfg:
-        return cls(**load_default_config(phase=3)['build_query_prompts'])
+        return cls(**load_default_config(key='queries')['build_prompts'])
 
 
 class GenQueriesCfg(BaseModel):
@@ -215,7 +250,7 @@ class GenQueriesCfg(BaseModel):
 
     @classmethod
     def load(cls) -> GenQueriesCfg:
-        return cls(**load_default_config(phase=3)['gen_queries_llm'])
+        return cls(**load_default_config(key='queries')['llm_generation'])
 
 
 class FilterQueriesCfg(BaseModel):
@@ -234,7 +269,7 @@ class FilterQueriesCfg(BaseModel):
 
     @classmethod
     def load(cls) -> FilterQueriesCfg:
-        return cls(**load_default_config(phase=3)['filter_queries'])
+        return cls(**load_default_config(key='queries')['filtering'])
 
 
 class GoldAnnotationCfg(BaseModel):
@@ -253,12 +288,12 @@ class GoldAnnotationCfg(BaseModel):
     top_k: int | None = None
     think: bool = False
     stream: bool = False
-    tagging_system_prompt: str
-    tagging_user_template: str
+    tagging_system_prompt: str = GOLD_TAGS_SYSTEM_PROMPT_DEF
+    tagging_user_template: str = GOLD_TAGS_TEMPLATE_DEF
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:
-        return cls(**load_default_config(phase=3)['gold_annotation'])
+        return cls(**load_default_config(key='queries')['gold_annotation'])
 
 
 # -- Phase 4 --
@@ -271,8 +306,7 @@ class EvaluateCfg(BaseModel):
 
     @classmethod
     def load(cls) -> EvaluateCfg:
-        data = load_default_config(phase=4)
-        return cls(**data)
+        return cls(**load_default_config(key='evaluation'))
 
 
 def setup_logging() -> None:

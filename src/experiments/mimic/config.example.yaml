@@ -11,12 +11,14 @@ global:
     #     divergence_stats: <dir>
     #     gold_annotations: <dir>
 
-    n_conditions: 17 # number of conditions to sample from conditions_stats -->
-    # TODO: understand how to pick the conditions
+    # number of conditions to sample from conditions_stats
+    n_conditions: 350
 
-    # ["multi-qa-mpnet-base-cos-v1", "abhinand/MedEmbed-large-v0.1", 
-    # "Simonlee711/Clinical_ModernBERT", "Qwen/Qwen3-Embedding-8B", ...]
     embedding_model: multi-qa-mpnet-base-cos-v1
+        # - multi-qa-mpnet-base-cos-v1
+        # - Simonlee711/Clinical_ModernBERT
+        # - abhinand/MedEmbed-large-v0.1
+        # - Qwen/Qwen3-Embedding-0.6B
 
     # relative to src/experiments/mimic/_results/_vector_db
     chunks_vec_table: chunks_512
@@ -24,7 +26,7 @@ global:
     # pre-retrieval cosine pool. Shared between query filtering and evaluation
     prefilter_n: 2_000
 # ----------------------------------------------------------------------------
-phase_1:
+chunking:
     conditions_stats:
         min_admissions: 200
 
@@ -60,13 +62,13 @@ phase_1:
         boilerplate_sections:
             - PAST MEDICAL HISTORY
 # ----------------------------------------------------------------------------
-phase_2:
+embeddings:
     batch_size: 256
     commit_every: 16384
     device: cuda
 # ----------------------------------------------------------------------------
-phase_3:
-    build_query_prompts:
+queries:
+    build_prompts:
         n_grounding_patients: 6
         max_modifiers: 3
         min_modifier_admissions: 5 # skip modifier pairs where cond ∩ modifier < this
@@ -74,9 +76,9 @@ phase_3:
         # Stratified condition sampling: split [min_condition_admissions, max_condition_admissions]
         # into n_strata log/linear buckets, sample n_conditions/n_strata uniformly from each.
         min_condition_admissions: 200
-        max_condition_admissions: null   # null = no upper bound
+        max_condition_admissions: null # null = no upper bound
         n_strata: 3
-        stratify_scale: log              # log | linear
+        stratify_scale: log # log | linear
         stratify_seed: 42
 
         high_value_sections:
@@ -122,7 +124,7 @@ phase_3:
 
             Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
 
-    gen_queries_llm:
+    llm_generation:
         save_every: 25
         model: gemma4-31b-text
         temperature: 1.0
@@ -130,7 +132,7 @@ phase_3:
         top_k: 64
         think: false
 
-    filter_queries:
+    filtering:
         k_values: [ 5, 10, 20, 30, 100, 500 ]
         lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
         jaccard_threshold: 0.90
@@ -174,7 +176,7 @@ phase_3:
             If none relevant: [].
             Return ONLY the JSON array, nothing else.
 # ----------------------------------------------------------------------------
-phase_4:
+evaluation:
     strategies:
         - top_k
         - mmr

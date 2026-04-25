@@ -2,6 +2,7 @@ import re
 
 from pydantic import BaseModel, field_validator
 
+from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
 from experiments.mimic.schemas import EmbedJoinedRow
 
 
@@ -55,25 +56,4 @@ def get_age_group(age: float | None) -> str:
 
 
 def get_charlson_conditions(meta_row: EmbedJoinedRow) -> list[str]:
-    return [label for col, label in CHARLSON_LABELS.items() if meta_row.get(col) == 1]
-
-
-CHARLSON_LABELS = {
-    'myocardial_infarct': 'prior myocardial infarction',
-    'congestive_heart_failure': 'congestive heart failure',
-    'peripheral_vascular_disease': 'peripheral vascular disease',
-    'cerebrovascular_disease': 'cerebrovascular disease',
-    'dementia': 'dementia',
-    'chronic_pulmonary_disease': 'chronic pulmonary disease (COPD)',
-    'rheumatic_disease': 'rheumatic disease',
-    'peptic_ulcer_disease': 'peptic ulcer disease',
-    'mild_liver_disease': 'mild liver disease',
-    'severe_liver_disease': 'severe liver disease (cirrhosis)',
-    'diabetes_without_cc': 'diabetes without complications',
-    'diabetes_with_cc': 'diabetes with chronic complications',
-    'paraplegia': 'hemiplegia or paraplegia',
-    'renal_disease': 'chronic kidney disease',
-    'malignant_cancer': 'malignancy',
-    'metastatic_solid_tumor': 'metastatic cancer',
-    'aids': 'HIV/AIDS',
-}
+    return [label for col, label in CHARLSON_LABELS_TO_STR.items() if meta_row.get(col) == 1]

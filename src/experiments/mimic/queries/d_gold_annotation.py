@@ -24,11 +24,11 @@ from experiments.mimic.configs import (
     get_table_path,
     setup_logging,
 )
+from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.phase_4_evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from experiments.mimic.schemas import AdmissionMetadataRow, QueryRow
 from experiments.mimic.utils import (
-    CHARLSON_LABELS,
     QueryAspect,
     TagDecision,
     aspects_from_modifiers,
@@ -58,7 +58,9 @@ def run_gold_annotation(
 
     # Load patient metadata for chunk context
     meta_path = get_table_path('admissions_metadata')
-    patient_meta = _build_patient_meta(meta_path, CHARLSON_LABELS) if meta_path.exists() else None
+    patient_meta = (
+        _build_patient_meta(meta_path, CHARLSON_LABELS_TO_STR) if meta_path.exists() else None
+    )
     if patient_meta:
         print(f'Loaded patient metadata for {len(patient_meta):,} admissions')
 
@@ -469,5 +471,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.configs import load_config_from_main
 
-    raw = load_config_from_main(phase=3)
+    raw = load_config_from_main(key='queries')
     run_gold_annotation(cfg=GoldAnnotationCfg(**raw['gold_annotation']))

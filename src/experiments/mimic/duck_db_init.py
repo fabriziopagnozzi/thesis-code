@@ -5,6 +5,7 @@ from experiments.mimic.configs import (
     get_table_path,
     setup_logging,
 )
+from experiments.mimic.constants import HOSP_TABLES, ICU_TABLES, NOTE_TABLES, RESULT_TABLES
 from helpers.dir_paths import (
     BHC_DIR,
     HOSP_DIR,
@@ -15,45 +16,6 @@ from helpers.dir_paths import (
 
 INIT_SQL_PATH = MIMIC_IV_DIR / '_mimic_init.sql'
 DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
-
-HOSP_TABLES = {
-    'admissions',
-    'd_hcpcs',
-    'd_icd_diagnoses',
-    'd_icd_procedures',
-    'd_labitems',
-    'diagnoses_icd',
-    'drgcodes',
-    'emar',
-    'emar_detail',
-    'hcpcsevents',
-    'labevents',
-    'microbiologyevents',
-    'omr',
-    'patients',
-    'pharmacy',
-    'poe',
-    'poe_detail',
-    'prescriptions',
-    'procedures_icd',
-    'provider',
-    'services',
-    'transfers',
-}
-ICU_TABLES = {
-    'caregiver',
-    'chartevents',
-    'd_items',
-    'datetimeevents',
-    'icustays',
-    'ingredientevents',
-    'inputevents',
-    'outputevents',
-    'procedureevents',
-}
-NOTE_TABLES = {'discharge', 'discharge_detail', 'radiology', 'radiology_detail'}
-
-RESULT_TABLES = {'conditions_stats', 'admissions_metadata', 'chunks'}
 
 # From the MIT repo
 DERIVED_CONCEPTS = {

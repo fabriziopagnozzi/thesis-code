@@ -183,8 +183,7 @@ class CandidatePoolBuilder:
         self._charlson_label_to_col_name = global_cfg.label_to_charlson_col
         self._demographic_filters = prompts_cfg.demographic_filters
 
-        meta_path = get_table_path('admissions_metadata')
-        self._admissions_meta = pl.read_parquet(meta_path) if meta_path.exists() else None
+        self._admissions_meta = pl.read_parquet(get_table_path('admissions_metadata'))
 
         import lancedb
 

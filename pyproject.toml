@@ -23,13 +23,15 @@ dependencies = [
 dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs", "taskipy"]
 
 [tool.taskipy.tasks]
-mimic = "uv run -m experiments.mimic.pipeline_main"
-add_new_embeddings = "uv run -m experiments.mimic.phase_2_embedding.add_new_vector_col"
-build_vector_indexes = "uv run -m experiments.mimic.phase_2_embedding.build_vector_indexes"
-phase1 = "uv run -m experiments.mimic.phase_1_chunking.orchestrator_1"
-phase2 = "uv run -m experiments.mimic.phase_2_embedding.embed_whole_corpus"
-phase3 = "uv run -m experiments.mimic.phase_3_queries.orchestrator_3"
-phase4 = "uv run -m experiments.mimic.phase_4_evaluation.evaluate"
+mimic = "uv run -m experiments.mimic.main"
+chunking = "uv run -m experiments.mimic.chunking.run_chunking_steps"
+embed_whole = "uv run -m experiments.mimic.embeddings.embed_whole_corpus"
+embed_selective = "uv run -m experiments.mimic.embeddings.embed_selective"
+queries = "uv run -m experiments.mimic.queries.run_queries_steps"
+evaluation = "uv run -m experiments.mimic.evaluation.evaluate"
+
+add_new_embeddings = "uv run -m experiments.mimic.embeddings.add_new_vector_col"
+build_vector_indexes = "uv run -m experiments.mimic.embeddings.build_vector_indexes"
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]
