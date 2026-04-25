@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from experiments.mimic.configs import NoteChunkingCfg, get_parquet_path, global_cfg, setup_logging
 from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.phase_1_chunking.a_conditions_stats import TRANSLATE_ICDS_CTE
 
 chunking_cfg = NoteChunkingCfg.load()
 
@@ -50,36 +51,45 @@ def run_note_chunking(
 
 
 def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
-    top_codes = (
+    con.execute('SET arrow_large_buffer_size=true')
+
+    df_top_codes = (  # noqa: F841
         pl.read_parquet(get_parquet_path('conditions_stats'))
-        .head(global_cfg.num_conditions)['icd10_3char']
-        .to_list()
+        .head(global_cfg.num_conditions)
+        .select(pl.col('icd10_3char').alias('code'))
     )
 
-    rows = con.execute(f"""--sql
-        SELECT DISTINCT
+    # Pull into Polars (arrow) then convert to tuples for multiprocessing
+    notes_df = con.execute(f"""--sql
+        WITH unified_conditions_icds AS {TRANSLATE_ICDS_CTE},
+        target_admissions AS (
+            SELECT DISTINCT u.hadm_id
+            FROM unified_conditions_icds AS u
+            JOIN df_top_codes
+              ON LEFT(u.unified_icd10, 3) = df_top_codes.code
+        )
+        SELECT
             bhc.note_id,
             discharge.subject_id,
             discharge.hadm_id,
             bhc.input,
             discharge.text
-        FROM bhc
-        JOIN discharge ON bhc.note_id = discharge.note_id
-        JOIN mimiciv_hosp.diagnoses_icd ON discharge.hadm_id = diagnoses_icd.hadm_id
-        WHERE diagnoses_icd.icd_version = 10
-        AND LEFT(diagnoses_icd.icd_code, 3) IN ({', '.join(f"'{c}'" for c in top_codes)})
-    """).fetchall()
+        FROM target_admissions
+        JOIN discharge ON target_admissions.hadm_id = discharge.hadm_id
+        JOIN bhc ON discharge.note_id = bhc.note_id
+    """).pl()
 
-    n_workers = min(os.cpu_count() or 1, len(rows))
+    notes_rows = notes_df.rows()
+
     with Pool(
-        processes=n_workers,
+        processes=min(os.cpu_count() or 1, len(notes_rows)),
         initializer=_worker_init,
         initargs=(global_cfg.embedding_model, chunking_cfg),
     ) as pool:
         per_note = list(
             tqdm(
-                pool.imap(_process_row, rows, chunksize=32),
-                total=len(rows),
+                pool.imap(_process_row, notes_rows, chunksize=32),
+                total=len(notes_rows),
                 desc='Parsing notes',
             )
         )
@@ -94,7 +104,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     )
 
     print(
-        f'Parsed {len(rows):,} notes into {len(df):,} chunks\n'
+        f'Parsed {len(notes_rows):,} notes into {len(df):,} chunks\n'
         f'{df["section_name"].value_counts().sort("count", descending=True).head(15)}'
     )
 

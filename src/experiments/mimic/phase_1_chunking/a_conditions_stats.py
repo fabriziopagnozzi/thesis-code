@@ -19,16 +19,17 @@ conditions_stats_cfg = ConditionsStatsCfg.load()
 
 
 TRANSLATE_ICDS_CTE = f"""--sql
-    (SELECT diagnoses_icd.hadm_id,
+    (SELECT diagnoses_icd.hadm_id AS hadm_id,
         CASE
             WHEN diagnoses_icd.icd_version = 10 THEN diagnoses_icd.icd_code
             WHEN diagnoses_icd.icd_version = 9 THEN icd_crosswalk.icd10
         END AS unified_icd10
     FROM mimiciv_hosp.diagnoses_icd diagnoses_icd
-    LEFT JOIN
-        (SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
+    LEFT JOIN (
+        SELECT icd9cm AS icd9, MIN(icd10cm) AS icd10
         FROM read_csv_auto('{ICD_MAPPING_PATH}')
-        GROUP BY icd9) icd_crosswalk
+        GROUP BY icd9
+    ) AS icd_crosswalk
     ON diagnoses_icd.icd_code = icd_crosswalk.icd9 AND diagnoses_icd.icd_version = 9)
 """
 
@@ -106,7 +107,7 @@ def select_conditions(
         ORDER BY n_admissions DESC
     """).fetchall()
 
-    code_to_info = coalesce_condition_names_mock(prefix_rows)
+    code_to_info = coalesce_condition_names(prefix_rows)
     kept_rows = [
         (icd3, raw, n) for icd3, raw, n in prefix_rows if code_to_info.get(icd3, (None, True))[1]
     ]
@@ -183,7 +184,7 @@ def coalesce_condition_names(
     with CONDITION_FILTERING_JSONL.open('a') as jsonl_f:
         for batch in tqdm(batches, desc='Coalescing condition names'):
             payload = [
-                {'code': icd3, 'titles': raw_titles.split(' | ')[:100]}
+                {'code': icd3, 'titles': raw_titles.split(' | ')[:75]}
                 for icd3, raw_titles, _ in batch
                 if raw_titles and icd3 not in code_to_info
             ]
@@ -196,6 +197,7 @@ def coalesce_condition_names(
                 f'Input:\n{json.dumps(payload, indent=2)}\n\n'
                 'Output a JSON array: [{"code": "...", "condition_name": "...", "keep": true/false}, ...]'
             )
+            print(prompt)
             result = generate_json(
                 prompt,
                 model=conditions_stats_cfg.cond_processing_llm,
@@ -205,6 +207,7 @@ def coalesce_condition_names(
                 think=False,
                 stream=False,
             )
+            print(result)
             for item in result:
                 code_to_info[item['code']] = (item['condition_name'], bool(item['keep']))
                 jsonl_f.write(json.dumps(item) + '\n')
