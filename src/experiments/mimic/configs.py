@@ -1,11 +1,14 @@
 import argparse
 import io
+import os
 import re
+import sys
 from os import getenv
 from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
+import torch
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
 
@@ -18,6 +21,9 @@ from experiments.mimic.prompts_default import (
 from experiments.mimic.utils import get_vec_col_name
 from helpers.dir_paths import MIMIC_IV_DIR
 from helpers.query_algorithms import ScoringFunction
+
+torch.cuda.empty_cache()
+os.environ['PYTORCH_ALLOC_CONF'] = 'expandable_segments:True'
 
 type TopLevelConfigKeys = Literal[
     'global',
@@ -332,3 +338,12 @@ def setup_logging() -> None:
             self._file.flush()
 
     sys.stdout = _Tee(log_path)
+
+
+def silent_excepthook(type, value, traceback):
+    if type in [KeyboardInterrupt, SystemExit]:
+        return
+    sys.__excepthook__(type, value, traceback)
+
+
+sys.excepthook = silent_excepthook

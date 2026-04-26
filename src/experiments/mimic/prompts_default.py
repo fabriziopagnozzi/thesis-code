@@ -9,9 +9,8 @@ The examples above are provided ONLY so you understand what kinds of clinical in
 Do NOT generate a question about these specific patients or these specific notes.
 Using the above as background context only, generate ONE generic question about patients with {condition}
 that asks for clinical patterns across multiple aspects of care.
-The question must be answerable by reading across many different patients in the dataset - not just the examples above.
-
-The question must address EXACTLY the following aspects — all of them, no others:
+The question must be answerable by reading across many different patients in the dataset, not just the examples above.
+The question must address EXACTLY the following aspects:
 {modifier_list}
 
 Good examples:
@@ -26,6 +25,7 @@ Requirements:
 Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
 """
 
+
 GOLD_TAGS_SYSTEM_PROMPT_DEF = """
 You are a clinical information analyst. You will be given a clinical
 question, a patient subgroup modifier (a comorbidity or demographic
@@ -34,6 +34,7 @@ from patients who have that modifier. Decide whether each chunk
 contains substantive evidence of how that modifier affects the
 clinical picture described in the question.
 """
+
 
 GOLD_TAGS_TEMPLATE_DEF = """
 QUESTION: {query_text}

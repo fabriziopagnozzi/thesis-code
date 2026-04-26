@@ -96,7 +96,7 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
     )
 
     metadata_joined, chunk_texts = enrich_note_excerpts(relevant_chunks, metadata)
-    n_chunks = len(chunk_texts)
+    n_chunks = len(metadata_joined)
     print(f'[selective embed] Embedding {n_chunks:,} chunks with model: {emb_model}')
 
     # 6. Embed in batches and commit to LanceDB (same logic as embed_whole_corpus.py)

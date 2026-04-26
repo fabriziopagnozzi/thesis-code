@@ -1,22 +1,22 @@
-"""Build HNSW indexes for all vector_ columns in a LanceDB table."""
+"""Build HNSW indexes for all "vector_" columns in a LanceDB table."""
 
 import argparse
 
 import lancedb
 
 from experiments.mimic.configs import (
-    MIMIC_RESULTS_DIR,
     VECTOR_DB_DIR,
     setup_logging,
 )
 
 
 def build_indexes(
-    table_name: str = 'chunks',
+    table_name: str,
     metric: str = 'cosine',
     db_dir_override: str | None = None,
 ) -> None:
-    db = lancedb.connect(MIMIC_RESULTS_DIR / db_dir_override if db_dir_override else VECTOR_DB_DIR)
+    dir = VECTOR_DB_DIR / db_dir_override if db_dir_override else VECTOR_DB_DIR
+    db = lancedb.connect(dir)
     table = db.open_table(table_name)
 
     vector_cols = [c for c in table.schema.names if c.startswith('vector_')]
@@ -50,12 +50,12 @@ def build_indexes(
 if __name__ == '__main__':
     setup_logging()
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--vec_dir', default='chunks', help='Vector DB directory override')
-    parser.add_argument('--table', default='chunks', help='LanceDB table name (default: chunks)')
+    parser.add_argument('--vec_dir', help='Vector DB directory override')
+    parser.add_argument('--table', help='LanceDB table name (default: chunks)')
     parser.add_argument(
         '--metric',
-        default='cosine',
         choices=['cosine', 'l2', 'dot'],
+        default='cosine',
         help='Distance metric (default: cosine)',
     )
     args = parser.parse_args()

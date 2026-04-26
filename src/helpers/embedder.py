@@ -6,7 +6,7 @@ class Embedder:
     def __init__(
         self,
         model_name: str,
-        device: str = 'cpu',
+        device: str = 'cuda',
         batch_size: int = 256,
         query_prompt: str | None = None,
         document_prompt: str | None = None,
@@ -18,6 +18,7 @@ class Embedder:
         self.batch_size = batch_size
         self.query_prompt = query_prompt
         self.document_prompt = document_prompt
+
         self._model: SentenceTransformer = SentenceTransformer(model_name, device=device)
 
     @property

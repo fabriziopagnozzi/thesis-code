@@ -57,7 +57,12 @@ type IcuTable = Literal[
     'procedureevents',
 ]
 
-type NoteTable = Literal['discharge', 'discharge_detail', 'radiology', 'radiology_detail']
+type NoteTable = Literal[
+    'discharge',
+    'discharge_detail',
+    'radiology',
+    'radiology_detail',
+]
 
 type ResultTable = Literal[
     'conditions_stats',
@@ -95,6 +100,7 @@ CHARLSON_LABELS_TO_STR: dict[CharlsonLabel, str] = {
     'metastatic_solid_tumor': 'metastatic cancer',
     'aids': 'HIV/AIDS',
 }
+
 HOSP_TABLES = set(get_args(HospTable))
 ICU_TABLES = set(get_args(IcuTable))
 NOTE_TABLES = set(get_args(NoteTable))
