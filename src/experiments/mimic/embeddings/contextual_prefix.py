@@ -1,8 +1,8 @@
 import polars as pl
 
-from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
-from experiments.mimic.schemas import EmbedJoinedRow
-from experiments.mimic.utils import get_age_group, get_charlson_conditions
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.schemas import EmbedJoinedRow
+from experiments.mimic.utils.utils import get_age_group, get_charlson_conditions
 
 
 def enrich_note_excerpts(

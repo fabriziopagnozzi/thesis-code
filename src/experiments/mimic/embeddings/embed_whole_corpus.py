@@ -1,16 +1,20 @@
 import polars as pl
+import pyarrow as pa
 from lancedb import Table, connect
 from pyarrow import FixedSizeListArray
 
 from experiments.mimic.configs import (
-    VECTOR_DB_DIR,
     EmbedCfg,
     get_table_path,
     global_cfg,
     setup_logging,
 )
+from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
+from .add_icd_list_col import COL_NAME as ICD_LIST_COL
+from .add_icd_list_col import build_hadm_to_icd
 from .contextual_prefix import enrich_note_excerpts
 
 embed_cfg = EmbedCfg.load()
@@ -29,7 +33,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         **embed_cfg.model_dump(exclude={'commit_every'}),
         query_prompt=global_cfg.query_retrieval_instruction,
     )
-    db = connect(VECTOR_DB_DIR)
+    db = connect(MimicPaths.vector_db)
     table_name = global_cfg.chunks_vec_table
 
     table: Table | None = None
@@ -59,24 +63,52 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         print('Nothing to embed, all chunks already in the table.')
         return
 
+    con = connect_mimic_duckdb()
+    hadm_to_icd = build_hadm_to_icd(con)
     print(f'Embedding {n_chunks:,} chunks. Model: {emb_model}')
 
-    for start in range(0, n_chunks, embed_cfg.commit_every):
-        end = min(start + embed_cfg.commit_every, n_chunks)
-        batch_df = metadata_joined.slice(start, end - start)
+    embed_and_commit(
+        metadata_joined,
+        chunk_texts,
+        hadm_to_icd,
+        embedder,
+        db,
+        table_name,
+        embed_cfg.commit_every,
+        table,
+    )
+    print(f'Saved {n_chunks:,} rows to {MimicPaths.vector_db}/{table_name}')
 
+
+def embed_and_commit(
+    metadata_joined: pl.DataFrame,
+    chunk_texts: list[str],
+    hadm_to_icd: dict[int, list[str]],
+    embedder: Embedder,
+    db,
+    table_name: str,
+    commit_every: int,
+    table: Table | None = None,
+) -> Table:
+    n = len(chunk_texts)
+    for start in range(0, n, commit_every):
+        end = min(start + commit_every, n)
+        batch_df = metadata_joined.slice(start, end - start)
         embeddings = embedder.embed_corpus(chunk_texts[start:end])
         v_data = FixedSizeListArray.from_arrays(embeddings.flatten(), embeddings.shape[1])
-        batch_table = batch_df.to_arrow().append_column(global_cfg.vector_column, v_data)
-
+        icd_lists = [hadm_to_icd.get(h, []) for h in batch_df['hadm_id'].to_list()]
+        batch_table = (
+            batch_df.to_arrow()
+            .append_column(global_cfg.vector_column, v_data)
+            .append_column(ICD_LIST_COL, pa.array(icd_lists, type=pa.list_(pa.string())))
+        )
         if table is None:
             table = db.create_table(table_name, data=batch_table, mode='overwrite')
         else:
             table.add(batch_table)
-
-        print(f'  Committed {end:,}/{n_chunks:,} chunks')
-
-    print(f'Saved {n_chunks:,} rows to {VECTOR_DB_DIR}/{table_name}')
+        print(f'  Committed {end:,}/{n:,}')
+    assert table is not None
+    return table
 
 
 if __name__ == '__main__':

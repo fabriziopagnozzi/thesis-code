@@ -2,8 +2,8 @@ import re
 
 from pydantic import BaseModel, field_validator
 
-from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
-from experiments.mimic.schemas import EmbedJoinedRow
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.schemas import EmbedJoinedRow
 
 
 class QueryAspect(BaseModel):

@@ -12,15 +12,15 @@ from experiments.mimic.configs import (
     global_cfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import (
+from experiments.mimic.utils.duck_db_init import (
     connect_mimic_duckdb,
 )
-from experiments.mimic.schemas import (
+from experiments.mimic.utils.schemas import (
     DivergenceStatsRow,
     EvaluationMetrics,
     GoldAnnotationRow,
 )
-from experiments.mimic.utils import modifier_to_snake_label
+from experiments.mimic.utils.utils import modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
@@ -108,15 +108,20 @@ def evaluate_llm(
     return pl.DataFrame(all_rows)
 
 
-def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
+def _load_queries_for_eval() -> pl.DataFrame:
     divergence_path = get_table_path('divergence_stats')
-    if divergence_path.exists():
-        all_queries = pl.read_parquet(divergence_path)
-        queries_df = all_queries.filter(pl.col('passes_filter'))
-    else:
-        queries_df = pl.read_parquet(get_table_path('queries'))
-    if 'query_id' not in queries_df.columns:
-        queries_df = queries_df.with_row_index('query_id')
+    df = (
+        pl.read_parquet(divergence_path).filter(pl.col('passes_filter'))
+        if divergence_path.exists()
+        else pl.read_parquet(get_table_path('queries'))
+    )
+    if 'query_id' not in df.columns:
+        df = df.with_row_index('query_id')
+    return df
+
+
+def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
+    queries_df = _load_queries_for_eval()
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
     all_rows = []
@@ -135,6 +140,10 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
 
         facets = build_structural_facets(pool, curr_query['icd10_3char'], modifiers_json, builder)
         if not facets:
+            print(
+                f'  [skip] query_id={curr_query["query_id"]} ({curr_query["icd10_3char"]}): '  # type: ignore
+                f'no modifier chunks found in pool'
+            )
             continue
 
         query_metrics = evaluate_query(
@@ -151,6 +160,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
                 {
                     'query_id': curr_query['query_id'],  # type: ignore
                     'icd10_3char': curr_query['icd10_3char'],
+                    'stratum': curr_query.get('stratum'),
                     'n_facets': len(facets),
                     **m,
                 }
@@ -329,6 +339,29 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
     stats_path = get_table_path('evaluation_stats')
     stats_df.write_parquet(stats_path)
     print(f'Saved summary to {stats_path}')
+
+    if 'stratum' in results_df.columns:
+        stratum_summaries = []
+        for k in sorted(results_df['k'].unique().to_list()):
+            subset = results_df.filter(pl.col('k') == k)
+            stratum_summaries.append(
+                subset.group_by('strategy', 'lam', 'stratum')
+                .agg(
+                    pl.col('aspect_recall').mean().alias('AR'),
+                    pl.col('weighted_aspect_recall').mean().alias('WAR'),
+                    pl.col('gold_precision').mean().alias('GP'),
+                    pl.col('gold_recall').mean().alias('GR'),
+                    pl.col('fac_cov_score').mean().alias('fac'),
+                    pl.col('avg_cos').mean().alias('cos'),
+                    pl.col('aspect_recall').count().alias('n'),
+                )
+                .sort('stratum', 'strategy', 'lam')
+                .with_columns(pl.lit(k).alias('k'))
+            )
+        stratum_stats_df = pl.concat(stratum_summaries)
+        stratum_stats_path = get_table_path('evaluation_stats_by_stratum')
+        stratum_stats_df.write_parquet(stratum_stats_path)
+        print(f'Saved stratum summary to {stratum_stats_path}')
 
 
 def store_best_per_metric(results_df: pl.DataFrame) -> None:

@@ -3,7 +3,6 @@ import io
 import os
 import re
 import sys
-from os import getenv
 from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
@@ -12,14 +11,17 @@ import torch
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
 
-from experiments.mimic.constants import CHARLSON_LABELS_TO_STR, MimicTable
-from experiments.mimic.prompts_default import (
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.constants import (
+    MimicPaths,
+    MimicTable,
+)
+from experiments.mimic.utils.prompts_default import (
     GOLD_TAGS_SYSTEM_PROMPT_DEF,
     GOLD_TAGS_TEMPLATE_DEF,
     QUERY_GENERATING_TEMPLATE_DEF,
 )
-from experiments.mimic.utils import get_vec_col_name
-from helpers.dir_paths import MIMIC_IV_DIR
+from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.query_algorithms import ScoringFunction
 
 torch.cuda.empty_cache()
@@ -32,13 +34,6 @@ type TopLevelConfigKeys = Literal[
     'queries',
     'evaluation',
 ]
-
-MIMIC_RESULTS_DIR = MIMIC_IV_DIR / '_results'
-VECTOR_DB_DIR = MIMIC_RESULTS_DIR / '_vector_db'
-
-MIMIC_EXPERIMENT_DIR = MIMIC_RESULTS_DIR / getenv('EXP_NAME', MIMIC_IV_DIR)
-LOGS_DIR = MIMIC_EXPERIMENT_DIR / '_logs'
-CONFIG_DIR = MIMIC_EXPERIMENT_DIR / '_config.yaml'
 
 
 class GlobalCfg(BaseModel):
@@ -67,7 +62,7 @@ class GlobalCfg(BaseModel):
         return {v: k for k, v in CHARLSON_LABELS_TO_STR.items()}
 
 
-def load_global_cfg(path: str | Path = CONFIG_DIR, cfg: GlobalCfg | None = None):
+def load_global_cfg(path: str | Path = MimicPaths.config, cfg: GlobalCfg | None = None):
     global global_cfg
     if cfg is not None:
         global_cfg = cfg
@@ -83,7 +78,7 @@ load_global_cfg()
 
 
 def load_default_config(key: TopLevelConfigKeys, path: str | Path | None = None) -> dict[str, Any]:
-    with open(path or CONFIG_DIR) as f:
+    with open(path or MimicPaths.config) as f:
         return yaml.safe_load(f)[key]
 
 
@@ -99,9 +94,9 @@ def load_config_from_main(key: TopLevelConfigKeys) -> dict:
 def get_result_dir(table: MimicTable) -> Path:
     subdir = global_cfg.result_dir_overrides.get(table)
     if subdir is not None:
-        return MIMIC_RESULTS_DIR / subdir
+        return MimicPaths.results / subdir
     else:
-        return MIMIC_EXPERIMENT_DIR
+        return MimicPaths.experiment
 
 
 def get_table_path(
@@ -116,7 +111,7 @@ def get_table_path(
         'unified_diagnoses',
     ]
     if table in shared_tables:
-        return MIMIC_RESULTS_DIR / '_shared' / f'{table}.{ext}'
+        return MimicPaths.results / '_shared' / f'{table}.{ext}'
     else:
         return get_result_dir(table) / f'{table}.{ext}'
 
@@ -320,8 +315,7 @@ def setup_logging() -> None:
 
     main = sys.modules['__main__']
     script_name = Path(main.__file__ if main.__file__ else f'unknown_script_{uuid4()}').stem
-    log_path = LOGS_DIR / f'{script_name}.log'
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    log_path = MimicPaths.logs / f'{script_name}.log'
 
     class _Tee(io.TextIOBase):
         def __init__(self, filepath: Path):

@@ -1,4 +1,4 @@
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
 con = connect_mimic_duckdb()
 

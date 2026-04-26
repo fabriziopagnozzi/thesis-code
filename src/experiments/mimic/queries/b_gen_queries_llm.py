@@ -14,7 +14,7 @@ import polars as pl
 from tqdm import tqdm
 
 from experiments.mimic.configs import GenQueriesCfg, get_table_path, setup_logging
-from experiments.mimic.schemas import QueryPromptRow, QueryRow
+from experiments.mimic.utils.schemas import QueryPromptRow, QueryRow
 from helpers.ollama_client import generate
 
 gen_queries_cfg = GenQueriesCfg.load()
@@ -49,7 +49,6 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
 
     df = pl.DataFrame(results)
     df.write_parquet(out_path)
-
     return df
 
 

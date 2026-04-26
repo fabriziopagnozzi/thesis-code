@@ -3,13 +3,13 @@ import argparse
 import duckdb
 
 from experiments.mimic.configs import (
-    MIMIC_EXPERIMENT_DIR,
     ConditionsStatsCfg,
     DedupCfg,
     NoteChunkingCfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import (
+from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.duck_db_init import (
     connect_mimic_duckdb,
     generate_init_sql,
     register_result_view,
@@ -18,9 +18,6 @@ from experiments.mimic.duck_db_init import (
 from .a_conditions_stats import run_conditions_stats
 from .b_note_chunking import run_note_chunking
 from .c_dedup import run_dedup
-
-MIMIC_EXPERIMENT_DIR.mkdir(parents=True, exist_ok=True)
-
 
 STEPS = (1, 2, 3)
 
@@ -57,7 +54,7 @@ def run_chunking_subpipeline(
         chunks = run_dedup(cfg=dedup_cfg)
         register_result_view(con, 'chunks', chunks)
 
-    print(f'\n\nPhase 1 complete. Outputs in {MIMIC_EXPERIMENT_DIR}:\n')
+    print(f'\n\nPhase 1 complete. Outputs in {MimicPaths.experiment}:\n')
 
 
 if __name__ == '__main__':

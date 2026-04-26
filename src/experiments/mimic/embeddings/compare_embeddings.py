@@ -13,7 +13,8 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import VECTOR_DB_DIR, get_vec_col_name, setup_logging
+from experiments.mimic.configs import get_vec_col_name, setup_logging
+from experiments.mimic.utils.constants import MimicPaths
 from helpers.embedder import Embedder
 
 DEFAULT_MODELS = [
@@ -42,7 +43,7 @@ def main() -> None:
     models = args.models
     cols = [get_vec_col_name(m) for m in models]
 
-    db = lancedb.connect(VECTOR_DB_DIR)
+    db = lancedb.connect(MimicPaths.vector_db)
     table = db.open_table(args.table)
 
     print(f'Query : "{args.query}"')

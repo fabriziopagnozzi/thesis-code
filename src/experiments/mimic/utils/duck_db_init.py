@@ -1,26 +1,22 @@
 import duckdb
 
 from experiments.mimic.configs import (
-    MIMIC_IV_DIR,
     get_table_path,
     setup_logging,
 )
-from experiments.mimic.constants import HOSP_TABLES, ICU_TABLES, NOTE_TABLES, RESULT_TABLES
-from helpers.dir_paths import (
-    BHC_DIR,
-    HOSP_DIR,
-    ICU_DIR,
-    MIMIR_REPO_CODE_DIR,
-    NOTE_DIR,
+from experiments.mimic.utils.constants import (
+    HOSP_TABLES,
+    ICU_TABLES,
+    NOTE_TABLES,
+    RESULT_TABLES,
+    MimicPaths,
+    MimicTable,
 )
 
-INIT_SQL_PATH = MIMIC_IV_DIR / '_mimic_init.sql'
-DUCKDB_CONCEPTS_DIR = MIMIR_REPO_CODE_DIR / 'mimic-iv' / 'concepts_duckdb'
-
 # From the MIT repo
-DERIVED_CONCEPTS = {
+DERIVED_CONCEPTS: dict[MimicTable, str] = {
     'age': 'demographics/age.sql',
-    'charlson': 'comorbidity/charlson.sql',  # for comorbidity index
+    'charlson': 'comorbidity/charlson.sql',
 }
 
 INIT_SCHEMAS = """--sql
@@ -36,7 +32,7 @@ SET search_path = 'mimiciv_hosp,mimiciv_icu,mimiciv_note,mimiciv_derived,mimic_r
 def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
     generate_init_sql()
     con = duckdb.connect()
-    for statement in INIT_SQL_PATH.read_text().splitlines():
+    for statement in MimicPaths.init_sql.read_text().splitlines():
         statement = statement.strip()
         if statement:
             con.execute(statement)
@@ -52,6 +48,56 @@ def connect_mimic_duckdb() -> duckdb.DuckDBPyConnection:
     _ensure_unified_diagnoses(con)
 
     return con
+
+
+def register_result_view(con: duckdb.DuckDBPyConnection, name: str, df) -> None:
+    con.execute(f'DROP VIEW IF EXISTS mimic_results.{name}')
+    con.register(name, df)
+
+
+def generate_init_sql(force: bool = False):
+    if MimicPaths.init_sql.exists() and not force:
+        return
+    lines: list[str] = [INIT_SCHEMAS]
+
+    for table in HOSP_TABLES:
+        csv = MimicPaths.hosp / f'{table}.csv'
+        if csv.exists():
+            lines.append(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_hosp.{table} AS SELECT * FROM read_csv_auto('{csv}');"
+            )
+
+    for table in ICU_TABLES:
+        csv = MimicPaths.icu / f'{table}.csv'
+        if csv.exists():
+            lines.append(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_icu.{table} AS SELECT * FROM read_csv_auto('{csv}');"
+            )
+
+    for table in NOTE_TABLES:
+        csv = MimicPaths.note / f'{table}.csv'
+        if csv.exists():
+            lines.append(
+                f"CREATE VIEW IF NOT EXISTS mimiciv_note.{table} AS SELECT * FROM read_csv_auto('{csv}');"
+            )
+
+    bhc_csv = MimicPaths.bhc / 'mimic-iv-bhc.csv'
+    if bhc_csv.exists():
+        lines.append(
+            f"CREATE VIEW IF NOT EXISTS mimiciv_note.bhc AS SELECT * FROM read_csv_auto('{bhc_csv}');"
+        )
+
+    MimicPaths.init_sql.write_text('\n'.join(lines) + '\n')
+
+
+def run_sql_concept_script(con: duckdb.DuckDBPyConnection, *relative_paths: str):
+    for rel in relative_paths:
+        sql_path = MimicPaths.duckdb_concepts / rel
+        sql = sql_path.read_text()
+        for statement in sql.split(';'):
+            statement = statement.strip()
+            if statement:
+                con.execute(statement)
 
 
 def _load_derived_concepts(con: duckdb.DuckDBPyConnection):
@@ -70,13 +116,10 @@ def _load_derived_concepts(con: duckdb.DuckDBPyConnection):
 
 
 def _ensure_unified_diagnoses(con: duckdb.DuckDBPyConnection) -> None:
-    """Materialize unified_diagnoses (ICD-9 + ICD-10 → ICD-10) once, then register as view.
-
-    Rows where no ICD-9→10 crosswalk entry exists are dropped, so every row in the
-    materialized table has a valid unified_icd10 code.
-    """
+    """Materialize unified_diagnoses (ICD-9 + ICD-10 → ICD-10) once, then register as view."""
     parquet_path = get_table_path('unified_diagnoses')
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
+
     if not parquet_path.exists():
         print('Materializing unified_diagnoses (ICD-9+10 → ICD-10) ...')
         con.execute(f"""--sql
@@ -101,55 +144,11 @@ def _ensure_unified_diagnoses(con: duckdb.DuckDBPyConnection) -> None:
             ) TO '{parquet_path}' (FORMAT PARQUET)
         """)
         print(f'  Saved {parquet_path}')
+
     con.execute(
         f'CREATE VIEW IF NOT EXISTS unified_diagnoses AS '
         f"SELECT * FROM read_parquet('{parquet_path}')"
     )
-
-
-def register_result_view(con: duckdb.DuckDBPyConnection, name: str, df) -> None:
-    con.execute(f'DROP VIEW IF EXISTS mimic_results.{name}')
-    con.register(name, df)
-
-
-def generate_init_sql(force: bool = False):
-    if INIT_SQL_PATH.exists() and not force:
-        return
-    lines: list[str] = [INIT_SCHEMAS]
-    for table in HOSP_TABLES:
-        csv = HOSP_DIR / f'{table}.csv'
-        if csv.exists():
-            lines.append(
-                f"CREATE VIEW IF NOT EXISTS mimiciv_hosp.{table} AS SELECT * FROM read_csv_auto('{csv}');"
-            )
-    for table in ICU_TABLES:
-        csv = ICU_DIR / f'{table}.csv'
-        if csv.exists():
-            lines.append(
-                f"CREATE VIEW IF NOT EXISTS mimiciv_icu.{table} AS SELECT * FROM read_csv_auto('{csv}');"
-            )
-    for table in NOTE_TABLES:
-        csv = NOTE_DIR / f'{table}.csv'
-        if csv.exists():
-            lines.append(
-                f"CREATE VIEW IF NOT EXISTS mimiciv_note.{table} AS SELECT * FROM read_csv_auto('{csv}');"
-            )
-    bhc_csv = BHC_DIR / 'mimic-iv-bhc.csv'
-    if bhc_csv.exists():
-        lines.append(
-            f"CREATE VIEW IF NOT EXISTS mimiciv_note.bhc AS SELECT * FROM read_csv_auto('{bhc_csv}');"
-        )
-    INIT_SQL_PATH.write_text('\n'.join(lines) + '\n')
-
-
-def run_sql_concept_script(con: duckdb.DuckDBPyConnection, *relative_paths: str):
-    for rel in relative_paths:
-        sql_path = DUCKDB_CONCEPTS_DIR / rel
-        sql = sql_path.read_text()
-        for statement in sql.split(';'):
-            statement = statement.strip()
-            if statement:
-                con.execute(statement)
 
 
 if __name__ == '__main__':

@@ -9,7 +9,8 @@ import argparse
 import lancedb
 import pyarrow as pa
 
-from experiments.mimic.configs import VECTOR_DB_DIR, global_cfg, setup_logging
+from experiments.mimic.configs import global_cfg, setup_logging
+from experiments.mimic.utils.constants import MimicPaths
 from helpers.embedder import Embedder
 
 
@@ -26,7 +27,7 @@ def add_vector_column(
         safe = model_name.replace('/', '_').replace('-', '_').replace('.', '_')
         col_name = f'vector_{safe}'
 
-    db = lancedb.connect(VECTOR_DB_DIR)
+    db = lancedb.connect(MimicPaths.vector_db)
     table = db.open_table(table_name)
 
     existing_cols = table.schema.names

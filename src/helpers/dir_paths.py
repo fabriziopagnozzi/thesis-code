@@ -19,13 +19,3 @@ DATASETS_DIR = (
 )
 
 THIRDPARTY_CODE_DIR = ROOT_DIR / 'src' / 'thirdparty'
-MIMIR_REPO_CODE_DIR = THIRDPARTY_CODE_DIR / 'mimic_code'  # MIT Repo with utils
-
-# MIMIC-IV code dirs
-MIMIC_IV_DIR = ROOT_DIR / 'src' / 'experiments' / 'mimic'
-
-# MIMIC-IV data
-HOSP_DIR = DATASETS_DIR / 'mimic-iv' / 'hosp'
-ICU_DIR = DATASETS_DIR / 'mimic-iv' / 'icu'
-NOTE_DIR = DATASETS_DIR / 'mimic-iv' / 'note'
-BHC_DIR = DATASETS_DIR / 'mimic-iv' / 'ext-bhc'

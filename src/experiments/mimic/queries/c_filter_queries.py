@@ -20,11 +20,11 @@ from experiments.mimic.configs import (
     global_cfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import (
+from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.utils.duck_db_init import (
     connect_mimic_duckdb,
 )
-from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
-from experiments.mimic.schemas import DivergenceMetrics, QueryRow
+from experiments.mimic.utils.schemas import DivergenceMetrics, QueryRow
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 

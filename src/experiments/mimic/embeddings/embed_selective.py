@@ -13,17 +13,17 @@ from typing import cast
 
 import polars as pl
 from lancedb import Table, connect
-from pyarrow import FixedSizeListArray
 
 from experiments.mimic.configs import (
-    VECTOR_DB_DIR,
     EmbedCfg,
     get_table_path,
     global_cfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.embeddings.embed_whole_corpus import enrich_note_excerpts
+from experiments.mimic.embeddings.add_icd_list_col import build_hadm_to_icd
+from experiments.mimic.embeddings.embed_whole_corpus import embed_and_commit, enrich_note_excerpts
+from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
 embed_cfg = EmbedCfg.load()
@@ -65,7 +65,7 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
     del all_chunks
 
     # 4. Anti-join vs existing LanceDB chunk_ids
-    db = connect(VECTOR_DB_DIR)
+    db = connect(MimicPaths.vector_db)
     table_name = global_cfg.chunks_vec_table
     table: Table | None = None
     try:
@@ -86,6 +86,8 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
         print('[selective embed] All relevant chunks already embedded. Nothing to do.')
         return
 
+    hadm_to_icd = build_hadm_to_icd(con)
+
     # 5. Enrich with contextual prefix metadata
     metadata = pl.read_parquet(get_table_path('admissions_metadata'))
     emb_model = global_cfg.embedding_model
@@ -99,22 +101,21 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
     n_chunks = len(metadata_joined)
     print(f'[selective embed] Embedding {n_chunks:,} chunks with model: {emb_model}')
 
-    # 6. Embed in batches and commit to LanceDB (same logic as embed_whole_corpus.py)
-    for start in range(0, n_chunks, embed_cfg.commit_every):
-        end = min(start + embed_cfg.commit_every, n_chunks)
-        batch_df = metadata_joined.slice(start, end - start)
-        embeddings = embedder.embed_corpus(chunk_texts[start:end])
-        v_data = FixedSizeListArray.from_arrays(embeddings.flatten(), embeddings.shape[1])
-        batch_table = batch_df.to_arrow().append_column(global_cfg.vector_column, v_data)
+    # 6. Embed in batches and commit to LanceDB
+    embed_and_commit(
+        metadata_joined,
+        chunk_texts,
+        hadm_to_icd,
+        embedder,
+        db,
+        table_name,
+        embed_cfg.commit_every,
+        table,
+    )
 
-        if table is None:
-            table = db.create_table(table_name, data=batch_table, mode='overwrite')
-        else:
-            table.add(batch_table)
-
-        print(f'  Committed {end:,}/{n_chunks:,}')
-
-    print(f'[selective embed] Done. Added {n_chunks:,} vectors to {VECTOR_DB_DIR}/{table_name}')
+    print(
+        f'[selective embed] Done. Added {n_chunks:,} vectors to {MimicPaths.vector_db}/{table_name}'
+    )
 
 
 if __name__ == '__main__':

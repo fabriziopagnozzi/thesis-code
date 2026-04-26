@@ -24,8 +24,9 @@ from experiments.mimic.configs import (
     global_cfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.schemas import (
+from experiments.mimic.utils.charlson import ICD3_TO_CHARLSON_COLS
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.schemas import (
     AdmissionMetaSlimRow,
     ConditionStatsRow,
     GroundingChunkSample,
@@ -104,8 +105,9 @@ def build_query_prompts(
         cond_hadm_ids = _get_icd3_hadm_ids(con, icd10_3char)
 
         top_mods = json.loads(condition_row.get('top_comorbidity_mods_json') or '[]')
-        charlson = [
-            (m['label'], 'comorbidity') for m in top_mods[: query_prompts_cfg.max_modifiers]
+        excluded_cols = ICD3_TO_CHARLSON_COLS.get(icd10_3char, frozenset())
+        charlson = [(m['label'], 'comorbidity') for m in top_mods if m['col'] not in excluded_cols][
+            : query_prompts_cfg.max_modifiers
         ]
         demographic = [
             (text, 'demographic') for text in query_prompts_cfg.demographic_modifiers_text

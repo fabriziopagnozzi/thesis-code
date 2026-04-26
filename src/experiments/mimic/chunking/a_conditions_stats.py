@@ -9,8 +9,8 @@ from experiments.mimic.configs import (
     get_table_path,
     setup_logging,
 )
-from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 from helpers.ollama_client import generate_json
 
 conditions_stats_cfg = ConditionsStatsCfg.load()

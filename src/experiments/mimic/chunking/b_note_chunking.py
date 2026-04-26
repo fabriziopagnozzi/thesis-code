@@ -9,7 +9,7 @@ from tokenizers import Tokenizer
 from tqdm import tqdm
 
 from experiments.mimic.configs import NoteChunkingCfg, get_table_path, global_cfg, setup_logging
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
 chunking_cfg = NoteChunkingCfg.load()
 

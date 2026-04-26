@@ -3,14 +3,14 @@ import argparse
 import duckdb
 
 from experiments.mimic.configs import (
-    MIMIC_EXPERIMENT_DIR,
     BuildQueryPromptsCfg,
     FilterQueriesCfg,
     GenQueriesCfg,
     GoldAnnotationCfg,
     setup_logging,
 )
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
 from .a_build_query_prompts import run_build_query_prompts
 from .b_gen_queries_llm import run_gen_queries_llm
@@ -50,7 +50,7 @@ def run_queries_subpipeline(
         print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
         run_gold_annotation(con, cfg=gold_annotation_cfg)
 
-    print(f'\n\nPhase 3 complete. Outputs in {MIMIC_EXPERIMENT_DIR}:\n')
+    print(f'\n\nPhase 3 complete. Outputs in {MimicPaths.experiment}:\n')
 
 
 if __name__ == '__main__':

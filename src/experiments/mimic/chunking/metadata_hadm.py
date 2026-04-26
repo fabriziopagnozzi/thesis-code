@@ -10,7 +10,7 @@ from experiments.mimic.configs import get_table_path, setup_logging
 
 
 def run_add_metadata(con: duckdb.DuckDBPyConnection | None = None) -> pl.DataFrame:
-    from experiments.mimic.duck_db_init import connect_mimic_duckdb
+    from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
     if con is None:
         con = connect_mimic_duckdb()

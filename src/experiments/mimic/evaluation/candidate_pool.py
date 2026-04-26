@@ -3,18 +3,20 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
+import lancedb
 import numpy as np
 import polars as pl
+import pyarrow as pa
 from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
 from experiments.mimic.configs import (
-    VECTOR_DB_DIR,
     BuildQueryPromptsCfg,
     EvaluateCfg,
     get_table_path,
     global_cfg,
 )
+from experiments.mimic.utils.constants import MimicPaths
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
@@ -185,45 +187,55 @@ class CandidatePoolBuilder:
 
         self._admissions_meta = pl.read_parquet(get_table_path('admissions_metadata'))
 
-        import lancedb
-
-        db = lancedb.connect(VECTOR_DB_DIR)
-        arrow_table = db.open_table(global_cfg.chunks_vec_table).to_arrow()
-        vec_col_name = global_cfg.vector_column
-        vec_column = arrow_table.column(vec_col_name)
-        print(f'[CandidatePoolBuilder] using vector column: {vec_col_name!r}')
-
-        combined = vec_column.combine_chunks()
-        dim = combined.type.list_size
-        self._corpus_vectors = (
-            combined.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
+        db = lancedb.connect(MimicPaths.vector_db)
+        self._table = db.open_table(global_cfg.chunks_vec_table)
+        self._vec_col_name = global_cfg.vector_column
+        self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
+        print(
+            f'[CandidatePoolBuilder] table: {global_cfg.chunks_vec_table!r}, '
+            f'vector column: {self._vec_col_name!r} ({self._vec_dim}-dim), '
+            f'{self._table.count_rows():,} rows'
         )
 
-        self._corpus_df = pl.DataFrame(arrow_table.drop(vec_col_name))
-        self._hadm_id_array: NDArray[np.int64] = self._corpus_df['hadm_id'].to_numpy()
-        self._chunk_id_to_idx: dict[str, int] = {
-            cid: i for i, cid in enumerate(self._corpus_df['chunk_id'].to_list())
-        }
-        self._condition_indices_cache: dict[str, NDArray[np.intp]] = {}
+    def _empty_pool(self) -> CandidatePool:
+        return CandidatePool(
+            chunk_ids=[],
+            hadm_ids=np.empty(0, dtype=np.int64),
+            vectors=np.empty((0, self._vec_dim), dtype=np.float32),
+            texts=[],
+            section_names=[],
+            metadata_df=pl.DataFrame(),
+        )
+
+    def _pool_from_arrow(self, result: pa.Table) -> CandidatePool:
+        """Convert a LanceDB search result (Arrow table) into a CandidatePool."""
+        if result.num_rows == 0:
+            return self._empty_pool()
+
+        vec_col = result.column(self._vec_col_name).combine_chunks()
+        dim = vec_col.type.list_size
+        vectors = vec_col.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
+        drop_cols = [self._vec_col_name]
+        if '_distance' in result.schema.names:
+            drop_cols.append('_distance')
+        df = pl.DataFrame(result.drop(drop_cols))
+        return CandidatePool(
+            chunk_ids=df['chunk_id'].to_list(),
+            hadm_ids=df['hadm_id'].to_numpy().astype(np.int64),
+            vectors=vectors,
+            texts=df['text'].to_list(),
+            section_names=df['section_name'].to_list(),
+            metadata_df=df,
+        )
 
     def for_query_cosine(
         self,
         query_vec: NDArray[np.float32],
         n: int,
     ) -> CandidatePool:
-        """Build a candidate pool from the top-N most similar chunks in the full corpus."""
-        sim = self._corpus_vectors @ query_vec
-        take = min(n, len(sim))
-        top_idx = np.argsort(sim)[::-1][:take].copy()
-        top_idx_list = top_idx.tolist()
-        return CandidatePool(
-            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
-            hadm_ids=self._hadm_id_array[top_idx],
-            vectors=self._corpus_vectors[top_idx],
-            texts=[self._corpus_df['text'][i] for i in top_idx_list],
-            section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
-            metadata_df=self._corpus_df[top_idx_list],
-        )
+        """Top-N most similar chunks across the full corpus."""
+        result = self._table.search(query_vec).limit(n).to_arrow()
+        return self._pool_from_arrow(result)
 
     def for_query_cosine_condition(
         self,
@@ -231,39 +243,21 @@ class CandidatePoolBuilder:
         icd10_3char: str,
         n: int,
     ) -> CandidatePool:
-        """Top-N cosine pool restricted to admissions with the given ICD-3 prefix.
+        """Top-N cosine pool restricted to admissions with the given ICD-10 3-char code.
 
-        Filtered index per icd10_3char is computed once and cached.
+        Requires the icd10_3char_list column to be present in the lance table
+        (run embeddings/add_icd_list_col.py once to add it).
+
+        Uses a LanceDB prefilter so only condition-relevant vectors are ranked.
+        If no ANN index exists the search falls back to exact cosine scan.
         """
-        if icd10_3char not in self._condition_indices_cache:
-            condition_hadm_ids = self.icd3_hadm_ids(icd10_3char)
-            mask = np.isin(self._hadm_id_array, np.fromiter(condition_hadm_ids, dtype=np.int64))
-            self._condition_indices_cache[icd10_3char] = np.where(mask)[0].astype(np.intp)
-
-        filtered_indices = self._condition_indices_cache[icd10_3char]
-        if filtered_indices.size == 0:
-            return CandidatePool(
-                chunk_ids=[],
-                hadm_ids=np.empty(0, dtype=np.int64),
-                vectors=np.empty((0, self._corpus_vectors.shape[1]), dtype=np.float32),
-                texts=[],
-                section_names=[],
-                metadata_df=self._corpus_df.clear(),
-            )
-
-        sim = self._corpus_vectors[filtered_indices] @ query_vec
-        top_local = np.argsort(sim)[::-1][: min(n, len(sim))].copy()
-        top_idx = filtered_indices[top_local]
-        top_idx_list = top_idx.tolist()
-
-        return CandidatePool(
-            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
-            hadm_ids=self._hadm_id_array[top_idx],
-            vectors=self._corpus_vectors[top_idx],
-            texts=[self._corpus_df['text'][i] for i in top_idx_list],
-            section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
-            metadata_df=self._corpus_df[top_idx_list],
+        result = (
+            self._table.search(query_vec)
+            .where(f"array_has(icd10_3char_list, '{icd10_3char}')")
+            .limit(n)
+            .to_arrow()
         )
+        return self._pool_from_arrow(result)
 
     def for_hadm_ids_cosine(
         self,
@@ -272,57 +266,29 @@ class CandidatePoolBuilder:
         n: int,
     ) -> CandidatePool:
         """Top-N cosine pool restricted to a given hadm_id set."""
-        mask = np.isin(self._hadm_id_array, np.fromiter(hadm_ids, dtype=np.int64))
-        filtered_indices = np.where(mask)[0].astype(np.intp)
-        if filtered_indices.size == 0:
-            return CandidatePool(
-                chunk_ids=[],
-                hadm_ids=np.empty(0, dtype=np.int64),
-                vectors=np.empty((0, self._corpus_vectors.shape[1]), dtype=np.float32),
-                texts=[],
-                section_names=[],
-                metadata_df=self._corpus_df.clear(),
-            )
-        sim = self._corpus_vectors[filtered_indices] @ query_vec
-        top_local = np.argsort(sim)[::-1][: min(n, len(sim))].copy()
-        top_idx = filtered_indices[top_local]
-        top_idx_list = top_idx.tolist()
-        return CandidatePool(
-            chunk_ids=[self._corpus_df['chunk_id'][i] for i in top_idx_list],
-            hadm_ids=self._hadm_id_array[top_idx],
-            vectors=self._corpus_vectors[top_idx],
-            texts=[self._corpus_df['text'][i] for i in top_idx_list],
-            section_names=[self._corpus_df['section_name'][i] for i in top_idx_list],
-            metadata_df=self._corpus_df[top_idx_list],
+        if not hadm_ids:
+            return self._empty_pool()
+        hadm_list = ', '.join(str(h) for h in hadm_ids)
+        result = (
+            self._table.search(query_vec).where(f'hadm_id IN ({hadm_list})').limit(n).to_arrow()
         )
+        return self._pool_from_arrow(result)
 
     def for_gold_chunks(self, gold_chunk_ids: set[str]) -> CandidatePool:
-        indices = np.array(
-            [self._chunk_id_to_idx[cid] for cid in gold_chunk_ids if cid in self._chunk_id_to_idx],
-            dtype=np.intp,
+        """Fetch specific chunks by chunk_id (no vector ranking)."""
+        if not gold_chunk_ids:
+            return self._empty_pool()
+        placeholders = ', '.join(f"'{cid}'" for cid in gold_chunk_ids)
+        result = (
+            self._table.search()
+            .where(f'chunk_id IN ({placeholders})')
+            .limit(len(gold_chunk_ids))
+            .to_arrow()
         )
-        if indices.size == 0:
-            return CandidatePool(
-                chunk_ids=[],
-                hadm_ids=np.empty(0, dtype=np.int64),
-                vectors=np.empty((0, self._corpus_vectors.shape[1]), dtype=np.float32),
-                texts=[],
-                section_names=[],
-                metadata_df=self._corpus_df.clear(),
-            )
-        idx_list = indices.tolist()
-
-        return CandidatePool(
-            chunk_ids=[self._corpus_df['chunk_id'][i] for i in idx_list],
-            hadm_ids=self._hadm_id_array[indices],
-            vectors=self._corpus_vectors[indices],
-            texts=[self._corpus_df['text'][i] for i in idx_list],
-            section_names=[self._corpus_df['section_name'][i] for i in idx_list],
-            metadata_df=self._corpus_df[idx_list],
-        )
+        return self._pool_from_arrow(result)
 
     def modifier_hadm_ids(self, modifier_text: str) -> set[int]:
-        """hadm_ids matching a modifier — tries Charlson comorbidity first, then demographic."""
+        """hadm_ids matching a modifier - tries Charlson comorbidity first, then demographic."""
         if modifier_text in self._modifier_to_hadm_ids_cache:
             return self._modifier_to_hadm_ids_cache[modifier_text]
 

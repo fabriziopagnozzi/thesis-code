@@ -24,11 +24,11 @@ from experiments.mimic.configs import (
     get_table_path,
     setup_logging,
 )
-from experiments.mimic.constants import CHARLSON_LABELS_TO_STR
-from experiments.mimic.duck_db_init import connect_mimic_duckdb
 from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
-from experiments.mimic.schemas import AdmissionMetadataRow, QueryRow
-from experiments.mimic.utils import (
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR, CharlsonLabel
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.schemas import AdmissionMetadataRow, QueryRow
+from experiments.mimic.utils.utils import (
     QueryAspect,
     TagDecision,
     aspects_from_modifiers,
@@ -441,7 +441,7 @@ def _format_chunk_batch(
     return '\n---\n'.join(parts)
 
 
-def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int, str]:
+def _build_patient_meta(meta_path, charlson_labels: dict[CharlsonLabel, str]) -> dict[int, str]:
     meta = pl.read_parquet(meta_path)
 
     lookup: dict[int, str] = {}
@@ -452,7 +452,9 @@ def _build_patient_meta(meta_path, charlson_labels: dict[str, str]) -> dict[int,
         age_str = f'age {age}' if age is not None else 'age unknown'
 
         comorbidities = [
-            label for col, label in charlson_labels.items() if row.get(col) and row[col] > 0
+            label
+            for col, label in charlson_labels.items()
+            if row.get(col) and row[col] > 0  # type: ignore
         ]
         primary = row.get('primary_icd_description', '')
 
