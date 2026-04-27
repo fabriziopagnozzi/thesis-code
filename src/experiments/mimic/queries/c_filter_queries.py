@@ -44,7 +44,7 @@ def run_filter_queries(
     queries_df = pl.read_parquet(get_table_path('queries'))
     print(f'Loaded {len(queries_df):,} queries')
 
-    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cuda')
+    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load())
     result = filter_queries(queries_df, builder)
 
     out_path = get_table_path('divergence_stats')

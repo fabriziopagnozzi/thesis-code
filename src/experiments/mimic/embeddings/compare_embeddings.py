@@ -13,8 +13,9 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import get_vec_col_name, setup_logging
+from experiments.mimic.configs import setup_logging
 from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.embedder import Embedder
 
 DEFAULT_MODELS = [
@@ -52,7 +53,7 @@ def main() -> None:
     vecs = []
     for model, col in zip(models, cols, strict=True):
         print(f'Loading {model} (col: {col}) ...')
-        emb = Embedder(model, device=args.device)
+        emb = Embedder(model)
         vec = emb._model.encode(args.query, normalize_embeddings=True)
         vecs.append(vec)
     print()

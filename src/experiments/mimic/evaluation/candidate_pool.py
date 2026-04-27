@@ -17,6 +17,7 @@ from experiments.mimic.configs import (
     global_cfg,
 )
 from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
@@ -171,11 +172,10 @@ class CandidatePoolBuilder:
         '==': operator.eq,
     }
 
-    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg, device: str | None):
+    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg):
         self._con = con
         self._embedder = Embedder(
-            global_cfg.embedding_model,
-            device=device if device else cfg.device,
+            cfg.embedding_model,
             batch_size=1,
             query_prompt=global_cfg.query_retrieval_instruction,
         )
@@ -189,7 +189,7 @@ class CandidatePoolBuilder:
 
         db = lancedb.connect(MimicPaths.vector_db)
         self._table = db.open_table(global_cfg.chunks_vec_table)
-        self._vec_col_name = global_cfg.vector_column
+        self._vec_col_name = get_vec_col_name(cfg.embedding_model)
         self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
         print(
             f'[CandidatePoolBuilder] table: {global_cfg.chunks_vec_table!r}, '

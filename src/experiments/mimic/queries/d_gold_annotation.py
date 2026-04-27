@@ -74,7 +74,7 @@ def run_gold_annotation(
             f'Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
         )
 
-    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load(), device='cpu')
+    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load())
     result = annotate(queries_df, builder, patient_meta, done_texts)
     result.write_parquet(out_path)
 

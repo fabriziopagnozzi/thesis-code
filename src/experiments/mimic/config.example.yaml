@@ -11,20 +11,31 @@ global:
     #     divergence_stats: <dir>
     #     gold_annotations: <dir>
 
-    # number of conditions to sample from conditions_stats
-    n_conditions: 350
 
-    embedding_model: multi-qa-mpnet-base-cos-v1
-        # - multi-qa-mpnet-base-cos-v1
-        # - Simonlee711/Clinical_ModernBERT
-        # - abhinand/MedEmbed-large-v0.1
-        # - Qwen/Qwen3-Embedding-0.6B
-
-    # relative to src/experiments/mimic/_results/_vector_db
-    chunks_vec_table: chunks_512
-
-    # pre-retrieval cosine pool. Shared between query filtering and evaluation
-    prefilter_n: 2_000
+    n_conditions: 350 # number of conditions to sample from conditions_stats
+    chunks_vec_table: chunks_512 # relative to src/experiments/mimic/_results/_vector_db
+    prefilter_n: 2_000 # pre-retrieval cosine pool. Shared between query filtering and evaluation
+# ----------------------------------------------------------------------------
+embeddings:
+    models:
+        - multi-qa-mpnet-base-cos-v1
+        - Simonlee711/Clinical_ModernBERT
+        - abhinand/MedEmbed-large-v0.1
+        - Qwen/Qwen3-Embedding-0.6B
+        - Qwen/Qwen3-Embedding-4B
+        - Qwen/Qwen3-Embedding-8B
+    batch_sizes: [ 2, 4, 8, 16, 32 ] # for each model
+    commit_every: 16384
+# ----------------------------------------------------------------------------
+evaluation:
+    embedding_model: Qwen/Qwen3-Embedding-4B
+    strategies:
+        - top_k
+        - mmr
+        - fac_loc
+    k_values: [ 5, 10, 20, 30 ]
+    lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+    device: cuda
 # ----------------------------------------------------------------------------
 chunking:
     conditions_stats:
@@ -61,11 +72,6 @@ chunking:
     dedup:
         boilerplate_sections:
             - PAST MEDICAL HISTORY
-# ----------------------------------------------------------------------------
-embeddings:
-    batch_size: 256
-    commit_every: 16384
-    device: cuda
 # ----------------------------------------------------------------------------
 queries:
     build_prompts:
@@ -175,12 +181,5 @@ queries:
               [{{"chunk_id": "<id>", "reason": "<up to 15 words>"}}, ...]
             If none relevant: [].
             Return ONLY the JSON array, nothing else.
+
 # ----------------------------------------------------------------------------
-evaluation:
-    strategies:
-        - top_k
-        - mmr
-        - fac_loc
-    k_values: [ 5, 10, 20, 30 ]
-    lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
-    device: cuda

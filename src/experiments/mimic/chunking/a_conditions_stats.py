@@ -9,33 +9,12 @@ from experiments.mimic.configs import (
     get_table_path,
     setup_logging,
 )
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR, ICD3_TO_CHARLSON_COLS
 from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
 from helpers.ollama_client import generate_json
 
 conditions_stats_cfg = ConditionsStatsCfg.load()
-LLM_CONDITIONS_SYSTEM_PROMPT = """
-You are a medical coding expert helping build a clinical QA benchmark.
-
-Given a list of ICD-10 sub-code descriptions sharing the same 3-character prefix, you must:\n
-    1. Produce a single concise clinical label (up to 20 words) representing the group in a semantically meaningful way,
-    focusing on the main condition shared by all sub-labels.\n
-    2. Decide whether this code group is USEFUL for a multi-document clinical QA benchmark.
-Set "keep": false for codes that are administrative, procedural, or too vague to anchor a
-meaningful clinical question requiring multi-source synthesis.
-
-Examples of codes to EXCLUDE ("keep": false):
-- Intraoperative, postprocedural, and iatrogenic complications (e.g., T-codes, and specific complication blocks like L76, G97, N99)
-- Do-not-resuscitate orders (Z66) and Encounter/screening codes (Z00-Z13)
-- External cause codes (V/W/X/Y)
-- Morphology/histology codes
-- Unspecified injury catch-alls
-- Codes whose group contains only generic 'unspecified' or 'other' entries with no clear clinical entity.
-- Standalone symptom/sign codes (R-codes), UNLESS they represent a life-threatening acute state (e.g., Coma, Shock) or a complex syndrome.
-- Drug poisoning/adverse effect groups (T-codes).
-
-Prefer the most specific / prevalent clinical entity over generic catch-alls when naming.
-"""
 
 
 def run_conditions_stats(
@@ -118,10 +97,11 @@ def select_conditions(
             mean_comorbidity_count = 0.0
         else:
             mean_comorbidity_count = round(sum(float(r) for r in rates if r is not None), 2)
+            excluded_cols = ICD3_TO_CHARLSON_COLS.get(icd3, frozenset())
             scored = [
                 {'col': col, 'label': CHARLSON_LABELS_TO_STR[col], 'rate': round(float(r), 4)}
                 for col, r in zip(all_cols, rates, strict=True)
-                if r and r > 0.05
+                if r and r > 0.05 and col not in excluded_cols
             ]
             scored.sort(key=lambda x: x['rate'], reverse=True)
 
@@ -185,7 +165,7 @@ def coalesce_condition_names(
                 model=conditions_stats_cfg.cond_processing_llm,
                 num_ctx=32_000,
                 num_predict=-1,
-                system=LLM_CONDITIONS_SYSTEM_PROMPT,
+                system=MimicDefaultPrompts.llm_conditions_cleaning_system,
                 think=False,
                 stream=False,
             )

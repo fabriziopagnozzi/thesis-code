@@ -20,8 +20,29 @@ type CharlsonLabel = Literal[
     'aids',
 ]
 
+
+CHARLSON_LABELS_TO_STR: dict[CharlsonLabel, str] = {
+    'myocardial_infarct': 'prior myocardial infarction',
+    'congestive_heart_failure': 'congestive heart failure',
+    'peripheral_vascular_disease': 'peripheral vascular disease',
+    'cerebrovascular_disease': 'cerebrovascular disease',
+    'dementia': 'dementia',
+    'chronic_pulmonary_disease': 'chronic pulmonary disease (COPD)',
+    'rheumatic_disease': 'rheumatic disease',
+    'peptic_ulcer_disease': 'peptic ulcer disease',
+    'mild_liver_disease': 'mild liver disease',
+    'severe_liver_disease': 'severe liver disease (cirrhosis)',
+    'diabetes_without_cc': 'diabetes without complications',
+    'diabetes_with_cc': 'diabetes with chronic complications',
+    'paraplegia': 'hemiplegia or paraplegia',
+    'renal_disease': 'chronic kidney disease',
+    'malignant_cancer': 'malignancy',
+    'metastatic_solid_tumor': 'metastatic cancer',
+    'aids': 'HIV/AIDS',
+}
+
 # Used to exclude self-referential comorbidities when the primary condition is in the same bucket.
-CHARLSON_ICD10_3CHAR: dict[str, frozenset[str]] = {
+CHARLSON_ICD10_3CHAR: dict[CharlsonLabel, frozenset[str]] = {
     'myocardial_infarct': frozenset({'I21', 'I22', 'I25'}),
     'congestive_heart_failure': frozenset({'I09', 'I11', 'I13', 'I25', 'I42', 'I43', 'I50', 'P29'}),
     'peripheral_vascular_disease': frozenset({'I70', 'I71', 'I73', 'I77', 'I79', 'K55', 'Z95'}),
@@ -173,23 +194,3 @@ ICD3_TO_CHARLSON_COLS: dict[str, frozenset[str]] = {}
 for _col, _pfxs in CHARLSON_ICD10_3CHAR.items():
     for _pfx in _pfxs:
         ICD3_TO_CHARLSON_COLS[_pfx] = ICD3_TO_CHARLSON_COLS.get(_pfx, frozenset()) | {_col}
-
-CHARLSON_LABELS_TO_STR: dict[CharlsonLabel, str] = {
-    'myocardial_infarct': 'prior myocardial infarction',
-    'congestive_heart_failure': 'congestive heart failure',
-    'peripheral_vascular_disease': 'peripheral vascular disease',
-    'cerebrovascular_disease': 'cerebrovascular disease',
-    'dementia': 'dementia',
-    'chronic_pulmonary_disease': 'chronic pulmonary disease (COPD)',
-    'rheumatic_disease': 'rheumatic disease',
-    'peptic_ulcer_disease': 'peptic ulcer disease',
-    'mild_liver_disease': 'mild liver disease',
-    'severe_liver_disease': 'severe liver disease (cirrhosis)',
-    'diabetes_without_cc': 'diabetes without complications',
-    'diabetes_with_cc': 'diabetes with chronic complications',
-    'paraplegia': 'hemiplegia or paraplegia',
-    'renal_disease': 'chronic kidney disease',
-    'malignant_cancer': 'malignancy',
-    'metastatic_solid_tumor': 'metastatic cancer',
-    'aids': 'HIV/AIDS',
-}

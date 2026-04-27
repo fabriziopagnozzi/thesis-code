@@ -4,17 +4,35 @@ from typing import Literal, get_args
 from helpers.dir_paths import DATASETS_DIR, ROOT_DIR, THIRDPARTY_CODE_DIR
 
 
-class MimicPaths:
-    exp_name = getenv('EXP_NAME', 'default_experiment')
-    root = ROOT_DIR / 'src' / 'experiments' / 'mimic'
-    results = root / '_results'
+def _resolve_exp_name() -> str:
+    exp = getenv('EXP') or getenv('EXP_NAME')
+    if exp is None:
+        raise RuntimeError('Specify EXP (or EXP_NAME) environment variable.')
+    results_dir = ROOT_DIR / 'src' / 'experiments' / 'mimic' / '_results'
+    if (results_dir / exp).is_dir():
+        return exp
+    matches = sorted(results_dir.glob(f'{exp}-*'))
+    if len(matches) == 1:
+        return matches[0].name
+    if len(matches) > 1:
+        raise RuntimeError(f'EXP={exp!r} is ambiguous: {[m.name for m in matches]}')
+    raise RuntimeError(f'No experiment directory matching {exp!r} in {results_dir}')
 
+
+_EXP_NAME = _resolve_exp_name()
+
+
+class MimicPaths:
+    exp_name = _EXP_NAME
+    mimic_root = ROOT_DIR / 'src' / 'experiments' / 'mimic'
+    results = mimic_root / '_results'
     vector_db = results / '_vector_db'
+
     experiment = results / exp_name
     config = experiment / '_config.yaml'
     logs = experiment / '_logs'
 
-    init_sql = root / '_mimic_init.sql'
+    init_sql = mimic_root / '_mimic_init.sql'
     duckdb_concepts = THIRDPARTY_CODE_DIR / 'mimic_code' / 'mimic-iv' / 'concepts_duckdb'
 
     hosp = DATASETS_DIR / 'mimic-iv' / 'hosp'
@@ -96,9 +114,9 @@ type ResultTable = Literal[
 type MimicTable = HospTable | IcuTable | NoteTable | ResultTable
 
 
-HOSP_TABLES = set(get_args(HospTable))
-ICU_TABLES = set(get_args(IcuTable))
-NOTE_TABLES = set(get_args(NoteTable))
-RESULT_TABLES = set(get_args(ResultTable))
+HOSP_TABLES = set(get_args(HospTable.__value__))
+ICU_TABLES = set(get_args(IcuTable.__value__))
+NOTE_TABLES = set(get_args(NoteTable.__value__))
+RESULT_TABLES = set(get_args(ResultTable.__value__))
 
 ALL_TABLES = HOSP_TABLES | ICU_TABLES | NOTE_TABLES | RESULT_TABLES

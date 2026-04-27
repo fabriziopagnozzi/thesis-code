@@ -49,7 +49,7 @@ def add_vector_column(
     print(f'Batch size      : {batch_size}')
     print(f'Device          : {device}')
 
-    embedder = Embedder(model_name, device=device, batch_size=batch_size)
+    embedder = Embedder(model_name, batch_size=batch_size)
 
     all_embeddings: list[list[float]] = []
 
@@ -58,7 +58,7 @@ def add_vector_column(
         batch = table.search().limit(batch_size).offset(start).select([text_col]).to_arrow()
         texts: list[str] = batch[text_col].to_pylist()
 
-        embs = embedder.embed_corpus(texts)
+        embs = embedder.embed_docs(texts)
         all_embeddings.extend(embs.tolist())
 
         print(f'  Embedded {end:,}/{total:,} rows', flush=True)

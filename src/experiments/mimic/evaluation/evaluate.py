@@ -44,7 +44,7 @@ def run_evaluate(
     if con is None:
         con = connect_mimic_duckdb()
 
-    builder = CandidatePoolBuilder(con, cfg=evaluate_cfg, device=evaluate_cfg.device)
+    builder = CandidatePoolBuilder(con, cfg=evaluate_cfg)
 
     if evaluate_cfg.gold_mode == 'structural':
         results = evaluate_structural(builder)

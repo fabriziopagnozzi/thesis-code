@@ -16,12 +16,7 @@ from experiments.mimic.utils.constants import (
     MimicPaths,
     MimicTable,
 )
-from experiments.mimic.utils.prompts_default import (
-    GOLD_TAGS_SYSTEM_PROMPT_DEF,
-    GOLD_TAGS_TEMPLATE_DEF,
-    QUERY_GENERATING_TEMPLATE_DEF,
-)
-from experiments.mimic.utils.utils import get_vec_col_name
+from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
 from helpers.query_algorithms import ScoringFunction
 
 torch.cuda.empty_cache()
@@ -42,19 +37,13 @@ class GlobalCfg(BaseModel):
     num_conditions: PositiveInt = Field(alias='n_conditions')
     result_dir_overrides: dict[str, str] = {}
 
-    prefilter_n: int
-    embedding_model: str
+    prefilter_n: int = 1_000_000  # basically infinity
     chunks_vec_table: str
     query_retrieval_instruction: str | None = (
         'Instruct: Given a multi-aspect clinical query comparing patient cohorts, '
         'retrieve relevant hospital discharge summaries containing matching patient '
         'demographics, comorbidities, and treatment outcomes.\nQuery: '
     )
-
-    @computed_field
-    @property
-    def vector_column(self) -> str:
-        return get_vec_col_name(self.embedding_model)
 
     @computed_field
     @property
@@ -191,9 +180,9 @@ class DedupCfg(BaseModel):
 
 # -- Phase 2 --
 class EmbedCfg(BaseModel):
-    batch_size: int
+    models: list[str]
+    batch_sizes: list[int]
     commit_every: int
-    device: str
 
     @classmethod
     def load(cls) -> EmbedCfg:
@@ -224,7 +213,7 @@ class BuildQueryPromptsCfg(BaseModel):
         'DISCHARGE MEDICATIONS',
     ]
     demographic_modifiers: list[DemographicModifier]
-    prompt_template: str = QUERY_GENERATING_TEMPLATE_DEF
+    prompt_template: str = MimicDefaultPrompts.query_gen_template
 
     @computed_field
     @property
@@ -289,8 +278,8 @@ class GoldAnnotationCfg(BaseModel):
     top_k: int | None = None
     think: bool = False
     stream: bool = False
-    tagging_system_prompt: str = GOLD_TAGS_SYSTEM_PROMPT_DEF
-    tagging_user_template: str = GOLD_TAGS_TEMPLATE_DEF
+    tagging_system_prompt: str = MimicDefaultPrompts.gold_tags_system
+    tagging_user_template: str = MimicDefaultPrompts.gold_tags_template
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:
@@ -299,10 +288,10 @@ class GoldAnnotationCfg(BaseModel):
 
 # -- Phase 4 --
 class EvaluateCfg(BaseModel):
+    embedding_model: str
     strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]
-    device: str
     gold_mode: Literal['llm', 'structural'] = 'llm'
 
     @classmethod

@@ -8,10 +8,17 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from experiments.mimic.configs import NoteChunkingCfg, get_table_path, global_cfg, setup_logging
+from experiments.mimic.configs import (
+    EvaluateCfg,
+    NoteChunkingCfg,
+    get_table_path,
+    global_cfg,
+    setup_logging,
+)
 from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
 chunking_cfg = NoteChunkingCfg.load()
+evaluate_cfg = EvaluateCfg.load()
 
 
 @dataclass
@@ -36,7 +43,7 @@ def run_note_chunking(
     if cfg is not None:
         chunking_cfg = cfg
 
-    tokenizer = _load_tokenizer(global_cfg.embedding_model)
+    tokenizer = _load_tokenizer(evaluate_cfg.embedding_model)
 
     if con is None:
         con = connect_mimic_duckdb()
@@ -82,7 +89,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     with Pool(
         processes=min(os.cpu_count() or 1, len(notes_rows)),
         initializer=_worker_init,
-        initargs=(global_cfg.embedding_model, chunking_cfg),
+        initargs=(evaluate_cfg.embedding_model, chunking_cfg),
     ) as pool:
         per_note = list(
             tqdm(
