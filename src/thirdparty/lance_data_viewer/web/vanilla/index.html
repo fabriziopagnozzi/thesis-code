@@ -1,90 +1,131 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lance Data Viewer</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
 
-<body>
+  <body>
     <div class="container">
-        <header>
-            <h1>Lance Data Viewer</h1>
-            <div class="health-status" id="healthStatus">Connecting...</div>
-        </header>
+      <main class="main-content">
+        <aside class="sidebar">
+          <div class="sidebar-section">
+            <h3>Datasets</h3>
+            <div class="dataset-list" id="datasetList">
+              <div class="loading">Loading datasets...</div>
+            </div>
+          </div>
 
-        <main class="main-content">
-            <aside class="sidebar">
-                <div class="sidebar-section">
-                    <h3>Datasets</h3>
-                    <div class="dataset-list" id="datasetList">
-                        <div class="loading">Loading datasets...</div>
-                    </div>
+          <div class="sidebar-section" id="columnSection" style="display: none">
+            <h3>Columns</h3>
+            <div class="column-selector">
+              <div id="columnList" class="column-list" style="display: none"></div>
+              <div class="column-controls" style="display: none">
+                <button id="selectAllCols">All</button>
+                <button id="selectNoneCols">None</button>
+                <button id="applyColumns">Apply</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="dataset-header" id="datasetHeader" style="display: none">
+            <div class="header-row">
+              <button
+                id="toggleSidebar"
+                title="Toggle Sidebar"
+                style="
+                  background: #2d2d2d;
+                  border: 1px solid #444;
+                  color: #e0e0e0;
+                  padding: 6px;
+                  border-radius: 4px;
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  transition: all 0.2s ease;
+                "
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+                </svg>
+              </button>
+
+              <!-- <h2 id="datasetTitle">Select a dataset</h2> -->
+              <div style="display: flex; align-items: center; gap: 20px">
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 0.9rem;
+                    cursor: pointer;
+                    color: #aaaaaa;
+                  "
+                >
+                  <input type="checkbox" id="toggleWordWrap" checked /> Wrap text
+                </label>
+                <label
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-size: 0.9rem;
+                    cursor: pointer;
+                    color: #aaaaaa;
+                  "
+                >
+                  <input type="checkbox" id="toggleTruncate" /> Truncate text
+                </label>
+
+                <div class="pagination-controls">
+                  <button id="prevPage" disabled>Previous</button>
+                  <span id="pageInfo">Page 1</span>
+                  <button id="nextPage" disabled>Next</button>
+                  <select id="pageSize">
+                    <option value="25">25 rows</option>
+                    <option value="50" selected>50 rows</option>
+                    <option value="100">100 rows</option>
+                    <option value="200">200 rows</option>
+                  </select>
                 </div>
+              </div>
+            </div>
+          </div>
 
-                <div class="sidebar-section" id="columnSection" style="display: none;">
-                    <h3>Columns</h3>
-                    <div class="column-selector">
-                        <select id="columnSelect" multiple size="6" style="display: none;">
-                        </select>
-                        <div class="column-controls" style="display: none;">
-                            <button id="selectAllCols">All</button>
-                            <button id="selectNoneCols">None</button>
-                            <button id="applyColumns">Apply</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="sidebar-section" id="schemaSection" style="display: none;">
-                    <h3>Schema</h3>
-                    <div class="schema-display" id="schemaDisplay"></div>
-                </div>
-            </aside>
-
-            <section class="content">
-                <div class="dataset-header" id="datasetHeader" style="display: none;">
-                    <div class="header-row">
-                        <h2 id="datasetTitle">Select a dataset</h2>
-                        <div style="display: flex; align-items: center; gap: 20px;">
-                            <label
-                                style="display: flex; align-items: center; gap: 6px; font-size: 0.9rem; cursor: pointer; color: #495057;">
-                                <input type="checkbox" id="toggleWordWrap"> Wrap Text
-                            </label>
-                            <div class="pagination-controls">
-                                <button id="prevPage" disabled>Previous</button>
-                                <span id="pageInfo">Page 1</span>
-                                <button id="nextPage" disabled>Next</button>
-                                <select id="pageSize">
-                                    <option value="25">25 rows</option>
-                                    <option value="50" selected>50 rows</option>
-                                    <option value="100">100 rows</option>
-                                    <option value="200">200 rows</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="data-section" id="dataSection" style="display: none;">
-                        <div class="table-container">
-                            <table id="dataTable">
-                                <thead id="tableHead"></thead>
-                                <tbody id="tableBody"></tbody>
-                            </table>
-                        </div>
-                        <div class="loading" id="dataLoading" style="display: none;">Loading data...</div>
-                        <div class="error" id="dataError" style="display: none;"></div>
-                    </div>
-            </section>
-        </main>
+          <div class="data-section" id="dataSection" style="display: none">
+            <div class="table-container">
+              <table id="dataTable">
+                <thead id="tableHead"></thead>
+                <tbody id="tableBody"></tbody>
+              </table>
+            </div>
+            <div class="loading" id="dataLoading" style="display: none">Loading data...</div>
+            <div class="error" id="dataError" style="display: none"></div>
+          </div>
+        </section>
+      </main>
     </div>
 
-    <div class="tooltip" id="tooltip" style="display: none;">
-        <div class="tooltip-content"></div>
+    <div class="tooltip" id="tooltip" style="display: none">
+      <div class="tooltip-content"></div>
     </div>
 
+    <div id="healthStatus" style="display: none"></div>
     <script src="app.js"></script>
-</body>
-
+  </body>
 </html>
