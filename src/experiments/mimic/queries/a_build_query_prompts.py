@@ -22,6 +22,7 @@ from experiments.mimic.configs import (
     BuildQueryPromptsCfg,
     get_table_path,
     global_cfg,
+    read_parquet,
     setup_logging,
 )
 from experiments.mimic.utils.charlson import ICD3_TO_CHARLSON_COLS
@@ -46,9 +47,9 @@ def run_build_query_prompts(
     if con is None:
         con = connect_mimic_duckdb()
 
-    conditions = pl.read_parquet(get_table_path('conditions_stats'))
-    chunks = pl.read_parquet(get_table_path('chunks'))
-    metadata = pl.read_parquet(get_table_path('admissions_metadata'))
+    conditions = read_parquet('conditions_stats')
+    chunks = read_parquet('chunks')
+    metadata = read_parquet('admissions_metadata')
 
     print(
         f'Loaded {len(conditions):,} conditions, {len(chunks):,} chunks, {len(metadata):,} admissions'
@@ -182,7 +183,7 @@ def build_query_prompts(
         f'Built {len(results):,} grounded prompts, skipped {skipped:,} conditions '
         f'(no charlson modifiers or under min_modifier_admissions={query_prompts_cfg.min_modifier_admissions})'
     )
-    return pl.DataFrame(results)
+    return pl.DataFrame(results).with_row_index('query_id')
 
 
 def _select_conditions_stratified(

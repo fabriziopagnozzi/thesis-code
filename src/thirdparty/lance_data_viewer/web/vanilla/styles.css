@@ -26,9 +26,24 @@ body {
     line-height: 1.2;
 }
 
+:root {
+    --bg-main: #121212;
+    --bg-panel: #1a1c23;
+    --bg-hover: #262a33;
+
+    --border: #2f3440;
+    --border-soft: #262a33;
+
+    --text-main: #e6e6e6;
+    --text-dim: #a0a8b8;
+
+    --accent: #7c5cff;
+    --accent-soft: #2a2340;
+}
+
 ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 2px;
+    height: 2px;
 }
 
 ::-webkit-scrollbar-track {
@@ -52,7 +67,7 @@ body {
     flex-direction: column;
     width: 100%;
     margin: 0 auto;
-    padding: 0px;
+    padding: 5px;
     box-sizing: border-box;
 }
 
@@ -85,7 +100,7 @@ header h1 {
 }
 
 .sidebar {
-    background: #1e1e1e;
+    background: #151416;
     padding: 15px;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
@@ -163,25 +178,22 @@ header h1 {
 .column-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     border-radius: 4px;
-    background: #2d2d2d;
 }
 
 .col-item {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 2px;
+    padding: 4px 4px;
     border-radius: 3px;
     cursor: default;
     user-select: none;
     font-size: 0.9rem;
-    background: #252526;
-    border: 1px solid #333;
+    background: #1d1d1d;
     transition: background 0.1s;
 }
 
@@ -251,7 +263,7 @@ header h1 {
 .column-controls button,
 .pagination-controls button,
 .pagination-controls select {
-    padding: 6px 12px;
+    padding: 2px 12px;
     border: 1px solid #444;
     border-radius: 4px;
     background: #2d2d2d;
@@ -294,11 +306,15 @@ header h1 {
     border: none !important;
 }
 
+/* 
+    background-color: #372d47 !important;
+    color: #dfbfff !important; */
+
 .dataset-header {
     display: flex;
     flex-direction: column;
-    background: #1e1e1e;
-    padding: 10px;
+    background: #151416;
+    padding: 2px;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.4);
     flex-shrink: 0;
@@ -343,8 +359,10 @@ header h1 {
     overflow-y: auto;
     position: relative;
     border: none !important;
-    border-radius: 0 !important;
+    border: 1px solid #333 !important;
+    border-radius: 5px !important;
 }
+
 
 table {
     table-layout: fixed;
@@ -352,43 +370,53 @@ table {
     min-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    background-color: #1e1e1e;
+    background-color: #1a1a1b;
+    border-color: var(--border) !important;
+
 }
 
 table th {
     position: sticky;
     top: 0;
     z-index: 10;
-    padding: 14px 20px;
-    text-align: left;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    background-color: #372d47 !important;
-    color: #dfbfff !important;
 
-    border-bottom: 2px solid #313244 !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px 15px;
 
-    background-clip: padding-box;
-    font-weight: 700;
-    font-size: 1rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    background: #0a559c;
+    color: #ffffff;
+
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border-soft);
+
+    font-weight: 600;
+}
+
+/* subtle accent line */
+table th::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.35;
 }
 
 table td {
     overflow: hidden;
     text-overflow: ellipsis;
     padding: 10px 16px;
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--border-soft);
+    border-right: 1px solid var(--border-soft);
     vertical-align: top;
     min-width: 100px;
-    color: #cccccc;
+    color: #d4d4d4;
     border-right: 1px solid #333;
 }
 
 table tr:hover {
-    background-color: #2a2d30;
+    background-color: var(--bg-hover);
 }
 
 .resizer {
@@ -643,10 +671,8 @@ table.truncate-text td {
     text-overflow: ellipsis;
 }
 
-/* 1. Collapse the wrapper to exactly one line + padding in Truncate mode */
 table.truncate-text .complex-object-wrapper {
     max-height: 38px;
-    /* Gives room for 8px padding top/bottom + 1 line of text */
     overflow: hidden;
     position: relative;
     white-space: normal !important;
@@ -655,12 +681,10 @@ table.truncate-text .complex-object-wrapper {
     transition: max-height 0.2s ease;
 }
 
-/* Optional tweak: adjust the vertical position of the "..." indicator so it aligns better */
 table.truncate-text .complex-object-wrapper:not(.expanded)::after {
     content: "...";
     position: absolute;
     bottom: 6px;
-    /* Moved up slightly to clear the bottom padding */
     right: 8px;
     background: #181818;
     padding-left: 8px;
@@ -669,15 +693,12 @@ table.truncate-text .complex-object-wrapper:not(.expanded)::after {
     pointer-events: none;
 }
 
-/* 3. The state when a user clicks to expand the specific table row */
 table.truncate-text .complex-object-wrapper.expanded {
     max-height: none;
-    /* Let it grow to show the 5 items + button */
     overflow: visible;
     cursor: default;
 }
 
-/* 4. Keep the text INSIDE the complex object truncated on a single line */
 table.truncate-text .co-list-item,
 table.truncate-text .co-dict-row {
     white-space: nowrap;
@@ -740,4 +761,42 @@ table.truncate-text td {
 #toggleSidebar:active {
     background-color: #e9ecef !important;
     color: #121212 !important;
+}
+
+.page-input-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+}
+
+.page-input-group input[type="number"] {
+    width: 60px;
+    padding: 2px 10px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #2d2d2d;
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.page-input-group input[type="number"]:focus {
+    outline: none;
+    border-color: #60a9fc;
+    background-color: #333;
+}
+
+/* Remove default spinner arrows for a cleaner look */
+.page-input-group input::-webkit-outer-spin-button,
+.page-input-group input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.page-input-group input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
 }

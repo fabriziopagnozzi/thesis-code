@@ -32,6 +32,16 @@
         </aside>
 
         <section class="content">
+          <div class="data-section" id="dataSection" style="display: none">
+            <div class="table-container">
+              <table id="dataTable">
+                <thead id="tableHead"></thead>
+                <tbody id="tableBody"></tbody>
+              </table>
+            </div>
+            <div class="loading" id="dataLoading" style="display: none">Loading data...</div>
+            <div class="error" id="dataError" style="display: none"></div>
+          </div>
           <div class="dataset-header" id="datasetHeader" style="display: none">
             <div class="header-row">
               <button
@@ -89,12 +99,16 @@
                     color: #aaaaaa;
                   "
                 >
-                  <input type="checkbox" id="toggleTruncate" /> Truncate text
+                  <input type="checkbox" id="toggleTruncate" /> Collapse rows
                 </label>
 
                 <div class="pagination-controls">
                   <button id="prevPage" disabled>Previous</button>
-                  <span id="pageInfo">Page 1</span>
+                  <div class="page-input-group">
+                    <span>Page</span>
+                    <input type="number" id="pageInput" min="1" value="1" title="Go to page" />
+                    <span id="pageTotalInfo">of 1</span>
+                  </div>
                   <button id="nextPage" disabled>Next</button>
                   <select id="pageSize">
                     <option value="25">25 rows</option>
@@ -105,17 +119,6 @@
                 </div>
               </div>
             </div>
-          </div>
-
-          <div class="data-section" id="dataSection" style="display: none">
-            <div class="table-container">
-              <table id="dataTable">
-                <thead id="tableHead"></thead>
-                <tbody id="tableBody"></tbody>
-              </table>
-            </div>
-            <div class="loading" id="dataLoading" style="display: none">Loading data...</div>
-            <div class="error" id="dataError" style="display: none"></div>
           </div>
         </section>
       </main>

@@ -1,0 +1,151 @@
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import polars as pl
+
+
+def _safe(d: dict[str, Any], k: str, default: Any = float('nan')) -> Any:
+    v = d.get(k, default)
+    return default if v is None else v
+
+
+def plot_per_query_card(points_df: pl.DataFrame, stats: dict[str, Any], out_path: Path) -> None:
+    import matplotlib
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    x = points_df['umap_x'].to_numpy()
+    y = points_df['umap_y'].to_numpy()
+
+    # 1. HDBSCAN clusters
+    ax = axes[0, 0]
+    clusters = points_df['hdbscan_cluster'].to_numpy()
+    is_out = clusters == -1
+    if (~is_out).any():
+        ax.scatter(x[~is_out], y[~is_out], c=clusters[~is_out], cmap='tab20', s=8, alpha=0.75)
+    if is_out.any():
+        ax.scatter(x[is_out], y[is_out], c='lightgray', s=8, alpha=0.5)
+    ax.set_title(
+        f'HDBSCAN (n={int(_safe(stats, "n_clusters_hdb", 0))}, '
+        f'outliers={float(_safe(stats, "frac_outliers_hdb", 0)):.2f})'
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # 2. Facet labels
+    ax = axes[0, 1]
+    facets = points_df['facet_combined'].to_numpy()
+    base_palette = {'neither': '#cccccc', 'both': '#d62728'}
+    others = [f for f in np.unique(facets) if f not in base_palette]
+    cmap = matplotlib.colormaps['tab10']  # type: ignore
+    palette = {**base_palette, **{f: cmap(i) for i, f in enumerate(others)}}
+    for f in np.unique(facets):
+        m = facets == f
+        ax.scatter(x[m], y[m], c=[palette[f]], s=8, alpha=0.75, label=str(f))
+    ax.legend(loc='best', fontsize=7, markerscale=2)
+    ax.set_title(
+        f'Facet (LDA={float(_safe(stats, "facet_lda_acc_cv")):.2f}, '
+        f'NMI={float(_safe(stats, "nmi_cluster_facet_hdb")):.2f}, '
+        f'ARI={float(_safe(stats, "ari_cluster_facet_hdb")):.2f})'
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # 3. cos to query
+    ax = axes[1, 0]
+    cos = points_df['cos_to_query'].to_numpy()
+    sc = ax.scatter(x, y, c=cos, cmap='viridis', s=8, alpha=0.75)
+    plt.colorbar(sc, ax=ax, fraction=0.04)
+    ax.set_title(f'cos(chunk, query) (mean={float(_safe(stats, "mean_cos_to_query")):.2f})')
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # 4. Section name (top-N)
+    ax = axes[1, 1]
+    sections = points_df['section_name'].to_numpy()
+    top_counts = pl.Series(sections).value_counts(sort=True).head(8)
+    top = set(top_counts.to_series(0).to_list())
+    cmap2 = matplotlib.colormaps['tab10']  # type: ignore
+    sec_palette = {s: cmap2(i) for i, s in enumerate(sorted(top))}
+    legend_seen: set[str] = set()
+    for s in np.unique(sections):
+        m = sections == s
+        c = sec_palette.get(s, '#dddddd')
+        label = s if (s in top and s not in legend_seen) else None
+        if label is not None:
+            legend_seen.add(s)
+        ax.scatter(x[m], y[m], c=[c], s=8, alpha=0.7, label=label)
+    ax.legend(loc='best', fontsize=6, markerscale=2)
+    ax.set_title('section_name')
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    fig.suptitle(
+        f'q={stats.get("query_id")} icd={stats.get("icd10_3char")} '
+        f'stratum={stats.get("stratum")} pool={stats.get("pool_size")} | '
+        f'dom={float(_safe(stats, "dom_cluster_frac_hdb")):.2f} '
+        f'eff_rank={float(_safe(stats, "effective_rank")):.1f}',
+        fontsize=11,
+    )
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=120, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_aggregate(stats_df: pl.DataFrame, out_dir: Path) -> None:
+    import matplotlib.pyplot as plt
+
+    metrics = [
+        'mean_cos',
+        'effective_rank',
+        'dom_cluster_frac_hdb',
+        'intra_minus_cross',
+        'ari_cluster_facet_hdb',
+        'facet_lda_acc_cv',
+    ]
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+    strata = (
+        sorted(stats_df['stratum'].drop_nulls().unique().to_list())
+        if 'stratum' in stats_df.columns
+        else []
+    )
+    for ax, m in zip(axes.flatten(), metrics, strict=False):
+        if m not in stats_df.columns:
+            ax.set_visible(False)
+            continue
+        if strata:
+            data = [
+                stats_df.filter(pl.col('stratum') == s)[m].drop_nulls().to_numpy() for s in strata
+            ]
+            ax.boxplot(data, tick_labels=[f'S{int(s)}' for s in strata])
+        else:
+            ax.hist(stats_df[m].drop_nulls().to_numpy(), bins=30)
+        ax.set_title(m)
+    fig.suptitle('Pool composition metrics — by stratum')
+    fig.tight_layout()
+    fig.savefig(out_dir / 'metrics_by_stratum.png', dpi=120, bbox_inches='tight')
+    plt.close(fig)
+
+    if {'facet_lda_acc_cv', 'nmi_cluster_facet_hdb'}.issubset(stats_df.columns):
+        sub = stats_df.select(['facet_lda_acc_cv', 'nmi_cluster_facet_hdb', 'stratum']).drop_nulls(
+            subset=['facet_lda_acc_cv', 'nmi_cluster_facet_hdb']
+        )
+        if sub.height > 0:
+            fig, ax = plt.subplots(figsize=(6.5, 6))
+            xs = sub['nmi_cluster_facet_hdb'].to_numpy()
+            ys = sub['facet_lda_acc_cv'].to_numpy()
+            if 'stratum' in sub.columns and sub['stratum'].drop_nulls().len() > 0:
+                cs = sub['stratum'].fill_null(-1).to_numpy()
+                sc = ax.scatter(xs, ys, c=cs, cmap='viridis', s=18, alpha=0.7)
+                plt.colorbar(sc, ax=ax, label='stratum')
+            else:
+                ax.scatter(xs, ys, s=18, alpha=0.7)
+            lo, hi = 0.0, max(1.0, float(max(xs.max(), ys.max())))
+            ax.plot([lo, hi], [lo, hi], 'k--', alpha=0.4)
+            ax.set_xlabel('NMI(HDBSCAN, facet)  — unsupervised recovery')
+            ax.set_ylabel('LDA cv accuracy on facet  — supervised ceiling')
+            ax.set_title('Awareness gap')
+            fig.tight_layout()
+            fig.savefig(out_dir / 'awareness_gap.png', dpi=120, bbox_inches='tight')
+            plt.close(fig)

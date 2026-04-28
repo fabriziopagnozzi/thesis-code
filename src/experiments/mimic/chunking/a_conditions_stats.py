@@ -144,7 +144,7 @@ def coalesce_condition_names(
     batches = [prefix_rows[i : i + batch_size] for i in range(0, len(prefix_rows), batch_size)]
 
     with cond_filtering_jsonl_out_path.open('a') as jsonl_f:
-        for batch in tqdm(batches, desc='Coalescing condition names'):
+        for batch in tqdm(batches, desc='Coalescing condition names', dynamic_ncols=True):
             payload = [
                 {'code': icd3, 'titles': raw_titles.split(' | ')[:75]}
                 for icd3, raw_titles, _ in batch

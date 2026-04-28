@@ -13,6 +13,7 @@ from experiments.mimic.configs import (
     NoteChunkingCfg,
     get_table_path,
     global_cfg,
+    read_parquet,
     setup_logging,
 )
 from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
@@ -60,7 +61,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     con.execute('SET arrow_large_buffer_size=true')
 
     df_top_codes = (  # noqa: F841
-        pl.read_parquet(get_table_path('conditions_stats'))
+        read_parquet('conditions_stats')
         .head(global_cfg.num_conditions)
         .select(pl.col('icd10_3char').alias('code'))
     )
@@ -96,6 +97,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
                 pool.imap(_process_row, notes_rows, chunksize=32),
                 total=len(notes_rows),
                 desc='Parsing notes',
+                dynamic_ncols=True,
             )
         )
 

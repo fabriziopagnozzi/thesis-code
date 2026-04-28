@@ -32,7 +32,6 @@ def run_experiment(cfg: ExperimentConfig) -> pl.DataFrame:
 
     embedder = Embedder(
         model_name=cfg.embedding_model,
-        device=cfg.device,
         batch_size=cfg.batch_size,
     )
 
@@ -43,7 +42,7 @@ def run_experiment(cfg: ExperimentConfig) -> pl.DataFrame:
     rows: list[dict] = []
     t0 = time.perf_counter()
 
-    for rec in tqdm(records, desc='Records'):
+    for rec in tqdm(records, desc='Records', dynamic_ncols=True):
         if not rec.chunks:
             continue
 

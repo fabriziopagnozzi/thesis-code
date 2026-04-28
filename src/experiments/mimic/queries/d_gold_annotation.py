@@ -22,6 +22,7 @@ from experiments.mimic.configs import (
     GoldAnnotationCfg,
     get_result_dir,
     get_table_path,
+    read_parquet,
     setup_logging,
 )
 from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
@@ -48,15 +49,7 @@ def run_gold_annotation(
     if con is None:
         con = connect_mimic_duckdb()
 
-    # Load filtered queries
-    filtered_queries_path = get_table_path('divergence_stats')
-    if filtered_queries_path.exists():
-        all_queries = pl.read_parquet(filtered_queries_path)
-        queries_df = all_queries.filter(pl.col('passes_filter'))
-    else:
-        queries_df = pl.read_parquet(get_table_path('queries'))
-
-    # Load patient metadata for chunk context
+    queries_df = read_parquet('divergence_stats')
     meta_path = get_table_path('admissions_metadata')
     patient_meta = (
         _build_patient_meta(meta_path, CHARLSON_LABELS_TO_STR) if meta_path.exists() else None
@@ -159,12 +152,9 @@ def annotate(
         for cids in facets.values():
             all_gold_chunks.update(cids)
 
-        query_id = f'{icd10_3char}_{i}'
-        query_id = query_id.replace(' ', '_')[:120]
-
         completed_rows.append(
             {
-                'query_id': query_id,
+                'query_id': row['query_id'],
                 'icd10_3char': icd10_3char,
                 'condition_name': row.get('condition_name', ''),
                 'modifiers_json': json.dumps(modifiers_json),

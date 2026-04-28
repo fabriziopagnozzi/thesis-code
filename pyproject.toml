@@ -21,6 +21,12 @@ dependencies = [
 	"fastapi>=0.136.1",
 	"uvicorn>=0.46.0",
 	"python-multipart>=0.0.26",
+	"scikit-learn>=1.5",
+	"umap-learn>=0.5",
+	"hdbscan>=0.8",
+	"matplotlib>=3.9",
+	"pandas-stubs>=3.0.0.260204",
+	"pyarrow-stubs>=20.0.0.20251215",
 ]
 [dependency-groups]
 dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs", "taskipy"]
@@ -32,6 +38,7 @@ embed_whole = "uv run -m experiments.mimic.embeddings.embed_whole_corpus"
 embed_selective = "uv run -m experiments.mimic.embeddings.embed_selective"
 queries = "uv run -m experiments.mimic.queries.run_queries_steps"
 evaluation = "uv run -m experiments.mimic.evaluation.evaluate"
+pool_analysis = "uv run -m experiments.mimic.analysis.main"
 
 add_new_embeddings = "uv run -m experiments.mimic.embeddings.add_new_vector_col"
 build_vector_indexes = "uv run -m experiments.mimic.embeddings.build_vector_indexes"
@@ -63,3 +70,18 @@ skip-magic-trailing-comma = false
 [tool.ruff.lint]
 ignore = ["E501"]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pyright]
+typeCheckingMode = "basic"
+reportOptionalIterable = false
+reportOptionalMemberAccess = false
+reportGeneralTypeIssues = true
+exclude = [
+	"**/datasets/**",
+	"**/.venv/**",
+	"**/build/**",
+	"**/__pycache__",
+	"**/node_modules",
+	"**/.*",
+]
+executionEnvironments = [{ root = ".", extraPaths = ["./"] }]

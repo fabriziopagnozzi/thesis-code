@@ -1,7 +1,10 @@
 import shutil
+from pathlib import Path
+from typing import cast
 
 import polars as pl
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from lancedb import DBConnection, Table, connect
@@ -9,8 +12,8 @@ from pyarrow import FixedSizeListArray
 
 from experiments.mimic.configs import (
     EmbedCfg,
-    get_table_path,
     global_cfg,
+    read_parquet,
     setup_logging,
 )
 from experiments.mimic.utils.constants import MimicPaths
@@ -30,33 +33,26 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
     if cfg is not None:
         embed_cfg = cfg
 
-    all_chunks = pl.read_parquet(get_table_path('chunks'))
-    admissions_metadata = pl.read_parquet(get_table_path('admissions_metadata'))
-
     duckdb_con = connect_mimic_duckdb()
     lance_con = connect(MimicPaths.vector_db)
     table_name = global_cfg.chunks_vec_table
     table = open_vec_table(lance_con, table_name)
 
-    (metadata_joined, chunk_texts) = enrich_note_excerpts(all_chunks, admissions_metadata)
+    all_chunks = read_parquet('chunks')
+    admissions_metadata = read_parquet('admissions_metadata')
 
-    for model in embed_cfg.models:
-        embedder = Embedder(
-            model,
-            **embed_cfg.model_dump(exclude={'commit_every', 'models'}),
-            query_prompt=global_cfg.query_retrieval_instruction,
-        )
+    (metadata_adm_joined, chunk_texts) = enrich_note_excerpts(all_chunks, admissions_metadata)
 
-        model_metadata = metadata_joined
+    for model, batch_size in zip(embed_cfg.models, embed_cfg.batch_sizes, strict=True):
+        model_admissions_metadata = pl.DataFrame()
         model_texts = chunk_texts
 
         if table is not None:
             done_ids = get_embedded_chunk_ids(table, model)
 
             if done_ids:
-                # 2. Filter the temporary variables
-                mask = ~model_metadata['chunk_id'].is_in(done_ids)
-                model_metadata = model_metadata.filter(mask)
+                mask = ~metadata_adm_joined['chunk_id'].is_in(done_ids)
+                model_admissions_metadata = metadata_adm_joined.filter(mask)
                 model_texts = [
                     t for t, keep in zip(model_texts, mask.to_list(), strict=True) if keep
                 ]
@@ -74,20 +70,28 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
         hadm_to_icd = build_hadm_to_icd(duckdb_con)
         print(f'Embedding {n_chunks:,} chunks. Model: {model}')
 
-        # 3. Pass the temporary variables into embed_and_commit
-        table = embed_and_commit(
-            model_metadata,
-            model_texts,
-            hadm_to_icd,
-            embedder,
-            lance_con,
-            table_name,
-            embed_cfg.commit_every,
-            table,
+        embedder = Embedder(
+            model,
+            batch_size,
+            query_prompt=global_cfg.query_retrieval_instruction,
         )
-        print(
-            f'Saved {n_chunks:,} rows to {MimicPaths.vector_db}/{table_name} for model {model}'
-        )  # end for model in embed_cfg.models
+
+        try:
+            table = embed_and_commit(
+                model_admissions_metadata,
+                model_texts,
+                hadm_to_icd,
+                embedder,
+                lance_con,
+                table_name,
+                embed_cfg.commit_every,
+                table,
+            )
+            print(
+                f'Saved {n_chunks:,} rows to {MimicPaths.vector_db}/{table_name} for model {model}'
+            )
+        finally:
+            embedder.release()
 
 
 def open_vec_table(db: DBConnection, table_name: str) -> Table | None:
@@ -106,15 +110,18 @@ def get_embedded_chunk_ids(table: Table, model: str) -> frozenset[str]:
 
     if vec_col not in lance_ds.schema.names:
         return frozenset()
-    return frozenset(
-        lance_ds.scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
-        .to_table()['chunk_id']
-        .to_pylist()
+    return cast(
+        frozenset[str],
+        frozenset(
+            lance_ds.scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
+            .to_table()['chunk_id']
+            .to_pylist()
+        ),
     )
 
 
 def embed_and_commit(
-    metadata_joined: pl.DataFrame,
+    admissions_metadata: pl.DataFrame,
     chunk_texts: list[str],
     hadm_to_icd: dict[int, list[str]],
     embedder: Embedder,
@@ -123,26 +130,27 @@ def embed_and_commit(
     commit_every: int,
     table: Table | None = None,
 ) -> Table:
-
-    n = len(chunk_texts)
     vec_col = get_vec_col_name(embedder.model_name)
 
-    staging_dir = MimicPaths.experiment / (f'.tmp_embeddings/{embedder.model_name}')
+    staging_dir = MimicPaths.experiment / f'.tmp_embeddings/{embedder.model_name}'
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---------------------------------------------------------
-    # BATCH LOOP (Save progress temporarily to disk, not LanceDB)
-    for start in range(0, n, commit_every):
-        end = min(start + commit_every, n)
-        batch_file = staging_dir / f'batch_{start}.parquet'
-        if batch_file.exists():
-            continue
+    admissions_metadata, chunk_texts, n_existing = resume_previous_run(
+        admissions_metadata, chunk_texts, staging_dir
+    )
+    n = len(chunk_texts)
 
-        batch_df = metadata_joined.slice(start, end - start)
+    # ---------------------------------------------------------
+    # BATCH LOOP (Save progress temporarily to disk)
+    for batch_idx, start in enumerate(range(0, n, commit_every)):
+        end = min(start + commit_every, n)
+        batch_file = staging_dir / f'batch_{n_existing + batch_idx:06d}.parquet'
+
+        batch_df = admissions_metadata.slice(start, end - start)
         embeddings = embedder.embed_docs(chunk_texts[start:end])
         vec_dim = embeddings.shape[1]
 
-        batch_v = FixedSizeListArray.from_arrays(embeddings.flatten(), vec_dim)
+        batch_v = FixedSizeListArray.from_arrays(pa.array(embeddings.flatten()), vec_dim)
         icd_new = [hadm_to_icd.get(h, []) for h in batch_df['hadm_id'].to_list()]
 
         batch_pa = (
@@ -170,8 +178,9 @@ def embed_and_commit(
         )
 
         is_new = [cid not in existing_ids for cid in final_pa['chunk_id'].to_pylist()]
-        new_pa = final_pa.filter(pa.array(is_new))
-        upd_pa = final_pa.filter(pa.compute.invert(pa.array(is_new)))
+        bool_mask = pa.array(is_new, type=pa.bool_())
+        new_pa = final_pa.filter(bool_mask)
+        upd_pa = final_pa.filter(pc.invert(bool_mask))
 
         # 1. UPDATE EXISTING CHUNKS
         if upd_pa.num_rows > 0:
@@ -187,7 +196,7 @@ def embed_and_commit(
                 if existing_vecs.num_rows > 0:
                     upd_ids = set(upd_pa['chunk_id'].to_pylist())
                     mask = [cid not in upd_ids for cid in existing_vecs['chunk_id'].to_pylist()]
-                    valid_old_vecs = existing_vecs.filter(pa.array(mask))
+                    valid_old_vecs = existing_vecs.filter(pa.array(mask, type=pa.bool_()))
                     all_vecs_for_column = pa.concat_tables([valid_old_vecs, all_vecs_for_column])
 
                 table.drop_columns([vec_col])
@@ -212,6 +221,32 @@ def embed_and_commit(
     shutil.rmtree(staging_dir)
     assert table is not None
     return table
+
+
+def resume_previous_run(
+    admissions_metadata: pl.DataFrame, chunk_texts: list[str], staging_dir: Path
+):
+    existing_batch_files = sorted(staging_dir.glob('batch_*.parquet'))
+    already_staged_ids: frozenset[str] = frozenset()
+
+    if existing_batch_files:
+        staged_ds = ds.dataset(staging_dir, format='parquet')
+        already_staged_ids = cast(
+            frozenset[str],
+            frozenset(staged_ds.to_table(columns=['chunk_id'])['chunk_id'].to_pylist()),
+        )
+        print(
+            f'  Resuming from prior staged data: {len(already_staged_ids):,} chunks already '
+            f'staged across {len(existing_batch_files)} file(s)'
+        )
+        staged_list = list(already_staged_ids)
+        mask_series = ~admissions_metadata['chunk_id'].is_in(staged_list)
+
+        admissions_metadata = admissions_metadata.filter(mask_series)
+        keep_list = mask_series.to_list()
+        chunk_texts = [t for t, keep in zip(chunk_texts, keep_list, strict=True) if keep]
+
+    return admissions_metadata, chunk_texts, len(existing_batch_files)
 
 
 if __name__ == '__main__':

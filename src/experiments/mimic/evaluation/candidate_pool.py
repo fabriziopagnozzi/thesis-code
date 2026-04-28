@@ -1,7 +1,7 @@
 import operator
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import lancedb
 import numpy as np
@@ -13,8 +13,8 @@ from numpy.typing import NDArray
 from experiments.mimic.configs import (
     BuildQueryPromptsCfg,
     EvaluateCfg,
-    get_table_path,
     global_cfg,
+    read_parquet,
 )
 from experiments.mimic.utils.constants import MimicPaths
 from experiments.mimic.utils.utils import get_vec_col_name
@@ -185,7 +185,7 @@ class CandidatePoolBuilder:
         self._charlson_label_to_col_name = global_cfg.label_to_charlson_col
         self._demographic_filters = prompts_cfg.demographic_filters
 
-        self._admissions_meta = pl.read_parquet(get_table_path('admissions_metadata'))
+        self._admissions_meta = read_parquet('admissions_metadata')
 
         db = lancedb.connect(MimicPaths.vector_db)
         self._table = db.open_table(global_cfg.chunks_vec_table)
@@ -212,13 +212,19 @@ class CandidatePoolBuilder:
         if result.num_rows == 0:
             return self._empty_pool()
 
-        vec_col = result.column(self._vec_col_name).combine_chunks()
-        dim = vec_col.type.list_size
-        vectors = vec_col.values.to_numpy(zero_copy_only=False).reshape(-1, dim).astype(np.float32)
+        vec_col = cast(pa.FixedSizeListArray, result.column(self._vec_col_name).combine_chunks())
+        vectors = (
+            vec_col.values.to_numpy(zero_copy_only=False)
+            .reshape(-1, vec_col.type.list_size)
+            .astype(np.float32)
+        )
         drop_cols = [self._vec_col_name]
+
         if '_distance' in result.schema.names:
             drop_cols.append('_distance')
+
         df = pl.DataFrame(result.drop(drop_cols))
+
         return CandidatePool(
             chunk_ids=df['chunk_id'].to_list(),
             hadm_ids=df['hadm_id'].to_numpy().astype(np.int64),
@@ -234,7 +240,9 @@ class CandidatePoolBuilder:
         n: int,
     ) -> CandidatePool:
         """Top-N most similar chunks across the full corpus."""
-        result = self._table.search(query_vec).limit(n).to_arrow()
+        result = (
+            self._table.search(query_vec, vector_column_name=self._vec_col_name).limit(n).to_arrow()
+        )
         return self._pool_from_arrow(result)
 
     def for_query_cosine_condition(
@@ -252,7 +260,7 @@ class CandidatePoolBuilder:
         If no ANN index exists the search falls back to exact cosine scan.
         """
         result = (
-            self._table.search(query_vec)
+            self._table.search(query_vec, vector_column_name=self._vec_col_name)
             .where(f"array_has(icd10_3char_list, '{icd10_3char}')")
             .limit(n)
             .to_arrow()
@@ -270,7 +278,10 @@ class CandidatePoolBuilder:
             return self._empty_pool()
         hadm_list = ', '.join(str(h) for h in hadm_ids)
         result = (
-            self._table.search(query_vec).where(f'hadm_id IN ({hadm_list})').limit(n).to_arrow()
+            self._table.search(query_vec, vector_column_name=self._vec_col_name)
+            .where(f'hadm_id IN ({hadm_list})')
+            .limit(n)
+            .to_arrow()
         )
         return self._pool_from_arrow(result)
 

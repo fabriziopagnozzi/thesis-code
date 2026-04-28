@@ -45,6 +45,15 @@ class Embedder:
         )
         return np.asarray(emb, dtype=np.float32)
 
+    def release(self) -> None:
+        import gc
+
+        import torch
+
+        del self._model
+        gc.collect()
+        torch.cuda.empty_cache()
+
     def embed_qa_record(
         self, query: str, chunk_texts: list[str], normalize: bool = True
     ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:

@@ -18,6 +18,7 @@ from experiments.mimic.configs import (
     FilterQueriesCfg,
     get_table_path,
     global_cfg,
+    read_parquet,
     setup_logging,
 )
 from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
@@ -41,7 +42,7 @@ def run_filter_queries(
     if con is None:
         con = connect_mimic_duckdb()
 
-    queries_df = pl.read_parquet(get_table_path('queries'))
+    queries_df = read_parquet('queries')
     print(f'Loaded {len(queries_df):,} queries')
 
     builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load())
@@ -77,7 +78,10 @@ def filter_queries(
     results = []
 
     for row in tqdm(
-        queries_df.iter_rows(named=True), total=len(queries_df), desc='Divergence filter'
+        queries_df.iter_rows(named=True),
+        total=len(queries_df),
+        desc='Divergence filter',
+        dynamic_ncols=True,
     ):
         row = cast(QueryRow, row)
         query_vec = builder.embed_query(row['query_text'])

@@ -5,6 +5,8 @@ the corresponding hospital admission (hadm_id). This enables efficient
 per-condition prefiltering in LanceDB.
 """
 
+from typing import cast
+
 import lancedb
 import pyarrow as pa
 
@@ -37,7 +39,7 @@ def add_icd_list_column(table_name: str = global_cfg.chunks_vec_table) -> None:
     con = connect_mimic_duckdb()
     hadm_to_icd = build_hadm_to_icd(con)
 
-    hadm_ids: list[int] = full_data.column('hadm_id').to_pylist()
+    hadm_ids = cast(list[int], full_data.column('hadm_id').to_pylist())
     icd_lists = [hadm_to_icd.get(h, []) for h in hadm_ids]
     new_col = pa.array(icd_lists, type=pa.list_(pa.string()))
 

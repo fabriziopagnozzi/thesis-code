@@ -5,6 +5,7 @@ model, and writes the result as a new column alongside the existing data.
 """
 
 import argparse
+from typing import cast
 
 import lancedb
 import pyarrow as pa
@@ -56,7 +57,7 @@ def add_vector_column(
     for start in range(0, total, batch_size):
         end = min(start + batch_size, total)
         batch = table.search().limit(batch_size).offset(start).select([text_col]).to_arrow()
-        texts: list[str] = batch[text_col].to_pylist()
+        texts = cast(list[str], batch[text_col].to_pylist())
 
         embs = embedder.embed_docs(texts)
         all_embeddings.extend(embs.tolist())

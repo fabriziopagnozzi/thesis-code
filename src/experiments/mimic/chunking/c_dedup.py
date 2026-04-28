@@ -8,7 +8,7 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.configs import DedupCfg, get_table_path, setup_logging
+from experiments.mimic.configs import DedupCfg, get_table_path, read_parquet, setup_logging
 
 dedup_cfg = DedupCfg.load()
 
@@ -18,11 +18,9 @@ def run_dedup(cfg: DedupCfg | None = None) -> pl.DataFrame:
     if cfg is not None:
         dedup_cfg = cfg
 
-    chunks = pl.read_parquet(get_table_path('chunks'))
-    result = deduplicate(chunks)
-
+    result = deduplicate(read_parquet('chunks'))
     out_path = get_table_path('chunks')
-    result.write_parquet(out_path)
+    result.write_parquet(get_table_path('chunks'))
     print(f'Saved to {out_path}')
 
     return result

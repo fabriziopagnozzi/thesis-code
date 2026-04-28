@@ -13,7 +13,7 @@ from typing import cast
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import GenQueriesCfg, get_table_path, setup_logging
+from experiments.mimic.configs import GenQueriesCfg, get_table_path, read_parquet, setup_logging
 from experiments.mimic.utils.schemas import QueryPromptRow, QueryRow
 from helpers.ollama_client import generate
 
@@ -25,7 +25,7 @@ def run_gen_queries_llm(cfg: GenQueriesCfg | None = None) -> pl.DataFrame:
     if cfg is not None:
         gen_queries_cfg = cfg
 
-    prompts_df = pl.read_parquet(get_table_path('queries_prompts'))
+    prompts_df = read_parquet('queries_prompts')
 
     out_path = get_table_path('queries')
     resume_df = None
@@ -68,6 +68,7 @@ def query_generator(
             total=len(prompts_df),
             desc='Generating queries',
             file=sys.stderr,
+            dynamic_ncols=True,
         )
     ):
         row = cast(QueryPromptRow, row)

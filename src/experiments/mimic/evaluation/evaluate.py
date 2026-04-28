@@ -10,6 +10,7 @@ from experiments.mimic.configs import (
     EvaluateCfg,
     get_table_path,
     global_cfg,
+    read_parquet,
     setup_logging,
 )
 from experiments.mimic.utils.duck_db_init import (
@@ -70,7 +71,10 @@ def evaluate_llm(
     all_rows = []
 
     for row in tqdm(
-        annotations_df.iter_rows(named=True), total=len(annotations_df), desc='Evaluating'
+        annotations_df.iter_rows(named=True),
+        total=len(annotations_df),
+        desc='Evaluating',
+        dynamic_ncols=True,
     ):
         row = cast(GoldAnnotationRow, row)
         icd10_3char = row['icd10_3char']
@@ -110,14 +114,9 @@ def evaluate_llm(
 
 def _load_queries_for_eval() -> pl.DataFrame:
     divergence_path = get_table_path('divergence_stats')
-    df = (
-        pl.read_parquet(divergence_path).filter(pl.col('passes_filter'))
-        if divergence_path.exists()
-        else pl.read_parquet(get_table_path('queries'))
-    )
-    if 'query_id' not in df.columns:
-        df = df.with_row_index('query_id')
-    return df
+    if divergence_path.exists():
+        return pl.read_parquet(divergence_path).filter(pl.col('passes_filter'))
+    return read_parquet('queries')
 
 
 def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
@@ -126,7 +125,10 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
 
     all_rows = []
     for curr_query in tqdm(
-        queries_df.iter_rows(named=True), total=len(queries_df), desc='Evaluating (structural)'
+        queries_df.iter_rows(named=True),
+        total=len(queries_df),
+        desc='Evaluating (structural)',
+        dynamic_ncols=True,
     ):
         curr_query = cast(DivergenceStatsRow, curr_query)
         modifiers_json: list[dict] = json.loads(curr_query.get('modifiers_json', '') or '[]')

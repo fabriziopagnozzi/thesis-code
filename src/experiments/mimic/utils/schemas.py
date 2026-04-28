@@ -139,6 +139,7 @@ class GroundingChunkSample(TypedDict):
 class QueryPromptRow(TypedDict):
     """queries_prompts.parquet — one row per (condition, modifier-set) prompt."""
 
+    query_id: int
     icd10_3char: str
     condition_name: str
     stratum: int
@@ -155,6 +156,7 @@ class QueryPromptRow(TypedDict):
 class QueryRow(TypedDict):
     """queries.parquet — QueryPromptRow minus full_prompt, plus query_text."""
 
+    query_id: int
     icd10_3char: str
     condition_name: str
     stratum: int
@@ -177,7 +179,6 @@ class DivergenceStatsRow(QueryRow, total=False):
     fac_fl: float
     pool_size: int
     passes_filter: bool
-    query_id: int | str  # added by with_row_index in evaluate_structural when missing
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +189,7 @@ class DivergenceStatsRow(QueryRow, total=False):
 class GoldAnnotationRow(TypedDict):
     """gold_annotations.parquet — one row per annotated query."""
 
-    query_id: str
+    query_id: int
     icd10_3char: str
     condition_name: str
     modifiers_json: str

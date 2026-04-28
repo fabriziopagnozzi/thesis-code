@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
+import polars as pl
 import torch
 import yaml
 from pydantic import BaseModel, Field, PositiveInt, computed_field, model_validator
@@ -103,6 +104,10 @@ def get_table_path(
         return MimicPaths.results / '_shared' / f'{table}.{ext}'
     else:
         return get_result_dir(table) / f'{table}.{ext}'
+
+
+def read_parquet(table: MimicTable):
+    return pl.read_parquet(get_table_path(table, ext='parquet'))
 
 
 # PYDANTIC MODELS FOR CONFIGS
@@ -297,6 +302,48 @@ class EvaluateCfg(BaseModel):
     @classmethod
     def load(cls) -> EvaluateCfg:
         return cls(**load_default_config(key='evaluation'))
+
+
+class PoolAnalysisCfg(BaseModel):
+    model_config = {'arbitrary_types_allowed': True}
+
+    embedding_model: str = 'Qwen/Qwen3-Embedding-0.6B'
+    pool_n: int = 2000
+
+    umap_n_neighbors: int = 30
+    umap_min_dist: float = 0.05
+    umap_metric: str = 'cosine'
+    umap_dim_for_cluster: int = 10
+    umap_random_state: int = 42
+
+    hdbscan_min_cluster_size: int = 30
+    hdbscan_min_samples: int | None = None
+
+    kmeans_k_min: int = 2
+    kmeans_k_max: int = 12
+    kmeans_random_state: int = 42
+
+    lof_n_neighbors: int = 20
+    lof_contamination: float | str = 'auto'
+
+    knn_k: int = 10
+
+    cv_n_splits: int = 5
+    n_figures: int = 30
+
+    output_subdir: str = 'pool_analysis'
+
+    @property
+    def output_dir(self) -> Path:
+        return MimicPaths.experiment / self.output_subdir
+
+    @classmethod
+    def load(cls, path: str | Path | None = None) -> PoolAnalysisCfg:
+        cfg_path = Path(path) if path else MimicPaths.config
+        with open(cfg_path) as f:
+            data = yaml.safe_load(f) or {}
+        block = data.get('analysis') or {}
+        return cls(**block)
 
 
 def setup_logging() -> None:

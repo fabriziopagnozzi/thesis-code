@@ -27,6 +27,31 @@ embeddings:
     batch_sizes: [ 2, 4, 8, 16, 32 ] # for each model
     commit_every: 16384
 # ----------------------------------------------------------------------------
+analysis:
+    embedding_model: Qwen/Qwen3-Embedding-0.6B
+    pool_n: 2000
+
+    umap_n_neighbors: 30
+    umap_min_dist: 0.05
+    umap_metric: cosine
+    umap_dim_for_cluster: 10
+    umap_random_state: 42
+
+    hdbscan_min_cluster_size: 30
+
+    kmeans_k_min: 2
+    kmeans_k_max: 12
+    kmeans_random_state: 42
+
+    lof_n_neighbors: 20
+    lof_contamination: auto
+
+    knn_k: 10
+    cv_n_splits: 5
+    n_figures: 30
+
+    output_subdir: pool_analysis
+# ----------------------------------------------------------------------------
 evaluation:
     embedding_model: Qwen/Qwen3-Embedding-4B
     strategies:

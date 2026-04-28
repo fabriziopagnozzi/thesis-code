@@ -33,7 +33,8 @@ class LanceViewer {
       columnList: document.getElementById("columnList"),
       prevPage: document.getElementById("prevPage"),
       nextPage: document.getElementById("nextPage"),
-      pageInfo: document.getElementById("pageInfo"),
+      pageInput: document.getElementById("pageInput"), // NEW
+      pageTotalInfo: document.getElementById("pageTotalInfo"), // NEW
       pageSize: document.getElementById("pageSize"),
       selectAllCols: document.getElementById("selectAllCols"),
       selectNoneCols: document.getElementById("selectNoneCols"),
@@ -52,6 +53,28 @@ class LanceViewer {
     }
     this.elements.prevPage.addEventListener("click", () => this.previousPage());
     this.elements.nextPage.addEventListener("click", () => this.nextPage());
+
+    // NEW: Handle user typing in a specific page number
+    this.elements.pageInput.addEventListener("change", (e) => {
+      // Convert to 0-indexed page for the logic
+      let newPage = parseInt(e.target.value) - 1;
+      const maxPage = Math.ceil(this.totalRows / this.pageSize) - 1;
+
+      // Validate bounds
+      if (isNaN(newPage) || newPage < 0) {
+        newPage = 0;
+      } else if (newPage > maxPage) {
+        newPage = maxPage;
+      }
+
+      if (this.currentPage !== newPage) {
+        this.currentPage = newPage;
+        this.loadData();
+      } else {
+        // Reset input if they typed an invalid number but didn't trigger a change
+        this.elements.pageInput.value = this.currentPage + 1;
+      }
+    });
     this.elements.pageSize.addEventListener("change", (e) => {
       this.pageSize = parseInt(e.target.value);
       this.currentPage = 0;
@@ -554,14 +577,18 @@ class LanceViewer {
   }
 
   updatePagination() {
-    const totalPages = Math.ceil(this.totalRows / this.pageSize);
+    // Fallback to 1 if no rows exist yet to prevent NaN issues
+    const totalPages = Math.max(1, Math.ceil(this.totalRows / this.pageSize));
     const currentPageDisplay = this.currentPage + 1;
 
-    this.elements.pageInfo.textContent = `Page ${currentPageDisplay} of ${totalPages} (${this.totalRows} total)`;
+    // Update the input value and the "of X" text
+    this.elements.pageInput.value = currentPageDisplay;
+    this.elements.pageInput.max = totalPages;
+    this.elements.pageTotalInfo.textContent = `of ${totalPages} (${this.totalRows} total)`;
+
     this.elements.prevPage.disabled = this.currentPage === 0;
     this.elements.nextPage.disabled = this.currentPage >= totalPages - 1;
   }
-
   previousPage() {
     if (this.currentPage > 0) {
       this.currentPage--;
