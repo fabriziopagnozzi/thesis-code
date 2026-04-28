@@ -256,8 +256,16 @@ header h1 {
 
 .column-controls {
     display: flex;
-    gap: 4px;
-    flex-shrink: 0;
+    justify-content: flex-start;
+    /* Aligns items to the left by default */
+    gap: 8px;
+    /* Adds spacing between buttons */
+    margin-top: 10px;
+}
+
+#applyColumns {
+    margin-left: auto;
+    /* This pushes the button to the far right */
 }
 
 .column-controls button,
@@ -360,7 +368,7 @@ header h1 {
     position: relative;
     border: none !important;
     border: 1px solid #333 !important;
-    border-radius: 5px !important;
+    /* border-radius: 5px !important; */
 }
 
 
@@ -382,7 +390,7 @@ table th {
 
     padding: 10px 15px;
 
-    background: #0a559c;
+    background: #3f75c7;
     color: #ffffff;
 
     border-bottom: 1px solid var(--border);
@@ -762,6 +770,8 @@ table.truncate-text td {
     background-color: #e9ecef !important;
     color: #121212 !important;
 }
+
+
 
 .page-input-group {
     display: flex;

@@ -19,7 +19,7 @@ from experiments.mimic.configs import (
     setup_logging,
 )
 from experiments.mimic.embeddings.add_icd_list_col import build_hadm_to_icd
-from experiments.mimic.embeddings.embed_whole_corpus import (
+from experiments.mimic.embeddings.run_embed_whole_corpus import (
     embed_and_commit,
     enrich_note_excerpts,
     get_embedded_chunk_ids,

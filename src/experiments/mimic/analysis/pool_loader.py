@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 
 from experiments.mimic.configs import PoolAnalysisCfg
 from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
-from experiments.mimic.evaluation.evaluate import _load_queries_for_eval
+from experiments.mimic.evaluation.run_evaluate import _load_queries_for_eval
 from experiments.mimic.utils.schemas import DivergenceStatsRow
 from experiments.mimic.utils.utils import modifier_to_snake_label
 
@@ -17,7 +17,7 @@ from experiments.mimic.utils.utils import modifier_to_snake_label
 class QueryPool:
     query_id: int
     icd10_3char: str
-    stratum: int | None
+    stratum: int
     query_text: str
     modifier_labels: list[str]
     pool: CandidatePool

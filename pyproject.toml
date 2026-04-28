@@ -27,18 +27,18 @@ dependencies = [
 	"matplotlib>=3.9",
 	"pandas-stubs>=3.0.0.260204",
 	"pyarrow-stubs>=20.0.0.20251215",
+	"plotly>=6.7.0",
 ]
 [dependency-groups]
 dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs", "taskipy"]
 
 [tool.taskipy.tasks]
-mimic = "uv run -m experiments.mimic.main"
 chunking = "uv run -m experiments.mimic.chunking.run_chunking_steps"
-embed_whole = "uv run -m experiments.mimic.embeddings.embed_whole_corpus"
-embed_selective = "uv run -m experiments.mimic.embeddings.embed_selective"
+embed_whole = "uv run -m experiments.mimic.embeddings.run_embed_whole_corpus"
+embed_selective = "uv run -m experiments.mimic.embeddings.run_embed_selective"
 queries = "uv run -m experiments.mimic.queries.run_queries_steps"
-evaluation = "uv run -m experiments.mimic.evaluation.evaluate"
-pool_analysis = "uv run -m experiments.mimic.analysis.main"
+evaluation = "uv run -m experiments.mimic.evaluation.run_evaluate"
+pool_analysis = "uv run -m experiments.mimic.analysis.run_pool_analysis"
 
 add_new_embeddings = "uv run -m experiments.mimic.embeddings.add_new_vector_col"
 build_vector_indexes = "uv run -m experiments.mimic.embeddings.build_vector_indexes"

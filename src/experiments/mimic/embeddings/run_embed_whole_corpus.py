@@ -1,4 +1,5 @@
 import shutil
+import time
 from pathlib import Path
 from typing import cast
 
@@ -113,7 +114,8 @@ def get_embedded_chunk_ids(table: Table, model: str) -> frozenset[str]:
     return cast(
         frozenset[str],
         frozenset(
-            lance_ds.scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
+            lance_ds
+            .scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
             .to_table()['chunk_id']
             .to_pylist()
         ),
@@ -154,13 +156,15 @@ def embed_and_commit(
         icd_new = [hadm_to_icd.get(h, []) for h in batch_df['hadm_id'].to_list()]
 
         batch_pa = (
-            batch_df.to_arrow()
+            batch_df
+            .to_arrow()
             .append_column(vec_col, batch_v)
             .append_column(ICD_LIST_COL, pa.array(icd_new, type=pa.list_(pa.string())))
         )
 
         pq.write_table(batch_pa, batch_file)
         print(f'  Staged {end:,}/{n:,} to temp disk')
+        time.sleep(120)
 
     # ---------------------------------------------------------
     # LANCE DB COMMIT (One time mutation)

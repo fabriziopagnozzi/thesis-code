@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 from experiments.mimic.configs import (
     EvaluateCfg,
+    MimicPaths,
     get_table_path,
     global_cfg,
     read_parquet,
@@ -61,6 +62,7 @@ def run_evaluate(
 
     store_eval_stats(results)
     store_best_per_metric(results)
+    store_eval_figures()
     return results
 
 
@@ -426,6 +428,39 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
     best_fixed_lam_path = get_table_path('evaluation_best_per_metric_fixed_lam')
     best_fixed_lam_df.write_parquet(best_fixed_lam_path)
     print(f'Saved best-per-metric (fixed lam) summary to {best_fixed_lam_path}')
+
+
+def store_eval_figures() -> None:
+    from .plots import (
+        plot_gain_over_topk,
+        plot_lambda_sensitivity,
+        plot_per_query_distributions,
+        plot_strategy_comparison,
+        plot_stratum_breakdown,
+    )
+
+    out_dir = MimicPaths.experiment / 'figures' / 'eval'
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    stats_path = get_table_path('evaluation_stats')
+    results_path = get_table_path('evaluation_results')
+    if not stats_path.exists() or not results_path.exists():
+        print('Skipping eval figures: evaluation_stats or evaluation_results not found')
+        return
+
+    stats_df = pl.read_parquet(stats_path)
+    results_df = pl.read_parquet(results_path)
+
+    plot_strategy_comparison(stats_df, out_dir)
+    plot_lambda_sensitivity(stats_df, out_dir)
+    plot_per_query_distributions(results_df, out_dir)
+    plot_gain_over_topk(stats_df, out_dir)
+
+    stratum_path = get_table_path('evaluation_stats_by_stratum')
+    if stratum_path.exists():
+        plot_stratum_breakdown(pl.read_parquet(stratum_path), out_dir)
+
+    print(f'Saved eval figures to {out_dir}')
 
 
 if __name__ == '__main__':

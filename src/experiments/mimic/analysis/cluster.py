@@ -72,13 +72,11 @@ def cluster_summary(labels: NDArray[np.int_], prefix: str = 'hdb') -> dict[str, 
     _, counts = np.unique(valid, return_counts=True)
     p = counts / counts.sum()
     H = -float((p * np.log(p + 1e-12)).sum())
-    base.update(
-        {
-            f'n_clusters_{prefix}': len(counts),
-            f'dom_cluster_frac_{prefix}': float(counts.max() / n),
-            f'cluster_size_entropy_{prefix}': H,
-        }
-    )
+    base.update({
+        f'n_clusters_{prefix}': len(counts),
+        f'dom_cluster_frac_{prefix}': float(counts.max() / n),
+        f'cluster_size_entropy_{prefix}': H,
+    })
     return base
 
 
