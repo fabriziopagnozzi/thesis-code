@@ -38,7 +38,6 @@ class MimicPaths:
 
     init_sql = mimic_root / '_mimic_init.sql'
     duckdb_concepts = THIRDPARTY_CODE_DIR / 'mimic_code' / 'mimic-iv' / 'concepts_duckdb'
-
     hosp = DATASETS_DIR / 'mimic-iv' / 'hosp'
     icu = DATASETS_DIR / 'mimic-iv' / 'icu'
     note = DATASETS_DIR / 'mimic-iv' / 'note'

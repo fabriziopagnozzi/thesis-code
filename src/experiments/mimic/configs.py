@@ -326,8 +326,6 @@ class PoolAnalysisCfg(BaseModel):
     lof_n_neighbors: int = 20
     lof_contamination: float | str = 'auto'
 
-    knn_k: int = 10
-
     cv_n_splits: int = 5
     n_figures: int = 30
 

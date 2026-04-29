@@ -4,7 +4,7 @@ import numpy as np
 
 
 def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
-    """AR(S) = |{f in F : S ∩ G_f ≠ ∅}| / |F|"""
+    """AR(S) = |{f in F : Selected && G_f ≠ ∅}| / |F|"""
     if not facets:
         return 0.0
 
@@ -13,7 +13,7 @@ def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) ->
 
 
 def weighted_aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
-    """WAR(S) = (1/|F|) * Σ_f |S ∩ G_f| / |G_f|"""
+    """WAR(S) = (1/|F|) * Σ_f |Selected && G_f| / |G_f|"""
     if not facets:
         return 0.0
 

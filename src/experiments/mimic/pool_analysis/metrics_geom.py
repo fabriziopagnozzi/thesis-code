@@ -50,23 +50,3 @@ def intrinsic_dim(vectors: NDArray[np.float32]) -> dict[str, float]:
         'participation_ratio': float(total**2 / float((eigvals**2).sum())),
         'top1_evr': float(eigvals.max() / total),
     }
-
-
-def knn_density_stats(vectors: NDArray[np.float32], k: int) -> dict[str, float]:
-    from sklearn.neighbors import NearestNeighbors
-
-    n = vectors.shape[0]
-    k_eff = max(1, min(k, n - 1))
-    if k_eff < 1:
-        return {'knn_dist_p10': 0.0, 'knn_dist_p50': 0.0, 'knn_dist_p90': 0.0}
-
-    nn = NearestNeighbors(n_neighbors=k_eff + 1, metric='cosine')
-    nn.fit(vectors)
-    dists, _ = nn.kneighbors(vectors)
-    mean_knn = dists[:, 1:].mean(axis=1)
-
-    return {
-        'knn_dist_p10': float(np.quantile(mean_knn, 0.1)),
-        'knn_dist_p50': float(np.quantile(mean_knn, 0.5)),
-        'knn_dist_p90': float(np.quantile(mean_knn, 0.9)),
-    }

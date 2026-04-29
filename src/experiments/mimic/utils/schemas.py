@@ -155,14 +155,13 @@ class QueryRow(TypedDict):
 
 class QueryRowPostFiltering(QueryRow, total=False):
     """queries.parquet - after running the query filtering step, which adds stats
-    and passes_filter boolean column for passing queries."""
+    and a filter_<vec_col> boolean column (name depends on embedding model)."""
 
     jaccard_div: float
     fac_gap: float
     fac_topk: float
     fac_fl: float
     pool_size: int
-    passes_filter: bool
 
 
 class GoldAnnotationRow(TypedDict):

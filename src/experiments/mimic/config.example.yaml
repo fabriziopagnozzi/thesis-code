@@ -44,7 +44,6 @@ pool_analysis:
     lof_n_neighbors: 20
     lof_contamination: auto
 
-    knn_k: 10
     cv_n_splits: 5
     n_figures: 30
 

@@ -18,7 +18,7 @@ from .aggregate import aggregate_stats
 from .cluster import alignment, cluster_summary, hdbscan_cluster
 from .dim_reduce import umap_2d, umap_reduce
 from .metrics_facet import facet_pairwise_cos, facet_silhouette, lda_cv_acc, logreg_cv_acc
-from .metrics_geom import cosine_stats, intrinsic_dim, knn_density_stats, query_cosine_stats
+from .metrics_geom import cosine_stats, intrinsic_dim, query_cosine_stats
 from .outliers import lof_scores, lof_summary
 from .plots import plot_aggregate, plot_per_query_card
 from .pool_loader import QueryPool, iter_query_pools
@@ -31,8 +31,6 @@ class PerQueryResult:
 
 
 def run_pool_analysis() -> None:
-    setup_logging()
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default=None)
     parser.add_argument('--pool-n', type=int, default=None)
@@ -49,6 +47,10 @@ def run_pool_analysis() -> None:
     args, _ = parser.parse_known_args()
 
     cfg = PoolAnalysisCfg.load(args.config)
+    eval_cfg = EvaluateCfg.load()
+    eval_cfg.embedding_model = cfg.embedding_model
+    con = connect_mimic_duckdb()
+    pool_builder = CandidatePoolBuilder(con, cfg=eval_cfg)
 
     if args.pool_n is not None:
         cfg.pool_n = args.pool_n
@@ -60,12 +62,6 @@ def run_pool_analysis() -> None:
     fig_agg = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'aggregate'
     for d in (out_dir, fig_per, fig_agg):
         d.mkdir(parents=True, exist_ok=True)
-
-    eval_cfg = EvaluateCfg.load()
-    eval_cfg.embedding_model = cfg.embedding_model
-
-    con = connect_mimic_duckdb()
-    builder = CandidatePoolBuilder(con, cfg=eval_cfg)
 
     ckpt_rows = out_dir / 'checkpoint_rows.jsonl'
     ckpt_points = out_dir / 'checkpoint_points.parquet'
@@ -88,14 +84,14 @@ def run_pool_analysis() -> None:
     new_since_ckpt = 0
     print(f'\n[1/4] Analyzing pools ({cfg.pool_n} chunks/query, output → {out_dir})')
 
-    queries_filtered_df = load_filtered_queries()
+    queries_filtered_df = load_filtered_queries(eval_cfg.embedding_model)
     if args.limit is not None:
         queries_filtered_df = queries_filtered_df.head(args.limit)
 
     print(f'Loaded {len(queries_filtered_df):,} queries')
 
     for qp in tqdm(
-        iter_query_pools(queries_filtered_df, builder, cfg),
+        iter_query_pools(queries_filtered_df, pool_builder, cfg),
         desc='Pool analysis',
         dynamic_ncols=True,
         total=len(queries_filtered_df),
@@ -148,22 +144,18 @@ def run_pool_analysis() -> None:
     stats_df = pl.DataFrame(rows)
     stats_path = out_dir / 'per_query_stats.parquet'
     stats_df.write_parquet(stats_path)
-    print(f'  → {stats_path}')
 
     points_df = pl.concat(point_frames, how='diagonal_relaxed')
     pts_path = out_dir / 'pool_points.parquet'
     points_df.write_parquet(pts_path)
-    print(f'  → {pts_path}  ({len(points_df):,} chunk-level rows)')
 
     print('\n[3/4] Aggregating stats')
     agg = aggregate_stats(stats_df)
     agg_path = out_dir / 'aggregate_stats.parquet'
     agg.write_parquet(agg_path)
-    print(f'  → {agg_path}')
 
     print('\n[4/4] Plotting aggregate figures')
     plot_aggregate(stats_df, fig_agg)
-    print(f'  → {fig_agg}')
 
     for ckpt_file in (ckpt_rows, ckpt_points, ckpt_meta):
         ckpt_file.unlink(missing_ok=True)
@@ -181,7 +173,6 @@ def analyze_query(qp: QueryPool, cfg: PoolAnalysisCfg) -> PerQueryResult:
         **cosine_stats(sim_matrix),
         **query_cosine_stats(sim_to_query),
         **intrinsic_dim(vectors),
-        **knn_density_stats(vectors, cfg.knn_k),
     }
     facet = {
         **facet_pairwise_cos(sim_matrix, qp.facet_onehot),
@@ -268,4 +259,5 @@ def _write_checkpoint(
 
 
 if __name__ == '__main__':
+    setup_logging()
     run_pool_analysis()

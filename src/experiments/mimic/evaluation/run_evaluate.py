@@ -22,7 +22,7 @@ from experiments.mimic.utils.schemas import (
     GoldAnnotationRow,
     QueryRowPostFiltering,
 )
-from experiments.mimic.utils.utils import modifier_to_snake_label
+from experiments.mimic.utils.utils import get_vec_col_name, modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
@@ -118,16 +118,19 @@ def evaluate_llm(
     return pl.DataFrame(all_rows)
 
 
-def load_filtered_queries() -> pl.DataFrame:
+def load_filtered_queries(embedding_model: str) -> pl.DataFrame:
+    col = f'filter_{get_vec_col_name(embedding_model)}'
     queries_df = read_parquet('queries')
-    if 'passes_filter' not in queries_df.columns:
-        raise RuntimeError('You need to run the query filtering step before.')
+    if col not in queries_df.columns:
+        raise RuntimeError(
+            f'You need to run the query filtering step before (expected column: {col!r}).'
+        )
 
-    return queries_df.filter(pl.col('passes_filter'))
+    return queries_df.filter(pl.col(col))
 
 
 def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
-    queries_df = load_filtered_queries()
+    queries_df = load_filtered_queries(evaluate_cfg.embedding_model)
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
     all_rows = []

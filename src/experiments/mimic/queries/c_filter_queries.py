@@ -25,11 +25,13 @@ from experiments.mimic.utils.duck_db_init import (
     connect_mimic_duckdb,
 )
 from experiments.mimic.utils.schemas import DivergenceMetrics, QueryRow
+from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
 filter_queries_cfg = FilterQueriesCfg.load()
 evaluate_cfg = EvaluateCfg.load()
+filter_col = f'filter_{get_vec_col_name(evaluate_cfg.embedding_model)}'
 
 
 def run_filter_queries(
@@ -51,7 +53,7 @@ def run_filter_queries(
     out_path = get_table_path('queries')
     result.write_parquet(out_path)
 
-    n_pass = result.select(pl.col('passes_filter').sum()).item()
+    n_pass = result.select(pl.col(filter_col).sum()).item()
     print(
         f'\nSaved {len(result):,} rows to {out_path}\n'
         f'\tRetained queries: {n_pass:,} / {len(result):,} ({n_pass / len(result) * 100:.2f}%)\n'
@@ -66,7 +68,7 @@ def filter_queries(
     builder: CandidatePoolBuilder,
 ) -> pl.DataFrame:
     """
-    Adds columns: jaccard_div, fac_gap, passes_filter, pool_size.
+    Adds columns: jaccard_div, fac_gap, filter_<vec_col>, pool_size.
     Divergence is averaged across all (k, lam) combinations in filter_queries_cfg.
     Queries with mean_jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
     """
@@ -96,7 +98,7 @@ def filter_queries(
         mean_jaccard = float(np.mean(all_jaccards))
 
         results.append({
-            'passes_filter': mean_jaccard < filter_queries_cfg.jaccard_threshold,
+            filter_col: mean_jaccard < filter_queries_cfg.jaccard_threshold,
             **{c: row[c] for c in queries_df.columns},
             'jaccard_div': 1.0 - mean_jaccard,
             'fac_gap': float(np.mean(all_fac_gaps)),

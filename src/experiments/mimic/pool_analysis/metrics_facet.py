@@ -64,8 +64,10 @@ def _supervised_cv_acc(
     n_splits_eff = int(min(n_splits, counts.min()))
     if n_splits_eff < 2:
         return float('nan')
+
     skf = StratifiedKFold(n_splits=n_splits_eff, shuffle=True, random_state=0)
     y = LabelEncoder().fit_transform(facet_combined)
+
     try:
         scores = cross_val_score(estimator, vectors, y, cv=skf, scoring='accuracy')
     except Exception:
@@ -81,7 +83,7 @@ def lda_cv_acc(
     from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
     return _supervised_cv_acc(
-        LinearDiscriminantAnalysis(solver='lsqr'), vectors, facet_combined, n_splits
+        LinearDiscriminantAnalysis(solver='svd'), vectors, facet_combined, n_splits
     )
 
 
