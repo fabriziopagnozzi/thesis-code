@@ -38,7 +38,7 @@ class GlobalCfg(BaseModel):
     num_conditions: PositiveInt = Field(alias='n_conditions')
     result_dir_overrides: dict[str, str] = {}
 
-    prefilter_n: int = 1_000_000  # basically infinity
+    prefilter_n: int = 1_000_000_000  # basically infinity
     chunks_vec_table: str
     query_retrieval_instruction: str | None = (
         'Instruct: Given a multi-aspect clinical query comparing patient cohorts, '
@@ -342,7 +342,7 @@ class PoolAnalysisCfg(BaseModel):
         cfg_path = Path(path) if path else MimicPaths.config
         with open(cfg_path) as f:
             data = yaml.safe_load(f) or {}
-        block = data.get('analysis') or {}
+        block = data.get('pool_analysis') or {}
         return cls(**block)
 
 

@@ -1,6 +1,5 @@
 """
-Step 4.1: Divergence pre-filter.
-
+Queries filter.
 For each query, run top_k and fac_loc on its condition's candidate
 pool. Keep only queries where coverage diverges from top_k
 """
@@ -30,6 +29,7 @@ from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
 filter_queries_cfg = FilterQueriesCfg.load()
+evaluate_cfg = EvaluateCfg.load()
 
 
 def run_filter_queries(
@@ -45,18 +45,18 @@ def run_filter_queries(
     queries_df = read_parquet('queries')
     print(f'Loaded {len(queries_df):,} queries')
 
-    builder = CandidatePoolBuilder(con, cfg=EvaluateCfg.load())
+    builder = CandidatePoolBuilder(con, cfg=evaluate_cfg)
     result = filter_queries(queries_df, builder)
 
-    out_path = get_table_path('divergence_stats')
+    out_path = get_table_path('queries')
     result.write_parquet(out_path)
 
-    n_pass = result.filter(pl.col('passes_filter')).height
+    n_pass = result.select(pl.col('passes_filter').sum()).item()
     print(
         f'\nSaved {len(result):,} rows to {out_path}\n'
-        f'  Retained queries: {n_pass:,} / {len(result):,} ({n_pass / len(result) * 100:.2f}%)\n'
-        f'  Jaccard div: mean={result["jaccard_div"].mean():.3f}\n'
-        f'  Fac gap:     mean={result["fac_gap"].mean():.4f}'
+        f'\tRetained queries: {n_pass:,} / {len(result):,} ({n_pass / len(result) * 100:.2f}%)\n'
+        f'\tJaccard div: mean={result["jaccard_div"].mean():.3f}\n'
+        f'\tFac gap:     mean={result["fac_gap"].mean():.4f}'
     )
     return result
 
@@ -70,11 +70,6 @@ def filter_queries(
     Divergence is averaged across all (k, lam) combinations in filter_queries_cfg.
     Queries with mean_jaccard > jaccard_threshold are filtered out (coverage ≈ top_k).
     """
-    k_values = filter_queries_cfg.k_values
-    lam_values = filter_queries_cfg.lam_values
-    jaccard_threshold = filter_queries_cfg.jaccard_threshold
-    prefilter_n = global_cfg.prefilter_n
-
     results = []
 
     for row in tqdm(
@@ -85,11 +80,13 @@ def filter_queries(
     ):
         row = cast(QueryRow, row)
         query_vec = builder.embed_query(row['query_text'])
-        pool = builder.for_query_cosine(query_vec, prefilter_n)
+        pool = builder.for_query_cosine_condition(
+            query_vec, icd10_3char=row['icd10_3char'], n=global_cfg.prefilter_n
+        )
 
         all_jaccards, all_fac_gaps, all_fac_topks, all_fac_fls = [], [], [], []
-        for k in k_values:
-            for lam in lam_values:
+        for k in filter_queries_cfg.k_values:
+            for lam in filter_queries_cfg.lam_values:
                 div = compute_divergence(pool, query_vec, k=k, lam=lam, prefilter_n=None)
                 all_jaccards.append(div['jaccard'])
                 all_fac_gaps.append(div['fac_gap'])
@@ -97,19 +94,15 @@ def filter_queries(
                 all_fac_fls.append(div['fac_fl'])
 
         mean_jaccard = float(np.mean(all_jaccards))
-        passes = mean_jaccard < jaccard_threshold
 
-        results.append(
-            {
-                **{c: row[c] for c in queries_df.columns},
-                'jaccard_div': 1.0 - mean_jaccard,
-                'fac_gap': float(np.mean(all_fac_gaps)),
-                'fac_topk': float(np.mean(all_fac_topks)),
-                'fac_fl': float(np.mean(all_fac_fls)),
-                'pool_size': pool.n,
-                'passes_filter': passes,
-            }
-        )
+        results.append({
+            'passes_filter': mean_jaccard < filter_queries_cfg.jaccard_threshold,
+            **{c: row[c] for c in queries_df.columns},
+            'jaccard_div': 1.0 - mean_jaccard,
+            'fac_gap': float(np.mean(all_fac_gaps)),
+            'fac_topk': float(np.mean(all_fac_topks)),
+            'fac_fl': float(np.mean(all_fac_fls)),
+        })
 
     return pl.DataFrame(results)
 

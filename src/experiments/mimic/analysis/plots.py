@@ -116,36 +116,55 @@ def plot_aggregate(stats_df: pl.DataFrame, out_dir: Path) -> None:
             continue
         if strata:
             data = [
-                stats_df.filter(pl.col('stratum') == s)[m].drop_nulls().to_numpy() for s in strata
+                stats_df.filter(pl.col('stratum') == s)[m].fill_nan(None).drop_nulls().to_numpy()
+                for s in strata
             ]
             ax.boxplot(data, tick_labels=[f'S{int(s)}' for s in strata])
         else:
-            ax.hist(stats_df[m].drop_nulls().to_numpy(), bins=30)
+            ax.hist(stats_df[m].fill_nan(None).drop_nulls().to_numpy(), bins=30)
         ax.set_title(m)
-    fig.suptitle('Pool composition metrics — by stratum')
+    fig.suptitle('Pool composition metrics - by stratum')
     fig.tight_layout()
     fig.savefig(out_dir / 'metrics_by_stratum.png', dpi=120, bbox_inches='tight')
     plt.close(fig)
 
-    if {'facet_lda_acc_cv', 'nmi_cluster_facet_hdb'}.issubset(stats_df.columns):
-        sub = stats_df.select(['facet_lda_acc_cv', 'nmi_cluster_facet_hdb', 'stratum']).drop_nulls(
-            subset=['facet_lda_acc_cv', 'nmi_cluster_facet_hdb']
-        )
-        if sub.height > 0:
-            fig, ax = plt.subplots(figsize=(6.5, 6))
-            xs = sub['nmi_cluster_facet_hdb'].to_numpy()
-            ys = sub['facet_lda_acc_cv'].to_numpy()
-            if 'stratum' in sub.columns and sub['stratum'].drop_nulls().len() > 0:
-                cs = sub['stratum'].fill_null(-1).to_numpy()
-                sc = ax.scatter(xs, ys, c=cs, cmap='viridis', s=18, alpha=0.7)
-                plt.colorbar(sc, ax=ax, label='stratum')
-            else:
-                ax.scatter(xs, ys, s=18, alpha=0.7)
-            lo, hi = 0.0, max(1.0, float(max(xs.max(), ys.max())))
-            ax.plot([lo, hi], [lo, hi], 'k--', alpha=0.4)
-            ax.set_xlabel('NMI(HDBSCAN, facet)  — unsupervised recovery')
-            ax.set_ylabel('LDA cv accuracy on facet  — supervised ceiling')
-            ax.set_title('Awareness gap')
-            fig.tight_layout()
-            fig.savefig(out_dir / 'awareness_gap.png', dpi=120, bbox_inches='tight')
-            plt.close(fig)
+
+if __name__ == '__main__':
+    from experiments.mimic.configs import PoolAnalysisCfg
+    from experiments.mimic.utils.constants import MimicPaths
+
+    cfg = PoolAnalysisCfg.load()
+    out_dir = cfg.output_dir
+
+    stats_path = out_dir / 'per_query_stats.parquet'
+    points_path = out_dir / 'pool_points.parquet'
+    if not stats_path.exists() or not points_path.exists():
+        raise FileNotFoundError(f'per_query_stats or pool_points not found in {out_dir}')
+
+    stats_df = pl.read_parquet(stats_path)
+    points_df = pl.read_parquet(points_path)
+
+    fig_per = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'per_query'
+    fig_agg = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'aggregate'
+    fig_per.mkdir(parents=True, exist_ok=True)
+    fig_agg.mkdir(parents=True, exist_ok=True)
+
+    points_by_qid = {df['query_id'][0]: df for df in points_df.partition_by('query_id')}
+
+    fig_count_per_stratum: dict[Any, int] = {}
+    for row in stats_df.iter_rows(named=True):
+        stratum = row.get('stratum')
+        if fig_count_per_stratum.get(stratum, 0) >= cfg.n_figures:
+            continue
+        qid = row['query_id']
+        pts = points_by_qid.get(qid)
+        if pts is None:
+            continue
+        fig_path = fig_per / f'{stratum}_q{int(qid):04d}_{row["icd10_3char"]}.png'
+        plot_per_query_card(pts, row, fig_path)
+        fig_count_per_stratum[stratum] = fig_count_per_stratum.get(stratum, 0) + 1
+
+    print(f'Per-query figures → {fig_per}')
+
+    plot_aggregate(stats_df, fig_agg)
+    print(f'Aggregate figures → {fig_agg}')

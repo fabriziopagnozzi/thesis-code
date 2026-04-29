@@ -18,7 +18,6 @@ def run_add_metadata(con: duckdb.DuckDBPyConnection | None = None) -> pl.DataFra
     df = build_admissions_metadata(con)
 
     out_path = get_table_path('admissions_metadata')
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     df.write_parquet(out_path)
     print(f'Saved to {out_path}')
 

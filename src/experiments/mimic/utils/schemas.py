@@ -1,21 +1,10 @@
-"""TypedDict schemas for every .parquet file in the MIMIC pipeline.
-
-Each class maps 1-to-1 to a parquet produced/consumed by a pipeline phase.
-Use cast() at the start of iter_rows loops to get full IDE inference:
-
-    for row in df.iter_rows(named=True):
-        row = cast(GoldAnnotationRow, row)
-"""
-
 from typing import TypedDict
 
-# ---------------------------------------------------------------------------
-# Phase 1 — corpus construction
-# ---------------------------------------------------------------------------
 
-
+# ---------------------------------------------------------------------------
+# Phase 1 - corpus construction
 class ConditionStatsRow(TypedDict):
-    """conditions_stats.parquet — one row per ICD-10 3-char prefix condition."""
+    """conditions_stats.parquet - one row per ICD-10 3-char prefix condition."""
 
     icd10_3char: str
     condition_name: str
@@ -25,7 +14,7 @@ class ConditionStatsRow(TypedDict):
 
 
 class ChunkRow(TypedDict):
-    """chunks.parquet — one row per overlapping text window."""
+    """chunks.parquet - one row per overlapping text window."""
 
     text: str
     chunk_id: str
@@ -57,7 +46,7 @@ class _AdmissionMetadataBase(TypedDict):
 
 
 class AdmissionMetadataRow(_AdmissionMetadataBase, total=False):
-    """admissions_metadata.parquet — base fields + Charlson fields (null when absent from Charlson view)."""
+    """admissions_metadata.parquet - base fields + Charlson fields (null when absent from Charlson view)."""
 
     age_score: int
     charlson_comorbidity_index: int
@@ -90,10 +79,7 @@ class AdmissionMetaSlimRow(TypedDict):
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — embedding (joined row passed to prefix builder)
-# ---------------------------------------------------------------------------
-
-
+# Phase 2 - embedding (joined row passed to prefix builder)
 class EmbedJoinedRow(ChunkRow, total=False):
     """chunks LEFT JOIN admissions_metadata (selected cols) iterated in embed_whole_corpus.py."""
 
@@ -124,10 +110,7 @@ class EmbedJoinedRow(ChunkRow, total=False):
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — query generation
-# ---------------------------------------------------------------------------
-
-
+# Phase 3 - query generation
 class GroundingChunkSample(TypedDict):
     """Single grounding example assembled in _sample_patient."""
 
@@ -137,7 +120,7 @@ class GroundingChunkSample(TypedDict):
 
 
 class QueryPromptRow(TypedDict):
-    """queries_prompts.parquet — one row per (condition, modifier-set) prompt."""
+    """queries_prompts.parquet - one row per (condition, modifier-set) prompt."""
 
     query_id: int
     icd10_3char: str
@@ -154,7 +137,7 @@ class QueryPromptRow(TypedDict):
 
 
 class QueryRow(TypedDict):
-    """queries.parquet — QueryPromptRow minus full_prompt, plus query_text."""
+    """queries.parquet - QueryPromptRow minus full_prompt, plus query_text."""
 
     query_id: int
     icd10_3char: str
@@ -170,8 +153,9 @@ class QueryRow(TypedDict):
     query_text: str
 
 
-class DivergenceStatsRow(QueryRow, total=False):
-    """divergence_stats.parquet — QueryRow plus pre-filter divergence metrics."""
+class QueryRowPostFiltering(QueryRow, total=False):
+    """queries.parquet - after running the query filtering step, which adds stats
+    and passes_filter boolean column for passing queries."""
 
     jaccard_div: float
     fac_gap: float
@@ -181,13 +165,8 @@ class DivergenceStatsRow(QueryRow, total=False):
     passes_filter: bool
 
 
-# ---------------------------------------------------------------------------
-# Phase 4 — annotation & evaluation
-# ---------------------------------------------------------------------------
-
-
 class GoldAnnotationRow(TypedDict):
-    """gold_annotations.parquet — one row per annotated query."""
+    """gold_annotations.parquet - one row per annotated query."""
 
     query_id: int
     icd10_3char: str
@@ -210,6 +189,8 @@ class DivergenceMetrics(TypedDict):
     pool_size: int
 
 
+# ---------------------------------------------------------------------------
+# Phase 4 - evaluation
 class EvaluationMetrics(TypedDict):
     """One element of the list returned by evaluate_query."""
 
@@ -227,7 +208,7 @@ class EvaluationMetrics(TypedDict):
 
 
 class EvaluationResultRow(EvaluationMetrics, total=False):
-    """evaluation_results.parquet — EvaluationMetrics plus query-level keys."""
+    """evaluation_results.parquet - EvaluationMetrics plus query-level keys."""
 
     query_id: str
     icd10_3char: str
@@ -235,7 +216,7 @@ class EvaluationResultRow(EvaluationMetrics, total=False):
 
 
 class EvaluationStatsRow(TypedDict):
-    """evaluation_stats.parquet — mean metrics per (strategy, lam, k) across all queries."""
+    """evaluation_stats.parquet - mean metrics per (strategy, lam, k) across all queries."""
 
     strategy: str
     lam: float | None
@@ -251,7 +232,7 @@ class EvaluationStatsRow(TypedDict):
 
 
 class BestPerMetricRow(TypedDict):
-    """evaluation_best_per_metric.parquet — winning (strategy, k, lam) per metric at each (k, lam)."""
+    """evaluation_best_per_metric.parquet - winning (strategy, k, lam) per metric at each (k, lam)."""
 
     k: int
     lam: float | None
@@ -264,7 +245,7 @@ class BestPerMetricRow(TypedDict):
 
 
 class BestPerMetricFixedLamRow(TypedDict):
-    """evaluation_best_per_metric_fixed_lam.parquet — winning (strategy, k) per metric at each fixed lam."""
+    """evaluation_best_per_metric_fixed_lam.parquet - winning (strategy, k) per metric at each fixed lam."""
 
     lam: float | None
     best_for: str

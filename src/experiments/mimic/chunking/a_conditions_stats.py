@@ -28,7 +28,6 @@ def run_conditions_stats(
 
     df = select_conditions(con=con, min_admissions=conditions_stats_cfg.min_admissions)
     out_path = get_table_path('conditions_stats')
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     df.write_parquet(out_path)
     print(f'\nSaved {len(df)} conditions to {out_path}')
 
@@ -105,15 +104,13 @@ def select_conditions(
             ]
             scored.sort(key=lambda x: x['rate'], reverse=True)
 
-        rows.append(
-            {
-                'icd10_3char': icd3,
-                'condition_name': code_to_info.get(icd3, (cond_name, True))[0],
-                'n_admissions': n,
-                'mean_comorbidity_count': mean_comorbidity_count,
-                'top_comorbidity_mods_json': json.dumps(scored),
-            }
-        )
+        rows.append({
+            'icd10_3char': icd3,
+            'condition_name': code_to_info.get(icd3, (cond_name, True))[0],
+            'n_admissions': n,
+            'mean_comorbidity_count': mean_comorbidity_count,
+            'top_comorbidity_mods_json': json.dumps(scored),
+        })
 
     df = pl.DataFrame(rows).sort('n_admissions', descending=True)
     print(

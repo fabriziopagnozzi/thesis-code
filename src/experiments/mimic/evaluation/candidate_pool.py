@@ -107,13 +107,11 @@ class CandidatePool:
 
     def sim_matrix(self) -> NDArray[np.float32]:
         """Pairwise cosine similarity (cached, vectors assumed normalized)."""
-
         if self._sim_matrix is None:
             if self.n > MAX_CANDIDATES:
                 raise ValueError(
                     'Exceeded size {MAX_CANDIDATES}. Apply prefilter_n to reduce pool size first.'
                 )
-
             self._sim_matrix = self.vectors @ self.vectors.T
 
         return self._sim_matrix
@@ -122,7 +120,6 @@ class CandidatePool:
         return self.vectors @ query_vec
 
     def slice(self, indices: NDArray[np.intp]) -> CandidatePool:
-        """Return a new pool containing only the given row indices."""
         idx_list = indices.tolist()
         return CandidatePool(
             chunk_ids=[self.chunk_ids[i] for i in idx_list],
@@ -132,12 +129,6 @@ class CandidatePool:
             section_names=[self.section_names[i] for i in idx_list],
             metadata_df=self.metadata_df[idx_list],
         )
-
-    def top_k_by_similarity(self, query_vec: NDArray[np.float32], k: int) -> CandidatePool:
-        sim = self.sim_to_query(query_vec)
-        take = min(k, self.n)
-        idx = np.argsort(sim)[::-1][:take].copy()
-        return self.slice(idx)
 
     @classmethod
     def concat(cls, pools: list[CandidatePool]) -> CandidatePool:
@@ -214,7 +205,8 @@ class CandidatePoolBuilder:
 
         vec_col = cast(pa.FixedSizeListArray, result.column(self._vec_col_name).combine_chunks())
         vectors = (
-            vec_col.values.to_numpy(zero_copy_only=False)
+            vec_col.values
+            .to_numpy(zero_copy_only=False)
             .reshape(-1, vec_col.type.list_size)
             .astype(np.float32)
         )
@@ -251,16 +243,10 @@ class CandidatePoolBuilder:
         icd10_3char: str,
         n: int,
     ) -> CandidatePool:
-        """Top-N cosine pool restricted to admissions with the given ICD-10 3-char code.
-
-        Requires the icd10_3char_list column to be present in the lance table
-        (run embeddings/add_icd_list_col.py once to add it).
-
-        Uses a LanceDB prefilter so only condition-relevant vectors are ranked.
-        If no ANN index exists the search falls back to exact cosine scan.
-        """
+        """Top-N cosine pool restricted to admissions with the given ICD-10 3-char code."""
         result = (
-            self._table.search(query_vec, vector_column_name=self._vec_col_name)
+            self._table
+            .search(query_vec, vector_column_name=self._vec_col_name)
             .where(f"array_has(icd10_3char_list, '{icd10_3char}')")
             .limit(n)
             .to_arrow()
@@ -278,7 +264,8 @@ class CandidatePoolBuilder:
             return self._empty_pool()
         hadm_list = ', '.join(str(h) for h in hadm_ids)
         result = (
-            self._table.search(query_vec, vector_column_name=self._vec_col_name)
+            self._table
+            .search(query_vec, vector_column_name=self._vec_col_name)
             .where(f'hadm_id IN ({hadm_list})')
             .limit(n)
             .to_arrow()
@@ -291,7 +278,8 @@ class CandidatePoolBuilder:
             return self._empty_pool()
         placeholders = ', '.join(f"'{cid}'" for cid in gold_chunk_ids)
         result = (
-            self._table.search()
+            self._table
+            .search()
             .where(f'chunk_id IN ({placeholders})')
             .limit(len(gold_chunk_ids))
             .to_arrow()
@@ -335,7 +323,8 @@ class CandidatePoolBuilder:
         if cache_key in self._modifier_to_hadm_ids_cache:
             return self._modifier_to_hadm_ids_cache[cache_key]
         result = set(
-            self._con.execute(f"""--sql
+            self._con
+            .execute(f"""--sql
                 SELECT DISTINCT hadm_id FROM unified_diagnoses
                 WHERE LEFT(unified_icd10, 3) = '{icd10_3char}'
             """)

@@ -8,17 +8,21 @@ def _resolve_exp_name() -> str:
     exp = getenv('EXP') or getenv('EXP_NAME')
     if exp is None:
         raise RuntimeError('Specify EXP (or EXP_NAME) environment variable.')
+
     results_dir = ROOT_DIR / 'src' / 'experiments' / 'mimic' / '_results'
     if (results_dir / exp).is_dir():
         return exp
+
     matches = sorted(results_dir.glob(f'{exp}-*'))
     if len(matches) == 1:
         return matches[0].name
     if len(matches) > 1:
         raise RuntimeError(f'EXP={exp!r} is ambiguous: {[m.name for m in matches]}')
+
     raise RuntimeError(f'No experiment directory matching {exp!r} in {results_dir}')
 
 
+# START side effects
 _EXP_NAME = _resolve_exp_name()
 
 
@@ -43,7 +47,7 @@ class MimicPaths:
 
 for p in [MimicPaths.results, MimicPaths.logs, MimicPaths.vector_db]:
     p.mkdir(parents=True, exist_ok=True)
-
+# END side effects
 
 type HospTable = Literal[
     'admissions',
@@ -102,7 +106,6 @@ type ResultTable = Literal[
     'chunks',
     'queries_prompts',
     'queries',
-    'divergence_stats',
     'gold_annotations',
     'evaluation_results',
     'evaluation_stats',

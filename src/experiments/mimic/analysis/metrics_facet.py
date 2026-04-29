@@ -59,7 +59,7 @@ def _supervised_cv_acc(
     from sklearn.preprocessing import LabelEncoder
 
     classes, counts = np.unique(facet_combined, return_counts=True)
-    if len(classes) < 2 or counts.min() < 2:
+    if len(classes) < 2 or counts.min() < 3:
         return float('nan')
     n_splits_eff = int(min(n_splits, counts.min()))
     if n_splits_eff < 2:

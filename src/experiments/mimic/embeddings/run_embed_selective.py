@@ -18,16 +18,17 @@ from experiments.mimic.configs import (
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.embeddings.add_icd_list_col import build_hadm_to_icd
-from experiments.mimic.embeddings.run_embed_whole_corpus import (
+from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
+from helpers.embedder import Embedder
+
+from .embed_utils import build_hadm_to_icd
+from .run_embed_whole_corpus import (
     embed_and_commit,
     enrich_note_excerpts,
     get_embedded_chunk_ids,
     open_vec_table,
 )
-from experiments.mimic.utils.constants import MimicPaths
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
-from helpers.embedder import Embedder
 
 embed_cfg = EmbedCfg.load()
 

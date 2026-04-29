@@ -4,12 +4,12 @@ from dataclasses import dataclass
 from typing import cast
 
 import numpy as np
+import polars as pl
 from numpy.typing import NDArray
 
 from experiments.mimic.configs import PoolAnalysisCfg
 from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
-from experiments.mimic.evaluation.run_evaluate import _load_queries_for_eval
-from experiments.mimic.utils.schemas import DivergenceStatsRow
+from experiments.mimic.utils.schemas import QueryRow
 from experiments.mimic.utils.utils import modifier_to_snake_label
 
 
@@ -24,6 +24,39 @@ class QueryPool:
     query_vec: NDArray[np.float32]
     facet_onehot: NDArray[np.bool_]
     facet_combined: NDArray[np.object_]
+
+
+def iter_query_pools(
+    queries_df: pl.DataFrame,
+    builder: CandidatePoolBuilder,
+    cfg: PoolAnalysisCfg,
+) -> Iterator[QueryPool]:
+    for row in queries_df.iter_rows(named=True):
+        row = cast(QueryRow, row)
+        modifiers = json.loads(row.get('modifiers_json', '') or '[]')
+        if not modifiers:
+            continue
+
+        query_vec = builder.embed_query(row['query_text'])
+        pool = builder.for_query_cosine_condition(query_vec, row['icd10_3char'], n=cfg.pool_n)
+        if pool.n < 5:
+            continue
+
+        labels, onehot, combined = _build_facet_arrays(pool, row['icd10_3char'], modifiers, builder)
+        if not onehot.any():
+            continue
+
+        yield QueryPool(
+            query_id=int(row['query_id']),
+            icd10_3char=row['icd10_3char'],
+            stratum=row.get('stratum'),
+            query_text=row['query_text'],
+            modifier_labels=labels,
+            pool=pool,
+            query_vec=query_vec,
+            facet_onehot=onehot,
+            facet_combined=combined,
+        )
 
 
 def _build_facet_arrays(
@@ -58,41 +91,3 @@ def _build_facet_arrays(
             j = int(np.argmax(flags))
             combined[i] = f'{labels[j]}_only'
     return labels, onehot, combined
-
-
-def iter_query_pools(
-    builder: CandidatePoolBuilder,
-    cfg: PoolAnalysisCfg,
-    limit: int | None = None,
-) -> Iterator[QueryPool]:
-    queries_df = _load_queries_for_eval()
-    if limit is not None:
-        queries_df = queries_df.head(limit)
-    print(f'[pool_loader] loaded {len(queries_df):,} queries')
-
-    for row in queries_df.iter_rows(named=True):
-        row = cast(DivergenceStatsRow, row)
-        modifiers = json.loads(row.get('modifiers_json', '') or '[]')
-        if not modifiers:
-            continue
-
-        query_vec = builder.embed_query(row['query_text'])
-        pool = builder.for_query_cosine_condition(query_vec, row['icd10_3char'], n=cfg.pool_n)
-        if pool.n < 5:
-            continue
-
-        labels, onehot, combined = _build_facet_arrays(pool, row['icd10_3char'], modifiers, builder)
-        if not onehot.any():
-            continue
-
-        yield QueryPool(
-            query_id=int(row['query_id']),
-            icd10_3char=row['icd10_3char'],
-            stratum=row.get('stratum'),
-            query_text=row['query_text'],
-            modifier_labels=labels,
-            pool=pool,
-            query_vec=query_vec,
-            facet_onehot=onehot,
-            facet_combined=combined,
-        )

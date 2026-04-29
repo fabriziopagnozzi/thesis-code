@@ -8,19 +8,19 @@ from tqdm import tqdm
 
 from experiments.mimic.configs import (
     EvaluateCfg,
-    MimicPaths,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
+from experiments.mimic.evaluation.plots import store_eval_figures
 from experiments.mimic.utils.duck_db_init import (
     connect_mimic_duckdb,
 )
 from experiments.mimic.utils.schemas import (
-    DivergenceStatsRow,
     EvaluationMetrics,
     GoldAnnotationRow,
+    QueryRowPostFiltering,
 )
 from experiments.mimic.utils.utils import modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
@@ -31,6 +31,12 @@ from .candidate_pool import (
     CandidatePoolBuilder,
     RetrievalResult,
     run_retrieval,
+)
+from .metrics import (
+    aspect_recall,
+    gold_precision,
+    gold_recall,
+    weighted_aspect_recall,
 )
 
 evaluate_cfg = EvaluateCfg.load()
@@ -102,27 +108,26 @@ def evaluate_llm(
         )
 
         for m in query_metrics:
-            all_rows.append(
-                {
-                    'query_id': row['query_id'],
-                    'icd10_3char': icd10_3char,
-                    'n_facets': row['n_facets'],
-                    **m,
-                }
-            )
+            all_rows.append({
+                'query_id': row['query_id'],
+                'icd10_3char': icd10_3char,
+                'n_facets': row['n_facets'],
+                **m,
+            })
 
     return pl.DataFrame(all_rows)
 
 
-def _load_queries_for_eval() -> pl.DataFrame:
-    divergence_path = get_table_path('divergence_stats')
-    if divergence_path.exists():
-        return pl.read_parquet(divergence_path).filter(pl.col('passes_filter'))
-    return read_parquet('queries')
+def load_filtered_queries() -> pl.DataFrame:
+    queries_df = read_parquet('queries')
+    if 'passes_filter' not in queries_df.columns:
+        raise RuntimeError('You need to run the query filtering step before.')
+
+    return queries_df.filter(pl.col('passes_filter'))
 
 
 def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
-    queries_df = _load_queries_for_eval()
+    queries_df = load_filtered_queries()
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
     all_rows = []
@@ -132,7 +137,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
         desc='Evaluating (structural)',
         dynamic_ncols=True,
     ):
-        curr_query = cast(DivergenceStatsRow, curr_query)
+        curr_query = cast(QueryRowPostFiltering, curr_query)
         modifiers_json: list[dict] = json.loads(curr_query.get('modifiers_json', '') or '[]')
         if not modifiers_json:
             continue
@@ -145,7 +150,7 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
         facets = build_structural_facets(pool, curr_query['icd10_3char'], modifiers_json, builder)
         if not facets:
             print(
-                f'  [skip] query_id={curr_query["query_id"]} ({curr_query["icd10_3char"]}): '  # type: ignore
+                f'  [skip] query_id={curr_query["query_id"]} ({curr_query["icd10_3char"]}): '
                 f'no modifier chunks found in pool'
             )
             continue
@@ -160,15 +165,13 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
         )
 
         for m in query_metrics:
-            all_rows.append(
-                {
-                    'query_id': curr_query['query_id'],  # type: ignore
-                    'icd10_3char': curr_query['icd10_3char'],
-                    'stratum': curr_query.get('stratum'),
-                    'n_facets': len(facets),
-                    **m,
-                }
-            )
+            all_rows.append({
+                'query_id': curr_query['query_id'],
+                'icd10_3char': curr_query['icd10_3char'],
+                'stratum': curr_query.get('stratum'),
+                'n_facets': len(facets),
+                **m,
+            })
 
     return pl.DataFrame(all_rows)
 
@@ -206,8 +209,6 @@ def evaluate_query(
     lam_values: list[float],
 ) -> list[EvaluationMetrics]:
     """Evaluate all strategy x k x λ combos for a single query.
-
-    Pool is assumed to be already prefiltered/stratified.
     Returns list of metric dicts.
     """
     retrieval_results = run_retrieval(
@@ -262,55 +263,21 @@ def evaluate_query(
         else:
             jac = 1.0
 
-        metrics.append(
-            {
-                'strategy': result.strategy,
-                'k': result.k,
-                'lam': result.lam,
-                'aspect_recall': ar,
-                'weighted_aspect_recall': war,
-                'gold_precision': gp,
-                'gold_recall': gr,
-                'fac_cov_score': fac,
-                'avg_cos': ac,
-                'jaccard_vs_topk': jac,
-                'n_unique_hadms': len(set(result.selected_hadm_ids)),
-            }
-        )
+        metrics.append({
+            'strategy': result.strategy,
+            'k': result.k,
+            'lam': result.lam,
+            'aspect_recall': ar,
+            'weighted_aspect_recall': war,
+            'gold_precision': gp,
+            'gold_recall': gr,
+            'fac_cov_score': fac,
+            'avg_cos': ac,
+            'jaccard_vs_topk': jac,
+            'n_unique_hadms': len(set(result.selected_hadm_ids)),
+        })
 
     return metrics
-
-
-def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
-    """AR(S) = |{f in F : S ∩ G_f ≠ ∅}| / |F|"""
-    if not facets:
-        return 0.0
-    covered = sum(1 for cids in facets.values() if selected_chunk_ids & set(cids))
-    return covered / len(facets)
-
-
-def weighted_aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
-    """WAR(S) = (1/|F|) * Σ_f |S ∩ G_f| / |G_f|"""
-    if not facets:
-        return 0.0
-    total = 0.0
-    for cids in facets.values():
-        gold_set = set(cids)
-        total += len(selected_chunk_ids & gold_set) / len(gold_set)
-    return total / len(facets)
-
-
-def gold_precision(selected_chunk_ids: set[str], all_gold_ids: set[str]) -> float:
-    if not selected_chunk_ids:
-        return 0.0
-    return len(selected_chunk_ids & all_gold_ids) / len(selected_chunk_ids)
-
-
-def gold_recall(selected_chunk_ids: set[str], all_gold_ids: set[str], pool_ids: set[str]) -> float:
-    reachable_gold = all_gold_ids & pool_ids
-    if not reachable_gold:
-        return 0.0
-    return len(selected_chunk_ids & reachable_gold) / len(reachable_gold)
 
 
 def store_eval_stats(results_df: pl.DataFrame) -> None:
@@ -322,7 +289,8 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         subset = results_df.filter(pl.col('k') == k)
 
         summary = (
-            subset.group_by('strategy', 'lam')
+            subset
+            .group_by('strategy', 'lam')
             .agg(
                 pl.col('aspect_recall').mean().alias('AR'),
                 pl.col('weighted_aspect_recall').mean().alias('WAR'),
@@ -349,7 +317,8 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         for k in sorted(results_df['k'].unique().to_list()):
             subset = results_df.filter(pl.col('k') == k)
             stratum_summaries.append(
-                subset.group_by('strategy', 'lam', 'stratum')
+                subset
+                .group_by('strategy', 'lam', 'stratum')
                 .agg(
                     pl.col('aspect_recall').mean().alias('AR'),
                     pl.col('weighted_aspect_recall').mean().alias('WAR'),
@@ -367,6 +336,29 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         stratum_stats_df.write_parquet(stratum_stats_path)
         print(f'Saved stratum summary to {stratum_stats_path}')
 
+        strata = sorted(results_df['stratum'].drop_nulls().unique().to_list())
+        for stratum in strata:
+            print(f'\n=== Stratum {stratum} ===\n')
+            stratum_rows = results_df.filter(pl.col('stratum') == stratum)
+            for k in sorted(stratum_rows['k'].unique().to_list()):
+                print(f'--- k = {k} ---')
+                print(
+                    stratum_rows
+                    .filter(pl.col('k') == k)
+                    .group_by('strategy', 'lam')
+                    .agg(
+                        pl.col('aspect_recall').mean().alias('AR'),
+                        pl.col('weighted_aspect_recall').mean().alias('WAR'),
+                        pl.col('gold_precision').mean().alias('GP'),
+                        pl.col('gold_recall').mean().alias('GR'),
+                        pl.col('fac_cov_score').mean().alias('fac'),
+                        pl.col('avg_cos').mean().alias('cos'),
+                        pl.col('aspect_recall').count().alias('n'),
+                    )
+                    .sort('strategy', 'lam')
+                )
+                print()
+
 
 def store_best_per_metric(results_df: pl.DataFrame) -> None:
     """For each (k, lam) pair and each metric, find the best strategy among top_k, mmr, fl."""
@@ -379,7 +371,7 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
         pl.col('gold_recall').mean().alias('GR'),
     )
 
-    # top_k has lam=null — it must compete against mmr/fl at every lambda value
+    # top_k has lam=null - it must compete against mmr/fl at every lambda value
     top_k_s = summary.filter(pl.col('strategy') == 'top_k').drop('lam')
     others_s = summary.filter(pl.col('strategy') != 'top_k')
 
@@ -392,75 +384,38 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
         for col in metric_cols:
             best_val = group[col].max()
             tied = group.filter(pl.col(col) == best_val)
-            best_rows.append(
-                {
-                    'k': k,
-                    'lam': lam,
-                    'best_for': col,
-                    'strategy': tied['strategy'].to_list(),
-                    **{c: best_val if c == col else tied[c][0] for c in metric_cols},
-                }
-            )
+            best_rows.append({
+                'k': k,
+                'lam': lam,
+                'best_for': col,
+                'strategy': tied['strategy'].to_list(),
+                **{c: best_val if c == col else tied[c][0] for c in metric_cols},
+            })
 
     best_df = pl.DataFrame(best_rows).sort('k', 'lam', 'best_for')
     best_path = get_table_path('evaluation_best_per_metric')
     best_df.write_parquet(best_path)
     print(f'Saved best-per-metric summary to {best_path}')
 
-    # best_fixed_lam: for each lam, best (strategy, k) — top_k competes at all k values
+    # best_fixed_lam: for each lam, best (strategy, k) - top_k competes at all k values
     best_fixed_lam_rows = []
     for (lam,), group in others_s.group_by('lam'):
         combined = pl.concat([group, top_k_s], how='diagonal_relaxed')
         for col in metric_cols:
             best_val = combined[col].max()
             tied = combined.filter(pl.col(col) == best_val)
-            best_fixed_lam_rows.append(
-                {
-                    'lam': lam,
-                    'best_for': col,
-                    'strategy': tied['strategy'].to_list(),
-                    'k': tied['k'].to_list(),
-                    **{c: best_val if c == col else tied[c][0] for c in metric_cols},
-                }
-            )
+            best_fixed_lam_rows.append({
+                'lam': lam,
+                'best_for': col,
+                'strategy': tied['strategy'].to_list(),
+                'k': tied['k'].to_list(),
+                **{c: best_val if c == col else tied[c][0] for c in metric_cols},
+            })
 
     best_fixed_lam_df = pl.DataFrame(best_fixed_lam_rows).sort('lam', 'best_for')
     best_fixed_lam_path = get_table_path('evaluation_best_per_metric_fixed_lam')
     best_fixed_lam_df.write_parquet(best_fixed_lam_path)
     print(f'Saved best-per-metric (fixed lam) summary to {best_fixed_lam_path}')
-
-
-def store_eval_figures() -> None:
-    from .plots import (
-        plot_gain_over_topk,
-        plot_lambda_sensitivity,
-        plot_per_query_distributions,
-        plot_strategy_comparison,
-        plot_stratum_breakdown,
-    )
-
-    out_dir = MimicPaths.experiment / 'figures' / 'eval'
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    stats_path = get_table_path('evaluation_stats')
-    results_path = get_table_path('evaluation_results')
-    if not stats_path.exists() or not results_path.exists():
-        print('Skipping eval figures: evaluation_stats or evaluation_results not found')
-        return
-
-    stats_df = pl.read_parquet(stats_path)
-    results_df = pl.read_parquet(results_path)
-
-    plot_strategy_comparison(stats_df, out_dir)
-    plot_lambda_sensitivity(stats_df, out_dir)
-    plot_per_query_distributions(results_df, out_dir)
-    plot_gain_over_topk(stats_df, out_dir)
-
-    stratum_path = get_table_path('evaluation_stats_by_stratum')
-    if stratum_path.exists():
-        plot_stratum_breakdown(pl.read_parquet(stratum_path), out_dir)
-
-    print(f'Saved eval figures to {out_dir}')
 
 
 if __name__ == '__main__':

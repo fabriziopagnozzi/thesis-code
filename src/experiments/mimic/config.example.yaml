@@ -1,16 +1,14 @@
-# Run each command with EXP_NAME env var to save results under _results/EXP_NAME.
-# Copy this config file to _results/EXP_NAME/_config.yaml and edit.
+# Run each command with EXP environment variable to save results under _results/EXP.
+# Copy this config file to _results/EXP/_config.yaml and edit.
 
 global:
     # result_dir_overrides: # Per-table result directory overrides relative to _results 
-    # (if not listed here, their default location is _results/EXP_NAME)
+    # (if not listed here, their default location is _results/EXP)
     #     conditions_stats: <dir>
     #     chunks: <dir>
     #     queries_prompts: <dir>
     #     queries: <dir>
-    #     divergence_stats: <dir>
     #     gold_annotations: <dir>
-
 
     n_conditions: 350 # number of conditions to sample from conditions_stats
     chunks_vec_table: chunks_512 # relative to src/experiments/mimic/_results/_vector_db
@@ -27,7 +25,7 @@ embeddings:
     batch_sizes: [ 2, 4, 8, 16, 32 ] # for each model
     commit_every: 16384
 # ----------------------------------------------------------------------------
-analysis:
+pool_analysis:
     embedding_model: Qwen/Qwen3-Embedding-0.6B
     pool_n: 2000
 
@@ -60,7 +58,6 @@ evaluation:
         - fac_loc
     k_values: [ 5, 10, 20, 30 ]
     lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
-    device: cuda
 # ----------------------------------------------------------------------------
 chunking:
     conditions_stats:

@@ -10,6 +10,8 @@ from tqdm import tqdm
 
 from experiments.mimic.configs import EvaluateCfg, PoolAnalysisCfg, setup_logging
 from experiments.mimic.evaluation.candidate_pool import CandidatePoolBuilder
+from experiments.mimic.evaluation.run_evaluate import load_filtered_queries
+from experiments.mimic.utils.constants import MimicPaths
 from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
 from .aggregate import aggregate_stats
@@ -54,8 +56,8 @@ def run_pool_analysis() -> None:
         cfg.n_figures = args.n_figures
 
     out_dir = cfg.output_dir
-    fig_per = out_dir / 'figures' / 'per_query'
-    fig_agg = out_dir / 'figures' / 'aggregate'
+    fig_per = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'per_query'
+    fig_agg = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'aggregate'
     for d in (out_dir, fig_per, fig_agg):
         d.mkdir(parents=True, exist_ok=True)
 
@@ -85,8 +87,18 @@ def run_pool_analysis() -> None:
 
     new_since_ckpt = 0
     print(f'\n[1/4] Analyzing pools ({cfg.pool_n} chunks/query, output → {out_dir})')
+
+    queries_filtered_df = load_filtered_queries()
+    if args.limit is not None:
+        queries_filtered_df = queries_filtered_df.head(args.limit)
+
+    print(f'Loaded {len(queries_filtered_df):,} queries')
+
     for qp in tqdm(
-        iter_query_pools(builder, cfg, limit=args.limit), desc='Pool analysis', dynamic_ncols=True
+        iter_query_pools(queries_filtered_df, builder, cfg),
+        desc='Pool analysis',
+        dynamic_ncols=True,
+        total=len(queries_filtered_df),
     ):
         if qp.query_id in processed_ids:
             continue

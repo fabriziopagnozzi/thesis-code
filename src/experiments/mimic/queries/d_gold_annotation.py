@@ -1,10 +1,11 @@
 """
-Step 4.2: Gold facet annotation via two-phase pipeline.
+Gold facet annotation via two-phase pipeline.
 
 For each query + its candidate pool:
-  1. Build facet vocabulary deterministically from the query's modifier list.
-  2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision + "reason" per chunk per aspect, gated by a HARD structural prior: a chunk is only shown to the LLM for aspect X if its hadm_id belongs to modifier X's hadm_id set.
-  3. Reduce: union of relevant chunk_ids per aspect across batches.
+    1. Build facet vocabulary deterministically from the query's modifier list.
+    2. Per-aspect tagging (map: aspects x chunk-batches): yes/no decision + "reason" per chunk per aspect,
+       gated by a HARD structural prior: a chunk is only shown to the LLM for aspect X if its hadm_id belongs to modifier X's hadm_id set.
+    3. Reduce: union of relevant chunk_ids per aspect across batches.
 
 Output: gold_annotations.parquet
 """
@@ -49,7 +50,7 @@ def run_gold_annotation(
     if con is None:
         con = connect_mimic_duckdb()
 
-    queries_df = read_parquet('divergence_stats')
+    queries_df = read_parquet('queries')
     meta_path = get_table_path('admissions_metadata')
     patient_meta = (
         _build_patient_meta(meta_path, CHARLSON_LABELS_TO_STR) if meta_path.exists() else None
@@ -152,18 +153,16 @@ def annotate(
         for cids in facets.values():
             all_gold_chunks.update(cids)
 
-        completed_rows.append(
-            {
-                'query_id': row['query_id'],
-                'icd10_3char': icd10_3char,
-                'condition_name': row.get('condition_name', ''),
-                'modifiers_json': json.dumps(modifiers_json),
-                'query_text': query_text,
-                'facets_json': json.dumps(facets),
-                'n_facets': len(facets),
-                'n_gold_chunks': len(all_gold_chunks),
-            }
-        )
+        completed_rows.append({
+            'query_id': row['query_id'],
+            'icd10_3char': icd10_3char,
+            'condition_name': row.get('condition_name', ''),
+            'modifiers_json': json.dumps(modifiers_json),
+            'query_text': query_text,
+            'facets_json': json.dumps(facets),
+            'n_facets': len(facets),
+            'n_gold_chunks': len(all_gold_chunks),
+        })
     # end for i, row in enumerate(queries_df.iter_rows(named=True)):
 
     if completed_rows:
@@ -289,14 +288,12 @@ def annotate_query(
 
             with jsonl_path.open('a') as f:
                 f.write(
-                    json.dumps(
-                        {
-                            'query_idx': query_idx,
-                            'batch_idx': batch_idx,
-                            'facet_label': aspect.facet_label,
-                            'decisions': [d.model_dump() for d in decisions],
-                        }
-                    )
+                    json.dumps({
+                        'query_idx': query_idx,
+                        'batch_idx': batch_idx,
+                        'facet_label': aspect.facet_label,
+                        'decisions': [d.model_dump() for d in decisions],
+                    })
                     + '\n'
                 )
 
