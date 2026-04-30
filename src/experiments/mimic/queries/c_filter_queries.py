@@ -12,42 +12,35 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.configs import (
-    EvaluateCfg,
-    FilterQueriesCfg,
+from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
+from experiments.mimic.global_configs import (
+    duckdb_con,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
-from experiments.mimic.utils.duck_db_init import (
-    connect_mimic_duckdb,
-)
-from experiments.mimic.utils.schemas import DivergenceMetrics, QueryRow
+from experiments.mimic.queries.schemas_queries import DivergenceMetrics, FilterQueriesCfg, QueryRow
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
 
 filter_queries_cfg = FilterQueriesCfg.load()
-evaluate_cfg = EvaluateCfg.load()
-filter_col = f'filter_{get_vec_col_name(evaluate_cfg.embedding_model)}'
+filter_col = f'filter_{get_vec_col_name(global_cfg.embedding_model)}'
 
 
 def run_filter_queries(
-    con: duckdb.DuckDBPyConnection | None = None,
+    con: duckdb.DuckDBPyConnection = duckdb_con,
     cfg: FilterQueriesCfg | None = None,
 ) -> pl.DataFrame:
     global filter_queries_cfg
     if cfg is not None:
         filter_queries_cfg = cfg
-    if con is None:
-        con = connect_mimic_duckdb()
 
     queries_df = read_parquet('queries')
     print(f'Loaded {len(queries_df):,} queries')
 
-    builder = CandidatePoolBuilder(con, cfg=evaluate_cfg)
+    builder = CandidatePoolBuilder(con, embedding_model=global_cfg.embedding_model)
     result = filter_queries(queries_df, builder)
 
     out_path = get_table_path('queries')
@@ -150,7 +143,7 @@ def compute_divergence(
 
 if __name__ == '__main__':
     setup_logging()
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.global_configs import load_config_from_main
 
     raw = load_config_from_main(key='queries')
     run_filter_queries(cfg=FilterQueriesCfg(**raw['filter_queries']))

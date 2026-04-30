@@ -24,26 +24,49 @@ dependencies = [
 	"umap-learn>=0.5",
 	"hdbscan>=0.8",
 	"matplotlib>=3.9",
-	"pandas-stubs>=3.0.0.260204",
-	"pyarrow-stubs>=20.0.0.20251215",
 	"plotly>=6.7.0",
 ]
 [dependency-groups]
-dev = ["ruff", "pytest", "ipykernel", "matplotlib-stubs", "taskipy"]
+dev = [
+	"ruff",
+	"pytest",
+	"ipykernel",
+	"matplotlib-stubs",
+	"pandas-stubs",
+	"pyarrow-stubs",
+	"taskipy",
+]
+
 
 [tool.taskipy.tasks]
-chunking = "uv run -m experiments.mimic.chunking.run_chunking_steps"
+# Chunking
+chunking_full = "uv run -m experiments.mimic.chunking.run_chunking_steps"
+conditions_stats = "uv run -m experiments.mimic.chunking.a_conditions_stats"
+note_chunking = "uv run -m experiments.mimic.chunking.b_note_chunking"
+dedup_chunks = "uv run -m experiments.mimic.chunking.c_dedup"
+
+# Embeddings
 embed_whole = "uv run -m experiments.mimic.embeddings.run_embed_whole_corpus"
 embed_selective = "uv run -m experiments.mimic.embeddings.run_embed_selective"
-queries = "uv run -m experiments.mimic.queries.run_queries_steps"
+
+# Evaluation
+gold_annotation = "uv run -m experiments.mimic.evaluation.run_gold_annotation"
 evaluation = "uv run -m experiments.mimic.evaluation.run_evaluate"
 evaluation_plots = "uv run -m experiments.mimic.evaluation.plots"
+
+# Pool Analysis
 pool_analysis = "uv run -m experiments.mimic.pool_analysis.run_pool_analysis"
 pool_analysis_plots = "uv run -m experiments.mimic.pool_analysis.plots"
 
-add_new_embeddings = "uv run -m experiments.mimic.embeddings.add_new_vector_col"
-build_vector_indexes = "uv run -m experiments.mimic.embeddings.build_vector_indexes"
+# Queries
+queries_full = "uv run -m experiments.mimic.queries.run_queries_steps"
+build_prompts = "uv run -m experiments.mimic.queries.a_build_prompts"
+gen_queries_llm = "uv run -m experiments.mimic.queries.b_gen_queries_llm"
+filter_queries = "uv run -m experiments.mimic.queries.c_filter_queries"
+
+# Miscellaneous
 lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"/home/pagnozzi/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
+
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]

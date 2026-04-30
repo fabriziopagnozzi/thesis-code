@@ -4,6 +4,8 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
+
 
 def _safe(d: dict[str, Any], k: str, default: Any = float('nan')) -> Any:
     v = d.get(k, default)
@@ -93,24 +95,24 @@ def plot_per_query_card(points_df: pl.DataFrame, stats: dict[str, Any], out_path
     plt.close(fig)
 
 
-def plot_aggregate(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def _plot_metric_grid(
+    stats_df: pl.DataFrame,
+    metrics: list[str],
+    title: str,
+    out_path: Path,
+    ncols: int = 3,
+) -> None:
     import matplotlib.pyplot as plt
 
-    metrics = [
-        'mean_cos',
-        'effective_rank',
-        'dom_cluster_frac_hdb',
-        'intra_minus_cross',
-        'ari_cluster_facet_hdb',
-        'facet_lda_acc_cv',
-    ]
-    fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+    nrows = -(-len(metrics) // ncols)  # ceil div
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4 * nrows))
+    ax_flat = np.asarray(axes).flatten()
     strata = (
         sorted(stats_df['stratum'].drop_nulls().unique().to_list())
         if 'stratum' in stats_df.columns
         else []
     )
-    for ax, m in zip(axes.flatten(), metrics, strict=False):
+    for ax, m in zip(ax_flat, metrics, strict=False):
         if m not in stats_df.columns:
             ax.set_visible(False)
             continue
@@ -123,29 +125,61 @@ def plot_aggregate(stats_df: pl.DataFrame, out_dir: Path) -> None:
         else:
             ax.hist(stats_df[m].fill_nan(None).drop_nulls().to_numpy(), bins=30)
         ax.set_title(m)
-    fig.suptitle('Pool composition metrics - by stratum')
+    for ax in ax_flat[len(metrics) :]:
+        ax.set_visible(False)
+    fig.suptitle(title)
     fig.tight_layout()
-    fig.savefig(out_dir / 'metrics_by_stratum.png', dpi=120, bbox_inches='tight')
+    fig.savefig(out_path, dpi=120, bbox_inches='tight')
     plt.close(fig)
 
 
+def plot_aggregate(stats_df: pl.DataFrame, out_dir: Path) -> None:
+    _plot_metric_grid(
+        stats_df,
+        metrics=[
+            'mean_cos',
+            'effective_rank',
+            'top1_evr',
+            'n_clusters_hdb',
+            'dom_cluster_frac_hdb',
+            'cluster_size_entropy_hdb',
+            'frac_outliers_hdb',
+        ],
+        title='Pool geometry & cluster structure - by stratum',
+        out_path=out_dir / 'metrics_geom_cluster_by_stratum.png',
+    )
+    _plot_metric_grid(
+        stats_df,
+        metrics=[
+            'intra_minus_cross',
+            'facet_silhouette',
+            'facet_lda_acc_cv',
+            'facet_logreg_acc_cv',
+            'nmi_cluster_facet_hdb',
+            'ari_cluster_facet_hdb',
+        ],
+        title='Pool facet separability - by stratum',
+        out_path=out_dir / 'metrics_facet_by_stratum.png',
+    )
+
+
 if __name__ == '__main__':
-    from experiments.mimic.configs import PoolAnalysisCfg
-    from experiments.mimic.utils.constants import MimicPaths
+    from experiments.mimic.global_configs import MimicPaths
 
     cfg = PoolAnalysisCfg.load()
-    out_dir = cfg.output_dir
 
-    stats_path = out_dir / 'per_query_stats.parquet'
-    points_path = out_dir / 'pool_points.parquet'
+    stats_path = MimicPaths.experiment_dir / 'per_query_stats.parquet'
+    points_path = MimicPaths.experiment_dir / 'pool_points.parquet'
     if not stats_path.exists() or not points_path.exists():
-        raise FileNotFoundError(f'per_query_stats or pool_points not found in {out_dir}')
+        raise FileNotFoundError(
+            f'per_query_stats or pool_points not found in {MimicPaths.experiment_dir}'
+        )
 
     stats_df = pl.read_parquet(stats_path)
     points_df = pl.read_parquet(points_path)
 
-    fig_per = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'per_query'
-    fig_agg = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'aggregate'
+    fig_per = MimicPaths.figures_dir / 'pool_analysis' / 'per_query'
+    fig_agg = MimicPaths.figures_dir / 'pool_analysis' / 'aggregate'
     fig_per.mkdir(parents=True, exist_ok=True)
     fig_agg.mkdir(parents=True, exist_ok=True)
 

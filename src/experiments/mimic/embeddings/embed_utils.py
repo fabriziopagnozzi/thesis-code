@@ -11,7 +11,7 @@ import pyarrow.parquet as pq
 from lancedb import DBConnection, Table
 from pyarrow import FixedSizeListArray
 
-from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.global_configs import MimicPaths
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.embedder import Embedder
 
@@ -48,14 +48,14 @@ def embed_and_commit(
     chunk_texts: list[str],
     hadm_to_icd: dict[int, list[str]],
     embedder: Embedder,
-    db: DBConnection,
+    lancedb_con: DBConnection,
     table_name: str,
     commit_every: int,
     table: Table | None = None,
 ) -> Table:
     vec_col = get_vec_col_name(embedder.model_name)
 
-    staging_dir = MimicPaths.experiment / f'.tmp_embeddings/{embedder.model_name}'
+    staging_dir = MimicPaths.experiment_dir / f'.tmp_embeddings/{embedder.model_name}'
     staging_dir.mkdir(parents=True, exist_ok=True)
 
     admissions_metadata, chunk_texts, n_existing = _resume_previous_run(
@@ -95,9 +95,9 @@ def embed_and_commit(
     final_pa = staged_ds.to_table()
 
     if table is None:
-        table = db.create_table(table_name, data=final_pa, mode='overwrite')
+        table = lancedb_con.create_table(table_name, data=final_pa, mode='overwrite')
     else:
-        table = db.open_table(table_name)
+        table = lancedb_con.open_table(table_name)
         existing_ids = frozenset(
             table.to_lance().to_table(columns=['chunk_id'])['chunk_id'].to_pylist()
         )
@@ -125,14 +125,14 @@ def embed_and_commit(
                     all_vecs_for_column = pa.concat_tables([valid_old_vecs, all_vecs_for_column])
 
                 table.drop_columns([vec_col])
-                table = db.open_table(table_name)
+                table = lancedb_con.open_table(table_name)
 
             table.to_lance().merge(all_vecs_for_column, left_on='chunk_id')
-            table = db.open_table(table_name)
+            table = lancedb_con.open_table(table_name)
 
         # 2. ADD BRAND NEW CHUNKS
         if new_pa.num_rows > 0:
-            table = db.open_table(table_name)
+            table = lancedb_con.open_table(table_name)
             table_schema = table.schema
 
             for field in table_schema:

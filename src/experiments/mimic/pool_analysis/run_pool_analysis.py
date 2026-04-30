@@ -1,4 +1,3 @@
-import argparse
 import json
 import time
 from dataclasses import dataclass
@@ -6,13 +5,13 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
+from duckdb import DuckDBPyConnection
 from tqdm import tqdm
 
-from experiments.mimic.configs import EvaluateCfg, PoolAnalysisCfg, setup_logging
 from experiments.mimic.evaluation.candidate_pool import CandidatePoolBuilder
 from experiments.mimic.evaluation.run_evaluate import load_filtered_queries
-from experiments.mimic.utils.constants import MimicPaths
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
+from experiments.mimic.global_configs import MimicPaths, duckdb_con, global_cfg, setup_logging
+from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
 
 from .aggregate import aggregate_stats
 from .cluster import alignment, cluster_summary, hdbscan_cluster
@@ -23,6 +22,8 @@ from .outliers import lof_scores, lof_summary
 from .plots import plot_aggregate, plot_per_query_card
 from .pool_loader import QueryPool, iter_query_pools
 
+pool_analysis_cfg = PoolAnalysisCfg.load()
+
 
 @dataclass
 class PerQueryResult:
@@ -30,42 +31,24 @@ class PerQueryResult:
     points: pl.DataFrame
 
 
-def run_pool_analysis() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, default=None)
-    parser.add_argument('--pool-n', type=int, default=None)
-    parser.add_argument('--n-figures', type=int, default=None)
-    parser.add_argument(
-        '--limit', type=int, default=None, help='Process only the first N queries (debug).'
-    )
-    parser.add_argument(
-        '--commit-every',
-        type=int,
-        default=25,
-        help='Checkpoint after every N newly processed queries.',
-    )
-    args, _ = parser.parse_known_args()
+def run_pool_analysis(
+    con: DuckDBPyConnection = duckdb_con, cfg: PoolAnalysisCfg | None = None
+) -> None:
+    global pool_analysis_cfg
+    if cfg is not None:
+        pool_analysis_cfg = cfg
 
-    cfg = PoolAnalysisCfg.load(args.config)
-    eval_cfg = EvaluateCfg.load()
-    eval_cfg.embedding_model = cfg.embedding_model
-    con = connect_mimic_duckdb()
-    pool_builder = CandidatePoolBuilder(con, cfg=eval_cfg)
+    embedding_model = global_cfg.embedding_model
+    pool_builder = CandidatePoolBuilder(con, embedding_model=embedding_model)
 
-    if args.pool_n is not None:
-        cfg.pool_n = args.pool_n
-    if args.n_figures is not None:
-        cfg.n_figures = args.n_figures
-
-    out_dir = cfg.output_dir
-    fig_per = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'per_query'
-    fig_agg = MimicPaths.experiment / 'figures' / 'pool_analysis' / 'aggregate'
-    for d in (out_dir, fig_per, fig_agg):
+    fig_per = MimicPaths.figures_dir / 'pool_analysis' / 'per_query'
+    fig_agg = MimicPaths.figures_dir / 'pool_analysis' / 'aggregate'
+    for d in (fig_per, fig_agg):
         d.mkdir(parents=True, exist_ok=True)
 
-    ckpt_rows = out_dir / 'checkpoint_rows.jsonl'
-    ckpt_points = out_dir / 'checkpoint_points.parquet'
-    ckpt_meta = out_dir / 'checkpoint_meta.json'
+    ckpt_rows = MimicPaths.experiment_dir / 'checkpoint_rows.jsonl'
+    ckpt_points = MimicPaths.experiment_dir / 'checkpoint_points.parquet'
+    ckpt_meta = MimicPaths.experiment_dir / 'checkpoint_meta.json'
 
     rows: list[dict] = []
     point_frames: list[pl.DataFrame] = []
@@ -82,16 +65,18 @@ def run_pool_analysis() -> None:
         print(f'[checkpoint] {len(processed_ids)} queries already done, resuming …')
 
     new_since_ckpt = 0
-    print(f'\n[1/4] Analyzing pools ({cfg.pool_n} chunks/query, output → {out_dir})')
+    print(
+        f'\n[1/4] Analyzing pools ({cfg.pool_n} chunks/query, output → {MimicPaths.experiment_dir})'
+    )
 
-    queries_filtered_df = load_filtered_queries(eval_cfg.embedding_model)
-    if args.limit is not None:
-        queries_filtered_df = queries_filtered_df.head(args.limit)
+    queries_filtered_df = load_filtered_queries(embedding_model)
+    if pool_analysis_cfg.limit is not None:
+        queries_filtered_df = queries_filtered_df.head(pool_analysis_cfg.limit)
 
     print(f'Loaded {len(queries_filtered_df):,} queries')
 
     for qp in tqdm(
-        iter_query_pools(queries_filtered_df, pool_builder, cfg),
+        iter_query_pools(queries_filtered_df, pool_builder, pool_analysis_cfg),
         desc='Pool analysis',
         dynamic_ncols=True,
         total=len(queries_filtered_df),
@@ -100,7 +85,7 @@ def run_pool_analysis() -> None:
             continue
 
         try:
-            r = analyze_query(qp, cfg)
+            r = analyze_query(qp, pool_analysis_cfg)
         except Exception as exc:
             print(f'  [skip] query_id={qp.query_id} ({qp.icd10_3char}): {exc}')
             continue
@@ -112,16 +97,16 @@ def run_pool_analysis() -> None:
 
         stratum = qp.stratum
         stratum_count = fig_count_per_stratum.get(qp.stratum, 0)
-        if stratum_count < cfg.n_figures:
+        if stratum_count < pool_analysis_cfg.n_figures:
             fig_path = fig_per / f'{stratum}_q{qp.query_id:04d}_{qp.icd10_3char}.png'
             plot_per_query_card(r.points, r.stats, fig_path)
             fig_count_per_stratum[stratum] = stratum_count + 1
             total_figs = sum(fig_count_per_stratum.values())
             print(
-                f'  [fig stratum={stratum} {stratum_count + 1}/{cfg.n_figures}] {fig_path.name}  (total={total_figs})'
+                f'  [fig stratum={stratum} {stratum_count + 1}/{pool_analysis_cfg.n_figures}] {fig_path.name}  (total={total_figs})'
             )
 
-        if new_since_ckpt >= args.commit_every:
+        if new_since_ckpt >= pool_analysis_cfg.commit_every:
             _write_checkpoint(
                 rows, point_frames, fig_count_per_stratum, ckpt_rows, ckpt_points, ckpt_meta
             )
@@ -142,16 +127,16 @@ def run_pool_analysis() -> None:
 
     print(f'\n[2/4] Writing per-query stats ({len(rows):,} rows)')
     stats_df = pl.DataFrame(rows)
-    stats_path = out_dir / 'per_query_stats.parquet'
+    stats_path = MimicPaths.experiment_dir / 'per_query_stats.parquet'
     stats_df.write_parquet(stats_path)
 
     points_df = pl.concat(point_frames, how='diagonal_relaxed')
-    pts_path = out_dir / 'pool_points.parquet'
+    pts_path = MimicPaths.experiment_dir / 'pool_points.parquet'
     points_df.write_parquet(pts_path)
 
     print('\n[3/4] Aggregating stats')
     agg = aggregate_stats(stats_df)
-    agg_path = out_dir / 'aggregate_stats.parquet'
+    agg_path = MimicPaths.experiment_dir / 'aggregate_stats.parquet'
     agg.write_parquet(agg_path)
 
     print('\n[4/4] Plotting aggregate figures')
@@ -260,4 +245,7 @@ def _write_checkpoint(
 
 if __name__ == '__main__':
     setup_logging()
-    run_pool_analysis()
+    from experiments.mimic.global_configs import load_config_from_main
+
+    raw = load_config_from_main(key='pool_analysis')
+    run_pool_analysis(cfg=PoolAnalysisCfg(**raw))

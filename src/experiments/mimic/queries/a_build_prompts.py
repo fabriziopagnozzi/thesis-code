@@ -18,34 +18,30 @@ import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
-from experiments.mimic.configs import (
-    BuildQueryPromptsCfg,
+from experiments.mimic.chunking.schemas_chunking import (
+    AdmissionMetaSlimRow,
+    ConditionStatsRow,
+)
+from experiments.mimic.global_configs import (
+    duckdb_con,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
+from experiments.mimic.queries.schemas_queries import BuildQueryPromptsCfg, GroundingChunkSample
 from experiments.mimic.utils.charlson import ICD3_TO_CHARLSON_COLS
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
-from experiments.mimic.utils.schemas import (
-    AdmissionMetaSlimRow,
-    ConditionStatsRow,
-    GroundingChunkSample,
-)
 
 query_prompts_cfg = BuildQueryPromptsCfg.load()
 
 
 def run_build_query_prompts(
-    con: DuckDBPyConnection | None = None,
+    con: DuckDBPyConnection = duckdb_con,
     cfg: BuildQueryPromptsCfg | None = None,
 ) -> pl.DataFrame:
     global query_prompts_cfg
     if cfg is not None:
         query_prompts_cfg = cfg
-
-    if con is None:
-        con = connect_mimic_duckdb()
 
     conditions = read_parquet('conditions_stats')
     chunks = read_parquet('chunks')
@@ -77,7 +73,8 @@ def build_query_prompts(
     }
     meta_by_hadm_id: dict[int, AdmissionMetaSlimRow] = {
         row['hadm_id']: cast(AdmissionMetaSlimRow, row)
-        for row in metadata.select('hadm_id', 'age', 'gender', 'race')
+        for row in metadata
+        .select('hadm_id', 'age', 'gender', 'race')
         .unique(subset=['hadm_id'])
         .iter_rows(named=True)
     }
@@ -163,21 +160,19 @@ def build_query_prompts(
                 modifier_list=modifier_list,
                 chunks_block=_format_chunks_block(data_samples),
             )
-            results.append(
-                {
-                    'icd10_3char': icd10_3char,
-                    'condition_name': cond_name,
-                    'stratum': stratum,
-                    'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
-                    'n_modifiers': len(modifiers),
-                    'n_condition_admissions': len(cond_hadm_ids),
-                    'n_condition_chunks': n_condition_chunks,
-                    'modifier_stats_json': json.dumps({t: modifier_stats[t] for t, _ in modifiers}),
-                    'n_grounding_chunks': len(data_samples),
-                    'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
-                    'full_prompt': full_prompt,
-                }
-            )
+            results.append({
+                'icd10_3char': icd10_3char,
+                'condition_name': cond_name,
+                'stratum': stratum,
+                'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
+                'n_modifiers': len(modifiers),
+                'n_condition_admissions': len(cond_hadm_ids),
+                'n_condition_chunks': n_condition_chunks,
+                'modifier_stats_json': json.dumps({t: modifier_stats[t] for t, _ in modifiers}),
+                'n_grounding_chunks': len(data_samples),
+                'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
+                'full_prompt': full_prompt,
+            })
 
     print(
         f'Built {len(results):,} grounded prompts, skipped {skipped:,} conditions '
@@ -329,7 +324,8 @@ def _sample_patient(
 ) -> list[GroundingChunkSample]:
     group = chunks_by_hadm[hadm_id]
     bhc_row = (
-        group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
+        group
+        .filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
         .sort('approx_tokens', descending=True)
         .row(0, named=True)
     )
@@ -337,7 +333,8 @@ def _sample_patient(
     section_priority = {s: i for i, s in enumerate(query_prompts_cfg.high_value_sections)}
     supp = group.filter(pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
     supp = (
-        supp.with_columns(
+        supp
+        .with_columns(
             pl.col('section_name').replace_strict(section_priority, default=99).alias('_p')
         )
         .sort('_p')
@@ -391,7 +388,7 @@ def _format_chunks_block(samples: list[GroundingChunkSample]) -> str:
 
 if __name__ == '__main__':
     setup_logging()
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.global_configs import load_config_from_main
 
     raw = load_config_from_main(key='queries')
     run_build_query_prompts(cfg=BuildQueryPromptsCfg(**raw['build_query_prompts']))

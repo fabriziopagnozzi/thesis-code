@@ -1,7 +1,7 @@
 import operator
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, TypedDict, Unpack, cast
 
 import lancedb
 import numpy as np
@@ -10,18 +10,19 @@ import pyarrow as pa
 from duckdb import DuckDBPyConnection
 from numpy.typing import NDArray
 
-from experiments.mimic.configs import (
-    BuildQueryPromptsCfg,
-    EvaluateCfg,
+from experiments.mimic.global_configs import (
+    MimicPaths,
     global_cfg,
     read_parquet,
 )
-from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.queries.schemas_queries import BuildQueryPromptsCfg
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.embedder import Embedder
 from helpers.query_algorithms import ScoringFunction, select
 
 MAX_CANDIDATES = 100_000
+
+_SECTION_FILTER = "section_name IN ('BRIEF HOSPITAL COURSE', 'DISCHARGE MEDICATIONS')"
 
 
 @dataclass
@@ -154,6 +155,10 @@ class CandidatePool:
         return merged.slice(np.array(keep, dtype=np.intp))
 
 
+class CandidatePoolBuilderArgs(TypedDict):
+    embedding_model: str
+
+
 class CandidatePoolBuilder:
     _OPS: ClassVar[dict[str, Callable[[Any, Any], bool]]] = {
         '>': operator.gt,
@@ -163,25 +168,24 @@ class CandidatePoolBuilder:
         '==': operator.eq,
     }
 
-    def __init__(self, con: DuckDBPyConnection, cfg: EvaluateCfg):
+    def __init__(self, con: DuckDBPyConnection, **kwargs: Unpack[CandidatePoolBuilderArgs]):
         self._con = con
         self._embedder = Embedder(
-            cfg.embedding_model,
+            kwargs['embedding_model'],
             batch_size=1,
             query_prompt=global_cfg.query_retrieval_instruction,
         )
-        self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
+        self._table = lancedb.connect(MimicPaths.vector_db_dir).open_table(
+            global_cfg.chunks_vec_table
+        )
+        self._vec_col_name = get_vec_col_name(kwargs['embedding_model'])
+        self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
 
-        prompts_cfg = BuildQueryPromptsCfg.load()
-        self._charlson_label_to_col_name = global_cfg.label_to_charlson_col
-        self._demographic_filters = prompts_cfg.demographic_filters
+        self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
+        self._demographic_filters = BuildQueryPromptsCfg.load().demographic_filters
 
         self._admissions_meta = read_parquet('admissions_metadata')
 
-        db = lancedb.connect(MimicPaths.vector_db)
-        self._table = db.open_table(global_cfg.chunks_vec_table)
-        self._vec_col_name = get_vec_col_name(cfg.embedding_model)
-        self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
         print(
             f'[CandidatePoolBuilder] table: {global_cfg.chunks_vec_table!r}, '
             f'vector column: {self._vec_col_name!r} ({self._vec_dim}-dim), '
@@ -247,7 +251,7 @@ class CandidatePoolBuilder:
         result = (
             self._table
             .search(query_vec, vector_column_name=self._vec_col_name)
-            .where(f"array_has(icd10_3char_list, '{icd10_3char}')")
+            .where(f"array_has(icd10_3char_list, '{icd10_3char}') AND {_SECTION_FILTER}")
             .limit(n)
             .to_arrow()
         )
@@ -266,7 +270,7 @@ class CandidatePoolBuilder:
         result = (
             self._table
             .search(query_vec, vector_column_name=self._vec_col_name)
-            .where(f'hadm_id IN ({hadm_list})')
+            .where(f'hadm_id IN ({hadm_list}) AND {_SECTION_FILTER}')
             .limit(n)
             .to_arrow()
         )
@@ -292,7 +296,7 @@ class CandidatePoolBuilder:
             return self._modifier_to_hadm_ids_cache[modifier_text]
 
         # Comorbidity modifier (Charlson table)
-        col = self._charlson_label_to_col_name.get(modifier_text)
+        col = global_cfg.label_to_charlson_col.get(modifier_text)
         if col is not None:
             hadm_ids = self._con.execute(f"""--sql
                 SELECT DISTINCT charlson.hadm_id

@@ -10,16 +10,17 @@ which is the first step that requires vectors.
 """
 
 import polars as pl
+from duckdb import DuckDBPyConnection
 from lancedb import connect
 
-from experiments.mimic.configs import (
-    EmbedCfg,
+from experiments.mimic.embeddings.schemas_embeddings import EmbedCfg
+from experiments.mimic.global_configs import (
+    MimicPaths,
+    duckdb_con,
     global_cfg,
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.utils.constants import MimicPaths
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
 from .embed_utils import build_hadm_to_icd
@@ -33,13 +34,14 @@ from .run_embed_whole_corpus import (
 embed_cfg = EmbedCfg.load()
 
 
-def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
+def run_selective_embed(
+    duckdb_con: DuckDBPyConnection = duckdb_con, cfg: EmbedCfg | None = None
+) -> None:
     global embed_cfg
     if cfg is not None:
         embed_cfg = cfg
 
-    duckdb_con = connect_mimic_duckdb()
-    lance_con = connect(MimicPaths.vector_db)
+    lance_con = connect(MimicPaths.vector_db_dir)
     table_name = global_cfg.chunks_vec_table
     table = open_vec_table(lance_con, table_name)
 
@@ -108,7 +110,7 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
                 table,
             )
             print(
-                f'Done. Added {n_chunks:,} vectors to {MimicPaths.vector_db}/{table_name} for model {model}'
+                f'Done. Added {n_chunks:,} vectors to {MimicPaths.vector_db_dir}/{table_name} for model {model}'
             )
         finally:
             embedder.release()
@@ -116,4 +118,4 @@ def run_selective_embed(cfg: EmbedCfg | None = None) -> None:
 
 if __name__ == '__main__':
     setup_logging()
-    run_selective_embed(cfg=EmbedCfg.load())
+    run_selective_embed()

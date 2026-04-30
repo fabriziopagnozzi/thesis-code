@@ -51,6 +51,52 @@ class MimicDefaultPrompts:
 		Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
 	""")
 
+    fact_extract_system = inspect.cleandoc("""
+		You are a clinical data extractor. Given discharge note excerpts and a clinical question,
+		extract specific, concrete facts that directly help answer the question. Facts must be
+		grounded in what is explicitly documented: name specific drugs, doses, procedures, lab values,
+		timelines, or clinical decisions — not vague summaries. A fact is relevant only if it directly
+		addresses an aspect of the question for the given patient subgroup.
+    """)
+
+    fact_extract_template = inspect.cleandoc("""
+		QUESTION: {query_text}
+		PATIENT SUBGROUP: {facet_description}
+
+		Below are discharge note excerpts from {condition_name} patients with {facet_description}:
+
+		<CHUNKS>
+		{chunks_block}
+		</CHUNKS>
+
+		Extract the key clinical facts from these excerpts that directly help answer the question
+		for this patient subgroup. For each fact, cite the chunk_id it came from.
+
+		Return JSON:
+		[{{"chunk_id": "<id>", "fact": "<one sentence>"}}, ...]
+		If no relevant facts, return [].
+		Return ONLY the JSON array, nothing else.
+    """)
+
+    answer_gen_system = inspect.cleandoc("""
+		You are a clinical data analyst. Your job is to summarize documented clinical facts —
+		report only what is explicitly stated in the provided facts. Do not infer, extrapolate,
+		or add clinical reasoning beyond what the facts say.
+	""")
+
+    answer_gen_template = inspect.cleandoc("""
+		QUESTION: {query_text}
+
+		The following facts were extracted verbatim from discharge notes of {condition_name} patients.
+
+		{subgroups_block}
+
+		Based ONLY on the facts listed above, write a concise comparative summary (3-6 sentences)
+		that directly addresses the question. Describe what is documented for each subgroup.
+		Do not infer causes, make clinical judgements, or add information not present in the facts.
+		Do not use markdown formatting. Return ONLY the summary text.
+	""")
+
     query_gen_template_alternative = inspect.cleandoc("""
 		Below are excerpts from real discharge summaries of patients admitted for {condition}.
 		<START DISCHARGE SUMMARIES EXAMPLES>
@@ -88,32 +134,4 @@ class MimicDefaultPrompts:
 		- "Among pneumonia patients, what IV-to-oral antibiotic switch criteria and step-down timelines differ between those with COPD exacerbation and elderly patients (>75) in whom aspiration precautions and swallowing evaluations feature prominently?"
 
 		Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
-    """)
-
-    gold_tags_system = inspect.cleandoc("""
-		You are a clinical information analyst. You will be given a clinical
-		question, a patient subgroup modifier (a comorbidity or demographic
-		trait on top of the primary diagnosis), and discharge note excerpts
-		from patients who have that modifier. Decide whether each chunk
-		contains substantive evidence of how that modifier affects the
-		clinical picture described in the question.
-    """)
-
-    gold_tags_template = inspect.cleandoc("""
-		QUESTION: {query_text}
-		PATIENT SUBGROUP MODIFIER: {facet_description}
-
-		For each chunk below, decide whether it contains SUBSTANTIVE evidence of how
-		this subgroup modifier affects the clinical management or outcomes described in the question.
-		Mere mentions of the condition or drug without context are NOT substantive.
-		They must directly provide useful information to answer the given QUESTION.
-
-		<CHUNKS>
-		{chunks_block}
-		</CHUNKS>
-
-		Return a JSON array of relevant chunks only:
-		[{"chunk_id": "<id>", "reason": "<up to 15 words>"}, ...]
-		If none relevant: [].
-		Return ONLY the JSON array, nothing else.
-    """)
+	""")

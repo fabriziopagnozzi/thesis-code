@@ -4,10 +4,10 @@ import argparse
 
 import lancedb
 
-from experiments.mimic.configs import (
+from experiments.mimic.global_configs import (
+    MimicPaths,
     setup_logging,
 )
-from experiments.mimic.utils.constants import MimicPaths
 
 
 def build_indexes(
@@ -15,7 +15,9 @@ def build_indexes(
     metric: str = 'cosine',
     db_dir_override: str | None = None,
 ) -> None:
-    dir = MimicPaths.vector_db / db_dir_override if db_dir_override else MimicPaths.vector_db
+    dir = (
+        MimicPaths.vector_db_dir / db_dir_override if db_dir_override else MimicPaths.vector_db_dir
+    )
     db = lancedb.connect(dir)
     table = db.open_table(table_name)
 

@@ -6,22 +6,19 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import (
+from experiments.mimic.evaluation.plots import store_eval_figures
+from experiments.mimic.evaluation.schemas_evaluation import (
     EvaluateCfg,
+    EvaluationMetrics,
+)
+from experiments.mimic.global_configs import (
+    duckdb_con,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.evaluation.plots import store_eval_figures
-from experiments.mimic.utils.duck_db_init import (
-    connect_mimic_duckdb,
-)
-from experiments.mimic.utils.schemas import (
-    EvaluationMetrics,
-    GoldAnnotationRow,
-    QueryRowPostFiltering,
-)
+from experiments.mimic.queries.schemas_queries import GoldAnnotationRow, QueryRowPostFiltering
 from experiments.mimic.utils.utils import get_vec_col_name, modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
@@ -43,16 +40,14 @@ evaluate_cfg = EvaluateCfg.load()
 
 
 def run_evaluate(
-    con: duckdb.DuckDBPyConnection | None = None,
+    con: duckdb.DuckDBPyConnection = duckdb_con,
     cfg: EvaluateCfg | None = None,
 ) -> pl.DataFrame:
     global evaluate_cfg
     if cfg is not None:
         evaluate_cfg = cfg
-    if con is None:
-        con = connect_mimic_duckdb()
 
-    builder = CandidatePoolBuilder(con, cfg=evaluate_cfg)
+    builder = CandidatePoolBuilder(con, embedding_model=global_cfg.embedding_model)
 
     if evaluate_cfg.gold_mode == 'structural':
         results = evaluate_structural(builder)
@@ -68,7 +63,7 @@ def run_evaluate(
 
     store_eval_stats(results)
     store_best_per_metric(results)
-    store_eval_figures()
+    store_eval_figures(evaluate_cfg)
     return results
 
 
@@ -119,18 +114,18 @@ def evaluate_llm(
 
 
 def load_filtered_queries(embedding_model: str) -> pl.DataFrame:
-    col = f'filter_{get_vec_col_name(embedding_model)}'
+    bool_filter_for_model = f'filter_{get_vec_col_name(embedding_model)}'
     queries_df = read_parquet('queries')
-    if col not in queries_df.columns:
+    if bool_filter_for_model not in queries_df.columns:
         raise RuntimeError(
-            f'You need to run the query filtering step before (expected column: {col!r}).'
+            f'You need to run the query filtering step before (expected column: {bool_filter_for_model!r}).'
         )
 
-    return queries_df.filter(pl.col(col))
+    return queries_df.filter(pl.col(bool_filter_for_model))
 
 
 def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
-    queries_df = load_filtered_queries(evaluate_cfg.embedding_model)
+    queries_df = load_filtered_queries(global_cfg.embedding_model)
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
     all_rows = []

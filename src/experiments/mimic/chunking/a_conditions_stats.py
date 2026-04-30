@@ -4,13 +4,13 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import (
-    ConditionsStatsCfg,
+from experiments.mimic.chunking.schemas_chunking import ConditionsStatsCfg
+from experiments.mimic.global_configs import (
+    duckdb_con,
     get_table_path,
     setup_logging,
 )
 from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR, ICD3_TO_CHARLSON_COLS
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
 from helpers.ollama_client import generate_json
 
@@ -18,13 +18,11 @@ conditions_stats_cfg = ConditionsStatsCfg.load()
 
 
 def run_conditions_stats(
-    con: duckdb.DuckDBPyConnection | None = None, cfg: ConditionsStatsCfg | None = None
+    con: duckdb.DuckDBPyConnection = duckdb_con, cfg: ConditionsStatsCfg | None = None
 ) -> pl.DataFrame:
     global conditions_stats_cfg
     if cfg is not None:
         conditions_stats_cfg = cfg
-    if con is None:
-        con = connect_mimic_duckdb()
 
     df = select_conditions(con=con, min_admissions=conditions_stats_cfg.min_admissions)
     out_path = get_table_path('conditions_stats')
@@ -185,7 +183,7 @@ def coalesce_condition_names_mock(
 
 if __name__ == '__main__':
     setup_logging()
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.global_configs import load_config_from_main
 
     raw = load_config_from_main(key='chunking')
     run_conditions_stats(cfg=ConditionsStatsCfg(**raw['conditions_stats']))

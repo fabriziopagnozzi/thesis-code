@@ -2,8 +2,8 @@ from pathlib import Path
 
 import polars as pl
 
-from experiments.mimic.configs import get_table_path
-from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.evaluation.schemas_evaluation import EvaluateCfg
+from experiments.mimic.global_configs import MimicPaths, get_table_path, setup_logging
 
 STRATEGY_STYLE: dict[str, dict] = {
     'top_k': {'color': '#333333', 'ls': '--', 'label': 'top-k'},
@@ -25,7 +25,7 @@ def get_style(strategy: str) -> dict:
     return STRATEGY_STYLE.get(strategy, {'color': '#aaaaaa', 'ls': '-', 'label': strategy})
 
 
-def store_eval_figures() -> None:
+def store_eval_figures(cfg: EvaluateCfg) -> None:
     from .plots import (
         plot_gain_over_topk,
         plot_lambda_sensitivity,
@@ -34,7 +34,11 @@ def store_eval_figures() -> None:
         plot_stratum_breakdown,
     )
 
-    out_dir = MimicPaths.experiment / 'figures' / 'eval'
+    out_dir = (
+        MimicPaths.experiment_dir
+        / 'figures'
+        / ('eval_structural' if cfg.gold_mode == 'structural' else 'eval_gold_annotations')
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
 
     stats_path = get_table_path('evaluation_stats')
@@ -438,4 +442,8 @@ def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -
 
 
 if __name__ == '__main__':
-    store_eval_figures()
+    setup_logging()
+    from experiments.mimic.global_configs import load_config_from_main
+
+    raw = load_config_from_main(key='queries')
+    store_eval_figures(cfg=EvaluateCfg(**raw['evaluate']))

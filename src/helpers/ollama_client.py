@@ -94,7 +94,7 @@ def generate_json(
                 extra_messages.append(
                     {
                         'role': 'user',
-                        'content': 'You must respond with only valid JSON. No prose, no explanation. Output the JSON array now.',
+                        'content': 'You must respond with only valid JSON. No prose, no explanation. Output the JSON now.',
                     }
                 )
                 continue

@@ -12,7 +12,10 @@ global:
 
     n_conditions: 350 # number of conditions to sample from conditions_stats
     chunks_vec_table: chunks_512 # relative to src/experiments/mimic/_results/_vector_db
+
     prefilter_n: 2_000 # pre-retrieval cosine pool. Shared between query filtering and evaluation
+
+    embedding_model: Qwen/Qwen3-Embedding-0.6B # shared by "chunking" (for tokenizer), "pool_analysis", "queries" and "evaluation"
 # ----------------------------------------------------------------------------
 embeddings:
     models:
@@ -26,7 +29,6 @@ embeddings:
     commit_every: 16384
 # ----------------------------------------------------------------------------
 pool_analysis:
-    embedding_model: Qwen/Qwen3-Embedding-0.6B
     pool_n: 2000
 
     umap_n_neighbors: 30
@@ -50,7 +52,6 @@ pool_analysis:
     output_subdir: pool_analysis
 # ----------------------------------------------------------------------------
 evaluation:
-    embedding_model: Qwen/Qwen3-Embedding-4B
     strategies:
         - top_k
         - mmr
@@ -178,29 +179,5 @@ queries:
         wide_pool_n: 5_000
         final_pool_n: 1_000
         min_per_modifier: 50 # minimum number of chunks to be shown to the LLM for each modifier
-        tagging_system_prompt: >-
-            You are a clinical information analyst. You will be given a clinical
-            question, a patient subgroup modifier (a comorbidity or demographic
-            trait on top of the primary diagnosis), and discharge note excerpts
-            from patients who have that modifier. Decide whether each chunk
-            contains substantive evidence of how that modifier affects the
-            clinical picture described in the question.
-        tagging_user_template: |
-            QUESTION: {query_text}
-            PATIENT SUBGROUP MODIFIER: {facet_description}
-
-            For each chunk below, decide whether it contains SUBSTANTIVE evidence of how
-            this subgroup modifier affects the clinical management or outcomes described in the question.
-            Mere mentions of the condition or drug without context are NOT substantive.
-            They must directly provide useful information to answer the given QUESTION.
-
-            <CHUNKS>
-            {chunks_block}
-            </CHUNKS>
-
-            Return a JSON array of relevant chunks only:
-              [{{"chunk_id": "<id>", "reason": "<up to 15 words>"}}, ...]
-            If none relevant: [].
-            Return ONLY the JSON array, nothing else.
 
 # ----------------------------------------------------------------------------

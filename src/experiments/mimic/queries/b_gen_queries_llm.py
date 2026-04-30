@@ -13,8 +13,8 @@ from typing import cast
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.configs import GenQueriesCfg, get_table_path, read_parquet, setup_logging
-from experiments.mimic.utils.schemas import QueryPromptRow, QueryRow
+from experiments.mimic.global_configs import get_table_path, read_parquet, setup_logging
+from experiments.mimic.queries.schemas_queries import GenQueriesCfg, QueryPromptRow, QueryRow
 from helpers.ollama_client import generate
 
 gen_queries_cfg = GenQueriesCfg.load()
@@ -100,7 +100,7 @@ def query_generator(
 
 if __name__ == '__main__':
     setup_logging()
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.global_configs import load_config_from_main
 
     raw = load_config_from_main(key='queries')
     run_gen_queries_llm(cfg=GenQueriesCfg(**raw['gen_queries_llm']))

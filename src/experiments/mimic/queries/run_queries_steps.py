@@ -2,37 +2,29 @@ import argparse
 
 import duckdb
 
-from experiments.mimic.configs import (
+from experiments.mimic.global_configs import MimicPaths, duckdb_con, setup_logging
+from experiments.mimic.queries.schemas_queries import (
     BuildQueryPromptsCfg,
     FilterQueriesCfg,
     GenQueriesCfg,
-    GoldAnnotationCfg,
-    setup_logging,
 )
-from experiments.mimic.utils.constants import MimicPaths
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
-from .a_build_query_prompts import run_build_query_prompts
+from .a_build_prompts import run_build_query_prompts
 from .b_gen_queries_llm import run_gen_queries_llm
 from .c_filter_queries import run_filter_queries
-from .d_gold_annotation import run_gold_annotation
 
-STEPS = (1, 2, 3, 4)
+STEPS = (1, 2, 3)
 
 
 def run_queries_subpipeline(
-    con: duckdb.DuckDBPyConnection | None = None,
+    con: duckdb.DuckDBPyConnection = duckdb_con,
     build_query_prompts_cfg: BuildQueryPromptsCfg | None = None,
     gen_queries_cfg: GenQueriesCfg | None = None,
     filter_queries_cfg: FilterQueriesCfg | None = None,
-    gold_annotation_cfg: GoldAnnotationCfg | None = None,
     steps: list[int] | None = None,
 ):
     if steps is None:
         steps = list(STEPS)
-
-    if con is None:
-        con = connect_mimic_duckdb()
 
     if 1 in steps:
         print('\n> Step 3.1: Building grounded query prompts')
@@ -46,11 +38,7 @@ def run_queries_subpipeline(
         print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
         run_filter_queries(con, cfg=filter_queries_cfg)
 
-    if 4 in steps:
-        print('\n> Step 3.4: Gold facet annotation (map-reduce LLM)')
-        run_gold_annotation(con, cfg=gold_annotation_cfg)
-
-    print(f'\n\nPhase 3 complete. Outputs in {MimicPaths.experiment}:\n')
+    print(f'\n\nPhase 3 complete. Outputs in {MimicPaths.experiment_dir}:\n')
 
 
 if __name__ == '__main__':

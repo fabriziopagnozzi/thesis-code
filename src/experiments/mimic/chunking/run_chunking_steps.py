@@ -1,43 +1,33 @@
 import argparse
 
-import duckdb
+from duckdb import DuckDBPyConnection
 
-from experiments.mimic.configs import (
+from experiments.mimic.chunking.schemas_chunking import (
     ConditionsStatsCfg,
     DedupCfg,
     NoteChunkingCfg,
-    setup_logging,
 )
-from experiments.mimic.utils.constants import MimicPaths
+from experiments.mimic.global_configs import MimicPaths, duckdb_con, setup_logging
 from experiments.mimic.utils.duck_db_init import (
-    connect_mimic_duckdb,
-    generate_init_sql,
     register_result_view,
 )
 
 from .a_conditions_stats import run_conditions_stats
 from .b_note_chunking import run_note_chunking
-from .c_dedup import run_dedup
+from .c_dedup_chunks import run_dedup
 
 STEPS = (1, 2, 3)
 
 
 def run_chunking_subpipeline(
-    con: duckdb.DuckDBPyConnection | None = None,
+    con: DuckDBPyConnection = duckdb_con,
     conditions_cfg: ConditionsStatsCfg | None = None,
     note_chunking_cfg: NoteChunkingCfg | None = None,
     dedup_cfg: DedupCfg | None = None,
     steps: list[int] | None = None,
-    *,
-    init_sql: bool,
 ):
     if steps is None:
         steps = list(STEPS)
-
-    if con is None:
-        if 1 in steps or init_sql:
-            generate_init_sql(force=True)
-        con = connect_mimic_duckdb()
 
     if 1 in steps:
         print('\n> Step 1.1: Condition selection')
@@ -54,19 +44,12 @@ def run_chunking_subpipeline(
         chunks = run_dedup(cfg=dedup_cfg)
         register_result_view(con, 'chunks', chunks)
 
-    print(f'\n\nPhase 1 complete. Outputs in {MimicPaths.experiment}:\n')
+    print(f'\n\nPhase 1 complete. Outputs in {MimicPaths.experiment_dir}:\n')
 
 
 if __name__ == '__main__':
     setup_logging()
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--init-sql',
-        dest='init_sql',
-        type=bool,
-        default=True,
-        help='Whether to init the _mimic_init.sql file',
-    )
     parser.add_argument(
         '--steps',
         type=int,
@@ -77,4 +60,4 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
 
-    run_chunking_subpipeline(steps=sorted(args.steps), init_sql=args.init_sql)
+    run_chunking_subpipeline(steps=sorted(args.steps))

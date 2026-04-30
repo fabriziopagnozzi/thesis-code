@@ -1,24 +1,8 @@
 import re
 
-from pydantic import BaseModel, field_validator
-
+from experiments.mimic.embeddings.schemas_embeddings import EmbedJoinedRow
+from experiments.mimic.queries.schemas_queries import QueryAspect
 from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
-from experiments.mimic.utils.schemas import EmbedJoinedRow
-
-
-class QueryAspect(BaseModel):
-    facet_label: str
-    description: str
-
-    @field_validator('facet_label')
-    @classmethod
-    def normalize_label(cls, v: str) -> str:
-        return v.strip().lower().replace(' ', '_')
-
-
-class TagDecision(BaseModel):
-    chunk_id: str
-    reason: str = ''
 
 
 def modifier_to_snake_label(text: str) -> str:

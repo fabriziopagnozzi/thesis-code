@@ -8,7 +8,8 @@ import hashlib
 
 import polars as pl
 
-from experiments.mimic.configs import DedupCfg, get_table_path, read_parquet, setup_logging
+from experiments.mimic.chunking.schemas_chunking import DedupCfg
+from experiments.mimic.global_configs import get_table_path, read_parquet, setup_logging
 
 dedup_cfg = DedupCfg.load()
 
@@ -56,7 +57,7 @@ def _content_hash(text: str) -> str:
 
 if __name__ == '__main__':
     setup_logging()
-    from experiments.mimic.configs import load_config_from_main
+    from experiments.mimic.global_configs import load_config_from_main
 
     raw = load_config_from_main(key='chunking')
     run_dedup(cfg=DedupCfg(**raw['dedup']))

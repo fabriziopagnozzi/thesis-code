@@ -1,14 +1,15 @@
 import polars as pl
+from duckdb import DuckDBPyConnection
 from lancedb import connect
 
-from experiments.mimic.configs import (
-    EmbedCfg,
+from experiments.mimic.embeddings.schemas_embeddings import EmbedCfg
+from experiments.mimic.global_configs import (
+    MimicPaths,
+    duckdb_con,
     global_cfg,
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.utils.constants import MimicPaths
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 from helpers.embedder import Embedder
 
 from .contextual_prefix import enrich_note_excerpts
@@ -17,13 +18,12 @@ from .embed_utils import build_hadm_to_icd, embed_and_commit, get_embedded_chunk
 embed_cfg = EmbedCfg.load()
 
 
-def run_embed(cfg: EmbedCfg | None = None) -> None:
+def run_embed(duckdb_con: DuckDBPyConnection = duckdb_con, cfg: EmbedCfg | None = None) -> None:
     global embed_cfg
     if cfg is not None:
         embed_cfg = cfg
 
-    duckdb_con = connect_mimic_duckdb()
-    lance_con = connect(MimicPaths.vector_db)
+    lance_con = connect(MimicPaths.vector_db_dir)
     table_name = global_cfg.chunks_vec_table
     table = open_vec_table(lance_con, table_name)
 
@@ -77,7 +77,7 @@ def run_embed(cfg: EmbedCfg | None = None) -> None:
                 table,
             )
             print(
-                f'Saved {n_chunks:,} rows to {MimicPaths.vector_db}/{table_name} for model {model}'
+                f'Saved {n_chunks:,} rows to {MimicPaths.vector_db_dir}/{table_name} for model {model}'
             )
         finally:
             embedder.release()

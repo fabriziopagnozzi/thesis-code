@@ -1,7 +1,7 @@
 import polars as pl
 
+from experiments.mimic.embeddings.schemas_embeddings import EmbedJoinedRow
 from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
-from experiments.mimic.utils.schemas import EmbedJoinedRow
 from experiments.mimic.utils.utils import get_age_group, get_charlson_conditions
 
 
@@ -23,7 +23,8 @@ def enrich_note_excerpts(
     meta_subset = metadata.select(meta_cols).unique(subset=['hadm_id'])
 
     joined = (
-        chunks.join(meta_subset, on='hadm_id', how='left')
+        chunks
+        .join(meta_subset, on='hadm_id', how='left')
         .with_columns(
             full_text=pl.struct(pl.all()).map_elements(build_full_text, return_dtype=pl.Utf8)
         )

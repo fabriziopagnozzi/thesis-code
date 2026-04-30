@@ -8,18 +8,16 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
-from experiments.mimic.configs import (
-    EvaluateCfg,
-    NoteChunkingCfg,
+from experiments.mimic.chunking.schemas_chunking import NoteChunkingCfg
+from experiments.mimic.global_configs import (
+    duckdb_con,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb
 
 chunking_cfg = NoteChunkingCfg.load()
-evaluate_cfg = EvaluateCfg.load()
 
 
 @dataclass
@@ -37,17 +35,15 @@ class MimicIVNoteChunk:
 
 
 def run_note_chunking(
-    con: duckdb.DuckDBPyConnection | None = None,
+    con: duckdb.DuckDBPyConnection = duckdb_con,
     cfg: NoteChunkingCfg | None = None,
 ) -> pl.DataFrame:
     global chunking_cfg, tokenizer
     if cfg is not None:
         chunking_cfg = cfg
 
-    tokenizer = _load_tokenizer(evaluate_cfg.embedding_model)
+    tokenizer = _load_tokenizer(global_cfg.embedding_model)
 
-    if con is None:
-        con = connect_mimic_duckdb()
     out_path = get_table_path('chunks')
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -90,7 +86,7 @@ def parse_all_notes(con: duckdb.DuckDBPyConnection) -> pl.DataFrame:
     with Pool(
         processes=min(os.cpu_count() or 1, len(notes_rows)),
         initializer=_worker_init,
-        initargs=(evaluate_cfg.embedding_model, chunking_cfg),
+        initargs=(global_cfg.embedding_model, chunking_cfg),
     ) as pool:
         per_note = list(
             tqdm(
