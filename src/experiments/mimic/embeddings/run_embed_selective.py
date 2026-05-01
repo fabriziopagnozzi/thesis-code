@@ -23,10 +23,9 @@ from experiments.mimic.global_configs import (
 )
 from helpers.embedder import Embedder
 
-from .embed_utils import build_hadm_to_icd
+from .embed_utils import build_chunk_texts, build_hadm_to_icd
 from .run_embed_whole_corpus import (
     embed_and_commit,
-    enrich_note_excerpts,
     get_embedded_chunk_ids,
     open_vec_table,
 )
@@ -46,7 +45,6 @@ def run_selective_embed(
     table = open_vec_table(lance_con, table_name)
 
     all_chunks = read_parquet('chunks')
-    admissions_metadata = read_parquet('admissions_metadata')
     queries_icd_prefixes = read_parquet('queries')['icd10_3char'].unique()
     queries_hadm_ids = (
         read_parquet('unified_diagnoses')
@@ -66,31 +64,26 @@ def run_selective_embed(
     del all_chunks
 
     for model, batch_size in zip(embed_cfg.models, embed_cfg.batch_sizes, strict=True):
-        filtered_chunks_for_model: pl.DataFrame = pl.DataFrame()
+        model_chunks = chunks_for_queries
 
         if table is not None:
             done_ids = get_embedded_chunk_ids(table, model)
             n_done = len(done_ids)
             # Filter the temporary dataframe, NOT relevant_chunks
-            filtered_chunks_for_model = chunks_for_queries.filter(
-                ~pl.col('chunk_id').is_in(done_ids)
-            )
+            model_chunks = chunks_for_queries.filter(~pl.col('chunk_id').is_in(done_ids))
             print(
                 f'{n_done:,} already in LanceDB with model '
-                f'{model}, {len(filtered_chunks_for_model):,} remaining to embed'
+                f'{model}, {len(model_chunks):,} remaining to embed'
             )
         # end if table is not None
 
-        if filtered_chunks_for_model.is_empty():
+        if model_chunks.is_empty():
             print('All relevant chunks already embedded. Nothing to do.')
             continue
 
         hadm_to_icd = build_hadm_to_icd(duckdb_con)
-
-        metadata_joined, chunk_texts = enrich_note_excerpts(
-            filtered_chunks_for_model, admissions_metadata
-        )
-        n_chunks = len(metadata_joined)
+        model_chunks, chunk_texts = build_chunk_texts(model_chunks)
+        n_chunks = len(model_chunks)
         print(f'Embedding {n_chunks:,} chunks with model: {model}')
 
         embedder = Embedder(
@@ -100,7 +93,7 @@ def run_selective_embed(
         )
         try:
             table = embed_and_commit(
-                metadata_joined,
+                model_chunks,
                 chunk_texts,
                 hadm_to_icd,
                 embedder,
@@ -118,4 +111,7 @@ def run_selective_embed(
 
 if __name__ == '__main__':
     setup_logging()
-    run_selective_embed()
+    from experiments.mimic.global_configs import load_config_from_main
+
+    raw = load_config_from_main(key='embeddings')
+    run_selective_embed(cfg=EmbedCfg.load(**raw))

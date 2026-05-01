@@ -87,13 +87,16 @@ class MimicDefaultPrompts:
     answer_gen_template = inspect.cleandoc("""
 		QUESTION: {query_text}
 
-		The following facts were extracted verbatim from discharge notes of {condition_name} patients.
+		The following facts were extracted from discharge notes of {condition_name} patients.
 
 		{subgroups_block}
 
-		Based ONLY on the facts listed above, write a concise comparative summary (3-6 sentences)
-		that directly addresses the question. Describe what is documented for each subgroup.
-		Do not infer causes, make clinical judgements, or add information not present in the facts.
+		Write a concise comparative summary (3-6 sentences) that directly answers the question.
+		State clinical patterns as facts: what treatments were used, what outcomes occurred, how the two subgroups differ.
+		Do NOT reference the source notes, the facts above, or the evidence — write as if summarizing observed clinical patterns in a patient cohort.
+		Never use phrases like "the provided facts", "the documented cases", "no facts were provided", or "the discharge notes".
+		If a subgroup had no relevant cases, write "No cases were identified for [subgroup]." and move on.
+		Do not infer causes or add clinical reasoning not present in the facts above.
 		Do not use markdown formatting. Return ONLY the summary text.
 	""")
 

@@ -39,10 +39,6 @@ pool_analysis:
 
     hdbscan_min_cluster_size: 30
 
-    kmeans_k_min: 2
-    kmeans_k_max: 12
-    kmeans_random_state: 42
-
     lof_n_neighbors: 20
     lof_contamination: auto
 
@@ -58,6 +54,20 @@ evaluation:
         - fac_loc
     k_values: [ 5, 10, 20, 30 ]
     lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+
+    gold_annotation:
+        model: gemma4-31b-text
+        temperature: 0.40
+        top_p: 0.95
+        top_k: 64
+        think: false
+        stream: false
+        num_ctx: 16_000
+        num_predict: -1
+        batch_size: 30
+        # resume_batch_size: 30  # set to OLD batch_size when resuming with a changed batch_size
+        annotation_pool_n: 1_000
+
 # ----------------------------------------------------------------------------
 chunking:
     conditions_stats:
@@ -68,10 +78,10 @@ chunking:
         min_tokens: 15
         stride_tokens: 128
         keep_sections:
-            - HISTORY OF PRESENT ILLNESS
             - DISCHARGE MEDICATIONS
             - DISCHARGE DIAGNOSIS
         skip_sections:
+            - HISTORY OF PRESENT ILLNESS
             - PERTINENT RESULTS
             - SEX
             - SERVICE
@@ -164,20 +174,5 @@ queries:
         k_values: [ 5, 10, 20, 30, 100, 500 ]
         lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
         jaccard_threshold: 0.90
-
-    gold_annotation:
-        model: gemma4-31b-text
-        temperature: 0.40
-        top_p: 0.95
-        top_k: 64
-        think: false
-        stream: false
-        num_ctx: 16_000 # LLM context window
-        num_predict: -1 # -1 == no limits to prediction tokens
-        batch_size: 30 # 30 chunks included in one call
-        # resume_batch_size: 30  # set to OLD batch_size when resuming with a changed batch_size
-        wide_pool_n: 5_000
-        final_pool_n: 1_000
-        min_per_modifier: 50 # minimum number of chunks to be shown to the LLM for each modifier
 
 # ----------------------------------------------------------------------------

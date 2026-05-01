@@ -1,5 +1,4 @@
 import shutil
-import time
 from pathlib import Path
 from typing import cast
 
@@ -85,7 +84,6 @@ def embed_and_commit(
 
         pq.write_table(batch_pa, batch_file)
         print(f'  Staged {end:,}/{n:,} to temp disk')
-        time.sleep(120)
 
     # ---------------------------------------------------------
     # LANCE DB COMMIT (One time mutation)
@@ -156,6 +154,29 @@ def build_hadm_to_icd(con) -> dict[int, list[str]]:
         GROUP BY hadm_id
     """).fetchall()
     return {int(hadm_id): list_icd3_groups for (hadm_id, list_icd3_groups) in rows}
+
+
+def build_chunk_texts(chunks: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
+    """Build embed texts from contextual_prefix already stored in the chunks DataFrame.
+
+    Returns (sorted_chunks_df, texts) sorted ascending by text length for efficient batching.
+    """
+    enriched = (
+        chunks
+        .with_columns(
+            full_text=(
+                pl.col('contextual_prefix').fill_null('')
+                + pl.lit('\nExcerpt from the ')
+                + pl.col('section_name')
+                + pl.lit(' section of a discharge summary.\n')
+                + pl.col('text')
+            )
+        )
+        .with_columns(text_len=pl.col('full_text').str.len_chars())
+        .sort('text_len', descending=False)
+    )
+    texts = enriched['full_text'].to_list()
+    return enriched.drop(['full_text', 'text_len']), texts
 
 
 def _resume_previous_run(

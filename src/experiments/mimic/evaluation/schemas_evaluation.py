@@ -12,9 +12,7 @@ class GoldAnnotationCfg(BaseModel):
 
     batch_size: int
     resume_batch_size: int | None = None
-    wide_pool_n: int = 10000
-    final_pool_n: int = 3000
-    min_per_modifier: int = 50
+    annotation_pool_n: int = 3000
     num_ctx: int | None = None
     num_predict: int | None = None
     model: str | None = None
@@ -32,10 +30,12 @@ class GoldAnnotationCfg(BaseModel):
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:
-        return cls(**load_default_config(key='queries')['gold_annotation'])
+        return cls(**load_default_config(key='evaluation')['gold_annotation'])
 
 
 class EvaluateCfg(BaseModel):
+    model_config = {'extra': 'ignore'}
+
     strategies: list[ScoringFunction]
     k_values: list[int]
     lam_values: list[float]

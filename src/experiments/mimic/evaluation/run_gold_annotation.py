@@ -19,14 +19,10 @@ import json
 from pathlib import Path
 from typing import cast
 
-import numpy as np
 import polars as pl
 from duckdb import DuckDBPyConnection
 
 from experiments.mimic.chunking.schemas_chunking import AdmissionMetadataRow
-from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
-from experiments.mimic.evaluation.run_evaluate import load_filtered_queries
-from experiments.mimic.evaluation.schemas_evaluation import GoldAnnotationCfg
 from experiments.mimic.global_configs import (
     duckdb_con,
     get_result_dir,
@@ -35,12 +31,17 @@ from experiments.mimic.global_configs import (
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.queries.schemas_queries import QueryAspect, QueryRow
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
-from experiments.mimic.utils.utils import (
+from experiments.mimic.queries.schemas_queries import (
+    QueryAspect,
+    QueryRow,
     aspects_from_modifiers,
 )
+from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.utils import load_filtered_queries
 from helpers.ollama_client import generate, generate_json
+
+from .candidate_pool import CandidatePool, CandidatePoolBuilder
+from .schemas_evaluation import GoldAnnotationCfg
 
 gold_annotation_cfg = GoldAnnotationCfg.load()
 
@@ -89,11 +90,13 @@ def annotate(
     """
     prompt_dump_dir = get_result_dir('gold_annotations') / '_prompt_dump'
     prompt_dump_dir.mkdir(parents=True, exist_ok=True)
-
-    jsonl_path = get_table_path('gold_annotations', ext='jsonl')
-    old_bs = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
-    prior_decisions = _load_prior_decisions(jsonl_path, old_bs)
     answers_jsonl_path = get_result_dir('gold_annotations') / 'gold_answers.jsonl'
+    jsonl_path = get_table_path('gold_annotations', ext='jsonl')
+
+    prior_decisions = _load_prior_decisions(
+        jsonl_path,
+        old_batch_size=gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size,
+    )
     prior_answers = _load_prior_answers(answers_jsonl_path)
 
     total = len(queries_df)
@@ -116,29 +119,24 @@ def annotate(
             print('  [WARN] no modifiers_json for this query, skipping')
             continue
         aspects = aspects_from_modifiers(modifiers_json)
-        print(f'  [aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
+        print(f'\t[aspects] {len(aspects)}: {[a.facet_label for a in aspects]}')
 
-        condition_hadm_ids = builder.icd3_hadm_ids(row['icd10_3char'])
-        aspect_hadm_sets: dict[str, set[int]] = {}
+        aspect_to_hadm_ids: dict[str, set[int]] = {}
         for aspect, modifier in zip(aspects, modifiers_json, strict=True):
-            aspect_hadm_sets[aspect.facet_label] = (
-                builder.modifier_hadm_ids(modifier['text']) & condition_hadm_ids
+            aspect_to_hadm_ids[aspect.facet_label] = builder.filter_by_condition_modifier(
+                row['icd10_3char'], modifier['text'], modifier['type']
             )
 
-        work_pool = _build_stratified_pool(
-            builder, row['query_text'], aspect_hadm_sets, row['icd10_3char']
-        )
-
         facets, answer_text = annotate_query(
+            pool=_build_gold_candidate_pool(builder, row['query_text'], aspect_to_hadm_ids),
+            query_idx=i,
             query_text=row['query_text'],
             condition_name=condition_name,
-            aspects=aspects,
-            aspect_hadm_sets=aspect_hadm_sets,
-            pool=work_pool,
             batch_size=gold_annotation_cfg.batch_size,
+            aspects=aspects,
+            aspect_to_hadm_ids=aspect_to_hadm_ids,
             hadm_id_to_metadata_str=hadm_id_to_metadata_str,
             prompt_dump_dir=prompt_dump_dir,
-            query_idx=i,
             prior_decisions=prior_decisions,
             prior_answers=prior_answers,
         )
@@ -171,44 +169,11 @@ def annotate(
     return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
 
 
-def _build_stratified_pool(
-    builder: CandidatePoolBuilder,
-    query_text: str,
-    aspect_hadm_sets: dict[str, set[int]],
-    icd10_3char: str,
-) -> CandidatePool:
-    """Per-modifier direct fetch + cosine fill, capped at final_pool_n."""
-
-    query_vec = builder.embed_query(query_text)
-    modifier_pools: list[CandidatePool] = []
-
-    for label, hadm_set in aspect_hadm_sets.items():
-        mod_pool = builder.for_hadm_ids_cosine(
-            query_vec, hadm_set, gold_annotation_cfg.min_per_modifier
-        )
-        print(
-            f'  [pool] {label}: direct fetch {mod_pool.n} chunks from {len(hadm_set)} modifier+condition patients'
-        )
-        modifier_pools.append(mod_pool)
-
-    cosine_pool = builder.for_query_cosine_condition(
-        query_vec, icd10_3char, gold_annotation_cfg.wide_pool_n
-    )
-    print(f'  [pool] cosine condition pool: {cosine_pool.n} chunks')
-
-    merged = CandidatePool.merge([*modifier_pools, cosine_pool])
-    if merged.n > gold_annotation_cfg.final_pool_n:
-        merged = merged.slice(np.arange(gold_annotation_cfg.final_pool_n, dtype=np.intp))
-
-    print(f'  [pool] stratified: {merged.n} total')
-    return merged
-
-
 def annotate_query(
     query_text: str,
     condition_name: str,
     aspects: list[QueryAspect],
-    aspect_hadm_sets: dict[str, set[int]],
+    aspect_to_hadm_ids: dict[str, set[int]],
     pool: CandidatePool,
     batch_size: int = 40,
     hadm_id_to_metadata_str: dict[int, str] | None = None,
@@ -240,23 +205,26 @@ def annotate_query(
         )
 
         for aspect in aspects:
-            eligible_hadm_set = aspect_hadm_sets.get(aspect.facet_label, set())
+            eligible_hadm_set = aspect_to_hadm_ids.get(aspect.facet_label, set())
             eligible_mask = [hid in eligible_hadm_set for hid in batch_hadm_ids]
             if not any(eligible_mask):
                 print(
-                    f'    [skip] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: '
+                    f'\t  [skip] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: '
                     f'no chunks from condition && modifier patients in this batch (structural prior)'
                 )
                 continue
 
             if prior_decisions is not None:
                 old_bs = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
-                sub_keys = [(query_idx, s, aspect.facet_label) for s in range(start, end, old_bs)]
+                aligned_start = (start // old_bs) * old_bs
+                sub_keys = [
+                    (query_idx, s, aspect.facet_label) for s in range(aligned_start, end, old_bs)
+                ]
                 if all(k in prior_decisions for k in sub_keys):
                     cached = [d for k in sub_keys for d in prior_decisions[k]]
                     facts_per_facet[aspect.facet_label].extend(cached)
                     print(
-                        f'    [resume] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: {len(cached)} facts (cached)'
+                        f'\t  [resume] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: {len(cached)} facts (cached)'
                     )
                     continue
 
@@ -266,7 +234,7 @@ def annotate_query(
             eligible_sections = [batch_sections[j] for j in eligible_indices]
             eligible_meta = [batch_meta[j] for j in eligible_indices] if batch_meta else None
 
-            facts = extract_facts_batch(
+            facts = map_batch_extract_facts(
                 query_text=query_text,
                 condition_name=condition_name,
                 aspect=aspect,
@@ -306,15 +274,15 @@ def annotate_query(
 
     all_gold = {cid for cids in facets.values() for cid in cids}
     print(
-        f'  map: {len(aspects)} aspects → {len(facets)} non-empty facets, {len(all_gold)} gold chunks'
+        f'\tmap: {len(aspects)} aspects → {len(facets)} non-empty facets, {len(all_gold)} gold chunks'
     )
 
     # REDUCE phase - synthesize unified answer from all extracted facts
     if prior_answers is not None and query_idx in prior_answers:
         answer_text = prior_answers[query_idx]
-        print(f'  [resume] reduce q{query_idx}: answer cached ({len(answer_text)} chars)')
+        print(f'\t[resume] reduce q{query_idx}: answer cached ({len(answer_text)} chars)')
     else:
-        answer_text = synthesize_answer(
+        answer_text = reduce_answer(
             query_text=query_text,
             condition_name=condition_name,
             aspects=aspects,
@@ -335,7 +303,7 @@ def annotate_query(
     return facets, answer_text
 
 
-def extract_facts_batch(
+def map_batch_extract_facts(
     query_text: str,
     condition_name: str,
     aspect: QueryAspect,
@@ -410,13 +378,13 @@ def extract_facts_batch(
         facts.append({'chunk_id': chunk_id, 'fact': str(fact)})
 
     print(
-        f'    [map] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: '
+        f'\t  [map] b{batch_idx + 1}/{n_batches} {aspect.facet_label}: '
         f'{len(facts)} facts, {n_dropped} dropped (~{len(prompt) // 4} tokens)'
     )
     return facts
 
 
-def synthesize_answer(
+def reduce_answer(
     query_text: str,
     condition_name: str,
     aspects: list[QueryAspect],
@@ -439,7 +407,7 @@ def synthesize_answer(
         )
 
     n_facts_total = sum(len(v) for v in facts_per_facet.values())
-    print(f'  [reduce] synthesizing answer from {n_facts_total} extracted facts')
+    print(f'\t[reduce] synthesizing answer from {n_facts_total} extracted facts')
 
     try:
         return generate(
@@ -459,9 +427,27 @@ def synthesize_answer(
         return ''
 
 
+def _build_gold_candidate_pool(
+    builder: CandidatePoolBuilder,
+    query_text: str,
+    aspect_to_hadm_ids: dict[str, set[int]],
+) -> CandidatePool:
+    """Top-N cosine chunks from union of (condition AND any_modifier) patients."""
+    query_vec = builder.embed_query(query_text)
+    union_hadm_ids: set[int] = set().union(*aspect_to_hadm_ids.values())
+    print(
+        f'\t[pool] union of {len(aspect_to_hadm_ids)} modifier sets: {len(union_hadm_ids)} unique patients'
+    )
+    pool = builder.for_hadm_ids_cosine(
+        query_vec, union_hadm_ids, gold_annotation_cfg.annotation_pool_n
+    )
+    print(f'\t[pool] top-{gold_annotation_cfg.annotation_pool_n} cosine: {pool.n} chunks')
+    return pool
+
+
 def _load_prior_decisions(
     jsonl_path: Path,
-    resume_batch_size: int,
+    old_batch_size: int,
 ) -> dict[tuple[int, int, str], list[dict]]:
     """Load cached map entries keyed by (query_idx, chunk_start, facet_label).
 
@@ -476,7 +462,7 @@ def _load_prior_decisions(
             if not line:
                 continue
             entry = json.loads(line)
-            chunk_start = entry['batch_idx'] * resume_batch_size
+            chunk_start = entry['batch_idx'] * old_batch_size
             key = (entry['query_idx'], chunk_start, entry['facet_label'])
             prior[key] = entry.get('decisions', [])
 
@@ -592,5 +578,5 @@ if __name__ == '__main__':
     setup_logging()
     from experiments.mimic.global_configs import load_config_from_main
 
-    raw = load_config_from_main(key='queries')
+    raw = load_config_from_main(key='evaluation')
     run_gold_annotation(cfg=GoldAnnotationCfg(**raw['gold_annotation']))

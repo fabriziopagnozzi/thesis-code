@@ -9,9 +9,9 @@ from duckdb import DuckDBPyConnection
 from tqdm import tqdm
 
 from experiments.mimic.evaluation.candidate_pool import CandidatePoolBuilder
-from experiments.mimic.evaluation.run_evaluate import load_filtered_queries
 from experiments.mimic.global_configs import MimicPaths, duckdb_con, global_cfg, setup_logging
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
+from experiments.mimic.utils.utils import load_filtered_queries
 
 from .aggregate import aggregate_stats
 from .cluster import alignment, cluster_summary, hdbscan_cluster

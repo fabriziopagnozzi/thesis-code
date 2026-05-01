@@ -8,6 +8,7 @@ import polars as pl
 from tokenizers import Tokenizer
 from tqdm import tqdm
 
+from experiments.mimic.chunking.contextual_prefix import add_contextual_prefix_to_df
 from experiments.mimic.chunking.schemas_chunking import NoteChunkingCfg
 from experiments.mimic.global_configs import (
     duckdb_con,
@@ -48,6 +49,7 @@ def run_note_chunking(
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     df = parse_all_notes(con)
+    df = add_contextual_prefix_to_df(df)
     df.write_parquet(out_path)
     print(f'Saved to {out_path}')
     return df

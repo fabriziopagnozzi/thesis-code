@@ -1,7 +1,9 @@
 import re
 
+import polars as pl
+
 from experiments.mimic.embeddings.schemas_embeddings import EmbedJoinedRow
-from experiments.mimic.queries.schemas_queries import QueryAspect
+from experiments.mimic.global_configs import read_parquet
 from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
 
 
@@ -11,13 +13,6 @@ def modifier_to_snake_label(text: str) -> str:
     s = re.sub(r'\b(?:the|a|an)\b', '', s)
     tokens = [t for t in s.split() if t]
     return '_'.join(tokens[:6])
-
-
-def aspects_from_modifiers(modifiers_json: list[dict]) -> list[QueryAspect]:
-    return [
-        QueryAspect(facet_label=modifier_to_snake_label(m['text']), description=m['text'])
-        for m in modifiers_json
-    ]
 
 
 def get_vec_col_name(model_name: str) -> str:
@@ -41,3 +36,14 @@ def get_age_group(age: float | None) -> str:
 
 def get_charlson_conditions(meta_row: EmbedJoinedRow) -> list[str]:
     return [label for col, label in CHARLSON_LABELS_TO_STR.items() if meta_row.get(col) == 1]
+
+
+def load_filtered_queries(embedding_model: str) -> pl.DataFrame:
+    bool_filter_for_model = f'filter_{get_vec_col_name(embedding_model)}'
+    queries_df = read_parquet('queries')
+    if bool_filter_for_model not in queries_df.columns:
+        raise RuntimeError(
+            f'You need to run the query filtering step before (expected column: {bool_filter_for_model!r}).'
+        )
+
+    return queries_df.filter(pl.col(bool_filter_for_model))

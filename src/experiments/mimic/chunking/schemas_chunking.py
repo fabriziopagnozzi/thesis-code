@@ -19,11 +19,11 @@ class NoteChunkingCfg(BaseModel):
     model_config = {'arbitrary_types_allowed': True}
 
     keep_sections: set[str] = {
-        'HISTORY OF PRESENT ILLNESS',
         'DISCHARGE MEDICATIONS',
-        'DISCHARGE DIAGNOSIS',
     }
     skip_sections: set[str] = {
+        'HISTORY OF PRESENT ILLNESS',
+        'DISCHARGE DIAGNOSIS',
         'PERTINENT RESULTS',
         'SEX',
         'SERVICE',
@@ -101,6 +101,7 @@ class ChunkRow(TypedDict):
     chief_complaint: str | None
     char_count: int
     approx_tokens: int
+    contextual_prefix: str | None
 
 
 class _AdmissionMetadataBase(TypedDict):

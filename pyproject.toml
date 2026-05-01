@@ -25,6 +25,7 @@ dependencies = [
 	"hdbscan>=0.8",
 	"matplotlib>=3.9",
 	"plotly>=6.7.0",
+	"mteb>=2.12.30",
 ]
 [dependency-groups]
 dev = [
@@ -51,6 +52,7 @@ embed_selective = "uv run -m experiments.mimic.embeddings.run_embed_selective"
 
 # Evaluation
 gold_annotation = "uv run -m experiments.mimic.evaluation.run_gold_annotation"
+regenerate_gold_ans = "uv run -m experiments.mimic.evaluation.run_regenerate_gold_ans"
 evaluation = "uv run -m experiments.mimic.evaluation.run_evaluate"
 evaluation_plots = "uv run -m experiments.mimic.evaluation.plots"
 

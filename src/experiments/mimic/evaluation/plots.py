@@ -2,8 +2,9 @@ from pathlib import Path
 
 import polars as pl
 
-from experiments.mimic.evaluation.schemas_evaluation import EvaluateCfg
 from experiments.mimic.global_configs import MimicPaths, get_table_path, setup_logging
+
+from .schemas_evaluation import EvaluateCfg
 
 STRATEGY_STYLE: dict[str, dict] = {
     'top_k': {'color': '#333333', 'ls': '--', 'label': 'top-k'},

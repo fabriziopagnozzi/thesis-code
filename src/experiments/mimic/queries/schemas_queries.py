@@ -4,6 +4,7 @@ from pydantic import BaseModel, computed_field, field_validator, model_validator
 
 from experiments.mimic.global_configs import load_default_config
 from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
+from experiments.mimic.utils.utils import modifier_to_snake_label
 
 
 # MISCELLANEOUS
@@ -172,3 +173,10 @@ class QueryAspect(BaseModel):
     @classmethod
     def normalize_label(cls, v: str) -> str:
         return v.strip().lower().replace(' ', '_')
+
+
+def aspects_from_modifiers(modifiers_json: list[dict]) -> list[QueryAspect]:
+    return [
+        QueryAspect(facet_label=modifier_to_snake_label(m['text']), description=m['text'])
+        for m in modifiers_json
+    ]

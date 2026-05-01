@@ -37,6 +37,14 @@ class GlobalCfg(BaseModel):
 
     embedding_model: str
 
+    sections_filter: frozenset[str] = frozenset({'BRIEF HOSPITAL COURSE', 'DISCHARGE MEDICATIONS'})
+
+    @computed_field
+    @property
+    def sections_filter_sql(self) -> str:
+        quoted = ', '.join(f"'{s}'" for s in sorted(self.sections_filter))
+        return f'section_name IN ({quoted})'
+
     @computed_field
     @property
     def label_to_charlson_col(self) -> dict[str, str]:

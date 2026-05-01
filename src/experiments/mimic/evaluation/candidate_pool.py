@@ -22,8 +22,6 @@ from helpers.query_algorithms import ScoringFunction, select
 
 MAX_CANDIDATES = 100_000
 
-_SECTION_FILTER = "section_name IN ('BRIEF HOSPITAL COURSE', 'DISCHARGE MEDICATIONS')"
-
 
 @dataclass
 class RetrievalResult:
@@ -251,7 +249,9 @@ class CandidatePoolBuilder:
         result = (
             self._table
             .search(query_vec, vector_column_name=self._vec_col_name)
-            .where(f"array_has(icd10_3char_list, '{icd10_3char}') AND {_SECTION_FILTER}")
+            .where(
+                f"array_has(icd10_3char_list, '{icd10_3char}') AND {global_cfg.sections_filter_sql}"
+            )
             .limit(n)
             .to_arrow()
         )
@@ -270,7 +270,7 @@ class CandidatePoolBuilder:
         result = (
             self._table
             .search(query_vec, vector_column_name=self._vec_col_name)
-            .where(f'hadm_id IN ({hadm_list}) AND {_SECTION_FILTER}')
+            .where(f'hadm_id IN ({hadm_list}) AND {global_cfg.sections_filter_sql}')
             .limit(n)
             .to_arrow()
         )
@@ -337,6 +337,24 @@ class CandidatePoolBuilder:
         )
         self._modifier_to_hadm_ids_cache[cache_key] = result
         return result
+
+    def filter_condition_comorbidity(self, icd10_3char: str, modifier_text: str) -> set[int]:
+        """hadm_ids that have the condition (ICD-10 3-char) AND the Charlson comorbidity."""
+        return self.icd3_hadm_ids(icd10_3char) & self.modifier_hadm_ids(modifier_text)
+
+    def filter_condition_demographic(self, icd10_3char: str, modifier_text: str) -> set[int]:
+        """hadm_ids that have the condition (ICD-10 3-char) AND match the demographic filter."""
+        return self.icd3_hadm_ids(icd10_3char) & self.modifier_hadm_ids(modifier_text)
+
+    def filter_by_condition_modifier(
+        self, icd10_3char: str, modifier_text: str, modifier_type: str
+    ) -> set[int]:
+        """Dispatch to the appropriate condition-scoped filter based on modifier_type."""
+        if modifier_type == 'comorbidity':
+            return self.filter_condition_comorbidity(icd10_3char, modifier_text)
+        if modifier_type == 'demographic':
+            return self.filter_condition_demographic(icd10_3char, modifier_text)
+        return set()
 
     def embed_query(self, query_text: str) -> NDArray[np.float32]:
         return self._embedder.embed_query(query_text)

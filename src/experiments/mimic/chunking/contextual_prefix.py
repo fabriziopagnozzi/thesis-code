@@ -1,14 +1,12 @@
 import polars as pl
 
 from experiments.mimic.embeddings.schemas_embeddings import EmbedJoinedRow
+from experiments.mimic.global_configs import read_parquet
 from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
 from experiments.mimic.utils.utils import get_age_group, get_charlson_conditions
 
 
-def enrich_note_excerpts(
-    chunks: pl.DataFrame, metadata: pl.DataFrame
-) -> tuple[pl.DataFrame, list[str]]:
-
+def add_contextual_prefix_to_df(chunks: pl.DataFrame) -> pl.DataFrame:
     meta_cols = [
         'hadm_id',
         'age',
@@ -20,26 +18,18 @@ def enrich_note_excerpts(
         'admission_type',
         *CHARLSON_LABELS_TO_STR.keys(),
     ]
-    meta_subset = metadata.select(meta_cols).unique(subset=['hadm_id'])
-
-    joined = (
+    metadata = read_parquet('admissions_metadata').select(meta_cols).unique(subset=['hadm_id'])
+    cols_to_drop = [c for c in meta_cols if c != 'hadm_id']
+    return (
         chunks
-        .join(meta_subset, on='hadm_id', how='left')
+        .join(metadata, on='hadm_id', how='left')
         .with_columns(
-            full_text=pl.struct(pl.all()).map_elements(build_full_text, return_dtype=pl.Utf8)
+            contextual_prefix=pl.struct(pl.all()).map_elements(
+                build_contextual_prefix, return_dtype=pl.Utf8
+            )
         )
-        .with_columns(text_len=pl.col('full_text').str.len_chars())
-        .sort('text_len', descending=False)
+        .drop(cols_to_drop)
     )
-
-    texts = joined['full_text'].to_list()
-
-    return joined.drop(['text_len', 'full_text']), texts
-
-
-def build_full_text(row_dict: EmbedJoinedRow) -> str:
-    prefix = build_contextual_prefix(row_dict)
-    return f'{prefix}\nExcerpt from the {row_dict["section_name"]} section of a discharge summary.\n{row_dict["text"]}'
 
 
 def build_contextual_prefix(meta_row: EmbedJoinedRow) -> str:

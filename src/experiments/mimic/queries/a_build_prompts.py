@@ -22,6 +22,7 @@ from experiments.mimic.chunking.schemas_chunking import (
     AdmissionMetaSlimRow,
     ConditionStatsRow,
 )
+from experiments.mimic.evaluation.candidate_pool import CandidatePoolBuilder
 from experiments.mimic.global_configs import (
     duckdb_con,
     get_table_path,
@@ -44,14 +45,15 @@ def run_build_query_prompts(
         query_prompts_cfg = cfg
 
     conditions = read_parquet('conditions_stats')
-    chunks = read_parquet('chunks')
+    chunks = read_parquet('chunks').filter(pl.col('section_name').is_in(global_cfg.sections_filter))
     metadata = read_parquet('admissions_metadata')
 
     print(
         f'Loaded {len(conditions):,} conditions, {len(chunks):,} chunks, {len(metadata):,} admissions'
     )
 
-    df = build_query_prompts(conditions, chunks, metadata, con)
+    pool_builder = CandidatePoolBuilder(con, embedding_model=global_cfg.embedding_model)
+    df = build_query_prompts(conditions, chunks, metadata, pool_builder)
 
     out_path = get_table_path('queries_prompts')
     df.write_parquet(out_path)
@@ -63,7 +65,7 @@ def build_query_prompts(
     conditions: pl.DataFrame,
     chunks: pl.DataFrame,
     metadata: pl.DataFrame,
-    con,
+    pool_builder: CandidatePoolBuilder,
 ) -> pl.DataFrame:
     filtered_chunks = chunks.filter(
         pl.col('section_name').is_in(query_prompts_cfg.high_value_sections)
@@ -100,7 +102,7 @@ def build_query_prompts(
         icd10_3char = condition_row['icd10_3char']
         cond_name = condition_row['condition_name'] or icd10_3char
         stratum = condition_row.get('stratum', 1)
-        cond_hadm_ids = _get_icd3_hadm_ids(con, icd10_3char)
+        cond_hadm_ids = pool_builder.icd3_hadm_ids(icd10_3char)
 
         top_mods = json.loads(condition_row.get('top_comorbidity_mods_json') or '[]')
         excluded_cols = ICD3_TO_CHARLSON_COLS.get(icd10_3char, frozenset())
@@ -129,7 +131,9 @@ def build_query_prompts(
         unique_mod_texts = {t for mset in modifier_sets for t, _ in mset}
         modifier_stats: dict[str, dict] = {}
         for mod_text in unique_mod_texts:
-            inter = _get_modifier_hadm_ids(con, icd10_3char, mod_text, mod_type_lookup[mod_text])
+            inter = pool_builder.filter_by_condition_modifier(
+                icd10_3char, mod_text, mod_type_lookup[mod_text]
+            )
             n_mod_chunks = sum(len(chunks_by_hadm_id[h]) for h in inter if h in chunks_by_hadm_id)
             modifier_stats[mod_text] = {'n_admissions': len(inter), 'n_chunks': n_mod_chunks}
 
@@ -148,7 +152,7 @@ def build_query_prompts(
                 meta_by_hadm_id,
                 icd10_3char,
                 modifiers,
-                con,
+                pool_builder,
                 n=query_prompts_cfg.n_grounding_patients,
             )
             if not data_samples:
@@ -240,61 +244,12 @@ def _select_conditions_stratified(
     return pl.concat(parts) if parts else filtered.head(0)
 
 
-# -- Step 2: sample grounding chunks --
-def _get_icd3_hadm_ids(con, icd10_3char: str) -> set[int]:
-    rows = con.execute(f"""--sql
-        SELECT DISTINCT hadm_id
-        FROM unified_diagnoses
-        WHERE LEFT(unified_icd10, 3) = '{icd10_3char}'
-    """).fetchall()
-    return {r[0] for r in rows}
-
-
-def _get_modifier_hadm_ids(
-    con, icd10_3char: str, modifier_text: str, modifier_type: str
-) -> set[int]:
-    if modifier_type == 'comorbidity':
-        return _filter_comorbidity(con, icd10_3char, modifier_text)
-    if modifier_type == 'demographic':
-        return _filter_demographic(con, icd10_3char, modifier_text)
-    return set()
-
-
-def _filter_comorbidity(con, icd10_3char: str, modifier_text: str) -> set[int]:
-    col = global_cfg.label_to_charlson_col.get(modifier_text)
-    if col is None:
-        return set()
-    rows = con.execute(f"""--sql
-        SELECT DISTINCT ud.hadm_id
-        FROM unified_diagnoses ud
-        JOIN charlson c ON ud.hadm_id = c.hadm_id
-        WHERE LEFT(ud.unified_icd10, 3) = '{icd10_3char}'
-        AND c.{col} > 0
-    """).fetchall()
-    return {r[0] for r in rows}
-
-
-def _filter_demographic(con, icd10_3char: str, modifier_text: str) -> set[int]:
-    filt = query_prompts_cfg.demographic_filters.get(modifier_text)
-    if filt is None:
-        return set()
-    _, op, val = filt
-    rows = con.execute(f"""--sql
-        SELECT DISTINCT ud.hadm_id
-        FROM unified_diagnoses ud
-        JOIN age a ON ud.hadm_id = a.hadm_id
-        WHERE LEFT(ud.unified_icd10, 3) = '{icd10_3char}'
-        AND a.age {op} {val}
-    """).fetchall()
-    return {r[0] for r in rows}
-
-
 def _sample_grounding_chunks_per_modifier(
     chunks_by_hadm: dict[int, pl.DataFrame],
     meta_by_hadm: dict[int, AdmissionMetaSlimRow],
     icd10_3char: str,
     modifiers: list[tuple[str, str]],
-    con,
+    pool_builder: CandidatePoolBuilder,
     n: int,
 ) -> list[GroundingChunkSample]:
     """Sample up to n patients, round-robin across modifiers for diversity."""
@@ -304,7 +259,7 @@ def _sample_grounding_chunks_per_modifier(
     for mod_text, mod_type in modifiers * n:
         if len(seen_hadm) >= n:
             break
-        mod_hadm_ids = _get_modifier_hadm_ids(con, icd10_3char, mod_text, mod_type)
+        mod_hadm_ids = pool_builder.filter_by_condition_modifier(icd10_3char, mod_text, mod_type)
         if not mod_hadm_ids:
             continue
         bhc_candidates = _hadm_ids_with_bhc(chunks_by_hadm, mod_hadm_ids - seen_hadm)

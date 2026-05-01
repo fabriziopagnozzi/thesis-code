@@ -6,20 +6,14 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.evaluation.plots import store_eval_figures
-from experiments.mimic.evaluation.schemas_evaluation import (
-    EvaluateCfg,
-    EvaluationMetrics,
-)
 from experiments.mimic.global_configs import (
     duckdb_con,
     get_table_path,
     global_cfg,
-    read_parquet,
     setup_logging,
 )
 from experiments.mimic.queries.schemas_queries import GoldAnnotationRow, QueryRowPostFiltering
-from experiments.mimic.utils.utils import get_vec_col_name, modifier_to_snake_label
+from experiments.mimic.utils.utils import load_filtered_queries, modifier_to_snake_label
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import ScoringFunction
 
@@ -34,6 +28,11 @@ from .metrics import (
     gold_precision,
     gold_recall,
     weighted_aspect_recall,
+)
+from .plots import store_eval_figures
+from .schemas_evaluation import (
+    EvaluateCfg,
+    EvaluationMetrics,
 )
 
 evaluate_cfg = EvaluateCfg.load()
@@ -111,17 +110,6 @@ def evaluate_llm(
             })
 
     return pl.DataFrame(all_rows)
-
-
-def load_filtered_queries(embedding_model: str) -> pl.DataFrame:
-    bool_filter_for_model = f'filter_{get_vec_col_name(embedding_model)}'
-    queries_df = read_parquet('queries')
-    if bool_filter_for_model not in queries_df.columns:
-        raise RuntimeError(
-            f'You need to run the query filtering step before (expected column: {bool_filter_for_model!r}).'
-        )
-
-    return queries_df.filter(pl.col(bool_filter_for_model))
 
 
 def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
