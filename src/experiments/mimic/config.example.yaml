@@ -108,7 +108,7 @@ chunking:
 queries:
     build_prompts:
         n_grounding_patients: 6
-        max_modifiers: 3
+        max_comorbidity_modifiers: 3
         min_modifier_admissions: 5 # skip modifier pairs where cond ∩ modifier < this
 
         # Stratified condition sampling: split [min_condition_admissions, max_condition_admissions]

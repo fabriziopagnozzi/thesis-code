@@ -14,7 +14,6 @@ import yaml
 from duckdb import DuckDBPyConnection
 from pydantic import BaseModel, Field, PositiveInt, computed_field
 
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
 from experiments.mimic.utils.constants import (
     MimicTable,
 )
@@ -44,11 +43,6 @@ class GlobalCfg(BaseModel):
     def sections_filter_sql(self) -> str:
         quoted = ', '.join(f"'{s}'" for s in sorted(self.sections_filter))
         return f'section_name IN ({quoted})'
-
-    @computed_field
-    @property
-    def label_to_charlson_col(self) -> dict[str, str]:
-        return {v: k for k, v in CHARLSON_LABELS_TO_STR.items()}
 
 
 def _resolve_exp_name() -> str:
@@ -186,6 +180,7 @@ sys.excepthook = silent_excepthook
 
 
 # <side_effects>
+
 torch.cuda.empty_cache()
 os.environ['PYTORCH_ALLOC_CONF'] = 'expandable_segments:True'
 
@@ -197,4 +192,5 @@ from experiments.mimic.utils.duck_db_init import connect_mimic_duckdb  # noqa: E
 
 duckdb_con: DuckDBPyConnection = connect_mimic_duckdb()
 lancedb_con: lancedb.DBConnection = lancedb.connect(MimicPaths.vector_db_dir)
+
 # </side_effects>

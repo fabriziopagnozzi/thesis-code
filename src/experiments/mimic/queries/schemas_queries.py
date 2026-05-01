@@ -1,13 +1,37 @@
+import json
+import re
 from typing import Literal, TypedDict
 
-from pydantic import BaseModel, computed_field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, computed_field, model_validator
 
 from experiments.mimic.global_configs import load_default_config
+from experiments.mimic.utils.charlson import CHARLSON_STR_TO_LABEL
 from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
-from experiments.mimic.utils.utils import modifier_to_snake_label
 
 
-# MISCELLANEOUS
+class QueryModifier(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    descr: str
+    type: Literal['comorbidity', 'demographic']
+
+    @computed_field
+    @property
+    def comorb_label(self) -> str:
+        if CHARLSON_STR_TO_LABEL[self.descr] is not None:
+            return CHARLSON_STR_TO_LABEL[self.descr]
+        else:
+            s = re.sub(r'\([^)]*\)', '', self.descr)
+            s = re.sub(r'[^a-zA-Z0-9\s]', ' ', s.lower())
+            s = re.sub(r'\b(?:the|a|an)\b', '', s)
+            tokens = [t for t in s.split() if t]
+            return '_'.join(tokens[:6])
+
+    @classmethod
+    def parse_list(cls, json_str: str) -> list[QueryModifier]:
+        return [cls(**d) for d in json.loads(json_str or '[]')]
+
+
 class DemographicModifier(BaseModel):
     text: str
     column: str
@@ -16,8 +40,6 @@ class DemographicModifier(BaseModel):
 
 
 class GroundingChunkSample(TypedDict):
-    """Single grounding example assembled in _sample_patient."""
-
     header: str
     text: str
     hadm_id: int
@@ -32,72 +54,6 @@ class DivergenceMetrics(TypedDict):
     fac_topk: float
     fac_fl: float
     pool_size: int
-
-
-# CONFIGS
-class BuildQueryPromptsCfg(BaseModel):
-    n_grounding_patients: int
-    max_modifiers: int
-    min_modifier_admissions: int = 5
-    min_condition_admissions: int | None = None
-    max_condition_admissions: int | None = None
-    n_strata: int = 3
-    stratify_scale: Literal['linear', 'log'] = 'log'
-    stratify_seed: int = 42
-    high_value_sections: list[str] = [
-        'BRIEF HOSPITAL COURSE',
-        'HISTORY OF PRESENT ILLNESS',
-        'DISCHARGE DIAGNOSIS',
-        'DISCHARGE MEDICATIONS',
-    ]
-    demographic_modifiers: list[DemographicModifier]
-    prompt_template: str = MimicDefaultPrompts.query_gen_template
-
-    @computed_field
-    @property
-    def demographic_modifiers_text(self) -> list[str]:
-        return [m.text for m in self.demographic_modifiers]
-
-    @computed_field
-    @property
-    def demographic_filters(self) -> dict[str, tuple]:
-        return {m.text: (m.column, m.op, m.value) for m in self.demographic_modifiers}
-
-    @classmethod
-    def load(cls) -> BuildQueryPromptsCfg:
-        return cls(**load_default_config(key='queries')['build_prompts'])
-
-
-class GenQueriesCfg(BaseModel):
-    save_every: int
-    model: str | None = None
-    temperature: float = 0.3
-    top_p: float | None = None
-    top_k: int | None = None
-    think: bool = False
-
-    @classmethod
-    def load(cls) -> GenQueriesCfg:
-        return cls(**load_default_config(key='queries')['llm_generation'])
-
-
-class FilterQueriesCfg(BaseModel):
-    k_values: list[int]
-    lam_values: list[float]
-    jaccard_threshold: float
-
-    @model_validator(mode='before')
-    @classmethod
-    def _compat_single_k_lam(cls, data: dict) -> dict:
-        if 'k' in data and 'k_values' not in data:
-            data['k_values'] = [data.pop('k')]
-        if 'lam' in data and 'lam_values' not in data:
-            data['lam_values'] = [data.pop('lam')]
-        return data
-
-    @classmethod
-    def load(cls) -> FilterQueriesCfg:
-        return cls(**load_default_config(key='queries')['filtering'])
 
 
 # PARQUET OUTPUTS
@@ -165,18 +121,66 @@ class TagDecision(BaseModel):
     reason: str = ''
 
 
-class QueryAspect(BaseModel):
-    facet_label: str
-    description: str
-
-    @field_validator('facet_label')
-    @classmethod
-    def normalize_label(cls, v: str) -> str:
-        return v.strip().lower().replace(' ', '_')
-
-
-def aspects_from_modifiers(modifiers_json: list[dict]) -> list[QueryAspect]:
-    return [
-        QueryAspect(facet_label=modifier_to_snake_label(m['text']), description=m['text'])
-        for m in modifiers_json
+# CONFIGS
+class BuildQueryPromptsCfg(BaseModel):
+    n_grounding_patients: int
+    max_comorbidity_modifiers: int
+    min_modifier_admissions: int = 5
+    min_condition_admissions: int | None = None
+    max_condition_admissions: int | None = None
+    n_strata: int = 3
+    stratify_scale: Literal['linear', 'log'] = 'log'
+    stratify_seed: int = 42
+    high_value_sections: list[str] = [
+        'BRIEF HOSPITAL COURSE',
+        'DISCHARGE DIAGNOSIS',
+        'DISCHARGE MEDICATIONS',
     ]
+    demographic_modifiers: list[DemographicModifier]
+    prompt_template: str = MimicDefaultPrompts.query_gen_template
+
+    @computed_field
+    @property
+    def demographic_modifiers_text(self) -> list[str]:
+        return [m.text for m in self.demographic_modifiers]
+
+    @computed_field
+    @property
+    def demographic_filters(self) -> dict[str, tuple]:
+        return {m.text: (m.column, m.op, m.value) for m in self.demographic_modifiers}
+
+    @classmethod
+    def load(cls) -> BuildQueryPromptsCfg:
+        return cls(**load_default_config(key='queries')['build_prompts'])
+
+
+class GenQueriesCfg(BaseModel):
+    save_every: int
+    model: str | None = None
+    temperature: float = 0.3
+    top_p: float | None = None
+    top_k: int | None = None
+    think: bool = False
+
+    @classmethod
+    def load(cls) -> GenQueriesCfg:
+        return cls(**load_default_config(key='queries')['llm_generation'])
+
+
+class FilterQueriesCfg(BaseModel):
+    k_values: list[int]
+    lam_values: list[float]
+    jaccard_threshold: float
+
+    @model_validator(mode='before')
+    @classmethod
+    def _compat_single_k_lam(cls, data: dict) -> dict:
+        if 'k' in data and 'k_values' not in data:
+            data['k_values'] = [data.pop('k')]
+        if 'lam' in data and 'lam_values' not in data:
+            data['lam_values'] = [data.pop('lam')]
+        return data
+
+    @classmethod
+    def load(cls) -> FilterQueriesCfg:
+        return cls(**load_default_config(key='queries')['filtering'])

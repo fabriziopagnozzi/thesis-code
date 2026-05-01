@@ -7,14 +7,6 @@ from experiments.mimic.global_configs import read_parquet
 from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
 
 
-def modifier_to_snake_label(text: str) -> str:
-    s = re.sub(r'\([^)]*\)', '', text)
-    s = re.sub(r'[^a-zA-Z0-9\s]', ' ', s.lower())
-    s = re.sub(r'\b(?:the|a|an)\b', '', s)
-    tokens = [t for t in s.split() if t]
-    return '_'.join(tokens[:6])
-
-
 def get_vec_col_name(model_name: str) -> str:
     safe = re.sub(r'[/\-.]', '_', model_name)
     return f'vector_{safe}'

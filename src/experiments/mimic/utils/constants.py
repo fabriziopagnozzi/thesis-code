@@ -58,6 +58,7 @@ type ResultTable = Literal[
     'queries_prompts',
     'queries',
     'gold_annotations',
+    'gold_answers',
     'evaluation_results',
     'evaluation_stats',
     'evaluation_stats_by_stratum',

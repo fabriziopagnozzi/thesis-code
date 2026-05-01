@@ -1,3 +1,5 @@
+from typing import Literal
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -9,6 +11,7 @@ class Embedder:
         batch_size: int = 4,
         query_prompt: str | None = None,
         document_prompt: str | None = None,
+        device: Literal['cpu', 'cuda'] = 'cuda',
     ):
         from sentence_transformers import SentenceTransformer
 
@@ -16,7 +19,8 @@ class Embedder:
         self.batch_size = batch_size
         self.query_prompt = query_prompt
         self.document_prompt = document_prompt
-        self._model: SentenceTransformer = SentenceTransformer(model_name, device='cuda')
+        self.device = device
+        self._model: SentenceTransformer = SentenceTransformer(model_name, device=device)
 
     @property
     def dim(self) -> int:

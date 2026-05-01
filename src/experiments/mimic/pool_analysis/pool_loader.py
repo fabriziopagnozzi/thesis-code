@@ -1,4 +1,3 @@
-import json
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import cast
@@ -7,10 +6,9 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
-from experiments.mimic.queries.schemas_queries import QueryRow
-from experiments.mimic.utils.utils import modifier_to_snake_label
+from experiments.mimic.queries.schemas_queries import QueryModifier, QueryRow
+from experiments.mimic.utils.candidate_pools import ChunkPool, ChunkPoolBuilder
 
 
 @dataclass
@@ -20,7 +18,7 @@ class QueryPool:
     stratum: int
     query_text: str
     modifier_labels: list[str]
-    pool: CandidatePool
+    pool: ChunkPool
     query_vec: NDArray[np.float32]
     facet_onehot: NDArray[np.bool_]
     facet_combined: NDArray[np.object_]
@@ -28,17 +26,19 @@ class QueryPool:
 
 def iter_query_pools(
     queries_df: pl.DataFrame,
-    builder: CandidatePoolBuilder,
+    builder: ChunkPoolBuilder,
     cfg: PoolAnalysisCfg,
 ) -> Iterator[QueryPool]:
     for row in queries_df.iter_rows(named=True):
         row = cast(QueryRow, row)
-        modifiers = json.loads(row.get('modifiers_json', '') or '[]')
+        modifiers: list[QueryModifier] = QueryModifier.parse_list(
+            row.get('modifiers_json', '') or ''
+        )
         if not modifiers:
             continue
 
         query_vec = builder.embed_query(row['query_text'])
-        pool = builder.for_query_cosine_condition(query_vec, row['icd10_3char'], n=cfg.pool_n)
+        pool = builder.topk_cosine_for_condition(query_vec, row['icd10_3char'], n=cfg.pool_n)
         if pool.n < 5:
             continue
 
@@ -60,17 +60,16 @@ def iter_query_pools(
 
 
 def _build_facet_arrays(
-    pool: CandidatePool,
+    pool: ChunkPool,
     icd10_3char: str,
-    modifiers_json: list[dict],
-    builder: CandidatePoolBuilder,
+    modifiers: list[QueryModifier],
+    builder: ChunkPoolBuilder,
 ) -> tuple[list[str], NDArray[np.bool_], NDArray[np.object_]]:
-    cond_hadms = builder.icd3_hadm_ids(icd10_3char)
     labels: list[str] = []
     qualifying: list[set[int]] = []
-    for m in modifiers_json:
-        labels.append(modifier_to_snake_label(m['text']))
-        qualifying.append(cond_hadms & builder.modifier_hadm_ids(m['text']))
+    for mod in modifiers:
+        labels.append(mod.comorb_label)
+        qualifying.append(builder.get_hadm_ids_by_condition_modifier(icd10_3char, mod))
 
     n_chunks, n_mods = pool.n, len(labels)
     onehot = np.zeros((n_chunks, n_mods), dtype=bool)

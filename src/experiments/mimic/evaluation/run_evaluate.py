@@ -1,28 +1,31 @@
 import json
 from typing import cast
 
-import duckdb
 import numpy as np
 import polars as pl
+from numpy.typing import NDArray
 from tqdm import tqdm
 
+from experiments.mimic.evaluation.schemas_evaluation import RetrievalResult
 from experiments.mimic.global_configs import (
-    duckdb_con,
     get_table_path,
     global_cfg,
+    read_parquet,
     setup_logging,
 )
-from experiments.mimic.queries.schemas_queries import GoldAnnotationRow, QueryRowPostFiltering
-from experiments.mimic.utils.utils import load_filtered_queries, modifier_to_snake_label
-from helpers.metrics import avg_cos, fac_cov_score, jaccard
-from helpers.query_algorithms import ScoringFunction
-
-from .candidate_pool import (
-    CandidatePool,
-    CandidatePoolBuilder,
-    RetrievalResult,
-    run_retrieval,
+from experiments.mimic.queries.schemas_queries import (
+    GoldAnnotationRow,
+    QueryModifier,
+    QueryRowPostFiltering,
 )
+from experiments.mimic.utils.candidate_pools import (
+    ChunkPool,
+    ChunkPoolBuilder,
+)
+from experiments.mimic.utils.utils import load_filtered_queries
+from helpers.metrics import avg_cos, fac_cov_score, jaccard
+from helpers.query_algorithms import ScoringFunction, select
+
 from .metrics import (
     aspect_recall,
     gold_precision,
@@ -38,20 +41,17 @@ from .schemas_evaluation import (
 evaluate_cfg = EvaluateCfg.load()
 
 
-def run_evaluate(
-    con: duckdb.DuckDBPyConnection = duckdb_con,
-    cfg: EvaluateCfg | None = None,
-) -> pl.DataFrame:
+def run_evaluate(cfg: EvaluateCfg | None = None) -> pl.DataFrame:
     global evaluate_cfg
     if cfg is not None:
         evaluate_cfg = cfg
 
-    builder = CandidatePoolBuilder(con, embedding_model=global_cfg.embedding_model)
+    builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
 
     if evaluate_cfg.gold_mode == 'structural':
         results = evaluate_structural(builder)
     else:
-        annotations_df = pl.read_parquet(get_table_path('gold_annotations'))
+        annotations_df = read_parquet('gold_annotations')
         annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
         print(f'Loaded {len(annotations_df):,} annotated queries with facets')
         results = evaluate_llm(annotations_df, builder)
@@ -68,7 +68,7 @@ def run_evaluate(
 
 def evaluate_llm(
     annotations_df: pl.DataFrame,
-    builder: CandidatePoolBuilder,
+    builder: ChunkPoolBuilder,
 ) -> pl.DataFrame:
     all_rows = []
 
@@ -87,10 +87,10 @@ def evaluate_llm(
 
         query_vec = builder.embed_query(query_text)
 
-        cosine_pool = builder.for_query_cosine(query_vec, n=global_cfg.prefilter_n)
+        cosine_pool = builder.topk_cosine(query_vec, n=global_cfg.prefilter_n)
         all_gold_ids = {cid for cids in facets.values() for cid in cids}
-        gold_pool = builder.for_gold_chunks(all_gold_ids)
-        pool = CandidatePool.merge([cosine_pool, gold_pool])
+        gold_pool = builder.topk_cosine_for_chunk_ids(ids=all_gold_ids)
+        pool = ChunkPool.merge([cosine_pool, gold_pool])
 
         query_metrics = evaluate_query(
             pool,
@@ -112,7 +112,7 @@ def evaluate_llm(
     return pl.DataFrame(all_rows)
 
 
-def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
+def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
     queries_df = load_filtered_queries(global_cfg.embedding_model)
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
@@ -124,16 +124,18 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
         dynamic_ncols=True,
     ):
         curr_query = cast(QueryRowPostFiltering, curr_query)
-        modifiers_json: list[dict] = json.loads(curr_query.get('modifiers_json', '') or '[]')
-        if not modifiers_json:
+        modifiers: list[QueryModifier] = QueryModifier.parse_list(
+            curr_query.get('modifiers_json', '') or ''
+        )
+        if not modifiers:
             continue
 
         query_vec = builder.embed_query(curr_query['query_text'])
-        pool = builder.for_query_cosine_condition(
+        pool = builder.topk_cosine_for_condition(
             query_vec, curr_query['icd10_3char'], n=global_cfg.prefilter_n
         )
 
-        facets = build_structural_facets(pool, curr_query['icd10_3char'], modifiers_json, builder)
+        facets = build_structural_facets(pool, curr_query['icd10_3char'], modifiers, builder)
         if not facets:
             print(
                 f'  [skip] query_id={curr_query["query_id"]} ({curr_query["icd10_3char"]}): '
@@ -163,31 +165,29 @@ def evaluate_structural(builder: CandidatePoolBuilder) -> pl.DataFrame:
 
 
 def build_structural_facets(
-    pool: CandidatePool,
+    pool: ChunkPool,
     icd10_3char: str,
-    modifiers_json: list[dict],
-    builder: CandidatePoolBuilder,
+    modifiers: list[QueryModifier],
+    builder: ChunkPoolBuilder,
 ) -> dict[str, list[str]]:
     """Build gold facets structurally: pool chunks whose hadm_id ∈ condition_hadm_ids ∩ modifier_hadm_ids."""
-    condition_hadm_ids = builder.icd3_hadm_ids(icd10_3char)
-
     facets: dict[str, list[str]] = {}
-    for m in modifiers_json:
-        label = modifier_to_snake_label(m['text'])
-        qualifying = condition_hadm_ids & builder.modifier_hadm_ids(m['text'])
+
+    for m in modifiers:
+        qualifying = builder.get_hadm_ids_by_condition_modifier(icd10_3char, m)
         chunk_ids = [
             cid
             for hid, cid in zip(pool.hadm_ids.tolist(), pool.chunk_ids, strict=False)
             if hid in qualifying
         ]
         if chunk_ids:
-            facets[label] = chunk_ids
+            facets[m.comorb_label] = chunk_ids
 
     return facets
 
 
 def evaluate_query(
-    pool: CandidatePool,
+    pool: ChunkPool,
     query_vec: np.ndarray,
     facets: dict[str, list[str]],
     strategies: list[ScoringFunction],
@@ -212,7 +212,7 @@ def evaluate_query(
         if result.strategy == 'top_k':
             topk_by_k[result.k] = result
 
-    sim_to_query = pool.sim_to_query(query_vec)
+    sim_to_query = pool.sim_scores(query_vec)
     sim_matrix = pool.sim_matrix()
 
     chunk_id_to_idx: dict[str, int] = {cid: i for i, cid in enumerate(pool.chunk_ids)}
@@ -264,6 +264,61 @@ def evaluate_query(
         })
 
     return metrics
+
+
+def run_retrieval(
+    pool: ChunkPool,
+    query_vec: NDArray[np.float32],
+    strategies: list[ScoringFunction],
+    k_values: list[int],
+    lam_values: list[float],
+    prefilter_n: int | None = 500,
+) -> list[RetrievalResult]:
+    sim_to_query = pool.sim_scores(query_vec)
+
+    if prefilter_n is not None and pool.n > prefilter_n:
+        top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
+        pool = pool.slice(top_indices)
+        sim_to_query = sim_to_query[top_indices]
+
+    sim_matrix = pool.sim_matrix()
+
+    valid_k_values = [k for k in k_values if k <= pool.n]
+    if not valid_k_values:
+        return []
+    max_k = max(valid_k_values)
+
+    results = []
+    for strategy in strategies:
+        needs_lambda = strategy in ('mmr', 'gmmr', 'fac_loc')
+        lams = lam_values if needs_lambda else [None]
+
+        for lam in lams:
+            all_selected = select(
+                strategy=strategy,
+                sim_to_query=sim_to_query,
+                k=max_k,
+                sim_matrix=sim_matrix,
+                embeddings=pool.vectors,
+                query_embedding=query_vec,
+                lam=lam if lam is not None else 0.5,
+            )
+
+            for k in valid_k_values:
+                selected = all_selected[:k]
+                results.append(
+                    RetrievalResult(
+                        strategy=strategy,
+                        k=k,
+                        lam=lam,
+                        selected_indices=selected,
+                        selected_chunk_ids=[pool.chunk_ids[i] for i in selected],
+                        selected_hadm_ids=[int(pool.hadm_ids[i]) for i in selected],
+                        sim_to_query=sim_to_query[selected],
+                    )
+                )
+
+    return results
 
 
 def store_eval_stats(results_df: pl.DataFrame) -> None:

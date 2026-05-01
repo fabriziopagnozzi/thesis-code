@@ -1,7 +1,7 @@
 import json
 
 from experiments.mimic.global_configs import get_result_dir, get_table_path, global_cfg
-from experiments.mimic.queries.schemas_queries import aspects_from_modifiers
+from experiments.mimic.queries.schemas_queries import QueryModifier
 from experiments.mimic.utils.utils import load_filtered_queries
 
 from .run_gold_annotation import reduce_answer
@@ -60,7 +60,7 @@ if __name__ == '__main__':
 
         query_text = meta['query_text']
         condition_name = meta.get('condition_name', '')
-        aspects = aspects_from_modifiers(json.loads(meta.get('modifiers_json', '') or '[]'))
+        modifiers = QueryModifier.parse_list(meta.get('modifiers_json', '') or '')
         facts_per_facet = facts_by_query[qidx]
 
         n_facts = sum(len(v) for v in facts_per_facet.values())
@@ -70,7 +70,7 @@ if __name__ == '__main__':
         answer_text = reduce_answer(
             query_text=query_text,
             condition_name=condition_name,
-            aspects=aspects,
+            modifiers=modifiers,
             facts_per_facet=facts_per_facet,
             prompt_dump_dir=None,
             query_idx=qidx,

@@ -1,5 +1,8 @@
+from dataclasses import dataclass
 from typing import Literal, TypedDict
 
+import numpy as np
+from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from experiments.mimic.global_configs import load_default_config
@@ -110,3 +113,14 @@ class BestPerMestricFixedLamRow(TypedDict):
     WAR: float
     GP: float
     GR: float
+
+
+@dataclass
+class RetrievalResult:
+    strategy: str
+    k: int
+    lam: float | None
+    selected_indices: NDArray[np.intp]
+    selected_chunk_ids: list[str]
+    selected_hadm_ids: list[int]
+    sim_to_query: NDArray[np.float32]

@@ -6,21 +6,19 @@ pool. Keep only queries where coverage diverges from top_k
 
 from typing import cast
 
-import duckdb
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.evaluation.candidate_pool import CandidatePool, CandidatePoolBuilder
 from experiments.mimic.global_configs import (
-    duckdb_con,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
 from experiments.mimic.queries.schemas_queries import DivergenceMetrics, FilterQueriesCfg, QueryRow
+from experiments.mimic.utils.candidate_pools import ChunkPool, ChunkPoolBuilder
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
@@ -29,10 +27,7 @@ filter_queries_cfg = FilterQueriesCfg.load()
 filter_col = f'filter_{get_vec_col_name(global_cfg.embedding_model)}'
 
 
-def run_filter_queries(
-    con: duckdb.DuckDBPyConnection = duckdb_con,
-    cfg: FilterQueriesCfg | None = None,
-) -> pl.DataFrame:
+def run_filter_queries(cfg: FilterQueriesCfg | None = None) -> pl.DataFrame:
     global filter_queries_cfg
     if cfg is not None:
         filter_queries_cfg = cfg
@@ -40,7 +35,7 @@ def run_filter_queries(
     queries_df = read_parquet('queries')
     print(f'Loaded {len(queries_df):,} queries')
 
-    builder = CandidatePoolBuilder(con, embedding_model=global_cfg.embedding_model)
+    builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
     result = filter_queries(queries_df, builder)
 
     out_path = get_table_path('queries')
@@ -58,7 +53,7 @@ def run_filter_queries(
 
 def filter_queries(
     queries_df: pl.DataFrame,
-    builder: CandidatePoolBuilder,
+    builder: ChunkPoolBuilder,
 ) -> pl.DataFrame:
     """
     Adds columns: jaccard_div, fac_gap, filter_<vec_col>, pool_size.
@@ -75,7 +70,7 @@ def filter_queries(
     ):
         row = cast(QueryRow, row)
         query_vec = builder.embed_query(row['query_text'])
-        pool = builder.for_query_cosine_condition(
+        pool = builder.topk_cosine_for_condition(
             query_vec, icd10_3char=row['icd10_3char'], n=global_cfg.prefilter_n
         )
 
@@ -103,13 +98,13 @@ def filter_queries(
 
 
 def compute_divergence(
-    pool: CandidatePool,
+    pool: ChunkPool,
     query_vec: NDArray[np.float32],
     k: int = 10,
     lam: float = 0.5,
     prefilter_n: int | None = None,
 ) -> DivergenceMetrics:
-    sim_to_query = pool.sim_to_query(query_vec)
+    sim_to_query = pool.sim_scores(query_vec)
 
     if prefilter_n is not None and pool.n > prefilter_n:
         top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()

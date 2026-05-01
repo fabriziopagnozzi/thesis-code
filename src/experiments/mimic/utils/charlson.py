@@ -41,6 +41,10 @@ CHARLSON_LABELS_TO_STR: dict[CharlsonLabel, str] = {
     'aids': 'HIV/AIDS',
 }
 
+CHARLSON_STR_TO_LABEL: dict[str, CharlsonLabel] = {
+    string: label for label, string in CHARLSON_LABELS_TO_STR.items()
+}
+
 # Used to exclude self-referential comorbidities when the primary condition is in the same bucket.
 CHARLSON_ICD10_3CHAR: dict[CharlsonLabel, frozenset[str]] = {
     'myocardial_infarct': frozenset({'I21', 'I22', 'I25'}),

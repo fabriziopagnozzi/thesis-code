@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
-from duckdb import DuckDBPyConnection
 from tqdm import tqdm
 
-from experiments.mimic.evaluation.candidate_pool import CandidatePoolBuilder
-from experiments.mimic.global_configs import MimicPaths, duckdb_con, global_cfg, setup_logging
+from experiments.mimic.global_configs import MimicPaths, global_cfg, setup_logging
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
+from experiments.mimic.utils.candidate_pools import ChunkPoolBuilder
 from experiments.mimic.utils.utils import load_filtered_queries
 
 from .aggregate import aggregate_stats
@@ -31,15 +30,13 @@ class PerQueryResult:
     points: pl.DataFrame
 
 
-def run_pool_analysis(
-    con: DuckDBPyConnection = duckdb_con, cfg: PoolAnalysisCfg | None = None
-) -> None:
+def run_pool_analysis(cfg: PoolAnalysisCfg | None = None) -> None:
     global pool_analysis_cfg
     if cfg is not None:
         pool_analysis_cfg = cfg
 
     embedding_model = global_cfg.embedding_model
-    pool_builder = CandidatePoolBuilder(con, embedding_model=embedding_model)
+    pool_builder = ChunkPoolBuilder(model_name=embedding_model)
 
     fig_per = MimicPaths.figures_dir / 'pool_analysis' / 'per_query'
     fig_agg = MimicPaths.figures_dir / 'pool_analysis' / 'aggregate'
@@ -152,7 +149,7 @@ def analyze_query(qp: QueryPool, cfg: PoolAnalysisCfg) -> PerQueryResult:
     pool = qp.pool
     vectors = pool.vectors
     sim_matrix = pool.sim_matrix()
-    sim_to_query = pool.sim_to_query(qp.query_vec)
+    sim_to_query = pool.sim_scores(qp.query_vec)
 
     geom = {
         **cosine_stats(sim_matrix),

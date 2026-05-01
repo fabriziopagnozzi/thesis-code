@@ -16,30 +16,29 @@ from typing import Literal, cast
 
 import numpy as np
 import polars as pl
-from duckdb import DuckDBPyConnection
 
 from experiments.mimic.chunking.schemas_chunking import (
     AdmissionMetaSlimRow,
     ConditionStatsRow,
 )
-from experiments.mimic.evaluation.candidate_pool import CandidatePoolBuilder
 from experiments.mimic.global_configs import (
-    duckdb_con,
     get_table_path,
     global_cfg,
     read_parquet,
     setup_logging,
 )
-from experiments.mimic.queries.schemas_queries import BuildQueryPromptsCfg, GroundingChunkSample
+from experiments.mimic.queries.schemas_queries import (
+    BuildQueryPromptsCfg,
+    GroundingChunkSample,
+    QueryModifier,
+)
+from experiments.mimic.utils.candidate_pools import ChunkPoolBuilder
 from experiments.mimic.utils.charlson import ICD3_TO_CHARLSON_COLS
 
 query_prompts_cfg = BuildQueryPromptsCfg.load()
 
 
-def run_build_query_prompts(
-    con: DuckDBPyConnection = duckdb_con,
-    cfg: BuildQueryPromptsCfg | None = None,
-) -> pl.DataFrame:
+def run_build_query_prompts(cfg: BuildQueryPromptsCfg | None = None) -> pl.DataFrame:
     global query_prompts_cfg
     if cfg is not None:
         query_prompts_cfg = cfg
@@ -52,9 +51,7 @@ def run_build_query_prompts(
         f'Loaded {len(conditions):,} conditions, {len(chunks):,} chunks, {len(metadata):,} admissions'
     )
 
-    pool_builder = CandidatePoolBuilder(con, embedding_model=global_cfg.embedding_model)
-    df = build_query_prompts(conditions, chunks, metadata, pool_builder)
-
+    df = build_query_prompts(conditions, chunks, metadata)
     out_path = get_table_path('queries_prompts')
     df.write_parquet(out_path)
 
@@ -65,8 +62,9 @@ def build_query_prompts(
     conditions: pl.DataFrame,
     chunks: pl.DataFrame,
     metadata: pl.DataFrame,
-    pool_builder: CandidatePoolBuilder,
 ) -> pl.DataFrame:
+    pool_builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
+
     filtered_chunks = chunks.filter(
         pl.col('section_name').is_in(query_prompts_cfg.high_value_sections)
     )
@@ -97,52 +95,57 @@ def build_query_prompts(
     results = []
     skipped = 0
 
-    for condition_row in selected_conditions.iter_rows(named=True):
-        condition_row = cast(ConditionStatsRow, condition_row)
-        icd10_3char = condition_row['icd10_3char']
-        cond_name = condition_row['condition_name'] or icd10_3char
-        stratum = condition_row.get('stratum', 1)
-        cond_hadm_ids = pool_builder.icd3_hadm_ids(icd10_3char)
+    for row in selected_conditions.iter_rows(named=True):
+        row = cast(ConditionStatsRow, row)
+        stratum = row.get('stratum', 1)
+        top_comorbidity_mods = json.loads(row.get('top_comorbidity_mods_json') or '[]')
+        condition_hadm_ids = pool_builder.get_icd3_hadm_ids(row['icd10_3char'])
+        excluded_cols = ICD3_TO_CHARLSON_COLS.get(row['icd10_3char'], frozenset())
 
-        top_mods = json.loads(condition_row.get('top_comorbidity_mods_json') or '[]')
-        excluded_cols = ICD3_TO_CHARLSON_COLS.get(icd10_3char, frozenset())
-        charlson = [(m['label'], 'comorbidity') for m in top_mods if m['col'] not in excluded_cols][
-            : query_prompts_cfg.max_modifiers
-        ]
-        demographic = [
-            (text, 'demographic') for text in query_prompts_cfg.demographic_modifiers_text
+        # NB label here is actually the charlson column DESCRIPTION, it was an old convention
+        comorbidity_mod = [
+            QueryModifier(descr=m['label'], type='comorbidity')
+            for m in top_comorbidity_mods
+            if m['col'] not in excluded_cols
+        ][: query_prompts_cfg.max_comorbidity_modifiers]
+        demographic_mod = [
+            QueryModifier(descr=text, type='demographic')
+            for text in query_prompts_cfg.demographic_modifiers_text
         ]
 
-        if not charlson:
+        if len(comorbidity_mod) == 0:
             skipped += 1
             continue
 
         # Two queries per condition: top + rare comorbidity, each paired with one demographic - exactly 2 aspects each
-        demo = demographic[:1]
-        modifier_sets: list[list[tuple[str, str]]] = [[charlson[0], *demo]]
-        if len(charlson) >= 2:
-            modifier_sets.append([charlson[-1], *demo])
+        demo = demographic_mod[:1]
+        modifier_sets: list[list[QueryModifier]] = [[comorbidity_mod[0], *demo]]
+        if len(comorbidity_mod) >= 2:
+            modifier_sets.append([comorbidity_mod[-1], *demo])
 
-        # Pool composition statistics, computed once per condition, before any LLM work
+        # POOL COMPISITION STATS
+        modifier_stats: dict[QueryModifier, dict[str, int]] = {}
         n_condition_chunks = sum(
-            len(chunks_by_hadm_id[h]) for h in cond_hadm_ids if h in chunks_by_hadm_id
+            len(chunks_by_hadm_id[h]) for h in condition_hadm_ids if h in chunks_by_hadm_id
         )
-        mod_type_lookup = dict(charlson + demographic)
-        unique_mod_texts = {t for mset in modifier_sets for t, _ in mset}
-        modifier_stats: dict[str, dict] = {}
-        for mod_text in unique_mod_texts:
-            inter = pool_builder.filter_by_condition_modifier(
-                icd10_3char, mod_text, mod_type_lookup[mod_text]
+        unique_mods = set(comorbidity_mod + demographic_mod)
+
+        for mod in unique_mods:
+            mod_hadm_ids = pool_builder.get_hadm_ids_by_condition_modifier(row['icd10_3char'], mod)
+            n_mod_chunks = sum(
+                len(chunks_by_hadm_id[h]) for h in mod_hadm_ids if h in chunks_by_hadm_id
             )
-            n_mod_chunks = sum(len(chunks_by_hadm_id[h]) for h in inter if h in chunks_by_hadm_id)
-            modifier_stats[mod_text] = {'n_admissions': len(inter), 'n_chunks': n_mod_chunks}
+            modifier_stats[mod] = {
+                'n_admissions': len(mod_hadm_ids),
+                'n_chunks': n_mod_chunks,
+            }
 
         for modifiers in modifier_sets:
             # Skip if any modifier has too few admissions within this condition's pool
             if any(
-                modifier_stats.get(t, {}).get('n_admissions', 0)
+                int(modifier_stats.get(mod).get('n_admissions', 0))
                 < query_prompts_cfg.min_modifier_admissions
-                for t, _ in modifiers
+                for mod in modifiers
             ):
                 skipped += 1
                 continue
@@ -150,7 +153,7 @@ def build_query_prompts(
             data_samples = _sample_grounding_chunks_per_modifier(
                 chunks_by_hadm_id,
                 meta_by_hadm_id,
-                icd10_3char,
+                row['icd10_3char'],
                 modifiers,
                 pool_builder,
                 n=query_prompts_cfg.n_grounding_patients,
@@ -159,24 +162,26 @@ def build_query_prompts(
                 continue
 
             modifier_list = '\n'.join(f'- {text}' for text, _ in modifiers)
-            full_prompt = query_prompts_cfg.prompt_template.format(
-                condition=cond_name,
-                modifier_list=modifier_list,
-                chunks_block=_format_chunks_block(data_samples),
-            )
             results.append({
-                'icd10_3char': icd10_3char,
-                'condition_name': cond_name,
+                'icd10_3char': row['icd10_3char'],
+                'condition_name': row['condition_name'],
                 'stratum': stratum,
                 'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
                 'n_modifiers': len(modifiers),
-                'n_condition_admissions': len(cond_hadm_ids),
+                'n_condition_admissions': len(condition_hadm_ids),
                 'n_condition_chunks': n_condition_chunks,
-                'modifier_stats_json': json.dumps({t: modifier_stats[t] for t, _ in modifiers}),
+                'modifier_stats_json': json.dumps({
+                    mod.descr: modifier_stats[mod] for mod in modifiers
+                }),
                 'n_grounding_chunks': len(data_samples),
                 'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
-                'full_prompt': full_prompt,
+                'full_prompt': query_prompts_cfg.prompt_template.format(
+                    condition=row['condition_name'],
+                    modifier_list=modifier_list,
+                    chunks_block=_format_chunks_block(data_samples),
+                ),
             })
+    # end for condition_row in selected_conditions.iter_rows(named=True):
 
     print(
         f'Built {len(results):,} grounded prompts, skipped {skipped:,} conditions '
@@ -248,23 +253,26 @@ def _sample_grounding_chunks_per_modifier(
     chunks_by_hadm: dict[int, pl.DataFrame],
     meta_by_hadm: dict[int, AdmissionMetaSlimRow],
     icd10_3char: str,
-    modifiers: list[tuple[str, str]],
-    pool_builder: CandidatePoolBuilder,
+    modifiers: list[QueryModifier],
+    pool_builder: ChunkPoolBuilder,
     n: int,
 ) -> list[GroundingChunkSample]:
     """Sample up to n patients, round-robin across modifiers for diversity."""
     seen_hadm: set[int] = set()
     samples: list[GroundingChunkSample] = []
 
-    for mod_text, mod_type in modifiers * n:
+    for mod in modifiers * n:
         if len(seen_hadm) >= n:
             break
-        mod_hadm_ids = pool_builder.filter_by_condition_modifier(icd10_3char, mod_text, mod_type)
+
+        mod_hadm_ids = pool_builder.get_hadm_ids_by_condition_modifier(icd10_3char, mod)
         if not mod_hadm_ids:
             continue
+
         bhc_candidates = _hadm_ids_with_bhc(chunks_by_hadm, mod_hadm_ids - seen_hadm)
         if not bhc_candidates:
             continue
+
         chosen_hid = bhc_candidates[0]
         seen_hadm.add(chosen_hid)
         samples.extend(_sample_patient(chosen_hid, chunks_by_hadm, meta_by_hadm))
