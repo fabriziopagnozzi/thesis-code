@@ -18,7 +18,7 @@ from experiments.mimic.queries.schemas_queries import (
     QueryModifier,
     QueryRowPostFiltering,
 )
-from experiments.mimic.utils.candidate_pools import (
+from experiments.mimic.utils.chunk_pools import (
     ChunkPool,
     ChunkPoolBuilder,
 )
@@ -36,6 +36,7 @@ from .plots import store_eval_figures
 from .schemas_evaluation import (
     EvaluateCfg,
     EvaluationMetrics,
+    ModifierToChunkIds,
 )
 
 evaluate_cfg = EvaluateCfg.load()
@@ -81,21 +82,21 @@ def evaluate_llm(
         row = cast(GoldAnnotationRow, row)
         icd10_3char = row['icd10_3char']
         query_text = row['query_text']
-        facets = json.loads(row['facets_json'])
-        if not facets:
+        aspect_label_to_chunk_ids: ModifierToChunkIds = json.loads(row['facets_json'])
+        if not aspect_label_to_chunk_ids:
             continue
 
         query_vec = builder.embed_query(query_text)
 
-        cosine_pool = builder.topk_cosine(query_vec, n=global_cfg.prefilter_n)
-        all_gold_ids = {cid for cids in facets.values() for cid in cids}
-        gold_pool = builder.topk_cosine_for_chunk_ids(ids=all_gold_ids)
-        pool = ChunkPool.merge([cosine_pool, gold_pool])
+        cosine_pool = builder.topk_cosine(query_vec, k=global_cfg.prefilter_n)
+        all_gold_ids = {cid for cids in aspect_label_to_chunk_ids.values() for cid in cids}
+        gold_pool = builder.topk_cosine_for_chunk_ids(all_gold_ids)
+        pool = ChunkPool.merge([gold_pool, cosine_pool])
 
         query_metrics = evaluate_query(
             pool,
             query_vec,
-            facets,
+            aspect_label_to_chunk_ids,
             strategies=evaluate_cfg.strategies,
             k_values=evaluate_cfg.k_values,
             lam_values=evaluate_cfg.lam_values,
@@ -117,28 +118,25 @@ def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
     print(f'Loaded {len(queries_df):,} queries for structural evaluation')
 
     all_rows = []
-    for curr_query in tqdm(
+    for query in tqdm(
         queries_df.iter_rows(named=True),
         total=len(queries_df),
         desc='Evaluating (structural)',
         dynamic_ncols=True,
     ):
-        curr_query = cast(QueryRowPostFiltering, curr_query)
-        modifiers: list[QueryModifier] = QueryModifier.parse_list(
-            curr_query.get('modifiers_json', '') or ''
-        )
+        query = cast(QueryRowPostFiltering, query)
+        modifiers: list[QueryModifier] = QueryModifier.parse_list(query.get('modifiers_json', ''))
         if not modifiers:
             continue
 
-        query_vec = builder.embed_query(curr_query['query_text'])
+        query_vec = builder.embed_query(query['query_text'])
         pool = builder.topk_cosine_for_condition(
-            query_vec, curr_query['icd10_3char'], n=global_cfg.prefilter_n
+            query_vec, query['icd10_3char'], k=global_cfg.prefilter_n
         )
-
-        facets = build_structural_facets(pool, curr_query['icd10_3char'], modifiers, builder)
-        if not facets:
+        mod_to_chunk_ids = build_structural_facets(pool, query['icd10_3char'], modifiers, builder)
+        if not mod_to_chunk_ids:
             print(
-                f'  [skip] query_id={curr_query["query_id"]} ({curr_query["icd10_3char"]}): '
+                f'  [skip] query_id={query["query_id"]} ({query["icd10_3char"]}): '
                 f'no modifier chunks found in pool'
             )
             continue
@@ -146,7 +144,7 @@ def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
         query_metrics = evaluate_query(
             pool,
             query_vec,
-            facets,
+            mod_to_chunk_ids,
             strategies=evaluate_cfg.strategies,
             k_values=evaluate_cfg.k_values,
             lam_values=evaluate_cfg.lam_values,
@@ -154,10 +152,10 @@ def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
 
         for m in query_metrics:
             all_rows.append({
-                'query_id': curr_query['query_id'],
-                'icd10_3char': curr_query['icd10_3char'],
-                'stratum': curr_query.get('stratum'),
-                'n_facets': len(facets),
+                'query_id': query['query_id'],
+                'icd10_3char': query['icd10_3char'],
+                'stratum': query.get('stratum'),
+                'n_facets': len(mod_to_chunk_ids),
                 **m,
             })
 
@@ -169,27 +167,22 @@ def build_structural_facets(
     icd10_3char: str,
     modifiers: list[QueryModifier],
     builder: ChunkPoolBuilder,
-) -> dict[str, list[str]]:
-    """Build gold facets structurally: pool chunks whose hadm_id ∈ condition_hadm_ids ∩ modifier_hadm_ids."""
-    facets: dict[str, list[str]] = {}
+) -> ModifierToChunkIds:
+    mod_to_chunk_ids: ModifierToChunkIds = {}
 
-    for m in modifiers:
-        qualifying = builder.get_hadm_ids_by_condition_modifier(icd10_3char, m)
-        chunk_ids = [
-            cid
-            for hid, cid in zip(pool.hadm_ids.tolist(), pool.chunk_ids, strict=False)
-            if hid in qualifying
-        ]
-        if chunk_ids:
-            facets[m.comorb_label] = chunk_ids
+    for mod in modifiers:
+        qualifying_hadm_ids = builder.get_hadm_ids_by_condition_modifier(icd10_3char, mod)
+        facet_pool = pool.filter_hadm_ids(qualifying_hadm_ids)
+        if facet_pool.n > 0:
+            mod_to_chunk_ids[mod.label] = facet_pool.chunk_ids
 
-    return facets
+    return mod_to_chunk_ids
 
 
 def evaluate_query(
     pool: ChunkPool,
     query_vec: np.ndarray,
-    facets: dict[str, list[str]],
+    modifier_to_chunk_ids: ModifierToChunkIds,
     strategies: list[ScoringFunction],
     k_values: list[int],
     lam_values: list[float],
@@ -215,20 +208,24 @@ def evaluate_query(
     sim_to_query = pool.sim_scores(query_vec)
     sim_matrix = pool.sim_matrix()
 
-    chunk_id_to_idx: dict[str, int] = {cid: i for i, cid in enumerate(pool.chunk_ids)}
+    chunk_id_to_pool_index: dict[str, int] = {cid: i for i, cid in enumerate(pool.chunk_ids)}
     pool_id_set = set(pool.chunk_ids)
-    all_gold_ids = {cid for cids in facets.values() for cid in cids}
+    all_gold_ids = {cid for cids in modifier_to_chunk_ids.values() for cid in cids}
 
     metrics = []
     for result in retrieval_results:
         selected_set = set(result.selected_chunk_ids)
-        ar = aspect_recall(selected_set, facets)
-        war = weighted_aspect_recall(selected_set, facets)
+        ar = aspect_recall(selected_set, modifier_to_chunk_ids)
+        war = weighted_aspect_recall(selected_set, modifier_to_chunk_ids)
         gp = gold_precision(selected_set, all_gold_ids)
         gr = gold_recall(selected_set, all_gold_ids, pool_id_set)
 
         eval_indices = np.array(
-            [chunk_id_to_idx[cid] for cid in result.selected_chunk_ids if cid in chunk_id_to_idx],
+            [
+                chunk_id_to_pool_index[cid]
+                for cid in result.selected_chunk_ids
+                if cid in chunk_id_to_pool_index
+            ],
             dtype=np.intp,
         )
 
@@ -239,9 +236,9 @@ def evaluate_query(
         if topk_ref is not None and result.strategy != 'top_k':
             topk_eval_idx = np.array(
                 [
-                    chunk_id_to_idx[cid]
+                    chunk_id_to_pool_index[cid]
                     for cid in topk_ref.selected_chunk_ids
-                    if cid in chunk_id_to_idx
+                    if cid in chunk_id_to_pool_index
                 ],
                 dtype=np.intp,
             )

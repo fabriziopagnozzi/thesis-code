@@ -1,7 +1,6 @@
-import operator
-from collections.abc import Callable
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal, NotRequired, TypedDict, Unpack, cast
+from typing import Literal, NotRequired, TypedDict, Unpack, cast
 
 import numpy as np
 import polars as pl
@@ -14,18 +13,11 @@ from experiments.mimic.global_configs import (
     lancedb_con,
     read_parquet,
 )
-from experiments.mimic.queries.schemas_queries import BuildQueryPromptsCfg, QueryModifier
+from experiments.mimic.queries.schemas_queries import QueryModifier
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.embedder import Embedder
 
 MAX_CANDIDATES = 100_000
-_OPERATORS_MAP: dict[str, Callable[[Any, Any], bool]] = {
-    '>': operator.gt,
-    '<': operator.lt,
-    '>=': operator.ge,
-    '<=': operator.le,
-    '==': operator.eq,
-}
 
 
 class ChunkPoolBuilderArgs(TypedDict):
@@ -39,6 +31,7 @@ class ChunkPoolBuilder:
         **kwargs: Unpack[ChunkPoolBuilderArgs],
     ):
         self._con = duckdb_con
+        self._con.register('admissions_meta', read_parquet('admissions_metadata'))
         self._embedder = Embedder(
             **kwargs,
             batch_size=1,
@@ -47,11 +40,7 @@ class ChunkPoolBuilder:
         self._table = lancedb_con.open_table(global_cfg.chunks_vec_table)
         self._vec_col_name = get_vec_col_name(kwargs['model_name'])
         self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
-
         self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
-        self._demographic_filters = BuildQueryPromptsCfg.load().demographic_filters
-
-        self._admissions_meta = read_parquet('admissions_metadata')
 
         print(
             f'[CandidatePoolBuilder] table: {global_cfg.chunks_vec_table!r}, '
@@ -66,7 +55,7 @@ class ChunkPoolBuilder:
             vectors=np.empty((0, self._vec_dim), dtype=np.float32),
             texts=[],
             section_names=[],
-            metadata_df=pl.DataFrame(),
+            contextual_prefixes=[],
         )
 
     def _pool_from_arrow(self, result: pa.Table) -> ChunkPool:
@@ -94,52 +83,31 @@ class ChunkPoolBuilder:
             vectors=vectors,
             texts=df['text'].to_list(),
             section_names=df['section_name'].to_list(),
-            metadata_df=df,
+            contextual_prefixes=df['contextual_prefix'].fill_null('').to_list(),
         )
 
-    def topk_cosine(self, vec: NDArray[np.float32], n: int) -> ChunkPool:
+    def topk_cosine(self, vec: NDArray[np.float32], k: int, predicate: str = '') -> ChunkPool:
         result = (
             self._table
             .search(vec, vector_column_name=self._vec_col_name)
-            .where(f'{global_cfg.sections_filter_sql}')
-            .limit(n)
+            .where(f'{predicate + ("AND" if predicate else "")} {global_cfg.sections_filter_sql}')
+            .limit(k)
             .to_arrow()
         )
         return self._pool_from_arrow(result)
 
     def topk_cosine_for_condition(
-        self,
-        query_vec: NDArray[np.float32],
-        icd10_3char: str,
-        n: int,
+        self, vec: NDArray[np.float32], icd10_3char: str, k: int
     ) -> ChunkPool:
-        result = (
-            self._table
-            .search(query_vec, vector_column_name=self._vec_col_name)
-            .where(
-                f"array_has(icd10_3char_list, '{icd10_3char}') AND {global_cfg.sections_filter_sql}"
-            )
-            .limit(n)
-            .to_arrow()
-        )
-        return self._pool_from_arrow(result)
-
-    def topk_cosine_for_hadm_ids(
-        self, vec: NDArray[np.float32], hadm_ids: set[int], n: int
-    ) -> ChunkPool:
-        """Top-N cosine pool restricted to a given hadm_id set."""
-        if not hadm_ids:
-            return self._empty_pool()
-
-        hadm_list = ', '.join(str(h) for h in hadm_ids)
         result = (
             self._table
             .search(vec, vector_column_name=self._vec_col_name)
-            .where(f'hadm_id IN ({hadm_list}) AND {global_cfg.sections_filter_sql}')
-            .limit(n)
+            .where(
+                f"array_has(icd10_3char_list, '{icd10_3char}') AND {global_cfg.sections_filter_sql}"
+            )
+            .limit(k)
             .to_arrow()
         )
-
         return self._pool_from_arrow(result)
 
     def topk_cosine_for_chunk_ids(self, ids: set[str]) -> ChunkPool:
@@ -147,43 +115,69 @@ class ChunkPoolBuilder:
             return self._empty_pool()
 
         placeholders = ', '.join(f"'{cid}'" for cid in ids)
-        result = (
+        return self._pool_from_arrow(
             self._table.search().where(f'chunk_id IN ({placeholders})').limit(len(ids)).to_arrow()
         )
 
-        return self._pool_from_arrow(result)
+    def topk_cosine_for_modifiers(
+        self,
+        vec: NDArray[np.float32],
+        icd10_3char: str,
+        modifiers: list[QueryModifier],
+        k: int,
+    ) -> ChunkPool:
+        """Top-N cosine pool for chunks matching condition AND any modifier.
+        Builds SQL predicates directly from the lance table's structured columns.
+        The pool covers the union across modifiers: condition AND (mod1 OR mod2 OR ...).
+        """
+        if k <= 0 or not modifiers:
+            return self._empty_pool()
+
+        modifier_preds = ' OR '.join(f'({m.sql_predicate()})' for m in modifiers)
+        predicate = (
+            f"array_has(icd10_3char_list, '{icd10_3char}') "
+            f'AND ({modifier_preds}) '
+            f'AND {global_cfg.sections_filter_sql}'
+        )
+
+        return self._pool_from_arrow(
+            self._table
+            .search(vec, vector_column_name=self._vec_col_name)
+            .where(predicate)
+            .limit(k)
+            .to_arrow()
+        )
+
+    def topk_cosine_for_hadm_ids(
+        self, vec: NDArray[np.float32], hadm_ids: set[int], k: int
+    ) -> ChunkPool:
+        """Top-N cosine pool restricted to a given hadm_id set."""
+        if not hadm_ids:
+            return self._empty_pool()
+
+        hadm_list = ', '.join(str(h) for h in hadm_ids)
+        return self._pool_from_arrow(
+            self._table
+            .search(vec, vector_column_name=self._vec_col_name)
+            .where(f'hadm_id IN ({hadm_list}) AND {global_cfg.sections_filter_sql}')
+            .limit(k)
+            .to_arrow()
+        )
 
     def get_modifier_hadm_ids(self, m: QueryModifier) -> set[int]:
-        if m.comorb_label in self._modifier_to_hadm_ids_cache:
-            return self._modifier_to_hadm_ids_cache[m.comorb_label]
+        if m.label in self._modifier_to_hadm_ids_cache:
+            return self._modifier_to_hadm_ids_cache[m.label]
 
-        # Comorbidity modifier (Charlson table)
-        if m.comorb_label is not None:
-            hadm_ids = self._con.execute(f"""--sql
-                SELECT DISTINCT charlson.hadm_id
-                FROM charlson
-                WHERE charlson.{m.comorb_label} > 0
-            """).pl()['hadm_id']
-            result = set(hadm_ids.to_list())
-            self._modifier_to_hadm_ids_cache[m.comorb_label] = result
-            return result
+        if m.type == 'comorbidity':
+            sql = f"""--sql SELECT DISTINCT hadm_id FROM charlson WHERE {m.sql_predicate()}"""
+        else:
+            sql = (
+                f"""--sql SELECT DISTINCT hadm_id FROM admissions_meta WHERE {m.sql_predicate()}"""
+            )
 
-        # Demographic modifier (admissions_metadata)
-        demo = self._demographic_filters.get(m.comorb_label)
-        if demo is not None and self._admissions_meta is not None:
-            column, op_str, value = demo
-            op_fn = _OPERATORS_MAP.get(op_str)
-
-            if op_fn is not None:
-                filtered = self._admissions_meta.filter(op_fn(pl.col(column), value))
-                result = set(filtered['hadm_id'].to_list())
-                self._modifier_to_hadm_ids_cache[m.comorb_label] = result
-                return result
-            else:
-                raise RuntimeError(f'Demographic Filters with unsupported operator: "{op_str}".')
-
-        self._modifier_to_hadm_ids_cache[m.comorb_label] = set()
-        return set()
+        result = set(self._con.execute(sql).pl()['hadm_id'].to_list())
+        self._modifier_to_hadm_ids_cache[m.label] = result
+        return result
 
     def get_icd3_hadm_ids(self, icd10_3char: str) -> set[int]:
         cache_key = f'__icd3__{icd10_3char}'
@@ -193,7 +187,8 @@ class ChunkPoolBuilder:
         result = set(
             self._con
             .execute(f"""--sql
-                SELECT DISTINCT hadm_id FROM unified_diagnoses
+                SELECT DISTINCT hadm_id
+                FROM unified_diagnoses
                 WHERE LEFT(unified_icd10, 3) = '{icd10_3char}'
             """)
             .pl()['hadm_id']
@@ -230,7 +225,7 @@ class ChunkPool:
     vectors: NDArray[np.float32]  # (n, d)
     texts: list[str]
     section_names: list[str]
-    metadata_df: pl.DataFrame
+    contextual_prefixes: list[str]
     _sim_matrix: NDArray[np.float32] | None = field(default=None, repr=False)
 
     @property
@@ -251,6 +246,17 @@ class ChunkPool:
     def sim_scores(self, vec: NDArray[np.float32]) -> NDArray[np.float32]:
         return self.vectors @ vec
 
+    def iter_batches(self, batch_size: int) -> Iterator[tuple[int, ChunkPool]]:
+        for start in range(0, self.n, batch_size):
+            end = min(start + batch_size, self.n)
+            yield start, self.slice(np.arange(start, end, dtype=np.intp))
+
+    def filter_hadm_ids(self, hadm_ids: set[int]) -> ChunkPool:
+        if not hadm_ids:
+            return self.slice(np.empty(0, dtype=np.intp))
+        keep = np.flatnonzero(np.isin(self.hadm_ids, list(hadm_ids))).astype(np.intp)
+        return self.slice(keep)
+
     def slice(self, indices: NDArray[np.intp]) -> ChunkPool:
         idx_list = indices.tolist()
         return ChunkPool(
@@ -259,7 +265,7 @@ class ChunkPool:
             vectors=self.vectors[indices],
             texts=[self.texts[i] for i in idx_list],
             section_names=[self.section_names[i] for i in idx_list],
-            metadata_df=self.metadata_df[idx_list],
+            contextual_prefixes=[self.contextual_prefixes[i] for i in idx_list],
         )
 
     @classmethod
@@ -270,7 +276,7 @@ class ChunkPool:
             vectors=np.concatenate([p.vectors for p in pools]),
             texts=[t for p in pools for t in p.texts],
             section_names=[s for p in pools for s in p.section_names],
-            metadata_df=pl.concat([p.metadata_df for p in pools]),
+            contextual_prefixes=[s for p in pools for s in p.contextual_prefixes],
         )
 
     @classmethod

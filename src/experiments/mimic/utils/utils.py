@@ -4,7 +4,7 @@ import polars as pl
 
 from experiments.mimic.embeddings.schemas_embeddings import EmbedJoinedRow
 from experiments.mimic.global_configs import read_parquet
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.charlson import CHARLSON_LABEL_TO_STR
 
 
 def get_vec_col_name(model_name: str) -> str:
@@ -27,7 +27,7 @@ def get_age_group(age: float | None) -> str:
 
 
 def get_charlson_conditions(meta_row: EmbedJoinedRow) -> list[str]:
-    return [label for col, label in CHARLSON_LABELS_TO_STR.items() if meta_row.get(col) == 1]
+    return [label for col, label in CHARLSON_LABEL_TO_STR.items() if meta_row.get(col) == 1]
 
 
 def load_filtered_queries(embedding_model: str) -> pl.DataFrame:

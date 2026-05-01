@@ -2,7 +2,7 @@ import polars as pl
 
 from experiments.mimic.embeddings.schemas_embeddings import EmbedJoinedRow
 from experiments.mimic.global_configs import read_parquet
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.charlson import CHARLSON_LABELS
 from experiments.mimic.utils.utils import get_age_group, get_charlson_conditions
 
 
@@ -16,7 +16,7 @@ def add_contextual_prefix_to_df(chunks: pl.DataFrame) -> pl.DataFrame:
         'top_icd_descriptions',
         'charlson_comorbidity_index',
         'admission_type',
-        *CHARLSON_LABELS_TO_STR.keys(),
+        *CHARLSON_LABELS,
     ]
     metadata = read_parquet('admissions_metadata').select(meta_cols).unique(subset=['hadm_id'])
     cols_to_drop = [c for c in meta_cols if c != 'hadm_id']

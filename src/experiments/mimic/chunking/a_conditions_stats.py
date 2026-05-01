@@ -4,13 +4,16 @@ import duckdb
 import polars as pl
 from tqdm import tqdm
 
-from experiments.mimic.chunking.schemas_chunking import ConditionsStatsCfg
+from experiments.mimic.chunking.schemas_chunking import ComorbidityOccurrence, ConditionsStatsCfg
 from experiments.mimic.global_configs import (
     duckdb_con,
     get_table_path,
     setup_logging,
 )
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR, ICD3_TO_CHARLSON_COLS
+from experiments.mimic.utils.charlson import (
+    CHARLSON_LABELS,
+    ICD3_TO_CHARLSON_LABEL,
+)
 from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
 from helpers.ollama_client import generate_json
 
@@ -41,8 +44,6 @@ def select_conditions(
         icd10_3char, condition_name, n_admissions, mean_comorbidity_count, top_comorbidity_mods_json
     Sorted by n_admissions descending, filtered by min_admissions.
     """
-    all_cols = list(CHARLSON_LABELS_TO_STR.keys())
-
     prefix_rows = con.execute(f"""--sql
         WITH condition_stats AS (
             SELECT
@@ -70,12 +71,13 @@ def select_conditions(
     kept_rows = [
         (icd3, raw, n) for icd3, raw, n in prefix_rows if code_to_info.get(icd3, (None, True))[1]
     ]
+
     n_filtered = len(prefix_rows) - len(kept_rows)
     if n_filtered:
         print(f'Filtered out {n_filtered} administrative/generic codes by LLM')
 
     charlson_rates = con.execute(f"""--sql
-        SELECT dedup.icd10_3char, {', '.join(f'AVG(c.{col}) AS {col}' for col in all_cols)}
+        SELECT dedup.icd10_3char, {', '.join(f'AVG(c.{col}) AS {col}' for col in CHARLSON_LABELS)}
         FROM (
             SELECT DISTINCT LEFT(unified_icd10, 3) AS icd10_3char, hadm_id
             FROM unified_diagnoses
@@ -84,21 +86,22 @@ def select_conditions(
         GROUP BY dedup.icd10_3char
     """).fetchall()
 
-    rates_by_icd3: dict[str, tuple] = {row[0]: row[1:] for row in charlson_rates}
+    rates_by_icd3: dict[str, tuple[float]] = {row[0]: row[1:] for row in charlson_rates}
 
     rows = []
     for icd3, cond_name, n in kept_rows:
-        rates = rates_by_icd3.get(icd3)
+        rates: tuple[float] | None = rates_by_icd3.get(icd3)
+
         if not rates:
             scored = []
             mean_comorbidity_count = 0.0
         else:
             mean_comorbidity_count = round(sum(float(r) for r in rates if r is not None), 2)
-            excluded_cols = ICD3_TO_CHARLSON_COLS.get(icd3, frozenset())
+            excluded_cols = ICD3_TO_CHARLSON_LABEL.get(icd3, frozenset())
             scored = [
-                {'col': col, 'label': CHARLSON_LABELS_TO_STR[col], 'rate': round(float(r), 4)}
-                for col, r in zip(all_cols, rates, strict=True)
-                if r and r > 0.05 and col not in excluded_cols
+                ComorbidityOccurrence(col=col, rate=round(float(rate), 4))
+                for col, rate in zip(CHARLSON_LABELS, rates, strict=True)
+                if rate and rate > 0.05 and col not in excluded_cols
             ]
             scored.sort(key=lambda x: x['rate'], reverse=True)
 
@@ -109,6 +112,7 @@ def select_conditions(
             'mean_comorbidity_count': mean_comorbidity_count,
             'top_comorbidity_mods_json': json.dumps(scored),
         })
+    # end for icd3, cond_name, n in kept_rows
 
     df = pl.DataFrame(rows).sort('n_admissions', descending=True)
     print(

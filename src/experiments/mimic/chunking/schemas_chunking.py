@@ -4,6 +4,7 @@ from typing import TypedDict
 from pydantic import BaseModel, computed_field
 
 from experiments.mimic.global_configs import load_default_config
+from experiments.mimic.utils.charlson import CharlsonLabel
 
 
 class ConditionsStatsCfg(BaseModel):
@@ -78,7 +79,11 @@ class DedupCfg(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Phase 1 - corpus construction
+class ComorbidityOccurrence(TypedDict):
+    col: CharlsonLabel
+    rate: float
+
+
 class ConditionStatsRow(TypedDict):
     """conditions_stats.parquet - one row per ICD-10 3-char prefix condition."""
 
@@ -86,7 +91,7 @@ class ConditionStatsRow(TypedDict):
     condition_name: str
     n_admissions: int
     mean_comorbidity_count: float
-    top_comorbidity_mods_json: str  # JSON array of modifier dicts
+    top_comorbidity_mods_json: str  # JSON array of ComorbidityOccurrence
 
 
 class ChunkRow(TypedDict):

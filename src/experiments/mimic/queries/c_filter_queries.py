@@ -18,7 +18,7 @@ from experiments.mimic.global_configs import (
     setup_logging,
 )
 from experiments.mimic.queries.schemas_queries import DivergenceMetrics, FilterQueriesCfg, QueryRow
-from experiments.mimic.utils.candidate_pools import ChunkPool, ChunkPoolBuilder
+from experiments.mimic.utils.chunk_pools import ChunkPool, ChunkPoolBuilder
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.metrics import fac_cov_score, jaccard
 from helpers.query_algorithms import select
@@ -71,7 +71,7 @@ def filter_queries(
         row = cast(QueryRow, row)
         query_vec = builder.embed_query(row['query_text'])
         pool = builder.topk_cosine_for_condition(
-            query_vec, icd10_3char=row['icd10_3char'], n=global_cfg.prefilter_n
+            query_vec, icd10_3char=row['icd10_3char'], k=global_cfg.prefilter_n
         )
 
         all_jaccards, all_fac_gaps, all_fac_topks, all_fac_fls = [], [], [], []

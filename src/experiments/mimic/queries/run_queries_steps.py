@@ -28,7 +28,7 @@ def run_queries_subpipeline(
 
     if 1 in steps:
         print('\n> Step 3.1: Building grounded query prompts')
-        run_build_query_prompts(con, cfg=build_query_prompts_cfg)
+        run_build_query_prompts(cfg=build_query_prompts_cfg)
 
     if 2 in steps:
         print('\n> Step 3.2: Generating clinical questions via LLM')
@@ -36,7 +36,7 @@ def run_queries_subpipeline(
 
     if 3 in steps:
         print('\n> Step 3.3: Divergence pre-filter (facility-location vs top-k)')
-        run_filter_queries(con, cfg=filter_queries_cfg)
+        run_filter_queries(cfg=filter_queries_cfg)
 
     print(f'\n\nPhase 3 complete. Outputs in {MimicPaths.experiment_dir}:\n')
 

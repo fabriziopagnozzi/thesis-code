@@ -31,20 +31,20 @@ def get_embedded_chunk_ids(table: Table, model: str) -> frozenset[str]:
 
     if vec_col not in lance_ds.schema.names:
         return frozenset()
-    return cast(
-        frozenset[str],
-        frozenset(
-            lance_ds
-            .scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
-            .to_table()['chunk_id']
-            .to_pylist()
-        ),
-    )
+    else:
+        return cast(
+            frozenset[str],
+            frozenset(
+                lance_ds
+                .scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
+                .to_table()['chunk_id']
+                .to_pylist()
+            ),
+        )
 
 
 def embed_and_commit(
-    admissions_metadata: pl.DataFrame,
-    chunk_texts: list[str],
+    chunks_df: pl.DataFrame,
     hadm_to_icd: dict[int, list[str]],
     embedder: Embedder,
     lancedb_con: DBConnection,
@@ -57,10 +57,8 @@ def embed_and_commit(
     staging_dir = MimicPaths.experiment_dir / f'.tmp_embeddings/{embedder.model_name}'
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    admissions_metadata, chunk_texts, n_existing = _resume_previous_run(
-        admissions_metadata, chunk_texts, staging_dir
-    )
-    n = len(chunk_texts)
+    chunks_df, n_existing = _resume_previous_run(chunks_df, staging_dir)
+    n = len(chunks_df)
 
     # ---------------------------------------------------------
     # BATCH LOOP (Save progress temporarily to disk)
@@ -68,18 +66,21 @@ def embed_and_commit(
         end = min(start + commit_every, n)
         batch_file = staging_dir / f'batch_{n_existing + batch_idx:06d}.parquet'
 
-        batch_df = admissions_metadata.slice(start, end - start)
-        embeddings = embedder.embed_docs(chunk_texts[start:end])
-        vec_dim = embeddings.shape[1]
+        batch_df = chunks_df.slice(start, end - start)
+        vecs = embedder.embed_docs(batch_df['text_to_embed'].to_list())
 
-        batch_v = FixedSizeListArray.from_arrays(pa.array(embeddings.flatten()), vec_dim)
-        icd_new = [hadm_to_icd.get(h, []) for h in batch_df['hadm_id'].to_list()]
+        batch_v = FixedSizeListArray.from_arrays(pa.array(vecs.flatten()), vecs.shape[1])
+        icd10_3char_list = [
+            hadm_to_icd.get(curr_hadm_id, []) for curr_hadm_id in batch_df['hadm_id'].to_list()
+        ]
 
         batch_pa = (
             batch_df
             .to_arrow()
-            .append_column(vec_col, batch_v)
-            .append_column('icd10_3char_list', pa.array(icd_new, type=pa.list_(pa.string())))
+            .append_column(field_=vec_col, column=batch_v)
+            .append_column(
+                'icd10_3char_list', pa.array(icd10_3char_list, type=pa.list_(pa.string()))
+            )
         )
 
         pq.write_table(batch_pa, batch_file)
@@ -88,9 +89,7 @@ def embed_and_commit(
     # ---------------------------------------------------------
     # LANCE DB COMMIT (One time mutation)
     print('All batches embedded. Applying changes to LanceDB...')
-    # Load all staged batches into a single PyArrow dataset
-    staged_ds = ds.dataset(staging_dir, format='parquet')
-    final_pa = staged_ds.to_table()
+    final_pa = ds.dataset(staging_dir, format='parquet').to_table()
 
     if table is None:
         table = lancedb_con.create_table(table_name, data=final_pa, mode='overwrite')
@@ -156,15 +155,14 @@ def build_hadm_to_icd(con) -> dict[int, list[str]]:
     return {int(hadm_id): list_icd3_groups for (hadm_id, list_icd3_groups) in rows}
 
 
-def build_chunk_texts(chunks: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
+def build_chunks_df_for_embedding(chunks: pl.DataFrame) -> pl.DataFrame:
     """Build embed texts from contextual_prefix already stored in the chunks DataFrame.
-
-    Returns (sorted_chunks_df, texts) sorted ascending by text length for efficient batching.
+    Returns (augmented_chunks) sorted ascending by text length for efficient batching.
     """
-    enriched = (
+    return (
         chunks
         .with_columns(
-            full_text=(
+            text_to_embed=(
                 pl.col('contextual_prefix').fill_null('')
                 + pl.lit('\nExcerpt from the ')
                 + pl.col('section_name')
@@ -172,16 +170,13 @@ def build_chunk_texts(chunks: pl.DataFrame) -> tuple[pl.DataFrame, list[str]]:
                 + pl.col('text')
             )
         )
-        .with_columns(text_len=pl.col('full_text').str.len_chars())
+        .with_columns(text_len=pl.col('text_to_embed').str.len_chars())
         .sort('text_len', descending=False)
+        .select(['chunk_id', 'hadm_id', 'text_to_embed'])
     )
-    texts = enriched['full_text'].to_list()
-    return enriched.drop(['full_text', 'text_len']), texts
 
 
-def _resume_previous_run(
-    admissions_metadata: pl.DataFrame, chunk_texts: list[str], staging_dir: Path
-):
+def _resume_previous_run(augmented_chunks_df: pl.DataFrame, staging_dir: Path):
     existing_batch_files = sorted(staging_dir.glob('batch_*.parquet'))
     already_staged_ids: frozenset[str] = frozenset()
 
@@ -196,10 +191,8 @@ def _resume_previous_run(
             f'staged across {len(existing_batch_files)} file(s)'
         )
         staged_list = list(already_staged_ids)
-        mask_series = ~admissions_metadata['chunk_id'].is_in(staged_list)
 
-        admissions_metadata = admissions_metadata.filter(mask_series)
-        keep_list = mask_series.to_list()
-        chunk_texts = [t for t, keep in zip(chunk_texts, keep_list, strict=True) if keep]
+        mask_series = ~augmented_chunks_df['chunk_id'].is_in(staged_list)
+        augmented_chunks_df = augmented_chunks_df.filter(mask_series)
 
-    return admissions_metadata, chunk_texts, len(existing_batch_files)
+    return augmented_chunks_df, len(existing_batch_files)

@@ -60,10 +60,10 @@ class MimicDefaultPrompts:
     """)
 
     fact_extract_template = inspect.cleandoc("""
+        PRIMARY CONDITION: "{condition_name}"
 		QUESTION: {query_text}
-		PATIENT SUBGROUP: {facet_description}
-
-		Below are discharge note excerpts from {condition_name} patients with {facet_description}:
+		PATIENT SUBGROUP: {modifier_subgroup_text}
+		Below are discharge note excerpts from patients with "{condition_name}", that are ALSO in the subgroup above.
 
 		<CHUNKS>
 		{chunks_block}

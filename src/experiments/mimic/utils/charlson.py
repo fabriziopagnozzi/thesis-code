@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, get_args
 
 type CharlsonLabel = Literal[
     'myocardial_infarct',
@@ -20,8 +20,10 @@ type CharlsonLabel = Literal[
     'aids',
 ]
 
+CHARLSON_LABELS: set[CharlsonLabel] = set(get_args(CharlsonLabel.__value__))
 
-CHARLSON_LABELS_TO_STR: dict[CharlsonLabel, str] = {
+
+CHARLSON_LABEL_TO_STR: dict[CharlsonLabel, str] = {
     'myocardial_infarct': 'prior myocardial infarction',
     'congestive_heart_failure': 'congestive heart failure',
     'peripheral_vascular_disease': 'peripheral vascular disease',
@@ -40,13 +42,12 @@ CHARLSON_LABELS_TO_STR: dict[CharlsonLabel, str] = {
     'metastatic_solid_tumor': 'metastatic cancer',
     'aids': 'HIV/AIDS',
 }
-
 CHARLSON_STR_TO_LABEL: dict[str, CharlsonLabel] = {
-    string: label for label, string in CHARLSON_LABELS_TO_STR.items()
+    string: label for label, string in CHARLSON_LABEL_TO_STR.items()
 }
 
 # Used to exclude self-referential comorbidities when the primary condition is in the same bucket.
-CHARLSON_ICD10_3CHAR: dict[CharlsonLabel, frozenset[str]] = {
+CHARLSON_LABEL_TO_ICD3: dict[CharlsonLabel, frozenset[str]] = {
     'myocardial_infarct': frozenset({'I21', 'I22', 'I25'}),
     'congestive_heart_failure': frozenset({'I09', 'I11', 'I13', 'I25', 'I42', 'I43', 'I50', 'P29'}),
     'peripheral_vascular_disease': frozenset({'I70', 'I71', 'I73', 'I77', 'I79', 'K55', 'Z95'}),
@@ -194,10 +195,8 @@ CHARLSON_ICD10_3CHAR: dict[CharlsonLabel, frozenset[str]] = {
     'metastatic_solid_tumor': frozenset({'C77', 'C78', 'C79', 'C80'}),
     'aids': frozenset({'B20', 'B21', 'B22', 'B24'}),
 }
-# Reverse index: icd10_3char → frozenset of Charlson columns that cover it.
-ICD3_TO_CHARLSON_COLS = dict[str, frozenset[str]]()
 
-
-for _col, _pfxs in CHARLSON_ICD10_3CHAR.items():
+ICD3_TO_CHARLSON_LABEL = dict[str, frozenset[str]]()
+for _col, _pfxs in CHARLSON_LABEL_TO_ICD3.items():
     for _pfx in _pfxs:
-        ICD3_TO_CHARLSON_COLS[_pfx] = ICD3_TO_CHARLSON_COLS.get(_pfx, frozenset()) | {_col}
+        ICD3_TO_CHARLSON_LABEL[_pfx] = ICD3_TO_CHARLSON_LABEL.get(_pfx, frozenset()) | {_col}

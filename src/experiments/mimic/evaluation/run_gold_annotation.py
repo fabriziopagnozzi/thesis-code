@@ -5,320 +5,278 @@ For each query + its candidate pool:
     1. Build facet vocabulary deterministically from the query's modifier list.
     2. MAP: per (batch, facet): extract key clinical facts from structurally eligible chunks,
        gated by a HARD structural prior (chunk hadm_id ∈ condition ∩ modifier hadm_ids).
-       Each fact cites its source chunk_id.
+       Each fact cites its source chunk_id. Cited chunk_ids per facet → gold set (facets_json).
     3. REDUCE: single LLM call per query: synthesize a unified comparative answer across
-       all facets, citing which chunk IDs support each facet. Those cited IDs become the
-       gold set stored in facets_json.
+       all facets from the MAP-extracted facts. Produces answer_text only.
 
 Output: gold_annotations.parquet
 Columns: query_id, icd10_3char, condition_name, modifiers_json, query_text,
          facets_json, answer_text, n_facets, n_gold_chunks
 """
 
-import json
-from pathlib import Path
-from typing import cast
+from __future__ import annotations
 
+import json
+from typing import Any, cast
+
+import numpy as np
 import polars as pl
 
-from experiments.mimic.chunking.schemas_chunking import AdmissionMetadataRow
+from experiments.mimic.evaluation.schemas_evaluation import (
+    AnnotationCacheKey,
+    ExtractedFact,
+    ModifierToChunkIds,
+)
 from experiments.mimic.global_configs import (
     get_result_dir,
     get_table_path,
     global_cfg,
-    read_parquet,
     setup_logging,
 )
 from experiments.mimic.queries.schemas_queries import (
     QueryModifier,
+    QueryModifierLabelId,
     QueryRow,
 )
-from experiments.mimic.utils.charlson import CHARLSON_LABELS_TO_STR
+from experiments.mimic.utils.chunk_pools import ChunkPool, ChunkPoolBuilder
 from experiments.mimic.utils.utils import load_filtered_queries
 from helpers.ollama_client import generate, generate_json
 
-from ..utils.candidate_pools import ChunkPool, ChunkPoolBuilder
 from .schemas_evaluation import GoldAnnotationCfg
 
 gold_annotation_cfg = GoldAnnotationCfg.load()
 
 
-def run_gold_annotation(cfg: GoldAnnotationCfg | None = None) -> pl.DataFrame:
+def run_gold_annotation(cfg: GoldAnnotationCfg | None = None):
     global gold_annotation_cfg
     if cfg is not None:
         gold_annotation_cfg = cfg
 
     queries_df: pl.DataFrame = load_filtered_queries(global_cfg.embedding_model)
-    hadm_id_to_metadata_str: dict[int, str] = _build_hadm_id_to_metadata_str()
+    persistence = GoldAnnotationPersistenceHandler(gold_annotation_cfg)
 
     out_path = get_table_path('gold_annotations')
-    done_texts = set[str]()
+    done_query_ids = set[int]()
     if out_path.exists():
         prev = pl.read_parquet(out_path)
-        done_texts = set(prev['query_text'].to_list())
+        done_query_ids = set(prev['query_id'].to_list())
         print(
-            f'Resuming: {len(done_texts)} queries already done, {len(queries_df) - len(done_texts)} remaining'
+            f'Resuming: {len(done_query_ids)} queries already done, {len(queries_df) - len(done_query_ids)} remaining'
         )
 
-    builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
-    result_df = annotate_all(queries_df, builder, hadm_id_to_metadata_str, done_texts)
+    result_df = annotate_all(queries_df, done_query_ids, persistence)
 
-    result_df.write_parquet(out_path)
-    print(
-        f'\nSaved {len(result_df):,} annotations to {out_path}\n'
-        f'\tAvg gold chunks per query: {result_df["n_gold_chunks"].mean():.1f}'
-    )
-    return result_df
+    if len(result_df) > 0:
+        final_df = (
+            pl.concat([pl.read_parquet(out_path), result_df], how='diagonal_relaxed')
+            if out_path.exists()
+            else result_df
+        )
+
+        final_df.write_parquet(out_path)
+        print(
+            f'\nSaved {len(final_df):,} annotations to {out_path}\n'
+            f'\tAvg gold chunks per query: {final_df["n_gold_chunks"].mean():.1f}'
+        )
 
 
 def annotate_all(
     queries_df: pl.DataFrame,
-    builder: ChunkPoolBuilder,
-    hadm_id_to_metadata_str: dict[int, str] | None,
-    done_texts: set[str],
+    done_query_ids: set[int],
+    persistence: GoldAnnotationPersistenceHandler,
 ) -> pl.DataFrame:
-    prompt_dump_dir = get_result_dir('gold_annotations') / '_prompt_dump'
-    prompt_dump_dir.mkdir(parents=True, exist_ok=True)
-
-    prior_decisions = GoldAnnotationResumer.load_prior_decisions()
-    prior_answers = GoldAnnotationResumer.load_prior_answers()
-
     total = len(queries_df)
-    n_done = len(done_texts)
+    n_done = len(done_query_ids)
     completed_rows: list[dict] = []
+
+    pool_builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
+    prior_annotations = persistence.load_prior_annotations()
+    prior_answers = persistence.load_prior_answers()
 
     for i, row in enumerate(queries_df.iter_rows(named=True)):
         row = cast(QueryRow, row)
-        condition_name = row.get('condition_name', '')
-        if row['query_text'] in done_texts:
+        if row['query_id'] in done_query_ids:
             continue
 
         n_done += 1
         print(
-            f'\n{"=" * 60}\n  Query {n_done}/{total} (idx {i})\n  {row["query_text"]}\n{"=" * 60}'
+            f'\n{"=" * 60}\n  Query {n_done}/{total} (query_id {row["query_id"]}, row {i})\n  {row["query_text"]}\n{"=" * 60}'
         )
 
-        modifiers = QueryModifier.parse_list(row.get('modifiers_json', '') or '')
-        if not modifiers:
-            print('  [WARN] no modifiers_json for this query, skipping')
-            continue
-        print(f'\t[modifiers] {len(modifiers)}: {[m.comorb_label for m in modifiers]}')
-
-        modifier_to_hadm_ids: dict[str, set[int]] = {}
-        for modifier in modifiers:
-            modifier_to_hadm_ids[modifier.comorb_label] = (
-                builder.get_hadm_ids_by_condition_modifier(row['icd10_3char'], modifier)
-            )
-
-        facets, answer_text = annotate_query(
-            pool=_build_gold_candidate_pool(builder, row['query_text'], modifier_to_hadm_ids),
-            query_idx=i,
-            query_text=row['query_text'],
-            condition_name=condition_name,
-            batch_size=gold_annotation_cfg.batch_size,
-            modifiers=modifiers,
-            modifier_to_hadm_ids=modifier_to_hadm_ids,
-            hadm_id_to_metadata_str=hadm_id_to_metadata_str,
-            prompt_dump_dir=prompt_dump_dir,
-            prior_decisions=prior_decisions,
+        res = annotate_query(
+            pool_builder=pool_builder,
+            query_row=row,
+            persistence=persistence,
+            prior_annotations=prior_annotations,
             prior_answers=prior_answers,
         )
+        if res is None:
+            continue
 
-        all_gold_chunks = {cid for cids in facets.values() for cid in cids}
+        facets, answer_text = res
 
-        completed_rows.append({
-            'query_id': row['query_id'],
-            'icd10_3char': row['icd10_3char'],
-            'condition_name': condition_name,
-            'modifiers_json': row['modifiers_json'],
-            'query_text': row['query_text'],
-            'facets_json': json.dumps(facets),
-            'answer_text': answer_text,
-            'n_facets': len(facets),
-            'n_gold_chunks': len(all_gold_chunks),
-        })
+        if answer_text is not None:
+            completed_rows.append({
+                'query_id': row['query_id'],
+                'icd10_3char': row['icd10_3char'],
+                'condition_name': row['condition_name'],
+                'modifiers_json': row['modifiers_json'],
+                'query_text': row['query_text'],
+                'facets_json': json.dumps(facets),
+                'answer_text': answer_text,
+                'n_facets': len(facets),
+                'n_gold_chunks': len({c_id for c_ids in facets.values() for c_id in c_ids}),
+            })
     # end for i, row in enumerate(queries_df.iter_rows(named=True))
 
-    out_path = get_table_path('gold_annotations')
-    if completed_rows:
-        new_df = pl.DataFrame(completed_rows)
-        if out_path.exists():
-            final_df = pl.concat([pl.read_parquet(out_path), new_df], how='diagonal_relaxed')
-        else:
-            final_df = new_df
-        final_df.write_parquet(out_path)
-        return final_df
-
-    return pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
+    return pl.DataFrame(completed_rows)
 
 
 def annotate_query(
-    query_text: str,
-    condition_name: str,
-    modifiers: list[QueryModifier],
-    modifier_to_hadm_ids: dict[str, set[int]],
-    pool: ChunkPool,
-    batch_size: int = 40,
-    hadm_id_to_metadata_str: dict[int, str] | None = None,
-    prompt_dump_dir: Path | None = None,
-    query_idx: int = 0,
-    prior_decisions: dict[tuple[int, int, str], list[dict]] | None = None,
-    prior_answers: dict[int, str] | None = None,
-) -> tuple[dict[str, list[str]], str]:
+    pool_builder: ChunkPoolBuilder,
+    query_row: QueryRow,
+    persistence: GoldAnnotationPersistenceHandler,
+    prior_annotations: dict[AnnotationCacheKey, list[ExtractedFact]],
+    prior_answers: dict[int, str],
+) -> tuple[ModifierToChunkIds, str | None] | None:
     """Map-reduce annotation for one query.
     Returns (facets_json_dict, answer_text).
     """
-    n = pool.n
-    n_batches = (n + batch_size - 1) // batch_size
-    facts_per_facet: dict[str, list[dict]] = {m.comorb_label: [] for m in modifiers}
-    jsonl_path = get_result_dir('gold_annotations') / 'gold_annotations.jsonl'
-    answers_jsonl_path = get_result_dir('gold_annotations') / 'gold_answers.jsonl'
+    query_id = query_row['query_id']
 
-    # MAP phase - extract facts per (batch, facet)
-    for batch_idx, start in enumerate(range(0, n, batch_size)):
-        end = min(start + batch_size, n)
-        batch_ids = pool.chunk_ids[start:end]
-        batch_texts = pool.texts[start:end]
-        batch_sections = pool.section_names[start:end]
-        batch_hadm_ids = pool.hadm_ids[start:end].tolist()
-        batch_meta = (
-            [hadm_id_to_metadata_str.get(h, '') for h in batch_hadm_ids]
-            if hadm_id_to_metadata_str
-            else None
+    modifiers = QueryModifier.parse_list(query_row.get('modifiers_json', ''))
+    if not modifiers:
+        print('\t[WARN] no modifiers_json for this query, skipping')
+        return None
+
+    print(f'\t[modifiers] {len(modifiers)}: {[m.label for m in modifiers]}')
+
+    modifier_to_hadm_ids: dict[str, set[int]] = {}
+    for modifier in modifiers:
+        modifier_to_hadm_ids[modifier.label] = pool_builder.get_hadm_ids_by_condition_modifier(
+            query_row['icd10_3char'], modifier
         )
 
+    pool = _build_gold_candidate_pool(
+        pool_builder,
+        query_row,
+        modifiers,
+        modifier_to_hadm_ids,
+    )
+
+    batch_size = gold_annotation_cfg.batch_size
+    n_batches = (pool.n + batch_size - 1) // batch_size
+    facts_per_facet: dict[QueryModifierLabelId, list[ExtractedFact]] = {
+        m.label: [] for m in modifiers
+    }
+
+    # MAP phase - extract facts per (batch, facet)
+    for batch_idx, (_start, batch_pool) in enumerate(pool.iter_batches(batch_size)):
         for modifier in modifiers:
-            eligible_hadm_set = modifier_to_hadm_ids.get(modifier.comorb_label, set())
-            eligible_mask = [hid in eligible_hadm_set for hid in batch_hadm_ids]
-            if not any(eligible_mask):
+            eligible_pool = batch_pool.filter_hadm_ids(
+                modifier_to_hadm_ids.get(modifier.label, set())
+            )
+            if eligible_pool.n == 0:
                 print(
-                    f'\t  [skip] b{batch_idx + 1}/{n_batches} {modifier.comorb_label}: '
+                    f'\t\t[skip] b{batch_idx + 1}/{n_batches} {modifier.label}: '
                     f'no chunks from condition && modifier patients in this batch (structural prior)'
                 )
                 continue
 
-            if prior_decisions is not None:
-                old_bs = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
-                aligned_start = (start // old_bs) * old_bs
-                sub_keys = [
-                    (query_idx, s, modifier.comorb_label) for s in range(aligned_start, end, old_bs)
-                ]
-                if all(k in prior_decisions for k in sub_keys):
-                    cached = [d for k in sub_keys for d in prior_decisions[k]]
-                    facts_per_facet[modifier.comorb_label].extend(cached)
-                    print(
-                        f'\t  [resume] b{batch_idx + 1}/{n_batches} {modifier.comorb_label}: {len(cached)} facts (cached)'
-                    )
-                    continue
-
-            eligible_indices = [j for j, m in enumerate(eligible_mask) if m]
-            eligible_ids = [batch_ids[j] for j in eligible_indices]
-            eligible_texts = [batch_texts[j] for j in eligible_indices]
-            eligible_sections = [batch_sections[j] for j in eligible_indices]
-            eligible_meta = [batch_meta[j] for j in eligible_indices] if batch_meta else None
+            cache_key = persistence.annotation_cache_key(
+                query_id=query_id,
+                facet_label=modifier.label,
+                chunk_ids=eligible_pool.chunk_ids,
+            )
+            if cache_key in prior_annotations:
+                cached = prior_annotations[cache_key]
+                facts_per_facet[modifier.label].extend(cached)
+                print(
+                    f'\t\t[resume] b{batch_idx + 1}/{n_batches} {modifier.label}: {len(cached)} facts (cached)'
+                )
+                continue
 
             facts = map_batch_extract_facts(
-                query_text=query_text,
-                condition_name=condition_name,
+                query_text=query_row['query_text'],
+                condition_name=query_row['condition_name'],
                 modifier=modifier,
-                chunk_ids=eligible_ids,
-                texts=eligible_texts,
-                batch_sections=eligible_sections,
-                batch_meta=eligible_meta,
+                chunks=eligible_pool,
                 batch_idx=batch_idx,
                 n_batches=n_batches,
-                prompt_dump_dir=prompt_dump_dir,
-                query_idx=query_idx,
+                query_id=query_id,
+                persistence=persistence,
             )
-            facts_per_facet[modifier.comorb_label].extend(facts)
-
-            with jsonl_path.open('a') as f:
-                f.write(
-                    json.dumps({
-                        'query_idx': query_idx,
-                        'batch_idx': batch_idx,
-                        'facet_label': modifier.comorb_label,
-                        'decisions': facts,
-                    })
-                    + '\n'
-                )
+            persistence.append_annotation({
+                'query_id': query_id,
+                'batch_idx': batch_idx,
+                'facet_label': modifier.label,
+                'chunk_ids': eligible_pool.chunk_ids,
+                'decisions': facts if facts is not None else '<LLM_ERROR>',
+            })
+            if facts is not None:
+                facts_per_facet[modifier.label].extend(facts)
 
     # Build facets_json from MAP output: unique chunk_ids cited in extracted facts per facet
     pool_id_set = set(pool.chunk_ids)
-    facets: dict[str, list[str]] = {}
+    aspects_to_chunk_ids: ModifierToChunkIds = {}
     for modifier in modifiers:
         cited = sorted({
             d['chunk_id']
-            for d in facts_per_facet.get(modifier.comorb_label, [])
+            for d in facts_per_facet.get(modifier.label, [])
             if d['chunk_id'] in pool_id_set
         })
         if cited:
-            facets[modifier.comorb_label] = cited
+            aspects_to_chunk_ids[modifier.label] = cited
 
-    all_gold = {cid for cids in facets.values() for cid in cids}
+    all_gold = {cid for cids in aspects_to_chunk_ids.values() for cid in cids}
     print(
-        f'\tmap: {len(modifiers)} modifiers → {len(facets)} non-empty facets, {len(all_gold)} gold chunks'
+        f'\tmap: {len(modifiers)} modifiers → {len(aspects_to_chunk_ids)} non-empty facets, {len(all_gold)} gold chunks'
     )
 
     # REDUCE phase - synthesize unified answer from all extracted facts
-    if prior_answers is not None and query_idx in prior_answers:
-        answer_text = prior_answers[query_idx]
-        print(f'\t[resume] reduce q{query_idx}: answer cached ({len(answer_text)} chars)')
+    if query_id in prior_answers:
+        final_answer = prior_answers[query_id]
+        print(f'\t[resume] reduce query_id={query_id}: answer cached ({len(final_answer)} chars)')
     else:
-        answer_text = reduce_answer(
-            query_text=query_text,
-            condition_name=condition_name,
+        final_answer = reduce_answer(
+            query_text=query_row['query_text'],
+            condition_name=query_row['condition_name'],
             modifiers=modifiers,
             facts_per_facet=facts_per_facet,
-            prompt_dump_dir=prompt_dump_dir,
-            query_idx=query_idx,
+            query_id=query_id,
+            persistence=persistence,
         )
-        with answers_jsonl_path.open('a') as f:
-            f.write(
-                json.dumps({
-                    'query_idx': query_idx,
-                    'query_text': query_text,
-                    'answer_text': answer_text,
-                })
-                + '\n'
-            )
+        persistence.append_answer({
+            'query_id': query_id,
+            'query_text': query_row['query_text'],
+            'answer_text': final_answer if final_answer is not None else '<LLM_ERROR>',
+        })
 
-    return facets, answer_text
+    return aspects_to_chunk_ids, final_answer
 
 
 def map_batch_extract_facts(
     query_text: str,
     condition_name: str,
     modifier: QueryModifier,
-    chunk_ids: list[str],
-    texts: list[str],
-    batch_sections: list[str] | None = None,
-    batch_meta: list[str] | None = None,
+    chunks: ChunkPool,
     batch_idx: int = 0,
     n_batches: int = 1,
-    prompt_dump_dir: Path | None = None,
-    query_idx: int = 0,
-) -> list[dict]:
+    query_id: int = 0,
+    persistence: GoldAnnotationPersistenceHandler | None = None,
+) -> list[ExtractedFact] | None:
     """Extract clinical facts from one (modifier, chunk batch) - MAP step."""
     prompt = _build_map_prompt(
         query_text=query_text,
         condition_name=condition_name,
         modifier=modifier,
-        chunk_ids=chunk_ids,
-        texts=texts,
-        batch_sections=batch_sections,
-        batch_meta=batch_meta,
+        chunks=chunks,
     )
-
-    if prompt_dump_dir is not None:
-        dump_path = (
-            prompt_dump_dir / f'q{query_idx:03d}_b{batch_idx:03d}_{modifier.comorb_label}_map.txt'
+    if persistence is not None:
+        persistence.dump_map_prompt(
+            prompt, label=modifier.label, batch_idx=batch_idx, query_id=query_id
         )
-        dump_path.write_text(
-            f'=== SYSTEM ===\n{gold_annotation_cfg.fact_extract_system_prompt}\n\n=== USER ===\n{prompt}'
-        )
-
-    valid_ids = set(chunk_ids)
+    chunk_id_set = set(chunks.chunk_ids)
 
     try:
         result = generate_json(
@@ -335,9 +293,9 @@ def map_batch_extract_facts(
         )
     except Exception as e:
         print(
-            f'[ERROR] extract_facts q{query_idx} b{batch_idx + 1}/{n_batches} {modifier.comorb_label}: {e}'
+            f'[ERROR] extract_facts query_id={query_id} b{batch_idx + 1}/{n_batches} {modifier.label}: {e}'
         )
-        return []
+        return None
 
     raw: list = []
     if isinstance(result, list):
@@ -345,23 +303,24 @@ def map_batch_extract_facts(
     elif isinstance(result, dict):
         raw = result.get('facts', []) or result.get('decisions', [])
 
-    facts: list[dict] = []
-    seen_ids: set[str] = set()
+    facts: list[ExtractedFact] = []
+    seen_facts: set[tuple[str, str]] = set()
     n_dropped = 0
     for item in raw:
         if not isinstance(item, dict):
             n_dropped += 1
             continue
-        chunk_id = item.get('chunk_id', '')
-        fact = item.get('fact', '')
-        if not chunk_id or chunk_id not in valid_ids or chunk_id in seen_ids or not fact:
+        chunk_id = str(item.get('chunk_id', '')).strip()
+        fact = str(item.get('fact', '')).strip()
+        fact_key = (chunk_id, _normalize_fact_for_dedupe(fact))
+        if not chunk_id or chunk_id not in chunk_id_set or not fact or fact_key in seen_facts:
             n_dropped += 1
             continue
-        seen_ids.add(chunk_id)
-        facts.append({'chunk_id': chunk_id, 'fact': str(fact)})
+        seen_facts.add(fact_key)
+        facts.append({'chunk_id': chunk_id, 'fact': fact})
 
     print(
-        f'\t  [map] b{batch_idx + 1}/{n_batches} {modifier.comorb_label}: '
+        f'\t\t[map] b{batch_idx + 1}/{n_batches} {modifier.label}: '
         f'{len(facts)} facts, {n_dropped} dropped (~{len(prompt) // 4} tokens)'
     )
     return facts
@@ -371,10 +330,10 @@ def reduce_answer(
     query_text: str,
     condition_name: str,
     modifiers: list[QueryModifier],
-    facts_per_facet: dict[str, list[dict]],
-    prompt_dump_dir: Path | None,
-    query_idx: int,
-) -> str:
+    facts_per_facet: dict[QueryModifierLabelId, list[ExtractedFact]],
+    query_id: int,
+    persistence: GoldAnnotationPersistenceHandler | None = None,
+) -> str | None:
     """Synthesize unified comparative answer from extracted facts - REDUCE step."""
     prompt = _build_reduce_prompt(
         query_text=query_text,
@@ -382,12 +341,8 @@ def reduce_answer(
         modifiers=modifiers,
         facts_per_facet=facts_per_facet,
     )
-
-    if prompt_dump_dir is not None:
-        dump_path = prompt_dump_dir / f'q{query_idx:03d}_reduce.txt'
-        dump_path.write_text(
-            f'=== SYSTEM ===\n{gold_annotation_cfg.answer_system_prompt}\n\n=== USER ===\n{prompt}'
-        )
+    if persistence is not None:
+        persistence.dump_reduce_prompt(prompt, query_id)
 
     n_facts_total = sum(len(v) for v in facts_per_facet.values())
     print(f'\t[reduce] synthesizing answer from {n_facts_total} extracted facts')
@@ -406,89 +361,99 @@ def reduce_answer(
             stream=gold_annotation_cfg.stream,
         )
     except Exception as e:
-        print(f'[ERROR] synthesize_answer q{query_idx}: {e}')
-        return ''
+        print(f'[ERROR] synthesize_answer query_id={query_id}: {e}')
+        return None
 
 
 def _build_gold_candidate_pool(
     builder: ChunkPoolBuilder,
-    query_text: str,
+    query_row: QueryRow,
+    modifiers: list[QueryModifier],
     modifier_to_hadm_ids: dict[str, set[int]],
 ) -> ChunkPool:
-    """Top-N cosine chunks from union of (condition AND any_modifier) patients."""
-    query_vec = builder.embed_query(query_text)
-    union_hadm_ids: set[int] = set().union(*modifier_to_hadm_ids.values())
+    """Top-N cosine chunks with an optional per-modifier floor."""
+    max_pool_size = gold_annotation_cfg.annotation_pool_n
+    query_vec = builder.embed_query(query_row['query_text'])
+    base_pool = builder.topk_cosine_for_modifiers(
+        query_vec, query_row['icd10_3char'], modifiers, max_pool_size
+    )
     print(
-        f'\t[pool] union of {len(modifier_to_hadm_ids)} modifier sets: {len(union_hadm_ids)} unique patients'
+        f'\t[pool] top-{max_pool_size} cosine '
+        f'(condition={query_row["icd10_3char"]}, modifiers={[m.label for m in modifiers]}): '
+        f'{base_pool.n} chunks'
     )
-    pool = builder.topk_cosine_for_hadm_ids(
-        query_vec, union_hadm_ids, gold_annotation_cfg.annotation_pool_n
+
+    min_per_modifier = gold_annotation_cfg.min_per_modifier
+    if min_per_modifier <= 0 or len(base_pool.chunk_ids) < max_pool_size:
+        return base_pool
+
+    modifier_pools: list[ChunkPool] = []
+    modifier_pool_sizes: dict[QueryModifierLabelId, int] = {}
+    for modifier in modifiers:
+        modifier_pool = builder.topk_cosine_for_modifiers(
+            query_vec,
+            query_row['icd10_3char'],
+            [modifier],
+            k=min_per_modifier,
+        )
+        modifier_pools.append(modifier_pool)
+        modifier_pool_sizes[modifier.label] = modifier_pool.n
+
+    floor_pool = ChunkPool.merge(modifier_pools)
+    if floor_pool.n > max_pool_size:
+        raise ValueError(
+            f'min_per_modifier={min_per_modifier} produced {floor_pool.n} unique '
+            f'floor chunks across {len(modifiers)} modifiers, exceeding '
+            f'annotation_pool_n={max_pool_size}. '
+        )
+
+    merged_pool = ChunkPool.merge([floor_pool, base_pool])
+    pool = (
+        merged_pool
+        if merged_pool.n <= max_pool_size
+        else merged_pool.slice(np.arange(max_pool_size, dtype=np.intp))
     )
-    print(f'\t[pool] top-{gold_annotation_cfg.annotation_pool_n} cosine: {pool.n} chunks')
+    modifier_coverage = []
+    for modifier in modifiers:
+        n_matching_modifier = pool.filter_hadm_ids(
+            modifier_to_hadm_ids.get(modifier.label, set())
+        ).n
+        modifier_coverage.append(
+            f'{modifier.label}: {n_matching_modifier} final '
+            f'({modifier_pool_sizes.get(modifier.label, 0)} floor-retrieved)'
+        )
+
+    print(
+        f'\t[pool] min_per_modifier={min_per_modifier}: '
+        f'{pool.n}/{max_pool_size} chunks after capped merge; ' + '; '.join(modifier_coverage)
+    )
     return pool
-
-
-class GoldAnnotationResumer:
-    annotations_jsonl_path: Path = get_table_path('gold_annotations', ext='jsonl')
-    answers_jsonl_path: Path = get_table_path('gold_answers', ext='jsonl')
-    old_batch_size = gold_annotation_cfg.resume_batch_size or gold_annotation_cfg.batch_size
-
-    @classmethod
-    def load_prior_decisions(cls) -> dict[tuple[int, int, str], list[dict]]:
-        """Load cached map entries keyed by (query_idx, chunk_start, facet_label).
-
-        chunk_start = batch_idx * resume_batch_size - position-based key survives batch_size changes.
-        """
-        prior: dict[tuple[int, int, str], list[dict]] = {}
-        if not cls.annotations_jsonl_path.exists():
-            return prior
-        with cls.annotations_jsonl_path.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                entry = json.loads(line)
-                chunk_start = entry['batch_idx'] * cls.old_batch_size
-                key = (entry['query_idx'], chunk_start, entry['facet_label'])
-                prior[key] = entry.get('decisions', [])
-
-        print(f'[resume] loaded {len(prior)} cached map entries from jsonl')
-        return prior
-
-    @classmethod
-    def load_prior_answers(cls) -> dict[int, str]:
-        """Load cached reduce answers keyed by query_idx."""
-        prior: dict[int, str] = {}
-        if not cls.answers_jsonl_path.exists():
-            return prior
-        with cls.answers_jsonl_path.open() as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                entry = json.loads(line)
-                prior[entry['query_idx']] = entry.get('answer_text', '')
-        print(f'[resume] loaded {len(prior)} cached reduce answers from jsonl')
-        return prior
 
 
 def _build_map_prompt(
     query_text: str,
     condition_name: str,
     modifier: QueryModifier,
-    chunk_ids: list[str],
-    texts: list[str],
-    batch_sections: list[str] | None = None,
-    batch_meta: list[str] | None = None,
+    chunks: ChunkPool,
 ) -> str:
-    chunks_block = _format_chunk_batch(
-        chunk_ids, texts, sections=batch_sections, meta_lines=batch_meta
-    )
+    chunks_block_parts = []
+    for c_id, text, section, context_prefix in zip(
+        chunks.chunk_ids,
+        chunks.texts,
+        chunks.section_names,
+        chunks.contextual_prefixes,
+        strict=True,
+    ):
+        header = f'[CHUNK_ID: {c_id}] [{section}]' if section else f'[CHUNK_ID: {c_id}]'
+        if context_prefix:
+            header += f'\n{context_prefix}'
+        chunks_block_parts.append(f'{header}\n{text}')
+
     return gold_annotation_cfg.fact_extract_template.format(
         query_text=query_text,
         condition_name=condition_name,
-        facet_description=modifier.descr,
-        chunks_block=chunks_block,
+        modifier_subgroup_text=(modifier.format_subgroup_info()),
+        chunks_block='\n---\n'.join(chunks_block_parts),
     )
 
 
@@ -496,14 +461,12 @@ def _build_reduce_prompt(
     query_text: str,
     condition_name: str,
     modifiers: list[QueryModifier],
-    facts_per_facet: dict[str, list[dict]],
+    facts_per_facet: dict[QueryModifierLabelId, list[ExtractedFact]],
 ) -> str:
     subgroups_block = '\n\n'.join(
-        f'=== SUBGROUP {i + 1} - {m.descr} ===\n'
+        f'=== SUBGROUP {i + 1} - {(m.format_subgroup_info())} ===\n'
         + (
-            '\n'.join(
-                f'- [{d["chunk_id"]}] {d["fact"]}' for d in facts_per_facet.get(m.comorb_label, [])
-            )
+            '\n'.join(f'- [{d["chunk_id"]}] {d["fact"]}' for d in facts_per_facet.get(m.label, []))
             or '(no relevant facts found)'
         )
         for i, m in enumerate(modifiers)
@@ -515,49 +478,122 @@ def _build_reduce_prompt(
     )
 
 
-def _format_chunk_batch(
-    chunk_ids: list[str],
-    texts: list[str],
-    sections: list[str] | None = None,
-    meta_lines: list[str] | None = None,
-) -> str:
-    parts = []
-    for i, (cid, text) in enumerate(zip(chunk_ids, texts, strict=True)):
-        section = sections[i] if sections else None
-        meta = meta_lines[i] if meta_lines else None
-        header = f'[CHUNK_ID: {cid}] [{section}]' if section else f'[CHUNK_ID: {cid}]'
-        if meta:
-            header += f'\n{meta}'
-        parts.append(f'{header}\n{text}')
-    return '\n---\n'.join(parts)
+def _normalize_fact_for_dedupe(fact: str) -> str:
+    return ' '.join(fact.lower().split())
 
 
-def _build_hadm_id_to_metadata_str() -> dict[int, str]:
-    meta = read_parquet('admissions_metadata')
+class GoldAnnotationPersistenceHandler:
+    def __init__(self, cfg: GoldAnnotationCfg):
+        self.cfg = cfg
+        self.annotations_jsonl_path = get_table_path('gold_annotations', ext='jsonl')
+        self.answers_jsonl_path = get_table_path('gold_answers', ext='jsonl')
+        self.prompt_dump_dir = (
+            get_result_dir('gold_annotations') / '_prompt_dump'
+            if cfg.dump_prompts is True
+            else None
+        )
+        self.annotations_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        self.answers_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.prompt_dump_dir is not None:
+            self.prompt_dump_dir.mkdir(parents=True, exist_ok=True)
 
-    lookup: dict[int, str] = {}
-    for row in meta.iter_rows(named=True):
-        row = cast(AdmissionMetadataRow, row)
-        age = int(row['age']) if row.get('age') is not None else None  # type: ignore
-        gender = 'F' if row.get('gender') == 'F' else 'M'
-        age_str = f'age {age}' if age is not None else 'age unknown'
+    @staticmethod
+    def annotation_cache_key(
+        query_id: int,
+        facet_label: str,
+        chunk_ids: list[str],
+    ) -> AnnotationCacheKey:
+        return query_id, facet_label, tuple(chunk_ids)
 
-        comorbidities = [
-            label
-            for col, label in CHARLSON_LABELS_TO_STR.items()
-            if row.get(col) and row[col] > 0  # type: ignore
-        ]
-        primary = row.get('primary_icd_description', '')
+    def load_prior_annotations(self) -> dict[AnnotationCacheKey, list[ExtractedFact]]:
+        """Load cached MAP entries keyed by stable query_id, facet label, and exact prompt chunks."""
+        prior: dict[AnnotationCacheKey, list[ExtractedFact]] = {}
+        n_legacy = 0
+        if not self.annotations_jsonl_path.exists():
+            return prior
+        with self.annotations_jsonl_path.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                decisions = entry.get('decisions', [])
+                if decisions == '<LLM_ERROR>':
+                    continue
+                if 'query_id' not in entry or 'chunk_ids' not in entry:
+                    n_legacy += 1
+                    continue
+                key = self.annotation_cache_key(
+                    query_id=entry['query_id'],
+                    facet_label=entry['facet_label'],
+                    chunk_ids=entry['chunk_ids'],
+                )
+                prior[key] = self.dedupe_facts(decisions)
 
-        parts = [f'{age_str}, {gender}']
-        if primary:
-            parts.append(f'primary dx: {primary}')
-        if comorbidities:
-            parts.append(f'comorbidities: {", ".join(comorbidities)}')
+        legacy_msg = f', skipped {n_legacy} legacy positional entries' if n_legacy else ''
+        print(f'[resume] loaded {len(prior)} cached map entries from jsonl{legacy_msg}')
+        return prior
 
-        lookup[row['hadm_id']] = 'Patient: ' + ' | '.join(parts)
+    def load_prior_answers(self) -> dict[int, str]:
+        """Load cached REDUCE answers keyed by stable query_id."""
+        prior: dict[int, str] = {}
+        n_legacy = 0
+        if not self.answers_jsonl_path.exists():
+            return prior
+        with self.answers_jsonl_path.open() as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                entry = json.loads(line)
+                ans = entry.get('answer_text', '')
+                if ans == '<LLM_ERROR>':
+                    continue
+                if 'query_id' not in entry:
+                    n_legacy += 1
+                    continue
+                prior[entry['query_id']] = ans
+        legacy_msg = f', skipped {n_legacy} legacy positional entries' if n_legacy else ''
+        print(f'[resume] loaded {len(prior)} cached reduce answers from jsonl{legacy_msg}')
+        return prior
 
-    return lookup
+    def append_answer(self, ans: dict[str, int | str]) -> None:
+        with self.answers_jsonl_path.open('a') as f:
+            f.write(json.dumps(ans) + '\n')
+
+    def append_annotation(self, ans: dict[str, Any]) -> None:
+        with self.annotations_jsonl_path.open('a') as f:
+            f.write(json.dumps(ans) + '\n')
+
+    def dump_map_prompt(self, prompt: str, query_id: int, batch_idx: int, label: str) -> None:
+        if self.prompt_dump_dir is not None:
+            dump_path = (
+                self.prompt_dump_dir / f'query_{query_id:03d}_b{batch_idx:03d}_{label}_map.txt'
+            )
+            dump_path.write_text(
+                f'=== SYSTEM ===\n{self.cfg.fact_extract_system_prompt}\n\n=== USER ===\n{prompt}'
+            )
+
+    def dump_reduce_prompt(self, prompt: str, query_id: int) -> None:
+        if self.prompt_dump_dir is not None:
+            dump_path = self.prompt_dump_dir / f'query_{query_id:03d}_reduce.txt'
+            dump_path.write_text(
+                f'=== SYSTEM ===\n{self.cfg.answer_system_prompt}\n\n=== USER ===\n{prompt}'
+            )
+
+    @staticmethod
+    def dedupe_facts(raw_facts: list[dict[str, Any]]) -> list[ExtractedFact]:
+        facts: list[ExtractedFact] = []
+        seen: set[tuple[str, str]] = set()
+        for item in raw_facts:
+            chunk_id = str(item.get('chunk_id', '')).strip()
+            fact = str(item.get('fact', '')).strip()
+            key = (chunk_id, _normalize_fact_for_dedupe(fact))
+            if not chunk_id or not fact or key in seen:
+                continue
+            seen.add(key)
+            facts.append({'chunk_id': chunk_id, 'fact': fact})
+        return facts
 
 
 if __name__ == '__main__':

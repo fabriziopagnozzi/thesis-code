@@ -19,6 +19,7 @@ import polars as pl
 
 from experiments.mimic.chunking.schemas_chunking import (
     AdmissionMetaSlimRow,
+    ComorbidityOccurrence,
     ConditionStatsRow,
 )
 from experiments.mimic.global_configs import (
@@ -30,10 +31,11 @@ from experiments.mimic.global_configs import (
 from experiments.mimic.queries.schemas_queries import (
     BuildQueryPromptsCfg,
     GroundingChunkSample,
+    ModifierStats,
     QueryModifier,
 )
-from experiments.mimic.utils.candidate_pools import ChunkPoolBuilder
-from experiments.mimic.utils.charlson import ICD3_TO_CHARLSON_COLS
+from experiments.mimic.utils.charlson import CHARLSON_LABEL_TO_STR, ICD3_TO_CHARLSON_LABEL
+from experiments.mimic.utils.chunk_pools import ChunkPoolBuilder
 
 query_prompts_cfg = BuildQueryPromptsCfg.load()
 
@@ -98,37 +100,39 @@ def build_query_prompts(
     for row in selected_conditions.iter_rows(named=True):
         row = cast(ConditionStatsRow, row)
         stratum = row.get('stratum', 1)
-        top_comorbidity_mods = json.loads(row.get('top_comorbidity_mods_json') or '[]')
+        top_comorbidities: list[ComorbidityOccurrence] = json.loads(
+            row.get('top_comorbidity_mods_json') or '[]'
+        )
         condition_hadm_ids = pool_builder.get_icd3_hadm_ids(row['icd10_3char'])
-        excluded_cols = ICD3_TO_CHARLSON_COLS.get(row['icd10_3char'], frozenset())
+        excluded_cols = ICD3_TO_CHARLSON_LABEL.get(row['icd10_3char'], frozenset())
 
         # NB label here is actually the charlson column DESCRIPTION, it was an old convention
-        comorbidity_mod = [
-            QueryModifier(descr=m['label'], type='comorbidity')
-            for m in top_comorbidity_mods
+        comorbidity_modifiers = [
+            QueryModifier(text=CHARLSON_LABEL_TO_STR[m['col']], type='comorbidity')
+            for m in top_comorbidities
             if m['col'] not in excluded_cols
         ][: query_prompts_cfg.max_comorbidity_modifiers]
-        demographic_mod = [
-            QueryModifier(descr=text, type='demographic')
+        demographic_modifiers = [
+            QueryModifier(text=text, type='demographic')
             for text in query_prompts_cfg.demographic_modifiers_text
         ]
 
-        if len(comorbidity_mod) == 0:
+        if len(comorbidity_modifiers) == 0:
             skipped += 1
             continue
 
         # Two queries per condition: top + rare comorbidity, each paired with one demographic - exactly 2 aspects each
-        demo = demographic_mod[:1]
-        modifier_sets: list[list[QueryModifier]] = [[comorbidity_mod[0], *demo]]
-        if len(comorbidity_mod) >= 2:
-            modifier_sets.append([comorbidity_mod[-1], *demo])
+        demo = demographic_modifiers[:1]
+        modifier_sets: list[list[QueryModifier]] = [[comorbidity_modifiers[0], *demo]]
+        if len(comorbidity_modifiers) >= 2:
+            modifier_sets.append([comorbidity_modifiers[-1], *demo])
 
         # POOL COMPISITION STATS
-        modifier_stats: dict[QueryModifier, dict[str, int]] = {}
+        modifier_stats: ModifierStats = {}
         n_condition_chunks = sum(
             len(chunks_by_hadm_id[h]) for h in condition_hadm_ids if h in chunks_by_hadm_id
         )
-        unique_mods = set(comorbidity_mod + demographic_mod)
+        unique_mods = set(comorbidity_modifiers + demographic_modifiers)
 
         for mod in unique_mods:
             mod_hadm_ids = pool_builder.get_hadm_ids_by_condition_modifier(row['icd10_3char'], mod)
@@ -171,7 +175,7 @@ def build_query_prompts(
                 'n_condition_admissions': len(condition_hadm_ids),
                 'n_condition_chunks': n_condition_chunks,
                 'modifier_stats_json': json.dumps({
-                    mod.descr: modifier_stats[mod] for mod in modifiers
+                    mod.text: modifier_stats[mod] for mod in modifiers
                 }),
                 'n_grounding_chunks': len(data_samples),
                 'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),

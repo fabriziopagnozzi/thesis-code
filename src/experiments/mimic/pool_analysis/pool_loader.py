@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
 from experiments.mimic.queries.schemas_queries import QueryModifier, QueryRow
-from experiments.mimic.utils.candidate_pools import ChunkPool, ChunkPoolBuilder
+from experiments.mimic.utils.chunk_pools import ChunkPool, ChunkPoolBuilder
 
 
 @dataclass
@@ -38,7 +38,7 @@ def iter_query_pools(
             continue
 
         query_vec = builder.embed_query(row['query_text'])
-        pool = builder.topk_cosine_for_condition(query_vec, row['icd10_3char'], n=cfg.pool_n)
+        pool = builder.topk_cosine_for_condition(query_vec, row['icd10_3char'], k=cfg.pool_n)
         if pool.n < 5:
             continue
 
@@ -68,7 +68,7 @@ def _build_facet_arrays(
     labels: list[str] = []
     qualifying: list[set[int]] = []
     for mod in modifiers:
-        labels.append(mod.comorb_label)
+        labels.append(mod.label)
         qualifying.append(builder.get_hadm_ids_by_condition_modifier(icd10_3char, mod))
 
     n_chunks, n_mods = pool.n, len(labels)

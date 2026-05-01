@@ -67,6 +67,7 @@ evaluation:
         batch_size: 30
         # resume_batch_size: 30  # set to OLD batch_size when resuming with a changed batch_size
         annotation_pool_n: 1_000
+        min_per_modifier: 0  # optional per-modifier retrieval floor inside annotation_pool_n
 
 # ----------------------------------------------------------------------------
 chunking:

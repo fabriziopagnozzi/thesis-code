@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from experiments.mimic.global_configs import MimicPaths, global_cfg, setup_logging
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
-from experiments.mimic.utils.candidate_pools import ChunkPoolBuilder
+from experiments.mimic.utils.chunk_pools import ChunkPoolBuilder
 from experiments.mimic.utils.utils import load_filtered_queries
 
 from .aggregate import aggregate_stats

@@ -6,6 +6,7 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from experiments.mimic.global_configs import load_default_config
+from experiments.mimic.queries.schemas_queries import QueryModifierLabelId
 from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
 from helpers.query_algorithms import ScoringFunction
 
@@ -16,6 +17,7 @@ class GoldAnnotationCfg(BaseModel):
     batch_size: int
     resume_batch_size: int | None = None
     annotation_pool_n: int = 3000
+    min_per_modifier: int = 0
     num_ctx: int | None = None
     num_predict: int | None = None
     model: str | None = None
@@ -30,6 +32,7 @@ class GoldAnnotationCfg(BaseModel):
     # Reduce phase: unified comparative answer synthesis per query
     answer_system_prompt: str = MimicDefaultPrompts.answer_gen_system
     answer_gen_template: str = MimicDefaultPrompts.answer_gen_template
+    dump_prompts: bool = True
 
     @classmethod
     def load(cls) -> GoldAnnotationCfg:
@@ -124,3 +127,12 @@ class RetrievalResult:
     selected_chunk_ids: list[str]
     selected_hadm_ids: list[int]
     sim_to_query: NDArray[np.float32]
+
+
+class ExtractedFact(TypedDict):
+    chunk_id: str
+    fact: str
+
+
+type AnnotationCacheKey = tuple[int, str, tuple[str, ...]]
+type ModifierToChunkIds = dict[QueryModifierLabelId, list[str]]

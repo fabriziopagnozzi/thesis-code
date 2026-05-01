@@ -23,7 +23,7 @@ from experiments.mimic.global_configs import (
 )
 from helpers.embedder import Embedder
 
-from .embed_utils import build_chunk_texts, build_hadm_to_icd
+from .embed_utils import build_chunks_df_for_embedding, build_hadm_to_icd
 from .run_embed_whole_corpus import (
     embed_and_commit,
     get_embedded_chunk_ids,
@@ -53,7 +53,9 @@ def run_selective_embed(
         .select('hadm_id')
         .unique()
     )
-    chunks_for_queries = all_chunks.join(queries_hadm_ids, on='hadm_id', how='inner')
+    chunks_for_queries = build_chunks_df_for_embedding(
+        all_chunks.join(queries_hadm_ids, on='hadm_id', how='inner')
+    )
 
     print(
         f'{len(queries_hadm_ids):,} admissions for the selected conditions in the generated queries.'
@@ -64,26 +66,25 @@ def run_selective_embed(
     del all_chunks
 
     for model, batch_size in zip(embed_cfg.models, embed_cfg.batch_sizes, strict=True):
-        model_chunks = chunks_for_queries
+        augmented_chunks_df = chunks_for_queries
 
         if table is not None:
             done_ids = get_embedded_chunk_ids(table, model)
             n_done = len(done_ids)
             # Filter the temporary dataframe, NOT relevant_chunks
-            model_chunks = chunks_for_queries.filter(~pl.col('chunk_id').is_in(done_ids))
+            augmented_chunks_df = chunks_for_queries.filter(~pl.col('chunk_id').is_in(done_ids))
             print(
                 f'{n_done:,} already in LanceDB with model '
-                f'{model}, {len(model_chunks):,} remaining to embed'
+                f'{model}, {len(augmented_chunks_df):,} remaining to embed'
             )
         # end if table is not None
 
-        if model_chunks.is_empty():
+        if augmented_chunks_df.is_empty():
             print('All relevant chunks already embedded. Nothing to do.')
             continue
 
         hadm_to_icd = build_hadm_to_icd(duckdb_con)
-        model_chunks, chunk_texts = build_chunk_texts(model_chunks)
-        n_chunks = len(model_chunks)
+        n_chunks = len(augmented_chunks_df)
         print(f'Embedding {n_chunks:,} chunks with model: {model}')
 
         embedder = Embedder(
@@ -93,8 +94,7 @@ def run_selective_embed(
         )
         try:
             table = embed_and_commit(
-                model_chunks,
-                chunk_texts,
+                augmented_chunks_df,
                 hadm_to_icd,
                 embedder,
                 lance_con,
