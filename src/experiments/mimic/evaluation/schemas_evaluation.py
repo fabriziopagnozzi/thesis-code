@@ -1,14 +1,13 @@
-from dataclasses import dataclass
 from typing import Literal, TypedDict
 
-import numpy as np
-from numpy.typing import NDArray
 from pydantic import BaseModel
 
 from experiments.mimic.global_configs import load_default_config
-from experiments.mimic.queries.schemas_queries import QueryModifierLabelId
+from experiments.mimic.utils.chunk_pools import ChunkPoolRetrievalResult
 from experiments.mimic.utils.prompts_default import MimicDefaultPrompts
 from helpers.query_algorithms import ScoringFunction
+
+__all__ = ['ChunkPoolRetrievalResult']
 
 
 class GoldAnnotationCfg(BaseModel):
@@ -16,7 +15,6 @@ class GoldAnnotationCfg(BaseModel):
 
     batch_size: int
     resume_batch_size: int | None = None
-    annotation_pool_n: int = 3000
     min_per_modifier: int = 0
     num_ctx: int | None = None
     num_predict: int | None = None
@@ -47,12 +45,25 @@ class EvaluateCfg(BaseModel):
     lam_values: list[float]
     gold_mode: Literal['llm', 'structural'] = 'llm'
 
+    pool_preretrieval_mode: Literal['full_corpus', 'primary_condition_restricted'] = (
+        'primary_condition_restricted'
+    )
+    """
+        Valid when gold_mode == 'llm'.
+        Decides how to construct the evaluation pool:
+           - either drawing from the full_corpus
+           - or first restricting to the primary_condition for the query and
+         In both cases global_cfg.prefilter_n chunks are retrieved by cosine similarity and then merged with the full golden chunks set to guarantee full reachability of golden chunks
+         (NOTE: TBD if this makes sense)
+    """
+    figures_subdir: str = '.'
+
     @classmethod
     def load(cls) -> EvaluateCfg:
         return cls(**load_default_config(key='evaluation'))
 
 
-class EvaluationMetrics(TypedDict):
+class QueryEvalResult(TypedDict):
     """One element of the list returned by evaluate_query."""
 
     strategy: str
@@ -66,9 +77,13 @@ class EvaluationMetrics(TypedDict):
     avg_cos: float
     jaccard_vs_topk: float
     n_unique_hadms: int
+    answer_rouge1_recall: float
+    answer_rouge1_precision: float
+    answer_tfidf_cosine: float
+    answer_rouge1_f1: float
 
 
-class EvaluationRsesultRow(EvaluationMetrics, total=False):
+class EvaluationRsesultRow(QueryEvalResult, total=False):
     """evaluation_results.parquet - EvaluationMetrics plus query-level keys."""
 
     query_id: str
@@ -88,6 +103,10 @@ class EvaluationStatsRow(TypedDict):
     fac: float
     cos: float
     jac: float
+    ans_rouge1_rec: float
+    ans_rouge1_prec: float
+    ans_tfidf: float
+    ans_rouge1_f1: float
     n: int
     k: int
 
@@ -97,12 +116,16 @@ class BestPerMetricRow(TypedDict):
 
     k: int
     lam: float | None
-    best_for: str  # 'AR' | 'WAR' | 'GP' | 'GR'
+    best_for: str
     strategy: list[str]  # list because ties are possible
     AR: float
     WAR: float
     GP: float
     GR: float
+    ans_rouge1_rec: float
+    ans_rouge1_prec: float
+    ans_tfidf: float
+    ans_rouge1_f1: float
 
 
 class BestPerMestricFixedLamRow(TypedDict):
@@ -116,17 +139,10 @@ class BestPerMestricFixedLamRow(TypedDict):
     WAR: float
     GP: float
     GR: float
-
-
-@dataclass
-class RetrievalResult:
-    strategy: str
-    k: int
-    lam: float | None
-    selected_indices: NDArray[np.intp]
-    selected_chunk_ids: list[str]
-    selected_hadm_ids: list[int]
-    sim_to_query: NDArray[np.float32]
+    ans_rouge1_rec: float
+    ans_rouge1_prec: float
+    ans_tfidf: float
+    ans_rouge1_f1: float
 
 
 class ExtractedFact(TypedDict):
@@ -135,4 +151,3 @@ class ExtractedFact(TypedDict):
 
 
 type AnnotationCacheKey = tuple[int, str, tuple[str, ...]]
-type ModifierToChunkIds = dict[QueryModifierLabelId, list[str]]

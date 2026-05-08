@@ -25,13 +25,9 @@ if __name__ == '__main__':
         raise FileNotFoundError(f'No MAP cache at {map_jsonl}')
 
     facts_by_query: dict[int, dict[QueryModifierLabelId, list[ExtractedFact]]] = {}
-    n_legacy = 0
     with map_jsonl.open() as f:
         for line in f:
             e = json.loads(line.strip())
-            if 'query_id' not in e:
-                n_legacy += 1
-                continue
             query_id = e['query_id']
             if query_id not in facts_by_query:
                 facts_by_query[query_id] = {}
@@ -42,8 +38,7 @@ if __name__ == '__main__':
             if decisions != '<LLM_ERROR>':
                 facts_by_query[query_id][label].extend(persistence.dedupe_facts(decisions))
 
-    legacy_msg = f' (skipped {n_legacy} legacy positional entries)' if n_legacy else ''
-    print(f'MAP cache: {len(facts_by_query)} query_ids with facts{legacy_msg}')
+    print(f'MAP cache: {len(facts_by_query)} query_ids with facts')
 
     # load already-generated answers
 
@@ -64,7 +59,6 @@ if __name__ == '__main__':
         raise SystemExit(0)
 
     # load queries to reconstruct aspects
-
     queries_df = load_filtered_queries(global_cfg.embedding_model)
     query_meta: dict[int, QueryRow] = {}
     for row in queries_df.iter_rows(named=True):
@@ -72,7 +66,6 @@ if __name__ == '__main__':
         query_meta[query_row['query_id']] = query_row
 
     # run reduce for each pending query
-
     for query_id in pending:
         meta = query_meta.get(query_id)
         if meta is None:

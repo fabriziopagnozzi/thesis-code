@@ -71,7 +71,7 @@ def filter_queries(
         row = cast(QueryRow, row)
         query_vec = builder.embed_query(row['query_text'])
         pool = builder.topk_cosine_for_condition(
-            query_vec, icd10_3char=row['icd10_3char'], k=global_cfg.prefilter_n
+            query_vec, condition_icd10_prefix=row['icd10_3char'], k=global_cfg.prefilter_n
         )
 
         all_jaccards, all_fac_gaps, all_fac_topks, all_fac_fls = [], [], [], []
@@ -108,7 +108,7 @@ def compute_divergence(
 
     if prefilter_n is not None and pool.n > prefilter_n:
         top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
-        pool = pool.slice(top_indices)
+        pool = pool.select_by_indices(top_indices)
         sim_to_query = sim_to_query[top_indices]
 
     sim_matrix = pool.sim_matrix()

@@ -21,9 +21,10 @@ from experiments.mimic.global_configs import (
     read_parquet,
     setup_logging,
 )
+from experiments.mimic.utils.utils import build_hadm_to_icd
 from helpers.embedder import Embedder
 
-from .embed_utils import build_chunks_df_for_embedding, build_hadm_to_icd
+from .embed_utils import build_chunks_df_for_embedding
 from .run_embed_whole_corpus import (
     embed_and_commit,
     get_embedded_chunk_ids,

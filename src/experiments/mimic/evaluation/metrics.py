@@ -1,6 +1,44 @@
 import math
+from typing import cast
 
 import numpy as np
+from rouge_score.rouge_scorer import RougeScorer
+from scipy.sparse import csr_matrix
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
+
+_rouge_scorer = RougeScorer(['rouge1'], use_stemmer=False)
+
+
+def compute_chunk_support_metrics(
+    selected_chunk_ids: set[str],
+    modifier_to_chunk_ids: dict[str, list[str]],
+    all_gold_ids: set[str],
+    pool_ids: set[str],
+) -> dict[str, float]:
+    return {
+        'aspect_recall': aspect_recall(selected_chunk_ids, modifier_to_chunk_ids),
+        'weighted_aspect_recall': weighted_aspect_recall(selected_chunk_ids, modifier_to_chunk_ids),
+        'gold_precision': gold_precision(selected_chunk_ids, all_gold_ids),
+        'gold_recall': gold_recall(selected_chunk_ids, all_gold_ids, pool_ids),
+    }
+
+
+def compute_answer_support_metrics(
+    answer_text: str,
+    selected_chunk_ids: list[str],
+    chunk_id_to_text: dict[str, str],
+) -> dict[str, float]:
+    retrieved = ' '.join(
+        chunk_id_to_text[cid] for cid in selected_chunk_ids if cid in chunk_id_to_text
+    )
+    r1 = _rouge_scorer.score(answer_text, retrieved)['rouge1']
+    return {
+        'answer_rouge1_precision': r1.precision,
+        'answer_rouge1_recall': r1.recall,
+        'answer_tfidf_cosine': tfidf_cosine(retrieved, answer_text),
+        'answer_rouge1_f1': r1.fmeasure,
+    }
 
 
 def aspect_recall(selected_chunk_ids: set[str], facets: dict[str, list[str]]) -> float:
@@ -115,3 +153,11 @@ def alpha_ndcg(
     if idcg == 0.0:
         return 0.0
     return dcg / idcg
+
+
+def tfidf_cosine(retrieved: str, answer: str) -> float:
+    """TF-IDF cosine = cos(tfidf(retrieved), tfidf(answer)) = dot product of unit TF-IDF vectors"""
+    if not retrieved.strip() or not answer.strip():
+        return 0.0
+    vec = cast(csr_matrix, TfidfVectorizer().fit_transform([retrieved, answer]))
+    return float(linear_kernel(vec[0:1], vec[1:2])[0, 0])

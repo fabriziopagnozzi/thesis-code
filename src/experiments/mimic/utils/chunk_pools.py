@@ -5,6 +5,7 @@ from typing import Literal, NotRequired, TypedDict, Unpack, cast
 import numpy as np
 import polars as pl
 import pyarrow as pa
+from lancedb import Table
 from numpy.typing import NDArray
 
 from experiments.mimic.global_configs import (
@@ -13,9 +14,10 @@ from experiments.mimic.global_configs import (
     lancedb_con,
     read_parquet,
 )
-from experiments.mimic.queries.schemas_queries import QueryModifier
+from experiments.mimic.queries.schemas_queries import QueryModifier, QueryModifierLabelId
 from experiments.mimic.utils.utils import get_vec_col_name
 from helpers.embedder import Embedder
+from helpers.query_algorithms import ScoringFunction, select
 
 MAX_CANDIDATES = 100_000
 
@@ -31,24 +33,23 @@ class ChunkPoolBuilder:
         **kwargs: Unpack[ChunkPoolBuilderArgs],
     ):
         self._con = duckdb_con
-        self._con.register('admissions_meta', read_parquet('admissions_metadata'))
+        self._con.register('admissions_metadata', read_parquet('admissions_metadata'))
         self._embedder = Embedder(
             **kwargs,
             batch_size=1,
             query_prompt=global_cfg.query_retrieval_instruction,
         )
-        self._table = lancedb_con.open_table(global_cfg.chunks_vec_table)
-        self._vec_col_name = get_vec_col_name(kwargs['model_name'])
+        self._table: Table = lancedb_con.open_table(global_cfg.chunks_vec_table)
+        self._vec_col_name: str = get_vec_col_name(kwargs['model_name'])
         self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
-        self._modifier_to_hadm_ids_cache: dict[str, set[int]] = {}
-
+        self._modifier_to_hadm_ids_cache: dict[QueryModifierLabelId, set[int]] = {}
         print(
-            f'[CandidatePoolBuilder] table: {global_cfg.chunks_vec_table!r}, '
+            f'[ChunkPoolBuilder] table: {global_cfg.chunks_vec_table!r}, '
             f'vector column: {self._vec_col_name!r} ({self._vec_dim}-dim), '
             f'{self._table.count_rows():,} rows'
         )
 
-    def _empty_pool(self) -> ChunkPool:
+    def empty_pool(self) -> ChunkPool:
         return ChunkPool(
             chunk_ids=[],
             hadm_ids=np.empty(0, dtype=np.int64),
@@ -58,12 +59,14 @@ class ChunkPoolBuilder:
             contextual_prefixes=[],
         )
 
-    def _pool_from_arrow(self, result: pa.Table) -> ChunkPool:
-        """Convert a LanceDB search result (Arrow table) into a CandidatePool."""
-        if result.num_rows == 0:
-            return self._empty_pool()
+    def from_arrow(self, pyarrow_table: pa.Table) -> ChunkPool:
+        """Convert a LanceDB search result (Arrow table) into a ChunkPool."""
+        if pyarrow_table.num_rows == 0:
+            return self.empty_pool()
 
-        vec_col = cast(pa.FixedSizeListArray, result.column(self._vec_col_name).combine_chunks())
+        vec_col = cast(
+            pa.FixedSizeListArray, pyarrow_table.column(self._vec_col_name).combine_chunks()
+        )
         vectors = (
             vec_col.values
             .to_numpy(zero_copy_only=False)
@@ -72,52 +75,50 @@ class ChunkPoolBuilder:
         )
         drop_cols = [self._vec_col_name]
 
-        if '_distance' in result.schema.names:
+        if '_distance' in pyarrow_table.schema.names:
             drop_cols.append('_distance')
 
-        df = pl.DataFrame(result.drop(drop_cols))
+        df = pl.DataFrame(pyarrow_table.drop(drop_cols))
 
         return ChunkPool(
             chunk_ids=df['chunk_id'].to_list(),
             hadm_ids=df['hadm_id'].to_numpy().astype(np.int64),
-            vectors=vectors,
             texts=df['text'].to_list(),
             section_names=df['section_name'].to_list(),
             contextual_prefixes=df['contextual_prefix'].fill_null('').to_list(),
+            vectors=vectors,
         )
 
-    def topk_cosine(self, vec: NDArray[np.float32], k: int, predicate: str = '') -> ChunkPool:
+    def topk_cosine(
+        self, vec: NDArray[np.float32], k: int, predicate: str | None = None
+    ) -> ChunkPool:
+        where_clause = (
+            f'{predicate} AND {global_cfg.sections_filter_sql}'
+            if predicate
+            else global_cfg.sections_filter_sql
+        )
         result = (
             self._table
             .search(vec, vector_column_name=self._vec_col_name)
-            .where(f'{predicate + ("AND" if predicate else "")} {global_cfg.sections_filter_sql}')
+            .where(where_clause)
             .limit(k)
             .to_arrow()
         )
-        return self._pool_from_arrow(result)
+        return self.from_arrow(result)
 
     def topk_cosine_for_condition(
-        self, vec: NDArray[np.float32], icd10_3char: str, k: int
+        self, vec: NDArray[np.float32], condition_icd10_prefix: str, k: int
     ) -> ChunkPool:
         result = (
             self._table
             .search(vec, vector_column_name=self._vec_col_name)
             .where(
-                f"array_has(icd10_3char_list, '{icd10_3char}') AND {global_cfg.sections_filter_sql}"
+                f"array_has(icd10_3char_list, '{condition_icd10_prefix}') AND {global_cfg.sections_filter_sql}"
             )
             .limit(k)
             .to_arrow()
         )
-        return self._pool_from_arrow(result)
-
-    def topk_cosine_for_chunk_ids(self, ids: set[str]) -> ChunkPool:
-        if not ids:
-            return self._empty_pool()
-
-        placeholders = ', '.join(f"'{cid}'" for cid in ids)
-        return self._pool_from_arrow(
-            self._table.search().where(f'chunk_id IN ({placeholders})').limit(len(ids)).to_arrow()
-        )
+        return self.from_arrow(result)
 
     def topk_cosine_for_modifiers(
         self,
@@ -127,20 +128,19 @@ class ChunkPoolBuilder:
         k: int,
     ) -> ChunkPool:
         """Top-N cosine pool for chunks matching condition AND any modifier.
-        Builds SQL predicates directly from the lance table's structured columns.
         The pool covers the union across modifiers: condition AND (mod1 OR mod2 OR ...).
         """
         if k <= 0 or not modifiers:
-            return self._empty_pool()
+            return self.empty_pool()
 
-        modifier_preds = ' OR '.join(f'({m.sql_predicate()})' for m in modifiers)
+        modifier_preds = ' OR '.join(f'({m.sql_metadata_table_predicate()})' for m in modifiers)
         predicate = (
             f"array_has(icd10_3char_list, '{icd10_3char}') "
             f'AND ({modifier_preds}) '
             f'AND {global_cfg.sections_filter_sql}'
         )
 
-        return self._pool_from_arrow(
+        return self.from_arrow(
             self._table
             .search(vec, vector_column_name=self._vec_col_name)
             .where(predicate)
@@ -153,10 +153,10 @@ class ChunkPoolBuilder:
     ) -> ChunkPool:
         """Top-N cosine pool restricted to a given hadm_id set."""
         if not hadm_ids:
-            return self._empty_pool()
+            return self.empty_pool()
 
         hadm_list = ', '.join(str(h) for h in hadm_ids)
-        return self._pool_from_arrow(
+        return self.from_arrow(
             self._table
             .search(vec, vector_column_name=self._vec_col_name)
             .where(f'hadm_id IN ({hadm_list}) AND {global_cfg.sections_filter_sql}')
@@ -164,25 +164,38 @@ class ChunkPoolBuilder:
             .to_arrow()
         )
 
+    def get_by_chunk_ids(self, ids: set[str]) -> ChunkPool:
+        if not ids:
+            return self.empty_pool()
+
+        placeholders = ', '.join(f"'{cid}'" for cid in ids)
+        return self.from_arrow(
+            self._table.search().where(f'chunk_id IN ({placeholders})').limit(len(ids)).to_arrow()
+        )
+
     def get_modifier_hadm_ids(self, m: QueryModifier) -> set[int]:
         if m.label in self._modifier_to_hadm_ids_cache:
             return self._modifier_to_hadm_ids_cache[m.label]
 
-        if m.type == 'comorbidity':
-            sql = f"""--sql SELECT DISTINCT hadm_id FROM charlson WHERE {m.sql_predicate()}"""
-        else:
-            sql = (
-                f"""--sql SELECT DISTINCT hadm_id FROM admissions_meta WHERE {m.sql_predicate()}"""
-            )
+        match m.type:
+            case 'comorbidity':
+                sql = f"""--sql
+                    SELECT DISTINCT hadm_id FROM charlson WHERE {m.sql_metadata_table_predicate()}
+                """
+            case 'demographic':
+                sql = f"""--sql
+                    SELECT DISTINCT hadm_id FROM admissions_metadata WHERE {m.sql_metadata_table_predicate()}
+                """
+            case _:
+                raise RuntimeError(f'[ERROR] Unsupported: {m.type=}')
 
         result = set(self._con.execute(sql).pl()['hadm_id'].to_list())
         self._modifier_to_hadm_ids_cache[m.label] = result
         return result
 
     def get_icd3_hadm_ids(self, icd10_3char: str) -> set[int]:
-        cache_key = f'__icd3__{icd10_3char}'
-        if cache_key in self._modifier_to_hadm_ids_cache:
-            return self._modifier_to_hadm_ids_cache[cache_key]
+        if icd10_3char in self._modifier_to_hadm_ids_cache:
+            return self._modifier_to_hadm_ids_cache[icd10_3char]
 
         result = set(
             self._con
@@ -194,7 +207,7 @@ class ChunkPoolBuilder:
             .pl()['hadm_id']
             .to_list()
         )
-        self._modifier_to_hadm_ids_cache[cache_key] = result
+        self._modifier_to_hadm_ids_cache[icd10_3char] = result
         return result
 
     def get_hadm_ids_by_condition_modifier(self, icd10_3char: str, mod: QueryModifier) -> set[int]:
@@ -216,6 +229,17 @@ class ChunkPoolBuilder:
 
     def embed_query(self, text: str) -> NDArray[np.float32]:
         return self._embedder.embed_query(text)
+
+
+@dataclass
+class ChunkPoolRetrievalResult:
+    strategy: str
+    k: int
+    lam: float | None
+    selected_indices: NDArray[np.intp]
+    selected_chunk_ids: list[str]
+    selected_hadm_ids: list[int]
+    sim_to_query: NDArray[np.float32]
 
 
 @dataclass
@@ -246,18 +270,20 @@ class ChunkPool:
     def sim_scores(self, vec: NDArray[np.float32]) -> NDArray[np.float32]:
         return self.vectors @ vec
 
-    def iter_batches(self, batch_size: int) -> Iterator[tuple[int, ChunkPool]]:
-        for start in range(0, self.n, batch_size):
-            end = min(start + batch_size, self.n)
-            yield start, self.slice(np.arange(start, end, dtype=np.intp))
+    def iter_batches(self, each: int) -> Iterator[tuple[int, ChunkPool]]:
+        for start in range(0, self.n, each):
+            end = min(start + each, self.n)
+            yield start, self.select_by_indices(np.arange(start, end, dtype=np.intp))
 
-    def filter_hadm_ids(self, hadm_ids: set[int]) -> ChunkPool:
-        if not hadm_ids:
-            return self.slice(np.empty(0, dtype=np.intp))
-        keep = np.flatnonzero(np.isin(self.hadm_ids, list(hadm_ids))).astype(np.intp)
-        return self.slice(keep)
+    def filter_by_hadm_ids(self, ids: set[int]) -> ChunkPool:
+        if not ids:
+            return self.select_by_indices(np.empty(0, dtype=np.intp))
 
-    def slice(self, indices: NDArray[np.intp]) -> ChunkPool:
+        return self.select_by_indices(
+            np.flatnonzero(np.isin(self.hadm_ids, list(ids))).astype(np.intp)
+        )
+
+    def select_by_indices(self, indices: NDArray[np.intp]) -> ChunkPool:
         idx_list = indices.tolist()
         return ChunkPool(
             chunk_ids=[self.chunk_ids[i] for i in idx_list],
@@ -289,4 +315,49 @@ class ChunkPool:
             if cid not in seen:
                 seen.add(cid)
                 keep.append(i)
-        return merged.slice(np.array(keep, dtype=np.intp))
+        return merged.select_by_indices(np.array(keep, dtype=np.intp))
+
+    def run_retrieval(
+        self,
+        query_embedding: NDArray[np.float32],
+        strategies: list[ScoringFunction],
+        k_values: list[int],
+        lam_values: list[float],
+    ) -> list[ChunkPoolRetrievalResult]:
+        valid_k_values = [k for k in k_values if k <= self.n]
+        if not valid_k_values:
+            return []
+        max_k = max(valid_k_values)
+
+        q_sim_scores = self.sim_scores(query_embedding)
+        sim_matrix = self.sim_matrix()
+
+        results = []
+        for strategy in strategies:
+            lambdas = lam_values if strategy in ('mmr', 'gmmr', 'fac_loc') else [None]
+
+            for lam in lambdas:
+                all_selected_indices = select(
+                    strategy=strategy,
+                    sim_to_query=q_sim_scores,
+                    k=max_k,
+                    sim_matrix=sim_matrix,
+                    embeddings=self.vectors,
+                    query_embedding=query_embedding,
+                    lam=lam if lam is not None else 0.5,
+                )
+                for k in valid_k_values:
+                    selected = all_selected_indices[:k]
+                    results.append(
+                        ChunkPoolRetrievalResult(
+                            strategy=strategy,
+                            k=k,
+                            lam=lam,
+                            selected_indices=selected,
+                            selected_chunk_ids=[self.chunk_ids[i] for i in selected],
+                            selected_hadm_ids=[int(self.hadm_ids[i]) for i in selected],
+                            sim_to_query=q_sim_scores[selected],
+                        )
+                    )
+
+        return results

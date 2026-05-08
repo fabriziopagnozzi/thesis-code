@@ -145,16 +145,6 @@ def embed_and_commit(
     return table
 
 
-def build_hadm_to_icd(con) -> dict[int, list[str]]:
-    """Return hadm_id → list[icd10_3char] for all admissions in unified_diagnoses."""
-    rows = con.execute("""--sql
-        SELECT hadm_id, list(DISTINCT LEFT(unified_icd10, 3)) AS icd10_3char_list
-        FROM unified_diagnoses
-        GROUP BY hadm_id
-    """).fetchall()
-    return {int(hadm_id): list_icd3_groups for (hadm_id, list_icd3_groups) in rows}
-
-
 def build_chunks_df_for_embedding(chunks: pl.DataFrame) -> pl.DataFrame:
     """Build embed texts from contextual_prefix already stored in the chunks DataFrame.
     Returns (augmented_chunks) sorted ascending by text length for efficient batching.

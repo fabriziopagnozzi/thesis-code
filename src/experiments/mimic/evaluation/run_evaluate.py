@@ -6,7 +6,6 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.mimic.evaluation.schemas_evaluation import RetrievalResult
 from experiments.mimic.global_configs import (
     get_table_path,
     global_cfg,
@@ -16,27 +15,26 @@ from experiments.mimic.global_configs import (
 from experiments.mimic.queries.schemas_queries import (
     GoldAnnotationRow,
     QueryModifier,
+    QueryModifierLabelId,
     QueryRowPostFiltering,
 )
 from experiments.mimic.utils.chunk_pools import (
     ChunkPool,
     ChunkPoolBuilder,
+    ChunkPoolRetrievalResult,
 )
 from experiments.mimic.utils.utils import load_filtered_queries
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
-from helpers.query_algorithms import ScoringFunction, select
+from helpers.query_algorithms import ScoringFunction
 
 from .metrics import (
-    aspect_recall,
-    gold_precision,
-    gold_recall,
-    weighted_aspect_recall,
+    compute_answer_support_metrics,
+    compute_chunk_support_metrics,
 )
 from .plots import store_eval_figures
 from .schemas_evaluation import (
     EvaluateCfg,
-    EvaluationMetrics,
-    ModifierToChunkIds,
+    QueryEvalResult,
 )
 
 evaluate_cfg = EvaluateCfg.load()
@@ -47,15 +45,18 @@ def run_evaluate(cfg: EvaluateCfg | None = None) -> pl.DataFrame:
     if cfg is not None:
         evaluate_cfg = cfg
 
-    builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
+    pool_builder = ChunkPoolBuilder(model_name=global_cfg.embedding_model)
 
-    if evaluate_cfg.gold_mode == 'structural':
-        results = evaluate_structural(builder)
-    else:
-        annotations_df = read_parquet('gold_annotations')
-        annotations_df = annotations_df.filter(pl.col('n_facets') > 0)
-        print(f'Loaded {len(annotations_df):,} annotated queries with facets')
-        results = evaluate_llm(annotations_df, builder)
+    results: pl.DataFrame
+    match evaluate_cfg.gold_mode:
+        case 'structural':
+            results = evaluate_structural(pool_builder)
+        case 'llm':
+            annotations_df = read_parquet('gold_annotations').filter(pl.col('n_facets') > 0)
+            print(f'Loaded {len(annotations_df):,} annotated queries with facets')
+            results = evaluate_llm(annotations_df, pool_builder)
+        case _:
+            raise RuntimeError(f'[ERROR] Unsupported case: {evaluate_cfg.gold_mode=}')
 
     out_path = get_table_path('evaluation_results')
     results.write_parquet(out_path)
@@ -63,14 +64,11 @@ def run_evaluate(cfg: EvaluateCfg | None = None) -> pl.DataFrame:
 
     store_eval_stats(results)
     store_best_per_metric(results)
-    store_eval_figures(evaluate_cfg)
+    store_eval_figures(evaluate_cfg)  # reads for convenience the results on disk
     return results
 
 
-def evaluate_llm(
-    annotations_df: pl.DataFrame,
-    builder: ChunkPoolBuilder,
-) -> pl.DataFrame:
+def evaluate_llm(annotations_df: pl.DataFrame, pool_builder: ChunkPoolBuilder) -> pl.DataFrame:
     all_rows = []
 
     for row in tqdm(
@@ -80,32 +78,47 @@ def evaluate_llm(
         dynamic_ncols=True,
     ):
         row = cast(GoldAnnotationRow, row)
-        icd10_3char = row['icd10_3char']
-        query_text = row['query_text']
-        aspect_label_to_chunk_ids: ModifierToChunkIds = json.loads(row['facets_json'])
-        if not aspect_label_to_chunk_ids:
+        mod_label_to_chunk_ids: dict[QueryModifierLabelId, list[str]] = json.loads(
+            row['facets_json']
+        )
+        if not mod_label_to_chunk_ids:
             continue
 
-        query_vec = builder.embed_query(query_text)
+        query_vec: NDArray[np.float32] = pool_builder.embed_query(row['query_text'])
 
-        cosine_pool = builder.topk_cosine(query_vec, k=global_cfg.prefilter_n)
-        all_gold_ids = {cid for cids in aspect_label_to_chunk_ids.values() for cid in cids}
-        gold_pool = builder.topk_cosine_for_chunk_ids(all_gold_ids)
+        cosine_pool: ChunkPool
+        match evaluate_cfg.pool_preretrieval_mode:
+            case 'full_corpus':
+                cosine_pool = pool_builder.topk_cosine(query_vec, k=global_cfg.prefilter_n)
+            case 'primary_condition_restricted':
+                cosine_pool = pool_builder.topk_cosine_for_condition(
+                    query_vec,
+                    condition_icd10_prefix=row['icd10_3char'],
+                    k=global_cfg.prefilter_n,
+                )
+            case _:
+                raise RuntimeError(f'[ERROR] Unsupported: {evaluate_cfg.pool_preretrieval_mode=}')
+
+        all_gold_ids = {chunk_id for ids in mod_label_to_chunk_ids.values() for chunk_id in ids}
+        gold_pool: ChunkPool = pool_builder.get_by_chunk_ids(all_gold_ids)
+
         pool = ChunkPool.merge([gold_pool, cosine_pool])
 
         query_metrics = evaluate_query(
             pool,
             query_vec,
-            aspect_label_to_chunk_ids,
+            mod_label_to_chunk_ids,
             strategies=evaluate_cfg.strategies,
             k_values=evaluate_cfg.k_values,
             lam_values=evaluate_cfg.lam_values,
+            answer_text=row['answer_text'],
+            chunk_id_to_text=dict(zip(pool.chunk_ids, pool.texts, strict=True)),
         )
 
         for m in query_metrics:
             all_rows.append({
                 'query_id': row['query_id'],
-                'icd10_3char': icd10_3char,
+                'icd10_3char': row['icd10_3char'],
                 'n_facets': row['n_facets'],
                 **m,
             })
@@ -141,7 +154,7 @@ def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
             )
             continue
 
-        query_metrics = evaluate_query(
+        query_result: list[QueryEvalResult] = evaluate_query(
             pool,
             query_vec,
             mod_to_chunk_ids,
@@ -150,7 +163,7 @@ def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
             lam_values=evaluate_cfg.lam_values,
         )
 
-        for m in query_metrics:
+        for m in query_result:
             all_rows.append({
                 'query_id': query['query_id'],
                 'icd10_3char': query['icd10_3char'],
@@ -167,12 +180,12 @@ def build_structural_facets(
     icd10_3char: str,
     modifiers: list[QueryModifier],
     builder: ChunkPoolBuilder,
-) -> ModifierToChunkIds:
-    mod_to_chunk_ids: ModifierToChunkIds = {}
+) -> dict[QueryModifierLabelId, list[str]]:
+    mod_to_chunk_ids: dict[QueryModifierLabelId, list[str]] = {}
 
     for mod in modifiers:
         qualifying_hadm_ids = builder.get_hadm_ids_by_condition_modifier(icd10_3char, mod)
-        facet_pool = pool.filter_hadm_ids(qualifying_hadm_ids)
+        facet_pool = pool.filter_by_hadm_ids(qualifying_hadm_ids)
         if facet_pool.n > 0:
             mod_to_chunk_ids[mod.label] = facet_pool.chunk_ids
 
@@ -181,26 +194,26 @@ def build_structural_facets(
 
 def evaluate_query(
     pool: ChunkPool,
-    query_vec: np.ndarray,
-    modifier_to_chunk_ids: ModifierToChunkIds,
+    query_vec: NDArray,
+    modifier_to_chunk_ids: dict[QueryModifierLabelId, list[str]],
     strategies: list[ScoringFunction],
     k_values: list[int],
     lam_values: list[float],
-) -> list[EvaluationMetrics]:
+    answer_text: str | None = None,
+    chunk_id_to_text: dict[str, str] | None = None,
+) -> list[QueryEvalResult]:
     """Evaluate all strategy x k x λ combos for a single query.
     Returns list of metric dicts.
     """
-    retrieval_results = run_retrieval(
-        pool,
+    retrieval_results = pool.run_retrieval(
         query_vec,
         strategies=strategies,
         k_values=k_values,
         lam_values=lam_values,
-        prefilter_n=None,
     )
 
     # Find top_k results for Jaccard comparison
-    topk_by_k: dict[int, RetrievalResult] = {}
+    topk_by_k: dict[int, ChunkPoolRetrievalResult] = {}
     for result in retrieval_results:
         if result.strategy == 'top_k':
             topk_by_k[result.k] = result
@@ -215,10 +228,9 @@ def evaluate_query(
     metrics = []
     for result in retrieval_results:
         selected_set = set(result.selected_chunk_ids)
-        ar = aspect_recall(selected_set, modifier_to_chunk_ids)
-        war = weighted_aspect_recall(selected_set, modifier_to_chunk_ids)
-        gp = gold_precision(selected_set, all_gold_ids)
-        gr = gold_recall(selected_set, all_gold_ids, pool_id_set)
+        chunk_metrics = compute_chunk_support_metrics(
+            selected_set, modifier_to_chunk_ids, all_gold_ids, pool_id_set
+        )
 
         eval_indices = np.array(
             [
@@ -246,76 +258,25 @@ def evaluate_query(
         else:
             jac = 1.0
 
-        metrics.append({
+        row_metrics: dict = {
             'strategy': result.strategy,
             'k': result.k,
             'lam': result.lam,
-            'aspect_recall': ar,
-            'weighted_aspect_recall': war,
-            'gold_precision': gp,
-            'gold_recall': gr,
+            **chunk_metrics,
             'fac_cov_score': fac,
             'avg_cos': ac,
             'jaccard_vs_topk': jac,
             'n_unique_hadms': len(set(result.selected_hadm_ids)),
-        })
+        }
+        if answer_text is not None and chunk_id_to_text is not None:
+            row_metrics.update(
+                compute_answer_support_metrics(
+                    answer_text, result.selected_chunk_ids, chunk_id_to_text
+                )
+            )
+        metrics.append(row_metrics)
 
     return metrics
-
-
-def run_retrieval(
-    pool: ChunkPool,
-    query_vec: NDArray[np.float32],
-    strategies: list[ScoringFunction],
-    k_values: list[int],
-    lam_values: list[float],
-    prefilter_n: int | None = 500,
-) -> list[RetrievalResult]:
-    sim_to_query = pool.sim_scores(query_vec)
-
-    if prefilter_n is not None and pool.n > prefilter_n:
-        top_indices = np.argsort(sim_to_query)[::-1][:prefilter_n].copy()
-        pool = pool.slice(top_indices)
-        sim_to_query = sim_to_query[top_indices]
-
-    sim_matrix = pool.sim_matrix()
-
-    valid_k_values = [k for k in k_values if k <= pool.n]
-    if not valid_k_values:
-        return []
-    max_k = max(valid_k_values)
-
-    results = []
-    for strategy in strategies:
-        needs_lambda = strategy in ('mmr', 'gmmr', 'fac_loc')
-        lams = lam_values if needs_lambda else [None]
-
-        for lam in lams:
-            all_selected = select(
-                strategy=strategy,
-                sim_to_query=sim_to_query,
-                k=max_k,
-                sim_matrix=sim_matrix,
-                embeddings=pool.vectors,
-                query_embedding=query_vec,
-                lam=lam if lam is not None else 0.5,
-            )
-
-            for k in valid_k_values:
-                selected = all_selected[:k]
-                results.append(
-                    RetrievalResult(
-                        strategy=strategy,
-                        k=k,
-                        lam=lam,
-                        selected_indices=selected,
-                        selected_chunk_ids=[pool.chunk_ids[i] for i in selected],
-                        selected_hadm_ids=[int(pool.hadm_ids[i]) for i in selected],
-                        sim_to_query=sim_to_query[selected],
-                    )
-                )
-
-    return results
 
 
 def store_eval_stats(results_df: pl.DataFrame) -> None:
@@ -326,6 +287,14 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         print(f'--- k = {k} ---')
         subset = results_df.filter(pl.col('k') == k)
 
+        ans_aggs = []
+        if 'answer_rouge1_recall' in results_df.columns:
+            ans_aggs = [
+                pl.col('answer_rouge1_recall').mean().alias('ans_rouge1_rec'),
+                pl.col('answer_rouge1_precision').mean().alias('ans_rouge1_prec'),
+                pl.col('answer_tfidf_cosine').mean().alias('ans_tfidf'),
+                pl.col('answer_rouge1_f1').mean().alias('ans_rouge1_f1'),
+            ]
         summary = (
             subset
             .group_by('strategy', 'lam')
@@ -337,6 +306,7 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
                 pl.col('fac_cov_score').mean().alias('fac'),
                 pl.col('avg_cos').mean().alias('cos'),
                 pl.col('jaccard_vs_topk').mean().alias('jac'),
+                *ans_aggs,
                 pl.col('aspect_recall').count().alias('n'),
             )
             .sort('strategy', 'lam')
@@ -400,13 +370,31 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
 
 def store_best_per_metric(results_df: pl.DataFrame) -> None:
     """For each (k, lam) pair and each metric, find the best strategy among top_k, mmr, fl."""
+    has_answer_metrics = 'answer_rouge1_recall' in results_df.columns
     metric_cols = ['AR', 'WAR', 'GP', 'GR']
+    if has_answer_metrics:
+        metric_cols = [
+            *metric_cols,
+            'ans_rouge1_rec',
+            'ans_rouge1_prec',
+            'ans_tfidf',
+            'ans_rouge1_f1',
+        ]
 
+    ans_aggs = []
+    if has_answer_metrics:
+        ans_aggs = [
+            pl.col('answer_rouge1_recall').mean().alias('ans_rouge1_rec'),
+            pl.col('answer_rouge1_precision').mean().alias('ans_rouge1_prec'),
+            pl.col('answer_tfidf_cosine').mean().alias('ans_tfidf'),
+            pl.col('answer_rouge1_f1').mean().alias('ans_rouge1_f1'),
+        ]
     summary = results_df.group_by('k', 'lam', 'strategy').agg(
         pl.col('aspect_recall').mean().alias('AR'),
         pl.col('weighted_aspect_recall').mean().alias('WAR'),
         pl.col('gold_precision').mean().alias('GP'),
         pl.col('gold_recall').mean().alias('GR'),
+        *ans_aggs,
     )
 
     # top_k has lam=null - it must compete against mmr/fl at every lambda value

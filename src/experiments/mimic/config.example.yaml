@@ -56,6 +56,7 @@ evaluation:
     lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
 
     gold_annotation:
+        min_per_modifier: 0 # optional per-modifier retrieval floor
         model: gemma4-31b-text
         temperature: 0.40
         top_p: 0.95
@@ -66,10 +67,8 @@ evaluation:
         num_predict: -1
         batch_size: 30
         # resume_batch_size: 30  # set to OLD batch_size when resuming with a changed batch_size
-        annotation_pool_n: 1_000
-        min_per_modifier: 0  # optional per-modifier retrieval floor inside annotation_pool_n
 
-# ----------------------------------------------------------------------------
+        # ----------------------------------------------------------------------------
 chunking:
     conditions_stats:
         min_admissions: 200
@@ -123,7 +122,6 @@ queries:
         high_value_sections:
             - BRIEF HOSPITAL COURSE
             - HISTORY OF PRESENT ILLNESS
-            - DISCHARGE DIAGNOSIS
             - DISCHARGE MEDICATIONS
 
         demographic_modifiers:

@@ -39,3 +39,13 @@ def load_filtered_queries(embedding_model: str) -> pl.DataFrame:
         )
 
     return queries_df.filter(pl.col(bool_filter_for_model))
+
+
+def build_hadm_to_icd(con) -> dict[int, list[str]]:
+    """Return hadm_id → list[icd10_3char] for all admissions in unified_diagnoses."""
+    rows = con.execute("""--sql
+        SELECT hadm_id, list(DISTINCT LEFT(unified_icd10, 3)) AS icd10_3char_list
+        FROM unified_diagnoses
+        GROUP BY hadm_id
+    """).fetchall()
+    return {int(hadm_id): list_icd3_groups for (hadm_id, list_icd3_groups) in rows}

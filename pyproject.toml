@@ -26,6 +26,7 @@ dependencies = [
 	"matplotlib>=3.9",
 	"plotly>=6.7.0",
 	"mteb>=2.12.30",
+	"rouge-score>=0.1.2",
 ]
 [dependency-groups]
 dev = [

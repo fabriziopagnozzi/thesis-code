@@ -65,15 +65,15 @@ def _resolve_exp_name() -> str:
 
 class MimicPaths:
     exp_name = _resolve_exp_name()
+
     mimic_root = ROOT_DIR / 'src' / 'experiments' / 'mimic'
     results_dir = mimic_root / '_results'
-
     vector_db_dir = results_dir / '_vector_db'
-    figures_dir = results_dir / 'figures'
     experiment_dir = results_dir / exp_name
 
     config_path = experiment_dir / '_config.yaml'
     logs_dir = experiment_dir / '_logs'
+    figures_dir = experiment_dir / '_figures'
 
     init_sql = mimic_root / '_mimic_init.sql'
     duckdb_concepts_dir = THIRDPARTY_CODE_DIR / 'mimic_code' / 'mimic-iv' / 'concepts_duckdb'

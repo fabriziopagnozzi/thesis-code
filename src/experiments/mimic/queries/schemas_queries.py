@@ -27,7 +27,6 @@ class BuildQueryPromptsCfg(BaseModel):
     stratify_seed: int = 42
     high_value_sections: list[str] = [
         'BRIEF HOSPITAL COURSE',
-        'DISCHARGE DIAGNOSIS',
         'DISCHARGE MEDICATIONS',
     ]
     demographic_modifiers: list[DemographicModifier]
@@ -94,39 +93,45 @@ class QueryModifier(BaseModel):
     @computed_field
     @property
     def label(self) -> QueryModifierLabelId:
-        if self.type == 'comorbidity':
-            return CHARLSON_STR_TO_LABEL[self.text]
-        elif self.type == 'demographic':
-            return self.text
-        else:
-            raise RuntimeError('[ERROR]: unsupported modifier type')
+        match self.type:
+            case 'comorbidity':
+                return CHARLSON_STR_TO_LABEL[self.text]
+            case 'demographic':
+                return self.text
+            case _:
+                raise RuntimeError('[ERROR]: unsupported modifier type')
 
     @classmethod
     def parse_list(cls, json_str: str) -> list[QueryModifier]:
         return [cls(**d) for d in json.loads(json_str or '[]')]
 
     def format_subgroup_info(self):
-        if self.type == 'comorbidity':
-            return f'patients with the following comorbidity: "{self.text}"'
-        elif self.type == 'demographic':
-            return self.text
-        else:
-            raise RuntimeError('[ERROR]: unsupported modifier type')
+        match self.type:
+            case 'comorbidity':
+                return f'patients with the following comorbidity: "{self.text}"'
+            case 'demographic':
+                return self.text
+            case _:
+                raise RuntimeError('[ERROR]: unsupported modifier type')
 
-    def sql_predicate(self) -> str:
-        """Build a LanceDB-compatible SQL predicate for a single modifier.
-        Comorbidity: uses the Charlson column already in the lance table (m.label).
-        Demographic: looks up the (column, op, value) tuple from the demographic_filters config.
+    def sql_metadata_table_predicate(self) -> str:
         """
-        if self.type == 'comorbidity':
-            return f'{self.label} > 0'
+        Build a LanceDB-compatible SQL predicate for a single modifier.
+            - Comorbidity: uses the Charlson column already in the lance table (m.label).
+            - Demographic: looks up the (column, op, value) tuple from the demographic_filters config.
+        """
+        match self.type:
+            case 'comorbidity':
+                return f'{self.label} > 0'
+            case 'demographic':
+                demo = self._demographic_filters.get(self.label)
+                if demo is None:
+                    raise ValueError(f'Unknown demographic modifier: {self.label!r}')
 
-        demo = self._demographic_filters.get(self.label)
-        if demo is None:
-            raise ValueError(f'Unknown demographic modifier: {self.label!r}')
-        column, op, value = demo
-
-        return f'{column} {op} {value}'
+                column, op, value = demo
+                return f'{column} {op} {value}'
+            case _:
+                raise ValueError(f'[ERROR] Unsupported type for SQL predicate: {self.type}')
 
 
 type ModifierStats = dict[QueryModifier, dict[Literal['n_admissions', 'n_chunks'], int]]
