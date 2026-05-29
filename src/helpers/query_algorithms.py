@@ -171,44 +171,42 @@ def fps(
 #     return np.array(selected, dtype=np.intp)
 
 
+# TODO: try and use apricot
 def fac_loc(
-    sim_to_query: NDArray[np.float32],
+    query_sim_scores: NDArray[np.float32],
     k: int,
-    sim_matrix: NDArray[np.float32],
+    dataset_sim_matrix: NDArray[np.float32],
     lam: float = 0.5,
     **_kwargs: object,
 ) -> NDArray[np.intp]:
-    n = len(sim_to_query)
+    n = len(query_sim_scores)
     if n == 0:
         return np.array([], dtype=np.intp)
-
     k = min(k, n)
+
     selected: list[int] = []
     m = np.zeros(n, dtype=np.float64)
 
-    initial_cov = np.maximum(0, sim_matrix).sum(axis=0) / n
-    initial_gains = lam * sim_to_query + (1 - lam) * initial_cov
+    initial_coverage = np.maximum(0, dataset_sim_matrix).sum(axis=0) / n
+    initial_gains = lam * query_sim_scores + (1 - lam) * initial_coverage
 
-    # 2. max-heap
-    queue = [(-initial_gains[i], i, 0) for i in range(n)]
-    heapq.heapify(queue)
+    max_heap = [(-initial_gains[i], i, 0) for i in range(n)]
+    heapq.heapify(max_heap)
 
-    # 3. Lazy Greedy Selection
+    # Lazy Greedy Selection
     for step in range(k):
         while True:
             # item with the highest historical gain
-            _, node, last_update = heapq.heappop(queue)
+            _, node_idx, last_update = heapq.heappop(max_heap)
 
-            # If we already updated this item's gain during the current step,
-            # submodularity guarantees it is the absolute best possible choice.
             if last_update == step:
-                selected.append(node)
-                m = np.maximum(m, sim_matrix[:, node])
+                selected.append(node_idx)
+                m = np.maximum(m, dataset_sim_matrix[:, node_idx])
                 break
 
-            marginal_cov = np.sum(np.maximum(0, sim_matrix[:, node] - m)) / n
-            new_gain = lam * sim_to_query[node] + (1 - lam) * marginal_cov
-            heapq.heappush(queue, (-new_gain, node, step))
+            marginal_cov = np.sum(np.maximum(0, dataset_sim_matrix[:, node_idx] - m)) / n
+            new_gain = lam * query_sim_scores[node_idx] + (1 - lam) * marginal_cov
+            heapq.heappush(max_heap, (-new_gain, node_idx, step))
 
     return np.array(selected, dtype=np.intp)
 

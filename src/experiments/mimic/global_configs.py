@@ -24,7 +24,7 @@ class GlobalCfg(BaseModel):
     model_config = {'populate_by_name': True, 'extra': 'ignore'}
 
     num_conditions: PositiveInt = Field(alias='n_conditions')
-    result_dir_overrides: dict[str, str] = {}
+    result_dir_overrides: dict[MimicTable, str] = {}
 
     prefilter_n: int = 1_000_000_000  # basically infinity
     chunks_vec_table: str
@@ -145,7 +145,6 @@ def read_parquet(table: MimicTable):
     return pl.read_parquet(get_table_path(table, ext='parquet'))
 
 
-# -- Phase 2 --
 def setup_logging() -> None:
     import sys
 
