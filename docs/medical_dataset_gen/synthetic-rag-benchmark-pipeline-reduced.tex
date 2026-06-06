@@ -1,0 +1,656 @@
+\begin{filecontents*}[overwrite]{synthetic-rag-benchmark-pipeline-reduced.bib}
+@inproceedings{kargupta2025claimspect,
+  author    = {Kargupta, Priyanka and Tian, Runchu and Han, Jiawei},
+  title     = {Beyond True or False: Retrieval-Augmented Hierarchical Analysis of Nuanced Claims},
+  booktitle = {Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics},
+  year      = {2025},
+  pages     = {29664--29679},
+  doi       = {10.18653/v1/2025.acl-long.1434},
+  url       = {https://aclanthology.org/2025.acl-long.1434/}
+}
+@inproceedings{abbasiantaeb2026multiaspect,
+  author    = {Abbasiantaeb, Zahra and Lupart, Simon and Aliannejadi, Mohammad},
+  title     = {Generating Multi-Aspect Queries for Conversational Search},
+  booktitle = {Proceedings of the 19th Conference of the European Chapter of the Association for Computational Linguistics},
+  year      = {2026},
+  pages     = {8201--8217},
+  doi       = {10.18653/v1/2026.eacl-long.383},
+  url       = {https://aclanthology.org/2026.eacl-long.383/}
+}
+@inproceedings{huang2025datagen,
+  author    = {Huang, Yue and Wu, Siyuan and Gao, Chujie and Chen, Dongping and Zhang, Qihui and Wan, Yao and Zhou, Tianyi and Xiao, Chaowei and Gao, Jianfeng and Sun, Lichao and Zhang, Xiangliang},
+  title     = {{DATAGEN}: Unified Synthetic Dataset via Large Language Models},
+  booktitle = {International Conference on Learning Representations},
+  year      = {2025}
+}
+@misc{driouich2025diverseprivate,
+  author       = {Driouich, Ilias and Cao, Hongliu and Thomas, Eoin},
+  title        = {Diverse And Private Synthetic Datasets Generation for {RAG} Evaluation: A Multi-Agent Framework},
+  year         = {2025},
+  eprint       = {2508.18929},
+  archivePrefix= {arXiv},
+  url          = {https://arxiv.org/abs/2508.18929}
+}
+@inproceedings{shen2026dragon,
+  author    = {Shen, Haiyang and Yan, Hang and Xing, Zhongshi and Liu, Mugeng and Li, Yue and Chen, Zhiyang and Wang, Yuxiang and Wang, Jiuzheng and Ma, Yun},
+  title     = {{DRAGON}: Domain-specific Robust Automatic Data Generation for {RAG} Optimization},
+  booktitle = {Findings of the Association for Computational Linguistics: EACL},
+  year      = {2026},
+  pages     = {1065--1078},
+  doi       = {10.18653/v1/2026.findings-eacl.56},
+  url       = {https://aclanthology.org/2026.findings-eacl.56/}
+}
+@misc{lee2025mhts,
+  author       = {Lee, Jeongsoo and Kwon, Daeyong and Jin, Kyohoon and Jeong, Junnyeong and Sim, Minwoo and Kim, Minwoo},
+  title        = {{MHTS}: Multi-Hop Tree Structure Framework for Generating Difficulty-Controllable {QA} Datasets for {RAG} Evaluation},
+  year         = {2025},
+  eprint       = {2504.08756},
+  archivePrefix= {arXiv},
+  doi          = {10.48550/arXiv.2504.08756},
+  url          = {https://arxiv.org/abs/2504.08756}
+}
+@inproceedings{lin2025scirgen,
+  author    = {Lin, Junyong and Dai, Lu and Han, Ruiqian and Sui, Yijie and Wang, Ruilin and Sun, Xingliang and Wu, Qinglin and Feng, Min and Liu, Hao and Xiong, Hui},
+  title     = {{ScIRGen}: Synthesize Realistic and Large-Scale {RAG} Dataset for Scientific Research},
+  booktitle = {Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  year      = {2025},
+  pages     = {5619--5630},
+  doi       = {10.1145/3711896.3737432},
+  url       = {https://dl.acm.org/doi/10.1145/3711896.3737432}
+}
+@inproceedings{rahmani2024synthetic,
+  author    = {Rahmani, Hossein A. and Craswell, Nick and Yilmaz, Emine and Mitra, Bhaskar and Campos, Daniel},
+  title     = {Synthetic Test Collections for Retrieval Evaluation},
+  booktitle = {Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval},
+  year      = {2024},
+  pages     = {2647--2651},
+  doi       = {10.1145/3626772.3657942},
+  url       = {https://dl.acm.org/doi/10.1145/3626772.3657942}
+}
+@inproceedings{kenneweg2024ragval,
+  author    = {Kenneweg, Tristan and Kenneweg, Philip and Hammer, Barbara},
+  title     = {{RAGVAL}: Automatic Dataset Creation and Evaluation for {RAG} Systems},
+  booktitle = {2024 2nd International Conference on Foundation and Large Language Models},
+  year      = {2024},
+  pages     = {470--475},
+  doi       = {10.1109/FLLM63129.2024.10852482}
+}
+@inproceedings{jadon2025domainspecific,
+  author    = {Jadon, Aryan and Patil, Avinash and Kumar, Shashank},
+  title     = {Enhancing Domain-Specific Retrieval-Augmented Generation: Synthetic Data Generation and Evaluation using Reasoning Models},
+  booktitle = {2025 IEEE International Conference on Industry 4.0, Artificial Intelligence, and Communications Technology},
+  year      = {2025},
+  pages     = {445--452},
+  doi       = {10.1109/IAICT65714.2025.11100564}
+}
+@inproceedings{long2024survey,
+  author    = {Long, Lin and Wang, Rui and Xiao, Ruixuan and Zhao, Junbo and Ding, Xiao and Chen, Gang and Wang, Haobo},
+  title     = {On {LLMs}-Driven Synthetic Data Generation, Curation, and Evaluation: A Survey},
+  booktitle = {Findings of the Association for Computational Linguistics: ACL},
+  year      = {2024},
+  pages     = {11065--11082},
+  doi       = {10.18653/v1/2024.findings-acl.658},
+  url       = {https://aclanthology.org/2024.findings-acl.658/}
+}
+@inproceedings{kim2025agorabench,
+  author    = {Kim, Seungone and Suk, Juyoung and Yue, Xiang and Viswanathan, Vijay and Lee, Seongyun and Wang, Yizhong and Gashteovski, Kiril and Lawrence, Carolin and Welleck, Sean and Neubig, Graham},
+  title     = {Evaluating Language Models as Synthetic Data Generators},
+  booktitle = {Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics},
+  year      = {2025},
+  pages     = {6385--6403},
+  url       = {https://aclanthology.org/2025.acl-long.320/}
+}
+@article{pastrian2026evolutionary,
+  author  = {Pastri{\'a}n, Diego and Hidalgo, Nicol{\'a}s and Reyes, V{\'i}ctor and Rosas, Erika},
+  title   = {Evolutionary Multi-Objective Prompt Learning for Synthetic Text Data Generation with Black-Box Large Language Models},
+  journal = {Applied Sciences},
+  year    = {2026},
+  volume  = {16},
+  number  = {8},
+  pages   = {3623},
+  doi     = {10.3390/app16083623},
+  url     = {https://doi.org/10.3390/app16083623}
+}
+@misc{cosentino2025healthbranches,
+  author       = {Cosentino, Cristian and Defilippo, Annamaria and Dossena, Marco and Irwin, Christopher and Joubbi, Sara and Li{\`o}, Pietro},
+  title        = {HealthBranches: Synthesizing Clinically-Grounded Question Answering Datasets via Decision Pathways},
+  year         = {2025},
+  eprint       = {2508.07308},
+  archivePrefix= {arXiv},
+  doi          = {10.48550/arXiv.2508.07308}
+}
+@misc{gong2026meddialogrubrics,
+  author       = {Gong, Lecheng and Fang, Weimin and Yang, Ting and Tao, Dongjie and Guo, Chunxiao and Wei, Peng and Xie, Bo and Guan, Jinqun and Chen, Zixiao and Shi, Fang and Gu, Jinjie and Liu, Junwei},
+  title        = {MedDialogRubrics: A Comprehensive Benchmark and Evaluation Framework for Multi-turn Medical Consultations in Large Language Models},
+  year         = {2026},
+  eprint       = {2601.03023},
+  archivePrefix= {arXiv},
+  doi          = {10.48550/arXiv.2601.03023}
+}
+@inproceedings{yue2021cliniqg4qa,
+  author    = {Yue, Xiang and Zhang, Xinliang Frederick and Yao, Ziyu and Lin, Simon and Sun, Huan},
+  title     = {{CliniQG4QA}: Generating Diverse Questions for Domain Adaptation of Clinical Question Answering},
+  booktitle = {2021 IEEE International Conference on Bioinformatics and Biomedicine},
+  year      = {2021},
+  pages     = {580--587},
+  doi       = {10.1109/BIBM52615.2021.9669300}
+}
+@misc{ziletti2025cohorts,
+  author       = {Ziletti, Angelo and D'Ambrosi, Leonardo},
+  title        = {Generating Patient Cohorts from Electronic Health Records using Two-Step Retrieval-Augmented Text-to-{SQL} Generation},
+  year         = {2025},
+  eprint       = {2502.21107},
+  archivePrefix= {arXiv},
+  doi          = {10.48550/arXiv.2502.21107}
+}
+@article{rao2026scoping,
+  author  = {Rao, Hanshu and Liu, Weisi and Wang, Haohan and Huang, I-Chan and He, Zhe and Huang, Xiaolei},
+  title   = {A Scoping Review of Synthetic Data Generation by Language Models in Biomedical Research and Application: Data Utility and Quality Perspectives},
+  journal = {Journal of Healthcare Informatics Research},
+  year    = {2026},
+  volume  = {10},
+  pages   = {367--392},
+  doi     = {10.1007/s41666-026-00229-9}
+}
+@article{montenegro2025medicalsynthetic,
+  author  = {Montenegro, Larissa and Gomes, Luis M. and Machado, Jos{\'e} M.},
+  title   = {What We Know About the Role of Large Language Models for Medical Synthetic Dataset Generation},
+  journal = {AI},
+  year    = {2025},
+  volume  = {6},
+  number  = {6},
+  pages   = {109},
+  doi     = {10.3390/ai6060109}
+}
+@misc{zafar2024kimag,
+  author = {Zafar and others},
+  title  = {{KI-MAG}: A Knowledge-Infused Abstractive Question Answering System in Medical Domain},
+  year   = {2024}
+}
+\end{filecontents*}
+
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.25cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage[numbers]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{parskip}
+\usepackage{xurl}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{multicol}
+
+\sloppy
+\definecolor{bettergrey}{gray}{0.95}
+\definecolor{betterblue}{RGB}{33, 65, 196}
+\newcommand{\field}[1]{\texttt{#1}}
+\newcommand{\stage}[2]{\subsection{\textcolor{betterblue}{#1}: #2}}
+
+\lstdefinestyle{promptstyle}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{bettergrey},
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\title{\textbf{Synthetic Dataset Construction Pipeline}}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+% \newpage
+
+\section{Pipeline Core Design}
+
+The new pipeline reverses the old MIMIC-IV workflow. The new benchmark starts from a structured plan:
+
+\begin{enumerate}[noitemsep, topsep=0pt]
+	\item define query facets and answer structure
+	\item generate atomic clinical facts that support each facet
+	\item render those facts into narrative clinical text chunks
+	\item generate redundant gold clusters and hard distractor clusters
+	\item generate natural multi-aspect queries from the same hidden plan
+	\item derive qrels and gold answers directly from the fact--chunk--facet mapping
+	\item validate the embedding geometry before final evaluation.
+\end{enumerate}
+
+% \subsection{Running Example}
+
+% \textbf{Strategy.} Generate a structured plan before generating chunks or queries. A clinical query should be backed by a graph or tree of candidate facets, such as primary condition, demographic subgroup, comorbidity subgroup, treatment duration, complications, rehabilitation outcome, discharge disposition, and follow-up needs.
+
+% For example, an encephalitis/myelitis query family could start from the following candidate facet pool:
+
+% \begin{itemize}[noitemsep, topsep=0pt]
+% 	\item primary condition: encephalitis or myelitis
+% 	\item demographic candidates: age $>75$, age 40--64
+% 	\item comorbidity candidates: uncomplicated diabetes, renal disease, immunosuppression
+% 	\item treatment candidates: antiviral duration, steroid exposure, delayed treatment start
+% 	\item outcome candidates: rehabilitation outcome, discharge disposition, persistent neurologic deficit, follow-up needs
+% 	\item distractor candidates: same condition but wrong subgroup, same subgroup but wrong condition, same treatment vocabulary but wrong disease.
+% \end{itemize}
+
+% The seven steps above then instantiate as follows.
+
+% \begin{enumerate}[leftmargin=*, itemsep=5pt, topsep=0pt]
+% 	\item \textbf{Query facets and answer structure.} The hidden plan selects four compatible candidates and turns them into required query facets:
+% 	      \field{F1}: diabetes + treatment duration
+% 	      \field{F2}: diabetes + rehabilitation outcome
+% 	      \field{F3}: age $>75$ + treatment duration
+% 	      \field{F4}: age $>75$ + rehabilitation outcome.
+% 	      The expected answer must compare the diabetes subgroup against the elderly subgroup across both clinical axes.
+
+% 	\item \textbf{Atomic clinical facts.} The generator creates structured facts before writing any text. For example:
+% 	      \begin{lstlisting}[style=promptstyle]
+% {
+%   "fact_id": "FACT_001",
+%   "primary_condition": "encephalitis",
+%   "age_group": "age_40_64",
+%   "comorbidities": ["uncomplicated_diabetes"],
+%   "intervention": "intravenous acyclovir",
+%   "treatment_duration": "10 days",
+%   "rehab_disposition": "home physical therapy",
+%   "outcome": "near-baseline mobility at discharge",
+%   "facet_ids": ["F1", "F2"],
+%   "must_not_mention": ["age over 75", "inpatient rehabilitation"]
+% }
+% 	      \end{lstlisting}
+
+% 	\item \textbf{Narrative clinical chunks.} The fact is rendered into one or more retrieval chunks while preserving the labels:
+% 	      \begin{lstlisting}[style=promptstyle]
+% C_001: The patient was treated for encephalitis with a 10-day course of
+% intravenous acyclovir. History included uncomplicated diabetes without
+% documented end-organ complications. By discharge the patient had returned
+% close to baseline mobility and was referred for home physical therapy.
+
+% metadata: fact_ids=["FACT_001"], facet_ids=["F1","F2"], cluster_id="C_diab_rehab"
+% 	      \end{lstlisting}
+
+% 	\item \textbf{Gold and distractor clusters.} The benchmark generates several chunks per facet, for example 10 chunks for each of \field{F1}--\field{F4}. It also generates hard distractors such as elderly stroke rehabilitation notes, encephalitis patients without diabetes, or diabetes patients with pneumonia treatment durations.
+
+% 	\item \textbf{Natural query.}
+% 	      \begin{quote}
+% 		      For patients diagnosed with encephalitis or myelitis, how do treatment durations and rehabilitative outcomes differ between patients with uncomplicated diabetes and patients older than 75?
+% 	      \end{quote}
+
+% 	\item \textbf{Qrels and gold answer.} The qrels are derived directly from the hidden mapping, e.g. \field{(Q\_001, C\_001, F1, relevant)} and \field{(Q\_001, C\_001, F2, relevant)}. The gold answer is then synthesized from all required facets, with citations to one or more chunks per facet.
+
+% 	\item \textbf{Geometry validation.} After embedding, the query is kept only if all four facets appear in the top-$N$ candidate pool, top-$k$ over-samples at least one dominant cluster, and the distractors are close enough to challenge retrieval without becoming gold evidence.
+% \end{enumerate}
+
+\subsection{Literature overview}
+
+\subsubsection{Generic papers}
+The papers start from an already existing data source and build a QA benchmark on top of it. The main ideas in the papers are: breaking down the data source into structured data supporting  knowledge discovery and query generation, allowing for control of query difficulty, explicit validation of the produced synthetic data, explicit evidence provenance, different methods to ensure and validate the diversity of the generated data.\\
+This pipeline borrows their construction methods, but changes the starting point: MIMIC-IV is used only as a reference for terminology, condition families, comorbidity co-occurrences, demographic bins, and note style, but the real starting point is the structured metadata about the dataset we want to generate. The final corpus is generated from a hidden schema so that the retrieval problem has the multi-cluster structure that the raw discharge note corpus did not provide, so it solves by construction many of the challenges encountered in the papers.
+
+Useful ideas from the literature:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item \textbf{Evidence-first construction.} MHTS builds questions from claims, clusters, evidence mappings, and difficulty signals \citep{lee2025mhts}. DRAGON stores explicit links among documents, queries, clues, answers, and citations \citep{shen2026dragon}. In this pipeline, those ideas become \field{query\_plans.parquet}, \field{clinical\_facts.parquet}, \field{chunks.parquet}, and \field{qrels.parquet}. The LLM writes the clinical text, but the gold labels come from the hidden mapping.
+	\item \textbf{Multi-aspect query structure.} ClaimSpect and MQ4CS are useful because they treat a broad user query as a set of separable aspects \citep{kargupta2025claimspect,abbasiantaeb2026multiaspect}. Here that decomposition is used before generation: a query plan explicitly chooses facets such as subgroup, treatment duration, rehabilitation outcome, and discharge disposition.
+	\item \textbf{Difficulty control.} MHTS motivates storing difficulty as number of facets, number of evidence pieces, and query--evidence similarity \citep{lee2025mhts}. In this benchmark, difficulty is controlled by \field{n\_facets}, \field{gold\_chunks\_per\_facet}, dominant-cluster size, distractor count, and whether complementary facets are less similar to the surface query.
+	\item \textbf{Validation and provenance.} Rahmani et al. and RAGVAL support automatic test-collection construction but also show why validation matters \citep{rahmani2024synthetic,kenneweg2024ragval}. This pipeline therefore stores fact IDs, facet IDs, cluster IDs, etc.
+	\item \textbf{Diversity.} DATAGEN uses attribute-guided generation, diversity-oriented example selection, and group checking to avoid duplicate synthetic examples \citep{huang2025datagen}. Driouich et al. use a diversity agent that clusters and samples source documents for broader RAG coverage \citep{driouich2025diverseprivate}. Those methods cannot be copied literally, because this benchmark needs both diversity and planned redundancy. The goal here is to preserve redundancy inside a dominant gold cluster, enforce separation among different gold facets, and create near-miss distractor clusters that are close enough to challenge MMR.
+	\item \textbf{Downstream filtering.} Kim et al. argue that synthetic generators should be judged by the downstream behavior their data induces \citep{kim2025agorabench}. For the thesis, a generated item is only useful if the candidate pool actually exposes a coverage-sensitive retrieval problem.
+	\item \textbf{Optional prompt optimization.} If prompts are unstable, prompt selection can be treated as a multi-objective optimization problem. Pastri{\'a}n et al. provide one example of this kind of automatic prompt evolution, using evolutionary multi-objective prompt learning rather than manually choosing one prompt by inspection \citep{pastrian2026evolutionary}. This is an optional optimization for improving the generator (maybe overkill in this phase).
+\end{itemize}
+
+\subsubsection{Clinical papers and MIMIC-IV role}
+
+MIMIC-IV can be used as a reference for terminology, frequent conditions, comorbidity distributions, age groups, etc.
+
+This can be strengthened with ideas from the medical papers for synthetic data construction:
+
+\begin{itemize}[]
+	\item simple care-path templates that say, for a given condition and subgroup, which treatments and outcomes are plausible. This follows the same general idea as HealthBranches \citep{cosentino2025healthbranches};
+	\item a small controlled vocabulary of medical terms, so the generator does not randomly alternate between inconsistent names for the same condition, treatment, or outcome. This is the practical part of knowledge-infused medical QA systems such as KI-MAG \citep{zafar2024kimag};
+	\item explicit patient-group rules, such as ``encephalitis + age over 75 + rehabilitation outcome'' or ``pneumonia + diabetes + treatment duration''. This borrows the idea of decomposing clinical questions into condition, subgroup, treatment, and outcome constraints \citep{ziletti2025cohorts}.
+\end{itemize}
+
+\section{Pipeline}
+
+\stage{Stage 1}{Build a Facet Catalogue}
+
+We can build it manually, or using MIMIC-IV as a reference for common conditions, age groups, comorbidities, ...
+Ideas from the clinical papers can be added later if the generated data is not clinically coherent enough: care-path templates, controlled medical vocabulary, cohort-style criteria, or rubric-style facet checks \citep{cosentino2025healthbranches,zafar2024kimag,ziletti2025cohorts,gong2026meddialogrubrics}. These are refinements to be maybe integrated later.
+
+We should have:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item 4--8 primary conditions to use in the benchmark;
+	\item demographic groups, e.g. age $<40$, age 40--64, age 65--75, age $>75$;
+	\item comorbidity groups, e.g. uncomplicated diabetes, renal disease, chronic pulmonary disease;
+	\item clinical axes we want questions to ask about, e.g. treatment duration, intervention choice, complications, rehabilitation outcome, discharge disposition;
+	\item allowed combinations, so the generator does not create completely implausible cases.
+\end{itemize}
+
+Example catalogue row:
+
+\begin{lstlisting}[style=promptstyle]
+condition: encephalitis_or_myelitis
+allowed_subgroups:
+  demographics: [age_over_75, age_40_64]
+  comorbidities: [uncomplicated_diabetes, renal_disease]
+allowed_axes:
+  - treatment_duration
+  - rehabilitation_outcome
+  - discharge_disposition
+allowed_treatments: [acyclovir, steroids, supportive_care]
+allowed_outcomes: [home_rehab, inpatient_rehab, persistent_deficit]
+\end{lstlisting}
+
+\stage{Stage 2}{Hidden Query Plans}
+
+Generate query plans from the catalogue before writing any query text. A query plan is the hidden recipe saying which facets must be covered. For example, choose:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item one primary condition: encephalitis/myelitis;
+	\item two subgroups to compare: uncomplicated diabetes vs. age $>75$;
+	\item two clinical axes: treatment duration and rehabilitation outcome.
+\end{itemize}
+
+This produces four required facets:
+
+\begin{lstlisting}[style=promptstyle]
+query_id: Q_001
+primary_condition: encephalitis_or_myelitis
+query_type: subgroup_comparison
+required_facets:
+  F1: uncomplicated_diabetes + treatment_duration
+  F2: uncomplicated_diabetes + rehabilitation_outcome
+  F3: age_over_75 + treatment_duration
+  F4: age_over_75 + rehabilitation_outcome
+answer_outline:
+  - summarize treatment duration for uncomplicated diabetes
+  - summarize rehabilitation outcome for uncomplicated diabetes
+  - summarize treatment duration for age_over_75
+  - summarize rehabilitation outcome for age_over_75
+  - compare the two subgroups
+difficulty:
+  n_facets: 4
+  dominant_gold_cluster: C1
+  dominant_gold_chunks: 18
+  complementary_gold_chunks_per_cluster: 8
+  hard_distractor_chunks: 24
+  expected_topk_failure: oversample_dominant_gold_cluster
+split: validation
+\end{lstlisting}
+
+The output of this stage is \field{query\_plans.parquet}. This follows the answer-first idea used in synthetic RAG benchmark construction \citep{lee2025mhts,shen2026dragon}. The important point is that diversity is already specified here: the plan says which clusters are gold, which one is intentionally redundant, which facets are complementary, and which distractor families should be generated.
+
+\stage{Stage 3}{Generate Structured Fact Rows}
+
+For each required facet, generate several structured fact rows. A fact row is the hidden source of truth for one synthetic case. It says what the generated text is allowed to mention and which facet it supports.
+
+Example:
+
+\begin{lstlisting}[style=promptstyle]
+fact_id: FACT_001
+query_id: Q_001
+facet_ids: [F3, F4]
+condition: encephalitis
+age_group: age_over_75
+comorbidities: [hypertension]
+treatment: acyclovir
+treatment_duration: 14_days
+rehab_outcome: inpatient_rehab_with_persistent_gait_instability
+must_mention:
+  - age over 75
+  - 14-day antiviral course
+  - inpatient rehabilitation
+  - persistent gait instability
+must_not_mention:
+  - uncomplicated diabetes
+  - complete recovery
+\end{lstlisting}
+
+For each facet, generate enough rows to create a cluster. These rows should vary across synthetic patients while preserving the same facet meaning. The output of this stage is \field{clinical\_facts.parquet}.
+
+\stage{Stage 4}{Render Fact Rows into Text Chunks via LLM}
+
+Example rendered chunk:
+
+\begin{lstlisting}[style=promptstyle]
+The patient, older than 75, was treated for encephalitis with a 14-day
+course of acyclovir. At discharge, orientation had improved, but gait
+instability persisted. The patient was transferred to inpatient
+rehabilitation for mobility and balance training.
+\end{lstlisting}
+
+Store the generated text together with \field{fact\_ids}, \field{facet\_ids}, \field{query\_id}, \field{cluster\_id}, and \field{split}. The output of this stage is \field{chunks.parquet}.
+
+\stage{Stage 5}{Create Role-Aware Gold Clusters}
+
+Example for \field{Q\_001}:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item \field{C1}: encephalitis + uncomplicated diabetes + treatment duration, 18 chunks, \field{cluster\_role=dominant\_gold};
+	\item \field{C2}: encephalitis + uncomplicated diabetes + rehabilitation outcome, 8 chunks, \field{cluster\_role=complementary\_gold};
+	\item \field{C3}: encephalitis + age $>75$ + treatment duration, 8 chunks, \field{cluster\_role=complementary\_gold};
+	\item \field{C4}: encephalitis + age $>75$ + rehabilitation outcome, 8 chunks, \field{cluster\_role=complementary\_gold}.
+\end{itemize}
+
+The dominant cluster is larger or more lexically similar to the surface query; this creates the top-$k$ failure mode. High similarity inside \field{C1} is allowed, high similarity between \field{C1} and \field{C2} is suspicious, and a chunk that supports several required facets at once should usually be rejected.
+
+\stage{Stage 6}{Generate Hard Distractor Chunks}
+
+For each query plan, generate non-gold chunks that are plausible and semantically close, but do not answer the required facets. These are needed to distinguish coverage from generic diversity.
+
+Useful distractor types:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item same condition, wrong subgroup: encephalitis without diabetes and not age $>75$;
+	\item same subgroup, wrong condition: elderly stroke patients with rehabilitation outcomes;
+	\item same treatment vocabulary, wrong disease: acyclovir duration for shingles;
+	\item same outcome vocabulary, wrong clinical axis: rehabilitation outcome after pneumonia;
+	\item dispersion trap: semantically different clinical text that is novel but does not support any required facet;
+	\item broad background: general encephalitis treatment description.
+\end{itemize}
+
+Store these chunks in \field{chunks.parquet} with \field{distractor\_type} set and no gold qrel for the target query. This is the practical adaptation of diversity-agent ideas from RAG dataset generation \citep{driouich2025diverseprivate}. Each distractor has a reason why it is close to the query and a reason why it is not gold. This poses a challenge for MMR.
+
+\stage{Stage 7}{Generate the Natural Query and Gold Answer via LLMs}
+
+Example:
+
+\begin{lstlisting}[style=promptstyle]
+For patients diagnosed with encephalitis or myelitis, how do treatment durations
+and rehabilitative outcomes differ between patients with uncomplicated diabetes
+and patients older than 75?
+\end{lstlisting}
+Hidden subqueries can be stored for diagnostics, but the main retrieval experiment should use the single natural query \citep{abbasiantaeb2026multiaspect,yue2021cliniqg4qa,lin2025scirgen}.
+
+The answer is also produced at this stage, during benchmark construction, before embedding and before any retrieval method is evaluated. The source of truth is the hidden scaffold: \field{query\_plans.parquet}, \field{clinical\_facts.parquet}, and the fact-to-chunk mapping stored in \field{chunks.parquet}.
+
+Use two separate prompts or procedures:
+
+\begin{enumerate}[noitemsep, topsep=0pt]
+	\item \textbf{Query prompt.} Given only the hidden plan, write the user-facing \field{query\_text}. Do not expose the answer wording.
+	\item \textbf{Answer prompt.} Given the required facets, the answer outline, and the structured fact rows grouped by facet, write a canonical answer. The prompt may receive \field{fact\_ids} and their derived \field{chunk\_ids} for citation, but it should not receive distractor chunks or retrieval rankings.
+\end{enumerate}
+
+Example answer object:
+
+\begin{lstlisting}[style=promptstyle]
+query_id: Q_001
+answer_text: >
+  In the uncomplicated-diabetes subgroup, treatment was generally shorter,
+  with acyclovir courses around 7--10 days, and rehabilitation needs were
+  usually limited to home therapy or near-baseline mobility. In patients
+  older than 75, treatment was more often extended to about 14 days, and
+  discharge commonly involved inpatient rehabilitation because gait
+  instability or persistent weakness remained. Overall, the elderly subgroup
+  shows longer treatment and worse functional recovery than the diabetes
+  subgroup.
+facet_answer_summaries:
+  F1: diabetes subgroup treatment duration pattern
+  F2: diabetes subgroup rehabilitation outcome pattern
+  F3: age_over_75 subgroup treatment duration pattern
+  F4: age_over_75 subgroup rehabilitation outcome pattern
+answer_claims:
+  - claim_id: A1
+    facet_id: F1
+    support_fact_ids: [FACT_010, FACT_011]
+    support_chunk_ids: [CH_020, CH_021]
+  - claim_id: A2
+    facet_id: F2
+    support_fact_ids: [FACT_018, FACT_019]
+    support_chunk_ids: [CH_031, CH_032]
+\end{lstlisting}
+
+This is stored in \field{gold\_answers.parquet}. \\
+
+\stage{Stage 8}{Create Qrels Directly from the Hidden Mapping}
+
+Create \field{qrels.parquet} from the known mapping between queries, chunks, facts, and facets.
+
+Example qrels:
+
+\begin{lstlisting}[style=promptstyle]
+query_id  chunk_id  facet_id  relevance_grade  fact_ids
+Q_001     CH_017    F3        1                [FACT_001]
+Q_001     CH_017    F4        1                [FACT_001]
+Q_001     CH_088    none      0                []
+\end{lstlisting}
+
+\stage{Stage 9}{Validate the Generated Objects}
+
+Run simple automatic checks before embedding:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item every query has 3--5 required facets;
+	\item every required facet has enough gold chunks;
+	\item every \field{cluster\_id} has exactly one \field{cluster\_role};
+	\item every generated chunk can be traced back to fact IDs;
+	\item chunks do not mention forbidden facts;
+	\item distractors do not accidentally answer a gold facet;
+	\item no chunk answers the entire query unless it is part of an easy ablation;
+	\item the canonical answer uses every required facet at least once;
+\end{itemize}
+
+\stage{Stage 10}{Embed and Filter by Retrieval Geometry}
+
+Embed all chunks and queries. These are benchmark-construction checks, so they are allowed to use the hidden structure of the generated data: \field{query\_id}, \field{facet\_ids}, \field{cluster\_id}, \field{cluster\_role}, \field{distractor\_type}, and \field{qrels.parquet}. These fields are used to validate the dataset, but they are not exposed to the retrieval methods.
+
+Separate two different questions:
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item \textbf{Query-local structure, primary generation check.} Use only the chunks generated for the current query. This checks whether the synthetic item itself has the intended facet and cluster structure.
+	\item \textbf{Full-corpus visibility, primary retrieval check if full-corpus evaluation is reported.} Use the full \field{chunks.parquet} corpus. This does not prove the local structure; it only checks whether the gold facets remain visible in the first-stage top-$N$ pool when chunks from other query plans also compete.
+\end{itemize}
+
+Query-local checks:
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item each required facet has enough gold chunks;
+	\item intra-facet similarity is high enough that each facet forms a usable cluster;
+	\item inter-facet similarity is lower than intra-facet similarity, so facets do not collapse into one cluster;
+	\item the dominant gold cluster is larger or more query-similar than the complementary gold clusters;
+	\item hard distractors are close to the query or to a gold facet, but have no gold qrel for the target query;
+\end{itemize}
+
+Full-corpus visibility checks, if the main evaluation uses full-corpus retrieval:
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item each required facet has at least one gold chunk in the full-corpus top-$N$ pool;
+	\item the top-$N$ pool contains hard distractors or background negatives, so evaluation is not trivial;
+	\item chunks from other query plans do not completely swamp the query's gold evidence.
+\end{itemize}
+
+Queries that fail these checks can be regenerated or excluded.
+
+\stage{Stage 11}{Evaluate Retrieval Methods}
+
+The retrieval corpus is part of the benchmark definition, so different corpus choices should be reported as different settings.
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item \textbf{Full-corpus retrieval, primary setting.} uses the full generated corpus with all the data points belonging to all the queries to realistically test the RAG system. The corpus contains the gold chunks for the current query, its hard distractors, and all chunks generated for the other query plans in the same split.
+	\item \textbf{Query-local retrieval, diagnostic ablation.} Run the same methods on only the chunks generated for the current query: gold chunks, hard distractors, and query-specific background negatives. This tests reranking behavior after the query-local universe has already been isolated.
+\end{itemize}
+
+\section{Data splits}
+
+\begin{itemize}[]
+	\item \textbf{Validation split}: used after the generation pipeline is fixed. We use it to choose retrieval hyperparameters, especially MMR and facility-location $\lambda$ values
+	\item \textbf{Test split}: final evaluation
+\end{itemize}
+
+\section{Prompt Families}
+
+\begingroup
+\renewcommand{\arraystretch}{1.2}
+\begin{center}
+	\begin{tabular}{@{}p{2.2cm}p{4cm}p{8.2cm}@{}}
+		\toprule
+		\textbf{Stage} & \textbf{Prompt family} & \textbf{Purpose} \\
+		\midrule
+		Stage 1 & Optional catalogue refinement & Usually no LLM is needed. If used, ask for plausible conditions, subgroups, treatments, outcomes, and forbidden combinations from a small seed catalogue. The output should be reviewed manually before use. \\
+		Stage 2 & Query-plan prompt & Given a catalogue row, produce a hidden plan: primary condition, subgroups, axes, required facets, cluster roles, and difficulty fields. This prompt does not write the final user query. \\
+		Stage 3 & Structured fact-row prompt & Given one required facet and its cluster role, generate structured synthetic fact rows with \field{must\_mention}, \field{must\_not\_mention}, metadata fields, and facet IDs. \\
+		Stage 4 & Chunk-rendering prompt & Convert one or more fact rows into short clinical-style evidence chunks while preserving the assigned facts and avoiding forbidden facts. \\
+		Stage 6 & Distractor-generation prompt & Given a query plan and distractor type, generate plausible non-gold chunks that are close to the query but fail a specific required facet. Store the explicit \field{distractor\_reason}. \\
+		Stage 7 & Query and answer prompts & Generate the natural user query from the hidden plan, then generate the canonical answer from grouped structured facts and fact-to-chunk provenance. \\
+		Stage 9 & Validation prompts & Use LLM-as-a-judge prompts to check schema compliance, forbidden-fact leakage, distractor leakage, clinical plausibility, and whether the canonical answer uses all required facets. These prompts can reject items. \\
+		\bottomrule
+	\end{tabular}
+\end{center}
+\endgroup
+
+\section{Metrics}
+
+\begingroup
+\renewcommand{\arraystretch}{1.25}
+\begin{center}
+	\begin{tabular}{@{}p{4cm}p{10.4cm}@{}}
+		\toprule
+		\textbf{Metric} & \textbf{Purpose} \\
+		\midrule
+		Facet Coverage@k & Fraction of required facets represented by at least one retrieved gold chunk. In this reduced pipeline each required facet is implemented as one gold cluster, so this is also cluster coverage. Primary metric. \\
+		Weighted Facet Coverage@k & Average fraction of pool-visible gold chunks retrieved per facet. \\
+		Gold Precision (GP) & Fraction of retrieved chunks that are gold for any facet. \\
+		Gold Recall (GR) & Fraction of pool-visible gold chunks retrieved. \\
+		Dominant-Cluster Concentration@k & Fraction of selected chunks from the largest or most query-similar gold cluster. Shows top-$k$ redundancy. \\
+		Distractor Rate@k & Fraction of selected chunks that are hard distractors. Shows MMR failure modes. \\
+		Jaccard vs. Top-$k$ & Whether reranking materially differs from the baseline. \\
+		\bottomrule
+	\end{tabular}
+\end{center}
+\endgroup
+
+\section{Benchmark Objects}
+
+\begingroup
+\renewcommand{\arraystretch}{1.25}
+\begin{center}
+	\begin{tabular}{@{}p{4.4cm}p{10.2cm}@{}}
+		\toprule
+		\textbf{Artifact} & \textbf{Purpose} \\
+		\midrule
+		\field{clinical\_facts.parquet} & hidden structured source of truth: condition, demographics, comorbidities, interventions, durations, outcomes, complications, and facet IDs. \\
+		\field{chunks.parquet} & retrieval corpus: \field{chunk\_id}, \field{fact\_ids}, \field{facet\_ids}, \field{cluster\_id}, \field{distractor\_type}, and text. \\
+		\field{queries.parquet} & query text, condition, query type, difficulty, split, and number of facets. \\
+		\field{gold\_answers.parquet} & canonical answer object: \field{answer\_text}, facet-level answer summaries, answer claims, supporting fact IDs, and supporting chunk IDs. \\
+		\field{query\_plans.parquet} & hidden plan for each query: selected facets, answer outline, split, difficulty, and generation constraints. \\
+		\field{qrels.parquet} & Gold evidence: query--chunk--facet labels, relevance grade, support type, fact IDs, and optional span offsets. \\
+		\bottomrule
+	\end{tabular}
+\end{center}
+\endgroup
+
+\newpage
+\begingroup
+\footnotesize
+\begin{multicols}{2}
+	\bibliographystyle{plainnat}
+	\bibliography{bibliography}
+\end{multicols}
+\endgroup
+
+\end{document}
