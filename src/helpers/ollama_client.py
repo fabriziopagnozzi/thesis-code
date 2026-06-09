@@ -1,13 +1,16 @@
 import json
 import os
 import re
+import subprocess
 
 import ollama
 
 OLLAMA_HOST = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 OLLAMA_DEFAULT_MODEL = os.environ.get('OLLAMA_MODEL', 'gemma4-31b-text')
 
-ollama_client = ollama.Client(host=OLLAMA_HOST)
+
+def _client() -> ollama.Client:
+    return ollama.Client(host=OLLAMA_HOST)
 
 
 def generate(
@@ -27,8 +30,9 @@ def generate(
     if stream:
         content_parts: list[str] = []
         thinking_done = False
+        client = _client()
 
-        for chunk in ollama_client.chat(
+        for chunk in client.chat(
             model=used_model, messages=messages, options=kwargs, think=think, stream=True
         ):
             thinking_token = chunk.message.thinking or ''
@@ -45,7 +49,7 @@ def generate(
 
         return ''.join(content_parts)
 
-    reply = ollama_client.chat(model=used_model, messages=messages, options=kwargs, think=think)
+    reply = _client().chat(model=used_model, messages=messages, options=kwargs, think=think)
 
     content = reply.message.content or ''
     print(f'[ollama] response: {len(content)} chars', flush=True)
@@ -151,3 +155,37 @@ def _salvage_truncated_json(text: str) -> list | dict | None:
         return result
     except json.JSONDecodeError:
         return None
+
+
+def stop_model(model: str | None = None) -> bool:
+    used_model = model or OLLAMA_DEFAULT_MODEL
+    try:
+        running = _client().ps()
+        loaded_models = {
+            getattr(item, 'model', '') or getattr(item, 'name', '')
+            for item in getattr(running, 'models', [])
+        }
+    except Exception as exc:
+        print(f'[ollama] WARNING: failed to inspect loaded models before stop: {exc}')
+        loaded_models = set()
+
+    if loaded_models and used_model not in loaded_models:
+        print(f'[ollama] model not loaded, skip stop: {used_model}')
+        return False
+
+    cmd = ['ollama', 'stop', used_model]
+    try:
+        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    except Exception as exc:
+        print(f'[ollama] WARNING: failed to run {" ".join(cmd)!r}: {exc}')
+        return False
+
+    if proc.returncode == 0:
+        print(f'[ollama] stopped model: {used_model}')
+        return True
+
+    stderr = (proc.stderr or '').strip()
+    stdout = (proc.stdout or '').strip()
+    detail = stderr or stdout or f'exit={proc.returncode}'
+    print(f'[ollama] WARNING: failed to stop model {used_model}: {detail}')
+    return False

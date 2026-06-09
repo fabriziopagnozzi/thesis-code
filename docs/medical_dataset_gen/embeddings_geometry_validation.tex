@@ -1,0 +1,190 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.25cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage[numbers]{natbib}
+\usepackage[hidelinks]{hyperref}
+\usepackage{parskip}
+\usepackage{xurl}
+\usepackage{microtype}
+
+\sloppy
+\definecolor{bettergrey}{gray}{0.95}
+\definecolor{betterblue}{RGB}{33, 65, 196}
+\newcommand{\field}[1]{\texttt{#1}}
+\newcommand{\metric}[1]{\textsc{#1}}
+\author{}
+\title{\textbf{Embedding Geometry Validation for the Synthetic Medical RAG Benchmark}}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Purpose}
+
+The benchmark is intended to show a retrieval-diversification effect, not merely to create realistic clinical text. The validation question is therefore query-local: for each multi-aspect query, do the relevant chunks form several recoverable answer-facet neighborhoods, do redundant chunks make naive top-$k$ over-sample one neighborhood, and do hard distractors sit close enough to be realistic without becoming unlabeled positives?
+
+The papers below are useful because they turn vague claims about ``embedding geometry'' into concrete checks: facet separability, local neighborhood stability, score-gap collapse, hubness, semantic-shift-aware chunking, source-artifact checks for synthetic distractors, and cautious use of anisotropy diagnostics.
+
+\section{Glossary}
+
+\begingroup
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.12}
+\begin{longtable}{@{}p{4.0cm}p{10.0cm}@{}}
+	\toprule
+	\textbf{Term} & \textbf{Plain definition} \\
+	\midrule
+	\endfirsthead
+	\toprule
+	\textbf{Term} & \textbf{Plain definition} \\
+	\midrule
+	\endhead
+	\midrule
+	\multicolumn{2}{r@{}}{\small\emph{Continued on next page}} \\
+	\endfoot
+	\bottomrule
+	\endlastfoot
+	Distractor & A chunk that looks related but should not answer the query facet. Distractors test whether retrieval is truly selecting the right evidence. \\
+	Hard distractor & A distractor that is close to the query in wording or topic. For example, it may mention the same condition and treatment but the wrong subgroup or outcome. \\
+	Local neighborhood stability & Whether the nearest chunks stay mostly the same after a small query paraphrase, small embedding perturbation, or rerun. Stable neighborhoods make retrieval results more trustworthy. \\
+	Score gap & The difference between two ranked similarity scores, such as the best score minus the second-best score. \\
+	Score-gap collapse & The situation where many chunks have nearly identical scores. Then tiny wording or embedding changes can reorder the retrieved list. \\
+	Hubness & When a few chunks appear as nearest neighbors for many queries. Hubs can dominate retrieval even when they are generic or only partly relevant. \\
+	Semantic shift & A change in topic or meaning inside a piece of text. A chunk that starts with treatment duration and drifts into unrelated history has semantic shift. \\
+	Semantic-shift-aware chunking & Splitting or rewriting chunks so one embedding does not average together unrelated facts. This keeps each retrieval unit focused. \\
+	Source artifact & A pattern that reveals how a chunk was generated rather than what it means clinically. Examples include repeated templates, unusual style, or LLM phrasing. \\
+	Source-artifact check & A check that generated chunks do not cluster only because they came from the same template, prompt, or generator. \\
+	Anisotropy & A global shape problem where embeddings concentrate in a narrow region instead of spreading evenly. It can affect similarity scores, but it is not automatically fatal for retrieval. \\
+	Anisotropy diagnostic & A measurement of how concentrated or directional the embedding space is. In this thesis it is a caveat, not the main success criterion. \\
+	Within-facet radius & How spread out chunks from one facet are around their facet centroid. Smaller radius means a tighter facet cluster. \\
+	Cross-facet separation & How far apart two facet centroids are. It should be larger than the within-facet radius if the facets are meant to be distinguishable. \\
+	ARI/NMI & Label-agreement scores for clustering. They ask whether discovered clusters match the hidden facet labels. \\
+	Cosine silhouette & A score that checks whether each chunk is closer to its own facet than to other facets. Higher is better. \\
+	Davies--Bouldin index & A cluster-quality score that gets worse when groups are spread out or close together. Lower is better. \\
+	Calinski--Harabasz index & A cluster-quality score that rewards groups that are compact internally and far apart from each other. Higher is better. \\
+	Xie--Beni index & A cluster-quality score that is sensitive to boundary leakage. It gets worse when chunks from different groups are too close or groups are not compact. Lower is better. \\
+	Top-1 change rate & How often the first retrieved chunk changes after a small perturbation or paraphrase. High values mean unstable ranking. \\
+	Pure source-cluster ratio & The fraction of clusters made only from one source or template. High values suggest the generator left an artifact. \\
+	Similarity-range overlap & How much the score range of hard distractors overlaps with gold chunks or mined distractors. Some overlap is good; no overlap means they are too easy, while too much overlap may mean false positives. \\
+	Template-pattern rate & How often chunks repeat the same wording pattern. High repetition can make synthetic chunks easy to detect for the wrong reason. \\
+\end{longtable}
+\endgroup
+
+\section{Most Useful Papers}
+
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.08}
+\begin{longtable}{@{}p{1.95cm}p{4.3cm}p{4.3cm}p{4.3cm}@{}}
+	\toprule
+	\textbf{Paper} & \textbf{Why} &  \textbf{Simple takeaway} & \textbf{How to use it here} \\
+	\midrule
+	\endfirsthead
+	\toprule
+	\textbf{Paper} & \textbf{Why} & \textbf{Simple takeaway} & \textbf{How to use it here} \\
+	\midrule
+	\endhead
+	\midrule
+	\multicolumn{4}{r@{}}{\small\emph{Continued on next page}} \\
+	\endfoot
+	\bottomrule
+	\endlastfoot
+	\citet{pavonIntrinsicThematicSeparability2026} & Controlled synthetic topics are easy to recover in native sentence-transformer space, while real text degrades as semantic overlap increases; cosine silhouette was the most robust diagnostic in their small comparison, but their own caveat is that these diagnostics are descriptive, not calibrated predictors. & If the topics are deliberately different, embeddings usually put them in separate groups. When topics overlap, the groups blur. Synthetic success is therefore best-case evidence, not proof that real corpora will behave the same way. & Use hidden facet labels to compute ARI/NMI, cosine silhouette, Davies--Bouldin, and pairwise centroid separation for every query-local pool; treat synthetic results as an upper bound and report overlap-sensitive degradation rather than claiming general real-world clustering performance. \\
+
+	\citet{lopezfuneHighDimensionalConcentrationRetrieval2026} & High-dimensional retrieval can suffer score-gap collapse, hubness, and unstable nearest-neighbor rankings under small perturbations. & Many chunks can end up with almost the same similarity score. When that happens, tiny wording changes or embedding noise can swap the ranking. & Add query-local score-gap, Jaccard@k under perturbation/paraphrase, top-1 change rate, and hubness/Gini diagnostics so top-$k$ collapse is measured as a geometry problem rather than only as a final metric difference. \\
+
+	\citet{gaoPoolingSemanticShift2026} & Long-text pooling can dilute meaning; anisotropy becomes harmful mainly when chunks mix semantically shifting content, not merely because text is long. & A long mixed chunk gets squeezed into one vector, so several meanings are averaged together. The problem is not length alone; it is mixing unrelated clinical facts inside one retrieval unit. & Keep chunks atomic around one fact or facet; compute within-chunk sentence embedding dispersion/semantic shift and split or rewrite chunks that blend treatment duration, rehab outcome, unrelated history, and distractor material. \\
+
+	\citet{zhangWhenHardNegatives2026} & Naive LLM-generated hard negatives can form source-specific clusters and degrade retrieval; better negatives come from perturbing explicit query information requirements and checking similarity-distribution alignment. & LLM-made distractors can look fake in embedding space. A retriever may learn the template or source instead of the clinical distinction. Good distractors should be near misses, not generic fake notes. & Generate distractors by violating one hidden facet requirement at a time, then validate pure source-cluster ratio, similarity-range overlap with mined/realistic distractors, intra-distractor diversity, and template-pattern repetition. \\
+
+	\citet{duSemanticCertaintyAssessment2025} & Query-level retrieval reliability can be approximated with geometric stability under quantization plus local neighborhood density. & Some queries sit in clear neighborhoods and retrieve reliably; others sit in sparse or ambiguous neighborhoods. We can detect weak queries before using them in the benchmark. & Use a cheap per-query reliability score to flag ambiguous geometry, select larger candidate pools, or reject queries whose local neighborhood is too sparse or unstable for a fair diversification test. \\
+
+	\citet{inkiriwangWeReallyNeed2025} & Intrinsic metrics should cover local neighborhood fidelity, global point-cloud structure, and spectral information; local Procrustes and neighborhood measures were more useful than a single global distance score for modern embeddings. & A nice 2D plot can lie. Before trusting a projection, check that it preserves the same nearby points and the same local shapes as the original embedding space. & When using UMAP/PCA plots or compressed vectors, report trustworthiness, continuity, neighbor precision, and Procrustes-style shape preservation so visual clusters are not treated as evidence unless local neighborhoods survive the reduction. \\
+
+	\citet{ait-saadaAnisotropyTrulyHarmful2023} and \citet{caiIsotropyContextualEmbedding2020} &  Global anisotropy is not automatically harmful; contextual spaces can be globally cone-shaped while still having useful local clusters/manifolds.  & The whole embedding space can look compressed into a cone and still contain useful local neighborhoods. Global anisotropy alone does not tell us whether retrieval will work. & Do not make ``fix anisotropy'' a benchmark objective; measure whether query-local facet neighborhoods are compact, separated, and stable after the exact preprocessing used at retrieval time. \\
+	\citet{borahAlignmentQualityIndex2025} &  Although the domain is LLM alignment rather than retrieval, the paper gives a practical local/global cluster-validity composite using Xie--Beni for compactness and boundary intrusion and Calinski--Harabasz for global dispersion. & Two cluster checks are useful together: one asks whether groups are far apart overall, and the other asks whether boundary examples are leaking into the wrong group. & Use CHI and XBI as additional labeled facet-separability diagnostics, especially to catch a small number of distractors intruding into a gold facet cluster even when a global separation score looks acceptable. \\
+\end{longtable}
+\endgroup
+
+\section{Validation Protocol}
+
+\subsection{Query-Local Pool}
+
+For each query $q$, build a diagnostic pool $P_q$ from the top-$N$ retrieved chunks plus any hidden gold chunks that were missed by top-$N$. Each row should carry \field{query\_id}, \field{chunk\_id}, \field{facet\_id}, \field{cluster\_id}, \field{is\_gold}, \field{is\_distractor}, \field{distractor\_type}, \field{source\_generator}, \field{template\_id}, \field{query\_similarity}, and embedding vectors.
+
+This pool should be validated before final evaluation. A query is not useful for the thesis if all facets are already uniformly represented in top-$k$, if one required facet is absent from the reachable top-$N$ neighborhood, or if distractors are far away and therefore never test the retriever.
+
+\subsection{Facet Separability}
+
+Compute facet centroids only over gold chunks for that query. For each facet $i$, compute mean in-facet cosine distance $\bar{d}_i$ to its centroid; for each pair of facets $(i,j)$, compute $S_{ij}=d_{\cos}(c_i,c_j)/\max(\bar{d}_i,\bar{d}_j)$, following the separation-ratio intuition in \citet{pavonIntrinsicThematicSeparability2026}.
+
+Report the minimum and mean $S_{ij}$, cosine silhouette with true facet labels, Davies--Bouldin, Calinski--Harabasz, and Xie--Beni. The minimum pairwise separation matters more than the mean because one overlapping facet pair can make a four-facet query fail even if the average separation looks good.
+
+For the MVP, use these as keep/reject diagnostics rather than hard universal laws: keep queries where every facet has at least one gold chunk in top-$N$, where the minimum facet separation is comfortably above the within-facet radius, and where top-$k$ over-samples a dominant facet. The exact numeric thresholds should be calibrated from the first smoke run, then frozen before the main benchmark run.
+
+\subsection{Top-k Collapse and Retrieval Instability}
+
+For each query, compute \field{dominant\_facet\_rate@k} as the largest number of retrieved gold chunks from one facet divided by $k$. A high value with low facet coverage is the direct operational signature of top-$k$ collapse.
+
+Also compute score margins: $\Delta_{1,2}=s_1-s_2$, $\Delta_{k,k+1}=s_k-s_{k+1}$, and the gap between the best retrieved chunk from the dominant facet and the best retrieved chunk from each missing facet. Small margins mean top-$k$ may be an arbitrary rank-order artifact rather than a robust semantic preference, echoing the score-gap argument in \citet{lopezfuneHighDimensionalConcentrationRetrieval2026}.
+
+Run a small perturbation test: re-embed two or three query paraphrases if available, or add small normalized Gaussian noise to the query vector, then compute Jaccard@k, facet-coverage variance, and top-1 change rate. A query whose facet coverage changes wildly under tiny perturbations should be marked unstable, not used as strong evidence for any retrieval method.
+
+Track hubness across the whole benchmark by counting how often each chunk appears in top-$k$ or top-$N$ lists, then report Gini coefficient or skewness over these counts. High hubness supports the thesis narrative that a few redundant or generic chunks can dominate nearest-neighbor retrieval.
+
+\subsection{Hard Distractor Validation}
+
+Generate hard distractors by decomposing the query into hidden information requirements and violating exactly one requirement while preserving topical and lexical proximity. For example, a distractor can keep the same condition and treatment vocabulary but switch the subgroup, or keep the subgroup and rehabilitation vocabulary but switch the outcome value.
+
+For each query, compare gold chunks, hard distractors, and easy distractors using query-similarity distributions. Hard distractors should overlap the lower-to-middle part of the gold similarity range; if they are all much farther away, they are not hard, and if they dominate the gold range, they may be false positives or mislabeled gold.
+
+Run a source-artifact check inspired by \citet{zhangWhenHardNegatives2026}: cluster gold chunks and distractors together with HDBSCAN or another density method, then compute the percentage of clusters that are pure by \field{source\_generator} or \field{template\_id}. A high pure source-cluster ratio means the model can separate synthetic origins instead of clinical relevance.
+
+Report \field{similarity\_range\_overlap}, \field{pure\_source\_cluster\_rate}, \field{intra\_distractor\_diversity}, and \field{template\_pattern\_rate}. These four diagnostics turn ``hard distractors'' into a measurable benchmark property.
+
+\subsection{Chunk Coherence}
+
+The chunk should be the retrieval unit for one small clinical assertion, not a mini-discharge summary. Compute sentence-level embeddings inside each chunk and measure mean pairwise cosine distance or distance from each sentence to the chunk centroid; high values indicate semantic shift and likely pooling dilution \citep{gaoPoolingSemanticShift2026}.
+
+Use this diagnostic during rendering: if an LLM rewrite merges unrelated facts or turns a one-facet chunk into a broad narrative, split it or rewrite it. This is especially important for treatment duration and rehabilitation outcome because both can be mentioned in the same note style but should remain separable answer facets when the hidden plan requires them to be separable.
+
+\subsection{Visualization}
+
+Use UMAP/t-SNE/PCA plots only as visual aids. If a plot is used in the thesis, accompany it with native-space metrics and at least one neighborhood-preservation metric such as trustworthiness, continuity, or neighbor precision as recommended by the multi-metric framing in \citet{inkiriwangWeReallyNeed2025}.
+
+For macro facets, cluster and score in native embedding space. For micro-structure exploration, UMAP plus HDBSCAN can be useful, but its result should be evaluated with internal coherence, holdout stability, or agreement with hidden facet labels, not by visual separation alone \citep{pavonIntrinsicThematicSeparability2026}.
+
+\section{Recommended MVP Report}
+
+The geometry report should have one row per query and aggregate tables by condition and axis. Include: \field{all\_facets\_in\_topN}, \field{facet\_coverage@k\_topk}, \field{facet\_coverage@k\_mmr}, \field{facet\_coverage@k\_facility}, \field{dominant\_facet\_rate@k}, \field{min\_facet\_separation}, \field{cosine\_silhouette}, \field{davies\_bouldin}, \field{calinski\_harabasz}, \field{xie\_beni}, \field{score\_gap\_1\_2}, \field{score\_gap\_k\_kplus1}, \field{jaccard\_under\_perturbation@k}, \field{top1\_change\_rate}, \field{hard\_distractor\_overlap}, and \field{pure\_source\_cluster\_rate}.
+
+The most important plots are not global UMAP pictures of the whole corpus. The useful plots are query-local: similarity histograms by facet/distractor type, facet count bars for top-$k$ versus MMR versus facility-location, score-gap distributions, and a small number of 2D projections annotated with the native-space metrics.
+
+The result section should make a narrow claim: after filtering for query-local multi-peak geometry, facility-location improves facet coverage because it selects representatives of several relevant neighborhoods, whereas top-$k$ can spend most of its budget on a redundant dominant facet. This is stronger and more defensible than claiming that facility-location is universally better for clinical RAG.
+
+\section{Papers Read but Less Central for the MVP}
+
+\citet{youSemanticsAngleWhen2025} is useful as a conceptual warning that cosine ignores vector norms and can fail when norm encodes certainty or informativeness, but it does not provide a direct benchmark-validation protocol beyond checking whether normalized cosine is the right retrieval score.
+
+\citet{barmanGeometryForgetting2026} supports the broader intuition that interference and low effective dimensionality can make proximity retrieval confuse related memories, but its cognitive-memory framing is not necessary for the first medical RAG experiment.
+
+\citet{tehenanSemanticGeometrySentence2025} and \citet{caiXetrievalMechanisticallyExplaining2026} are more relevant to future interpretability work: prototype directions, sparse features, and query-document feature overlap could later explain why facility-location selected a chunk, but they are too heavy for the MVP.
+
+\citet{tyshchukIsotropyMultimodalEmbeddings2023} is mostly multimodal, but it reinforces the local/global isotropy caution: centering and whitening can make spaces easier to visualize, yet transformations must be checked against the downstream objective rather than assumed beneficial.
+
+\section{Bottom Line}
+
+The practical thesis move is to validate query-local geometry before evaluating retrieval methods. A good synthetic query should have recoverable facet clusters, redundant same-facet gold chunks, boundary-near hard distractors, stable enough rankings to be meaningful, and enough top-$k$ dominance to give diversification a real job.
+
+\input{bibliography.tex}
+
+\end{document}

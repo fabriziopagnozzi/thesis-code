@@ -1,0 +1,109 @@
+# Example configuration for the synthetic medical RAG benchmark.
+#
+# Copy this file to a custom YAML and pass it with:
+#   uv run python -m experiments.medical_dataset_gen.run_pipeline --config path/to/config.yaml
+#
+# CLI flags can override the most common fields:
+#   --exp
+#   --max-queries
+#   --embedding-backend
+#   --embedding-model
+#   --llm-name
+#   --llm-workers
+#   --device
+#   --batch-size
+#   --pool-scope
+#   --no-llm-chunks
+#   --llm-chunks
+#   --embedding-geometry-queries
+#   --embedding-geometry-k
+#   --embedding-geometry-reduction
+
+global:
+  seed: 42 # Random seed used by deterministic query/fact/chunk generation.
+  n_queries: 120 # Number of multi-aspect queries to generate.
+  conditions: 4 # Number of conditions from ontology.yaml to use.
+
+  # Name of the experiment directory under:
+  #   src/experiments/medical_dataset_gen/_results/<output_experiment>
+  output_experiment: mvp
+
+generation:
+  ontology_path: null # Optional path to a custom ontology YAML.
+  query_types: # Query templates to instantiate for each condition/subgroup pair.
+    - subgroup_comparison
+    - outcome_synthesis
+
+  gold_chunks_dominant: 18 # Number of gold chunks for the intentionally over-represented facet.
+  gold_chunks_complementary: 8 # Number of gold chunks for each complementary facet.
+  distractors_per_query: 30 # Number of hard negatives generated per query.
+  chunk_min_words: 40
+  chunk_max_words: 200
+  chunk_word_tolerance: 2 # Soft tolerance around the target range to avoid crashing on a 1-word miss.
+  llm_name: gemma4:12b # Ollama generation model. This pipeline passes it explicitly; no OLLAMA_MODEL env var is needed.
+  llm_workers: 2 # Parallel chunk-generation workers. Match this with Ollama server OLLAMA_NUM_PARALLEL.
+  use_llm_chunk_generation: true #   false = every chunk uses deterministic clinical fallback text.
+  use_llm_query_paraphrase: false # If true, generated query strings are paraphrased by LLM.
+  llm_chunk_max_attempts: 3 # Maximum LLM retries per chunk before that query is dropped from the benchmark.
+  llm_temperature: 0.5
+  llm_num_ctx: 4096 # Keep this modest for chunk generation; VRAM scales with context and parallelism.
+
+embeddings:
+  backend: tfidf
+  model_name: multi-qa-mpnet-base-cos-v1
+  batch_size: 64
+  device: cuda
+  query_prompt: null # Optional query prompt passed to the Embedder for models that require one.
+  normalize: true
+
+  # TF-IDF settings used only when backend=tfidf.
+  tfidf_ngram_min: 1
+  tfidf_ngram_max: 2
+
+retrieval:
+  strategies: [top_k, mmr, fac_loc]
+  # Candidate-pool scope before top-N semantic retrieval:
+  # - query_local: only chunks generated for the same hidden query; useful for debugging only.
+  # - same_condition: all chunks from the same condition across different subgroup queries; this is the main benchmark setting.
+  # - full_corpus: all chunks across all conditions; use as a harder stress test once same_condition is working.
+  pool_scope: same_condition # "query_local" | "same_condition" | "full_corpus"
+  candidate_pool_n: 300 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
+  k_values: [5, 10, 20]
+  lambda_values: [0.3, 0.5, 0.7] # Low lambda favors diversity/coverage; high lambda favors query similarity.
+  mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
+
+  # If true, evaluation skips queries that fail the geometric prefilter.
+  # Set false only when diagnosing failed query/corpus generation.
+  only_pass_geometry: true
+
+geometry:
+  topk_dominance_k: 10 # k used by the geometry prefilter when checking whether top-k is dominated by one facet.
+  min_topk_dominant_count: 5 # Minimum number of top-k results from the same dominant gold facet.
+  min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
+  min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
+
+embedding_geometry:
+  random_state: 42 # Seed for PCA/UMAP figure reproducibility.
+
+  # Number of query-local embedding maps to generate after evaluation.
+  # Each selected query gets UMAP/PCA plots, query-cosine color maps, rank plots, and HDBSCAN plots.
+  n_queries: 6
+
+  # Optional explicit query IDs. If empty, representative queries are chosen automatically
+  # using geometry-pass status, FacLoc gain, top-k dominance, and cluster separation.
+  query_ids: []
+
+  # Candidate pool size for embedding-geometry plots.
+  # null means reuse retrieval.candidate_pool_n.
+  candidate_pool_n: null
+
+  # k used when overlaying top-k/MMR/FacLoc selected points on the scatter plot.
+  plot_k: 10
+  reduction: umap # "umap" | "pca"
+  umap_metric: cosine # Use cosine for normalized semantic embeddings. Euclidean is mainly useful for debugging PCA maps.
+  pca_dims: null # null = direct UMAP/HDBSCAN features; integer = PCA to this many dimensions before UMAP/HDBSCAN.
+  umap_neighbors: 15 # UMAP neighborhood size. Smaller values show local clusters; larger values preserve broader structure.
+  umap_min_dist: 0.08 # UMAP minimum distance. Smaller values create tighter visual clusters.
+
+  hdbscan_min_cluster_size: 5
+  hdbscan_min_samples: null

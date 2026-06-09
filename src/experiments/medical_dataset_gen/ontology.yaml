@@ -1,0 +1,136 @@
+conditions:
+  encephalitis_myelitis:
+    display: "encephalitis or myelitis"
+    terms: ["encephalitis", "myelitis", "neurologic deficit", "acyclovir"]
+    treatments: ["acyclovir", "corticosteroids", "supportive care"]
+    duration_treatments: ["acyclovir", "corticosteroids"]
+    duration_days:
+      short: [5, 7]
+      standard: [10, 14]
+      prolonged: [21, 28]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient neurorehabilitation"
+        - "home therapy with improving gait stability"
+      inpatient_rehab:
+        - "transferred to inpatient rehabilitation for persistent weakness"
+        - "required acute rehabilitation for mobility and cognitive deficits"
+      persistent_deficit:
+        - "persistent focal deficits requiring close neurologic follow-up"
+        - "ongoing weakness and impaired balance at discharge"
+
+  pneumonia:
+    display: "pneumonia"
+    terms: ["pneumonia", "oxygen requirement", "antibiotics", "respiratory failure"]
+    treatments: ["ceftriaxone", "azithromycin", "oxygen therapy"]
+    duration_treatments: ["ceftriaxone", "azithromycin"]
+    duration_days:
+      short: [3, 5]
+      standard: [7, 10]
+      prolonged: [14, 21]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with breathing exercises and visiting nursing"
+        - "home physical therapy after oxygen needs improved"
+      inpatient_rehab:
+        - "transferred to rehabilitation because of deconditioning"
+        - "required inpatient therapy for weakness after respiratory illness"
+      persistent_deficit:
+        - "continued exertional limitation at discharge"
+        - "persistent oxygen requirement with reduced exercise tolerance"
+
+  ischemic_stroke:
+    display: "ischemic stroke"
+    terms: ["ischemic stroke", "antiplatelet therapy", "hemiparesis", "neurologic recovery"]
+    treatments: ["aspirin", "clopidogrel", "statin therapy"]
+    duration_treatments: ["aspirin", "clopidogrel"]
+    duration_days:
+      short: [2, 4]
+      standard: [5, 7]
+      prolonged: [10, 14]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient stroke therapy"
+        - "home therapy after mild residual dysarthria"
+      inpatient_rehab:
+        - "transferred to acute stroke rehabilitation"
+        - "required inpatient rehabilitation for hemiparesis"
+      persistent_deficit:
+        - "persistent hemiparesis remained at discharge"
+        - "ongoing aphasia and mobility impairment required follow-up"
+
+  heart_failure:
+    display: "acute decompensated heart failure"
+    terms: ["heart failure", "diuresis", "volume overload", "guideline-directed therapy"]
+    treatments: ["intravenous furosemide", "spironolactone", "beta-blocker titration"]
+    duration_treatments: ["intravenous furosemide", "spironolactone"]
+    duration_days:
+      short: [2, 3]
+      standard: [5, 7]
+      prolonged: [10, 14]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with cardiac rehabilitation referral"
+        - "home nursing and gradual activity advancement"
+      inpatient_rehab:
+        - "transferred to rehabilitation after marked deconditioning"
+        - "required inpatient therapy before safe return home"
+      persistent_deficit:
+        - "persistent exertional dyspnea limited discharge function"
+        - "ongoing fatigue and mobility limitation were documented"
+
+subgroups:
+  age_over_75:
+    axis: demographic
+    label: "patients older than 75"
+    field: age_group
+    value: over_75
+    aliases: ["elderly patients", "older adults above 75"]
+
+  age_under_50:
+    axis: demographic
+    label: "patients younger than 50"
+    field: age_group
+    value: under_50
+    aliases: ["younger adults", "adults below 50"]
+
+  uncomplicated_diabetes:
+    axis: comorbidity
+    label: "patients with uncomplicated diabetes"
+    field: comorbidity
+    value: uncomplicated_diabetes
+    aliases: ["diabetes without end-organ complications"]
+
+  chronic_kidney_disease:
+    axis: comorbidity
+    label: "patients with chronic kidney disease"
+    field: comorbidity
+    value: chronic_kidney_disease
+    aliases: ["renal disease", "CKD"]
+
+  copd:
+    axis: comorbidity
+    label: "patients with COPD"
+    field: comorbidity
+    value: copd
+    aliases: ["chronic obstructive pulmonary disease"]
+
+  immunosuppression:
+    axis: comorbidity
+    label: "immunosuppressed patients"
+    field: comorbidity
+    value: immunosuppression
+    aliases: ["patients receiving immunosuppression"]
+
+clinical_axes:
+  treatment_duration:
+    label: "treatment duration"
+    exact_terms: ["treatment duration", "therapy duration", "days of treatment"]
+    synonym_terms: ["therapy-course length", "length of active therapy"]
+    bins: ["short", "standard", "prolonged"]
+
+  rehab_outcome:
+    label: "rehabilitation outcome"
+    exact_terms: ["rehabilitation outcome", "rehab outcome", "discharge rehabilitation"]
+    synonym_terms: ["post-discharge therapy status", "functional recovery status"]
+    bins: ["home_rehab", "inpatient_rehab", "persistent_deficit"]
