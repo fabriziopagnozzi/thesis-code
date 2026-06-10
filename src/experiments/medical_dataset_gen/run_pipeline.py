@@ -32,10 +32,10 @@ STAGES: list[tuple[str, StageFn]] = [
     ('queries_answers', run_make_queries_answers),
     ('qrels', run_make_qrels),
     ('embed', run_embed),
-    ('geometry', run_filter_geometry),
-    ('evaluate', run_evaluate),
-    ('embedding_geometry', run_embedding_geometry),
-    ('plots', store_eval_figures),
+    ('geom_filter', run_filter_geometry),
+    ('eval', run_evaluate),
+    ('geom_plots', run_embedding_geometry),
+    ('eval_plots', store_eval_figures),
 ]
 
 
@@ -74,10 +74,7 @@ def _stage_index(name: str) -> int:
 
 
 def _release_ollama_before_embeddings(cfg: ExperimentCfg) -> None:
-    llm_used = (
-        cfg.generation.use_llm_chunk_generation
-        or cfg.generation.use_llm_query_paraphrase
-    )
+    llm_used = cfg.generation.use_llm_chunk_generation or cfg.generation.use_llm_query_paraphrase
     if not llm_used:
         return
 

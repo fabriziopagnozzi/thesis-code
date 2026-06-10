@@ -13,11 +13,8 @@ from experiments.medical_dataset_gen.embedding_geometry.diagnostics import (
 )
 from experiments.medical_dataset_gen.embedding_geometry.plots import (
     plot_cluster_quality_overview,
-    plot_discovered_clusters,
-    plot_query_map,
+    plot_full_strategy_selection_overlay,
     plot_query_overview_4panel,
-    plot_query_rank,
-    plot_query_similarity_map,
     plot_strategy_overlay,
 )
 from experiments.medical_dataset_gen.evaluation.evaluate import _assert_pool_scope_match
@@ -89,11 +86,9 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
         query_dir = out_dir / qid
         query_dir.mkdir(parents=True, exist_ok=True)
         plot_query_overview_4panel(artifact, query_dir)
-        plot_query_map(artifact, query_dir)
         plot_strategy_overlay(artifact, query_dir)
-        plot_query_similarity_map(artifact, query_dir)
-        plot_query_rank(artifact, query_dir)
-        plot_discovered_clusters(artifact, query_dir)
+        for k in list(dict.fromkeys(cfg.retrieval.k_values)):
+            plot_full_strategy_selection_overlay(artifact, query_dir, k=k)
 
         all_point_rows.extend(point_rows(artifact))
         all_stat_rows.append(query_stats(artifact))

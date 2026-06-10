@@ -67,7 +67,7 @@ class EmbeddingCfg(BaseModel):
 
 
 class RetrievalCfg(BaseModel):
-    pool_scope: Literal['query_local', 'same_condition', 'full_corpus'] = 'same_condition'
+    pool_scope: Literal['query_local', 'same_condition', 'full_corpus'] = 'query_local'
     candidate_pool_n: int = 300
     k_values: list[int] = Field(default_factory=lambda: [5, 10, 20])
     lambda_values: list[float] = Field(default_factory=lambda: [0.3, 0.5, 0.7])

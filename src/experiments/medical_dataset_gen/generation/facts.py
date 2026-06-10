@@ -39,7 +39,11 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     )
                 )
 
-        rows.extend(_distractor_facts(plan=plan, ontology=ontology, rng=rng, n=cfg.generation.distractors_per_query))
+        rows.extend(
+            _distractor_facts(
+                plan=plan, ontology=ontology, rng=rng, n=cfg.generation.distractors_per_query
+            )
+        )
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'clinical_facts', df)
@@ -170,6 +174,7 @@ def _base_fact(
         ontology=ontology,
         condition_id=condition_id,
         axis=axis,
+        target_value_bin=facet.get('value_bin'),
         rng=rng,
         local_idx=local_idx,
     )
@@ -178,7 +183,9 @@ def _base_fact(
     fact_id = f'{query_id}_{"g" if is_gold else "d"}_{len(cluster_id)}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     admission_id = f'adm_{query_id}_{cluster_id}_{local_idx:03d}'
     patient_id = f'pat_{query_id}_{cluster_id}_{local_idx // 2:03d}'
-    note_style = rng.choice(['brief_hospital_course', 'brief_hospital_course', 'discharge_diagnosis'])
+    note_style = rng.choice(
+        ['brief_hospital_course', 'brief_hospital_course', 'discharge_diagnosis']
+    )
     patient_age = _patient_age(subgroup_id, rng)
     patient_sex = rng.choice(['female', 'male'])
     clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, rng)
@@ -233,13 +240,18 @@ def _axis_values(
     ontology: dict[str, Any],
     condition_id: str,
     axis: str,
+    target_value_bin: str | None,
     rng: Random,
     local_idx: int,
 ) -> tuple[str, int | None, str | None, str | None]:
     condition = ontology['conditions'][condition_id]
     if axis == 'treatment_duration':
         bins = list(condition['duration_days'])
-        value_bin = bins[(local_idx + rng.randint(0, 2)) % len(bins)]
+        value_bin = (
+            target_value_bin
+            if target_value_bin in condition['duration_days']
+            else bins[(local_idx + rng.randint(0, 2)) % len(bins)]
+        )
         low, high = condition['duration_days'][value_bin]
         duration_days = rng.randint(int(low), int(high))
         duration_treatments = condition.get('duration_treatments') or condition['treatments']
@@ -247,7 +259,11 @@ def _axis_values(
         return value_bin, duration_days, treatment, None
 
     bins = list(condition['rehab_outcomes'])
-    value_bin = bins[(local_idx + rng.randint(0, 2)) % len(bins)]
+    value_bin = (
+        target_value_bin
+        if target_value_bin in condition['rehab_outcomes']
+        else bins[(local_idx + rng.randint(0, 2)) % len(bins)]
+    )
     rehab_outcome = rng.choice(condition['rehab_outcomes'][value_bin])
     return value_bin, None, None, rehab_outcome
 
@@ -279,6 +295,38 @@ def _clinical_subgroup_phrase(subgroup_id: str, rng: Random) -> str:
         'immunosuppression': [
             'immunosuppression from chronic steroid therapy',
             'immunosuppression after transplant medication use',
+        ],
+        'obesity': [
+            'obesity with limited baseline exercise tolerance',
+            'elevated body mass index with chronic mobility strain',
+        ],
+        'malignancy': [
+            'active malignancy on recent systemic therapy',
+            'ongoing cancer treatment with baseline frailty',
+        ],
+        'atrial_fibrillation': [
+            'chronic atrial fibrillation on long-term rate control',
+            'baseline atrial fibrillation treated with anticoagulation',
+        ],
+        'chronic_liver_disease': [
+            'chronic liver disease with prior hepatic decompensation',
+            'cirrhosis with baseline hepatic dysfunction',
+        ],
+        'dementia': [
+            'baseline dementia with memory impairment',
+            'chronic cognitive impairment from dementia',
+        ],
+        'frailty': [
+            'baseline frailty with reduced reserve',
+            'frailty with limited pre-hospital mobility',
+        ],
+        'peripheral_vascular_disease': [
+            'peripheral vascular disease with chronic limb symptoms',
+            'baseline peripheral artery disease',
+        ],
+        'autoimmune_disease': [
+            'systemic autoimmune disease on chronic immunomodulatory therapy',
+            'chronic inflammatory autoimmune disease',
         ],
     }
     choices = phrases.get(subgroup_id)

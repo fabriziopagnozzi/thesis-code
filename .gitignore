@@ -105,6 +105,7 @@ activemq-data/
 .spyproject
 # Rope project settings
 .ropeproject
+AGENTS.md 
 
 /site
 

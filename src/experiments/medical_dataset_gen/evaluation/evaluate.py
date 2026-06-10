@@ -20,6 +20,8 @@ from experiments.medical_dataset_gen.retrieval.utils import (
     topn_by_query,
 )
 
+ALPHA_NDCG_REDUNDANCY = 0.5
+
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     chunks = read_parquet(paths, 'chunks')
@@ -154,22 +156,46 @@ def _assert_pool_scope_match(
 def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
     if len(results) == 0:
         return pl.DataFrame()
-    return (
-        results
-        .group_by('strategy', 'lam', 'k')
+    stats = (
+        results.group_by('strategy', 'lam', 'k')
         .agg(
-            pl.col('facet_coverage').mean().alias('FC'),
-            pl.col('weighted_facet_coverage').mean().alias('WFC'),
-            pl.col('gold_precision').mean().alias('GP'),
-            pl.col('gold_recall').mean().alias('GR'),
-            pl.col('distractor_rate').mean().alias('DR'),
-            pl.col('dominant_cluster_concentration').mean().alias('DCC'),
+            pl.col('query_id').n_unique().alias('n_queries'),
+            pl.col('gold_precision').mean().alias('Precision@k'),
+            pl.col('gold_recall').mean().alias('Recall@k'),
+            pl.col('gold_f1').mean().alias('F1@k'),
+            pl.col('average_precision_at_k').mean().alias('MAP@k'),
+            pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
+            pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
+            pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
+            pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
+            pl.col('distractor_rate').mean().alias('DistractorRate'),
+            pl.col('dominant_facet_rate').mean().alias('DominantFacetRate'),
+            pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
             pl.col('fac_cov_score').mean().alias('fac'),
             pl.col('avg_cos').mean().alias('avg_cos'),
             pl.col('jaccard_vs_topk').mean().alias('jac'),
-            pl.col('query_id').n_unique().alias('n_queries'),
         )
         .sort('k', 'strategy', 'lam')
+    )
+    return stats.select(
+        'strategy',
+        'lam',
+        'k',
+        'n_queries',
+        'Precision@k',
+        'Recall@k',
+        'F1@k',
+        'MAP@k',
+        'FacetCoverage@k',
+        'MeanFacetRecall@k',
+        'FacetMRR@k',
+        'alpha-nDCG@k',
+        'DistractorRate',
+        'DominantFacetRate',
+        'RedundantGoldRate',
+        'fac',
+        'avg_cos',
+        'jac',
     )
 
 
@@ -187,56 +213,283 @@ def _retrieval_metrics(
     all_gold_ids: set[str],
     dominant_facet_id: str,
 ) -> dict[str, float | int]:
-    selected = set(selected_chunk_ids)
-    selected_gold = selected & all_gold_ids
-
-    facet_hits = {
-        facet_id for facet_id, gold_ids in facet_to_gold.items() if selected & set(gold_ids)
-    }
-    facet_coverage = len(facet_hits) / len(facet_to_gold) if facet_to_gold else 0.0
-    weighted = (
-        np.mean([
-            len(selected & set(gold_ids)) / len(gold_ids)
-            for gold_ids in facet_to_gold.values()
-            if gold_ids
-        ])
-        if facet_to_gold
-        else 0.0
+    relevance = _relevance_metrics(
+        selected_chunk_ids=selected_chunk_ids,
+        all_gold_ids=all_gold_ids,
     )
-
+    facet_coverage = _facet_coverage_metrics(
+        selected_chunk_ids=selected_chunk_ids,
+        facet_to_gold=facet_to_gold,
+    )
+    diversified_ranking = _diversified_ranking_metrics(
+        selected_chunk_ids=selected_chunk_ids,
+        chunk_by_id=chunk_by_id,
+        facet_to_gold=facet_to_gold,
+        all_gold_ids=all_gold_ids,
+    )
+    redundancy = _redundancy_metrics(
+        selected_chunk_ids=selected_chunk_ids,
+        chunk_by_id=chunk_by_id,
+        all_gold_ids=all_gold_ids,
+        dominant_facet_id=dominant_facet_id,
+        n_selected_gold=int(relevance['n_selected_gold']),
+        n_facet_hits=int(facet_coverage['n_unique_gold_facets']),
+    )
     selected_rows = [chunk_by_id[cid] for cid in selected_chunk_ids]
-    non_gold_count = sum(1 for cid in selected_chunk_ids if cid not in all_gold_ids)
-    dominant_count = sum(
-        1 for cid in selected_chunk_ids if chunk_by_id[cid].get('facet_id') == dominant_facet_id
-    )
-    selected_facet_counts = Counter(
-        chunk_by_id[cid].get('facet_id')
-        for cid in selected_chunk_ids
-        if cid in all_gold_ids and chunk_by_id[cid].get('facet_id')
-    )
-    max_facet_concentration = (
-        selected_facet_counts.most_common(1)[0][1] / len(selected_chunk_ids)
-        if selected_chunk_ids and selected_facet_counts
+
+    return {
+        **relevance,
+        **facet_coverage,
+        **diversified_ranking,
+        **redundancy,
+        'n_unique_hadms': len(
+            {row.get('admission_id') for row in selected_rows if row.get('admission_id')}
+        ),
+    }
+
+
+def _relevance_metrics(
+    selected_chunk_ids: list[str],
+    all_gold_ids: set[str],
+) -> dict[str, float | int]:
+    n_selected = len(selected_chunk_ids)
+    n_selected_gold = sum(1 for chunk_id in selected_chunk_ids if chunk_id in all_gold_ids)
+    gold_precision = n_selected_gold / n_selected if n_selected else 0.0
+    gold_recall = n_selected_gold / len(all_gold_ids) if all_gold_ids else 0.0
+    return {
+        'gold_precision': float(gold_precision),
+        'gold_recall': float(gold_recall),
+        'gold_f1': float(_harmonic_mean(gold_precision, gold_recall)),
+        'average_precision_at_k': average_precision_at_k(
+            selected_chunk_ids=selected_chunk_ids,
+            all_gold_ids=all_gold_ids,
+        ),
+        'n_selected': n_selected,
+        'n_selected_gold': n_selected_gold,
+    }
+
+
+def _facet_coverage_metrics(
+    selected_chunk_ids: list[str],
+    facet_to_gold: dict[str, list[str]],
+) -> dict[str, float | int]:
+    selected = set(selected_chunk_ids)
+    facet_gold_sets = {
+        facet_id: set(gold_ids) for facet_id, gold_ids in facet_to_gold.items() if gold_ids
+    }
+    facet_hits = {facet_id for facet_id, gold_ids in facet_gold_sets.items() if selected & gold_ids}
+    n_facets = len(facet_to_gold)
+    n_facet_hits = len(facet_hits)
+    facet_coverage = n_facet_hits / n_facets if n_facets else 0.0
+    mean_facet_recall = (
+        np.mean(
+            [
+                len(selected & gold_ids) / len(gold_ids)
+                for gold_ids in facet_gold_sets.values()
+                if gold_ids
+            ]
+        )
+        if facet_gold_sets
         else 0.0
     )
+    facet_hit_density = n_facet_hits / len(selected_chunk_ids) if selected_chunk_ids else 0.0
+    facet_f1 = _harmonic_mean(facet_hit_density, facet_coverage)
 
     return {
         'facet_coverage': float(facet_coverage),
-        'weighted_facet_coverage': float(weighted),
-        'gold_precision': len(selected_gold) / len(selected_chunk_ids)
-        if selected_chunk_ids
-        else 0.0,
-        'gold_recall': len(selected_gold) / len(all_gold_ids) if all_gold_ids else 0.0,
-        'distractor_rate': non_gold_count / len(selected_chunk_ids) if selected_chunk_ids else 0.0,
-        'dominant_cluster_concentration': dominant_count / len(selected_chunk_ids)
-        if selected_chunk_ids
-        else 0.0,
-        'max_facet_concentration': float(max_facet_concentration),
-        'n_selected': len(selected_chunk_ids),
-        'n_selected_gold': len(selected_gold),
-        'n_selected_non_gold': non_gold_count,
-        'n_unique_hadms': len({row['admission_id'] for row in selected_rows}),
+        'weighted_facet_coverage': float(mean_facet_recall),
+        'facet_hit_density': float(facet_hit_density),
+        'unique_facet_rate': float(facet_hit_density),
+        'facet_f1': float(facet_f1),
+        # Backward-compatible raw names; summary tables no longer label these as AP/AF1.
+        'aspect_precision': float(facet_hit_density),
+        'aspect_f1': float(facet_f1),
+        'n_unique_gold_facets': n_facet_hits,
+        'n_total_facets': n_facets,
     }
+
+
+def _diversified_ranking_metrics(
+    selected_chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    facet_to_gold: dict[str, list[str]],
+    all_gold_ids: set[str],
+) -> dict[str, float]:
+    facet_mrr_at_k = _facet_mrr(
+        selected_chunk_ids=selected_chunk_ids,
+        chunk_by_id=chunk_by_id,
+        facet_ids=list(facet_to_gold),
+        all_gold_ids=all_gold_ids,
+    )
+    return {
+        'alpha_ndcg': _alpha_ndcg(
+            selected_chunk_ids=selected_chunk_ids,
+            chunk_by_id=chunk_by_id,
+            facet_to_gold=facet_to_gold,
+            all_gold_ids=all_gold_ids,
+            alpha=ALPHA_NDCG_REDUNDANCY,
+        ),
+        'facet_mrr_at_k': facet_mrr_at_k,
+        'facet_mrr': facet_mrr_at_k,
+    }
+
+
+def _redundancy_metrics(
+    selected_chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    all_gold_ids: set[str],
+    dominant_facet_id: str,
+    n_selected_gold: int,
+    n_facet_hits: int,
+) -> dict[str, float | int]:
+    n_selected = len(selected_chunk_ids)
+    non_gold_count = sum(1 for chunk_id in selected_chunk_ids if chunk_id not in all_gold_ids)
+    dominant_count = sum(
+        1
+        for chunk_id in selected_chunk_ids
+        if chunk_by_id[chunk_id].get('facet_id') == dominant_facet_id
+    )
+    selected_facet_counts = Counter(
+        chunk_by_id[chunk_id].get('facet_id')
+        for chunk_id in selected_chunk_ids
+        if chunk_id in all_gold_ids and chunk_by_id[chunk_id].get('facet_id')
+    )
+    max_facet_concentration = (
+        selected_facet_counts.most_common(1)[0][1] / n_selected
+        if n_selected and selected_facet_counts
+        else 0.0
+    )
+    redundant_gold_count = max(n_selected_gold - n_facet_hits, 0)
+    dominant_facet_rate = dominant_count / n_selected if n_selected else 0.0
+
+    return {
+        'distractor_rate': non_gold_count / n_selected if n_selected else 0.0,
+        'dominant_facet_rate': float(dominant_facet_rate),
+        'dominant_cluster_concentration': float(dominant_facet_rate),
+        'max_facet_concentration': float(max_facet_concentration),
+        'redundant_gold_rate': redundant_gold_count / n_selected if n_selected else 0.0,
+        'n_selected_non_gold': non_gold_count,
+        'n_redundant_gold': redundant_gold_count,
+    }
+
+
+def average_precision_at_k(
+    selected_chunk_ids: list[str],
+    all_gold_ids: set[str],
+    k: int | None = None,
+) -> float:
+    rank_cutoff = len(selected_chunk_ids) if k is None else k
+    denominator = min(len(all_gold_ids), rank_cutoff)
+    if denominator <= 0:
+        return 0.0
+
+    n_hits = 0
+    precision_sum = 0.0
+    for rank, chunk_id in enumerate(selected_chunk_ids[:rank_cutoff], start=1):
+        if chunk_id not in all_gold_ids:
+            continue
+        n_hits += 1
+        precision_sum += n_hits / rank
+    return float(precision_sum / denominator)
+
+
+def _harmonic_mean(left: float, right: float) -> float:
+    denom = left + right
+    return 0.0 if denom <= 0 else 2 * left * right / denom
+
+
+def _alpha_ndcg(
+    selected_chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    facet_to_gold: dict[str, list[str]],
+    all_gold_ids: set[str],
+    alpha: float,
+) -> float:
+    """alpha-nDCG with facet_id as the subtopic label.
+
+    Repeated gold chunks from the same facet receive diminishing gain, which
+    makes this a ranking-sensitive coverage metric for the synthetic benchmark.
+    """
+    selected_dcg = _alpha_dcg(
+        selected_chunk_ids=selected_chunk_ids,
+        chunk_by_id=chunk_by_id,
+        all_gold_ids=all_gold_ids,
+        alpha=alpha,
+    )
+    ideal_labels = _ideal_alpha_labels(facet_to_gold, k=len(selected_chunk_ids), alpha=alpha)
+    ideal_dcg = _alpha_dcg_from_labels(ideal_labels, alpha=alpha)
+    return float(selected_dcg / ideal_dcg) if ideal_dcg > 0 else 0.0
+
+
+def _alpha_dcg(
+    selected_chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    all_gold_ids: set[str],
+    alpha: float,
+) -> float:
+    labels = [
+        str(chunk_by_id[chunk_id].get('facet_id'))
+        if chunk_id in all_gold_ids and chunk_by_id[chunk_id].get('facet_id')
+        else None
+        for chunk_id in selected_chunk_ids
+    ]
+    return _alpha_dcg_from_labels(labels, alpha=alpha)
+
+
+def _alpha_dcg_from_labels(labels: list[str | None], alpha: float) -> float:
+    counts: Counter[str] = Counter()
+    total = 0.0
+    for rank, facet_id in enumerate(labels, start=1):
+        if facet_id is None:
+            continue
+        gain = (1 - alpha) ** counts[facet_id]
+        counts[facet_id] += 1
+        total += gain / np.log2(rank + 1)
+    return float(total)
+
+
+def _ideal_alpha_labels(
+    facet_to_gold: dict[str, list[str]],
+    k: int,
+    alpha: float,
+) -> list[str]:
+    remaining = {facet_id: len(gold_ids) for facet_id, gold_ids in facet_to_gold.items()}
+    counts: Counter[str] = Counter()
+    labels = []
+    for _ in range(k):
+        candidates = [
+            (facet_id, (1 - alpha) ** counts[facet_id])
+            for facet_id, n_remaining in remaining.items()
+            if n_remaining > 0
+        ]
+        if not candidates:
+            break
+        facet_id, _ = max(candidates, key=lambda item: item[1])
+        labels.append(facet_id)
+        remaining[facet_id] -= 1
+        counts[facet_id] += 1
+    return labels
+
+
+def _facet_mrr(
+    selected_chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    facet_ids: list[str],
+    all_gold_ids: set[str],
+) -> float:
+    if not facet_ids:
+        return 0.0
+    first_rank: dict[str, int] = {}
+    for rank, chunk_id in enumerate(selected_chunk_ids, start=1):
+        if chunk_id not in all_gold_ids:
+            continue
+        facet_id = chunk_by_id[chunk_id].get('facet_id')
+        if facet_id:
+            first_rank.setdefault(str(facet_id), rank)
+    reciprocal_ranks = [
+        1 / first_rank[facet_id] if facet_id in first_rank else 0.0 for facet_id in facet_ids
+    ]
+    return float(np.mean(reciprocal_ranks))
 
 
 if __name__ == '__main__':

@@ -41,37 +41,61 @@ class ChunkValidation:
 
 def render_chunk_text(fact: dict[str, Any], ontology: dict[str, Any], rng: Random) -> str:
     """Deterministic clinical fallback used when LLM generation is disabled or rejected."""
-    condition_display = fact['condition_display']
-    axis = fact['axis']
-    patient = _patient_descriptor(fact)
-    patient_start = _sentence_start(patient)
-
-    if axis == 'treatment_duration':
-        status = rng.choice(_condition_status_phrases(fact['condition_id']))
-        body = (
-            f'{patient_start} was treated for {condition_display}. '
-            f'Treatment with {fact["treatment"]} continued for {fact["duration_days"]} days, '
-            f'with {status} before discharge.'
-        )
-    elif axis == 'rehab_outcome':
-        transition = rng.choice([
-            'At discharge',
-            'By the time of discharge',
-            'Near discharge',
-        ])
-        body = (
-            f'{patient_start} was managed for {condition_display}. '
-            f'{transition}, the record described {fact["rehab_outcome"]}.'
-        )
+    if fact['axis'] == 'treatment_duration':
+        body = _render_duration_chunk(fact, rng)
+    elif fact['axis'] == 'rehab_outcome':
+        body = _render_rehab_chunk(fact, rng)
     else:
-        raise ValueError(f'Unsupported axis: {axis}')
+        raise ValueError(f'Unsupported axis: {fact["axis"]}')
 
-    followup = rng.choice([
-        'Follow-up with the treating service was arranged.',
-        'Vital signs were stable at discharge, and follow-up with the treating service was arranged.',
-        'The discharge plan focused on the acute illness and immediate recovery.',
-    ])
-    return _squash_ws(f'{body} {followup}')
+    return _squash_ws(body)
+
+
+def _render_duration_chunk(fact: dict[str, Any], rng: Random) -> str:
+    patient = _sentence_start(_patient_descriptor(fact))
+    condition = fact['condition_display']
+    presentation = rng.choice(_condition_presentations(fact['condition_id']))
+    response = rng.choice(_condition_status_phrases(fact['condition_id']))
+    course_noun = rng.choice(
+        ['active treatment course', 'inpatient treatment course', 'documented therapy course']
+    )
+    duration_phrase = rng.choice(
+        [
+            f'{fact["treatment"]} was continued for {fact["duration_days"]} days',
+            f'the {course_noun} used {fact["treatment"]} for {fact["duration_days"]} days',
+            f'clinicians completed {fact["duration_days"]} days of {fact["treatment"]}',
+        ]
+    )
+    close = rng.choice(_duration_closing_sentences(fact['condition_id']))
+
+    return (
+        f'{patient} was admitted with {condition}, with {presentation}. '
+        f'{_sentence_start(duration_phrase)}, and the record described {response} before discharge. '
+        f'{close}'
+    )
+
+
+def _render_rehab_chunk(fact: dict[str, Any], rng: Random) -> str:
+    patient = _sentence_start(_patient_descriptor(fact))
+    condition = fact['condition_display']
+    presentation = rng.choice(_condition_presentations(fact['condition_id']))
+    functional_detail = rng.choice(
+        _functional_status_phrases(fact['condition_id'], fact['value_bin'])
+    )
+    transition = rng.choice(
+        [
+            'By discharge',
+            'At discharge',
+            'Near the end of the hospitalization',
+        ]
+    )
+    close = rng.choice(_rehab_closing_sentences(fact['condition_id'], fact['value_bin']))
+
+    return (
+        f'{patient} was managed for {condition}, with {presentation}. '
+        f'{transition}, {functional_detail}; the discharge record described '
+        f'{fact["rehab_outcome"]}. {close}'
+    )
 
 
 def maybe_generate_chunk_text(
@@ -166,7 +190,9 @@ def facets_by(plan: dict[str, Any], subgroup_label: str, axis: str) -> str:
     raise KeyError((subgroup_label, axis))
 
 
-def validate_chunk_text(text: str, fact: dict[str, Any], ontology: dict[str, Any]) -> ChunkValidation:
+def validate_chunk_text(
+    text: str, fact: dict[str, Any], ontology: dict[str, Any]
+) -> ChunkValidation:
     lower = text.lower()
     hard_errors: list[str] = []
     soft_warnings: list[str] = []
@@ -247,9 +273,13 @@ def _contains_subgroup_evidence(text: str, fact: dict[str, Any], ontology: dict[
     subgroup_id = fact['subgroup_id']
 
     if subgroup_id == 'age_over_75':
-        return _has_age_in_range(text, 76, 120) or 'older than 75' in lower or 'above age 75' in lower
+        return (
+            _has_age_in_range(text, 76, 120) or 'older than 75' in lower or 'above age 75' in lower
+        )
     if subgroup_id == 'age_under_50':
-        return _has_age_in_range(text, 18, 49) or 'younger than 50' in lower or 'below age 50' in lower
+        return (
+            _has_age_in_range(text, 18, 49) or 'younger than 50' in lower or 'below age 50' in lower
+        )
 
     phrase = str(fact['clinical_subgroup_phrase']).lower()
     if phrase and phrase in lower:
@@ -265,6 +295,22 @@ def _contains_subgroup_evidence(text: str, fact: dict[str, Any], ontology: dict[
         'chronic_kidney_disease': ['chronic kidney disease', 'ckd'],
         'copd': ['copd', 'chronic obstructive pulmonary disease'],
         'immunosuppression': ['immunosuppression', 'immunosuppressed'],
+        'obesity': ['obesity', 'obese', 'body mass index'],
+        'malignancy': ['malignancy', 'active cancer', 'cancer treatment'],
+        'atrial_fibrillation': ['atrial fibrillation', 'af'],
+        'chronic_liver_disease': ['chronic liver disease', 'cirrhosis', 'hepatic disease'],
+        'dementia': ['dementia', 'cognitive impairment', 'neurocognitive disorder'],
+        'frailty': ['frailty', 'frail'],
+        'peripheral_vascular_disease': [
+            'peripheral vascular disease',
+            'peripheral artery disease',
+            'pad',
+        ],
+        'autoimmune_disease': [
+            'autoimmune disease',
+            'systemic autoimmune disease',
+            'inflammatory autoimmune disease',
+        ],
     }
     return any(term in lower for term in subgroup_terms.get(subgroup_id, []))
 
@@ -368,6 +414,31 @@ def _duration_treatment_terms(
     return [str(treatment) for treatment in treatments]
 
 
+def _condition_presentations(condition_id: str) -> list[str]:
+    return {
+        'encephalitis_myelitis': [
+            'fever, confusion, and gait change',
+            'headache, altered mental status, and lower-extremity weakness',
+            'new neurologic deficits and inflammatory cerebrospinal fluid findings',
+        ],
+        'pneumonia': [
+            'hypoxemia, fever, and productive cough',
+            'new oxygen requirement and bibasilar infiltrates',
+            'dyspnea, leukocytosis, and radiographic consolidation',
+        ],
+        'ischemic_stroke': [
+            'acute dysarthria and unilateral weakness',
+            'new focal neurologic deficits on arrival',
+            'hemiparesis with imaging consistent with acute infarct',
+        ],
+        'heart_failure': [
+            'volume overload, edema, and exertional dyspnea',
+            'pulmonary congestion and elevated filling pressures',
+            'worsening orthopnea with lower-extremity edema',
+        ],
+    }.get(condition_id, ['acute symptoms requiring inpatient management'])
+
+
 def _condition_status_phrases(condition_id: str) -> list[str]:
     return {
         'encephalitis_myelitis': [
@@ -391,6 +462,140 @@ def _condition_status_phrases(condition_id: str) -> list[str]:
             'stable renal function after diuresis',
         ],
     }.get(condition_id, ['clinical improvement'])
+
+
+def _duration_closing_sentences(condition_id: str) -> list[str]:
+    return {
+        'encephalitis_myelitis': [
+            'Neurology follow-up was arranged to monitor recovery after completion of the anti-inflammatory or antiviral course.',
+            'The discharge medication list matched the completed neurologic treatment plan and outpatient neurology follow-up.',
+            'Repeat examination was stable, and the team documented no escalation beyond the completed inpatient course.',
+        ],
+        'pneumonia': [
+            'The discharge medication list matched the completed antimicrobial plan and outpatient pulmonary follow-up.',
+            'Respiratory status was stable, and no additional inpatient antibiotic escalation was documented.',
+            'The plan emphasized completion of antimicrobial management and reassessment by the primary clinician.',
+        ],
+        'ischemic_stroke': [
+            'The discharge medication list emphasized vascular prevention and outpatient neurology follow-up.',
+            'Repeat examination was stable, and the team documented no extension of the acute infarct.',
+            'The plan focused on secondary stroke prevention and close neurologic reassessment.',
+        ],
+        'heart_failure': [
+            'The discharge medication list reflected the completed decongestive plan and cardiology follow-up.',
+            'Volume status was stable, and the team documented no further inpatient escalation.',
+            'The plan emphasized weight monitoring, medication adjustment, and early outpatient reassessment.',
+        ],
+    }.get(condition_id, ['Follow-up with the treating service was arranged.'])
+
+
+def _functional_status_phrases(condition_id: str, value_bin: str) -> list[str]:
+    phrases = {
+        'encephalitis_myelitis': {
+            'home_rehab': [
+                'orientation improved and gait was safe with supervised exercises',
+                'headache resolved and mild balance deficits could be managed with supervision',
+                'mental status returned near baseline with residual fatigue',
+            ],
+            'inpatient_rehab': [
+                'orientation improved but gait instability still made independent mobility unsafe',
+                'weakness persisted despite improved fever and stable neurologic checks',
+                'cognitive slowing and balance deficits still limited safe transfers',
+            ],
+            'persistent_deficit': [
+                'focal weakness and impaired balance remained prominent',
+                'confusion improved only partially and mobility stayed limited',
+                'residual neurologic deficits were still documented on the final examination',
+            ],
+        },
+        'pneumonia': {
+            'home_rehab': [
+                'oxygen needs improved and endurance was adequate for supervised activity',
+                'cough and fever improved, but conditioning remained below baseline',
+                'breathing was stable on room air with mild residual weakness',
+            ],
+            'inpatient_rehab': [
+                'respiratory status improved but deconditioning limited transfers',
+                'oxygenation stabilized while weakness still prevented independent ambulation',
+                'fatigue after respiratory illness made self-care unsafe',
+            ],
+            'persistent_deficit': [
+                'exertional dyspnea persisted despite improvement in fever',
+                'oxygen requirement remained a barrier to baseline activity',
+                'exercise tolerance stayed reduced at the end of the stay',
+            ],
+        },
+        'ischemic_stroke': {
+            'home_rehab': [
+                'speech improved and gait was safe with outpatient support',
+                'mild dysarthria persisted but transfers were independent',
+                'strength improved enough for home discharge planning',
+            ],
+            'inpatient_rehab': [
+                'hemiparesis still limited transfers and gait safety',
+                'aphasia improved but mobility deficits required supervised practice',
+                'motor deficits remained too significant for independent self-care',
+            ],
+            'persistent_deficit': [
+                'hemiparesis remained prominent on the final neurologic examination',
+                'aphasia and mobility impairment persisted',
+                'residual focal deficits continued to limit safe ambulation',
+            ],
+        },
+        'heart_failure': {
+            'home_rehab': [
+                'dyspnea improved and walking tolerance was adequate for a supervised home plan',
+                'edema decreased and activity tolerance was improving',
+                'volume status stabilized with residual fatigue',
+            ],
+            'inpatient_rehab': [
+                'deconditioning remained marked despite improved volume status',
+                'fatigue and poor endurance still limited transfers',
+                'breathing improved, but mobility remained unsafe without supervised strengthening',
+            ],
+            'persistent_deficit': [
+                'exertional dyspnea continued to limit hallway ambulation',
+                'fatigue and mobility limitation remained near discharge',
+                'residual congestion symptoms kept exercise tolerance reduced',
+            ],
+        },
+    }
+    return phrases.get(condition_id, {}).get(
+        value_bin, ['functional limitations remained documented']
+    )
+
+
+def _rehab_closing_sentences(condition_id: str, value_bin: str) -> list[str]:
+    if value_bin == 'home_rehab':
+        return [
+            'The plan emphasized caregiver teaching, home safety, and close outpatient reassessment.',
+            'The patient left with clear activity precautions and follow-up for functional recovery.',
+            'The team documented a stable medical condition with continued recovery outside the hospital.',
+        ]
+    if value_bin == 'inpatient_rehab':
+        return [
+            'The plan emphasized supervised strengthening, mobility training, and reassessment before return home.',
+            'The team documented a need for daily therapy intensity after medical stabilization.',
+            'Transfer planning focused on fall prevention, endurance, and recovery of daily activities.',
+        ]
+    return {
+        'encephalitis_myelitis': [
+            'Neurology follow-up was arranged because recovery remained incomplete.',
+            'The plan emphasized monitoring residual neurologic deficits after discharge.',
+        ],
+        'pneumonia': [
+            'Pulmonary follow-up was arranged because respiratory recovery remained incomplete.',
+            'The plan emphasized monitoring oxygen needs and gradual return of endurance.',
+        ],
+        'ischemic_stroke': [
+            'Neurology follow-up was arranged because focal deficits remained functionally important.',
+            'The plan emphasized continued monitoring of neurologic recovery after discharge.',
+        ],
+        'heart_failure': [
+            'Cardiology follow-up was arranged because functional recovery remained limited.',
+            'The plan emphasized symptom monitoring and gradual activity advancement.',
+        ],
+    }.get(condition_id, ['Follow-up was arranged because recovery remained incomplete.'])
 
 
 def _squash_ws(text: str) -> str:

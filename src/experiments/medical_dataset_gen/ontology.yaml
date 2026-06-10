@@ -79,6 +79,266 @@ conditions:
         - "persistent exertional dyspnea limited discharge function"
         - "ongoing fatigue and mobility limitation were documented"
 
+  bacterial_meningitis:
+    display: "bacterial meningitis"
+    terms: ["bacterial meningitis", "meningeal inflammation", "ceftriaxone", "neurologic monitoring"]
+    treatments: ["ceftriaxone", "vancomycin", "dexamethasone"]
+    duration_treatments: ["ceftriaxone", "vancomycin"]
+    duration_days:
+      short: [7, 10]
+      standard: [10, 14]
+      prolonged: [14, 21]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient neurorehabilitation after improved cognition"
+        - "home therapy after headache and confusion improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for residual weakness and slowed processing"
+        - "transferred to rehabilitation because balance and cognition remained impaired"
+      persistent_deficit:
+        - "persistent cognitive slowing and gait instability were documented at discharge"
+        - "ongoing neurologic deficits required close outpatient follow-up"
+
+  multiple_sclerosis_relapse:
+    display: "multiple sclerosis relapse"
+    terms: ["multiple sclerosis relapse", "demyelinating flare", "methylprednisolone", "weakness"]
+    treatments: ["intravenous methylprednisolone", "plasma exchange", "physical therapy"]
+    duration_treatments: ["intravenous methylprednisolone", "plasma exchange"]
+    duration_days:
+      short: [3, 5]
+      standard: [5, 7]
+      prolonged: [10, 14]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient neurorehabilitation for residual weakness"
+        - "home therapy after gait and fatigue improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for persistent mobility deficits"
+        - "transferred to rehabilitation because weakness still limited transfers"
+      persistent_deficit:
+        - "persistent lower-extremity weakness and imbalance remained at discharge"
+        - "ongoing sensory and gait deficits required close neurologic follow-up"
+
+  spinal_epidural_abscess:
+    display: "spinal epidural abscess"
+    terms: ["spinal epidural abscess", "back pain", "intravenous antibiotics", "cord compression"]
+    treatments: ["vancomycin", "cefepime", "surgical decompression"]
+    duration_treatments: ["vancomycin", "cefepime"]
+    duration_days:
+      short: [14, 21]
+      standard: [28, 42]
+      prolonged: [42, 56]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient therapy after improved leg strength"
+        - "home physical therapy after pain control and safer ambulation"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for persistent weakness after decompression"
+        - "transferred to rehabilitation because gait remained unsafe"
+      persistent_deficit:
+        - "persistent lower-extremity weakness and sensory loss remained at discharge"
+        - "ongoing neurologic deficits limited independent mobility"
+
+  pulmonary_embolism:
+    display: "pulmonary embolism"
+    terms: ["pulmonary embolism", "anticoagulation", "hypoxemia", "right heart strain"]
+    treatments: ["heparin infusion", "apixaban", "supplemental oxygen"]
+    duration_treatments: ["heparin infusion", "apixaban"]
+    duration_days:
+      short: [2, 3]
+      standard: [4, 6]
+      prolonged: [7, 10]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with gradual activity advancement and outpatient therapy"
+        - "home physical therapy after dyspnea improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for severe deconditioning after hypoxemia"
+        - "transferred to rehabilitation because mobility remained limited after pulmonary embolism"
+      persistent_deficit:
+        - "persistent exertional dyspnea limited discharge function"
+        - "continued oxygen requirement reduced walking tolerance at discharge"
+
+  copd_exacerbation:
+    display: "acute COPD exacerbation"
+    terms: ["COPD exacerbation", "bronchodilators", "systemic steroids", "hypercapnia"]
+    treatments: ["prednisone", "azithromycin", "scheduled bronchodilators"]
+    duration_treatments: ["prednisone", "azithromycin"]
+    duration_days:
+      short: [3, 5]
+      standard: [5, 7]
+      prolonged: [7, 10]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with pulmonary rehabilitation referral and inhaler teaching"
+        - "home therapy after breathing and endurance improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation because deconditioning limited safe ambulation"
+        - "transferred to rehabilitation for weakness after prolonged respiratory failure"
+      persistent_deficit:
+        - "persistent exertional limitation and dyspnea remained at discharge"
+        - "ongoing oxygen need and poor endurance reduced baseline activity"
+
+  infective_endocarditis:
+    display: "infective endocarditis"
+    terms: ["infective endocarditis", "bacteremia", "intravenous antibiotics", "valvular infection"]
+    treatments: ["ceftriaxone", "nafcillin", "vancomycin"]
+    duration_treatments: ["ceftriaxone", "nafcillin", "vancomycin"]
+    duration_days:
+      short: [14, 21]
+      standard: [28, 42]
+      prolonged: [42, 56]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with home infusion support and outpatient therapy"
+        - "home rehabilitation was arranged after strength improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for marked deconditioning during prolonged antibiotic therapy"
+        - "transferred to rehabilitation because endurance and mobility remained limited"
+      persistent_deficit:
+        - "persistent fatigue and reduced mobility were still documented at discharge"
+        - "ongoing functional limitation required close follow-up during antibiotic completion"
+
+  osteomyelitis:
+    display: "osteomyelitis"
+    terms: ["osteomyelitis", "bone infection", "intravenous antibiotics", "weight-bearing restriction"]
+    treatments: ["vancomycin", "cefazolin", "daptomycin"]
+    duration_treatments: ["vancomycin", "cefazolin", "daptomycin"]
+    duration_days:
+      short: [10, 14]
+      standard: [21, 28]
+      prolonged: [42, 56]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient therapy and protected weight bearing"
+        - "home physical therapy after pain and swelling improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for transfers and gait training with weight-bearing limits"
+        - "transferred to rehabilitation because weakness and offloading needs limited independence"
+      persistent_deficit:
+        - "persistent pain and impaired mobility remained at discharge"
+        - "ongoing difficulty with ambulation required close follow-up"
+
+  pyelonephritis_sepsis:
+    display: "pyelonephritis with sepsis"
+    terms: ["pyelonephritis", "urosepsis", "ceftriaxone", "acute infection"]
+    treatments: ["ceftriaxone", "piperacillin-tazobactam", "intravenous fluids"]
+    duration_treatments: ["ceftriaxone", "piperacillin-tazobactam"]
+    duration_days:
+      short: [5, 7]
+      standard: [10, 14]
+      prolonged: [14, 21]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with visiting nursing after strength improved"
+        - "home physical therapy after sepsis-related weakness improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for deconditioning after septic illness"
+        - "transferred to rehabilitation because mobility remained below baseline"
+      persistent_deficit:
+        - "persistent weakness and limited endurance remained at discharge"
+        - "ongoing fatigue after sepsis reduced safe activity tolerance"
+
+  diabetic_foot_infection:
+    display: "diabetic foot infection"
+    terms: ["diabetic foot infection", "wound care", "intravenous antibiotics", "offloading"]
+    treatments: ["vancomycin", "piperacillin-tazobactam", "wound care"]
+    duration_treatments: ["vancomycin", "piperacillin-tazobactam"]
+    duration_days:
+      short: [7, 10]
+      standard: [14, 21]
+      prolonged: [28, 42]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with wound care support and outpatient gait therapy"
+        - "home therapy after pain improved and protected ambulation was feasible"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for transfers and gait training with offloading precautions"
+        - "transferred to rehabilitation because mobility remained unsafe with wound-care restrictions"
+      persistent_deficit:
+        - "persistent gait limitation and wound-related pain remained at discharge"
+        - "ongoing difficulty with mobility required close podiatry and therapy follow-up"
+
+  cirrhosis_encephalopathy:
+    display: "cirrhosis with hepatic encephalopathy"
+    terms: ["hepatic encephalopathy", "cirrhosis", "lactulose", "encephalopathy"]
+    treatments: ["lactulose", "rifaximin", "diuretic adjustment"]
+    duration_treatments: ["lactulose", "rifaximin"]
+    duration_days:
+      short: [2, 4]
+      standard: [5, 7]
+      prolonged: [8, 12]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with visiting nursing after mentation improved"
+        - "home therapy after balance and orientation improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation because weakness and cognitive slowing limited safe mobility"
+        - "transferred to rehabilitation after recurrent falls and deconditioning"
+      persistent_deficit:
+        - "persistent cognitive slowing and poor balance remained at discharge"
+        - "ongoing fatigue and impaired mobility required close follow-up"
+
+  lupus_nephritis:
+    display: "lupus nephritis flare"
+    terms: ["lupus nephritis", "immune-mediated kidney injury", "methylprednisolone", "proteinuria"]
+    treatments: ["intravenous methylprednisolone", "mycophenolate", "cyclophosphamide"]
+    duration_treatments: ["intravenous methylprednisolone", "cyclophosphamide"]
+    duration_days:
+      short: [3, 5]
+      standard: [7, 10]
+      prolonged: [14, 21]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with outpatient therapy after edema and weakness improved"
+        - "home physical therapy after renal function stabilized"
+      inpatient_rehab:
+        - "required inpatient rehabilitation for deconditioning after prolonged immunosuppressive therapy"
+        - "transferred to rehabilitation because weakness and edema still limited mobility"
+      persistent_deficit:
+        - "persistent fatigue and reduced mobility remained at discharge"
+        - "ongoing weakness required close nephrology follow-up and functional support"
+
+  severe_cellulitis:
+    display: "severe cellulitis"
+    terms: ["cellulitis", "soft tissue infection", "intravenous antibiotics", "limb swelling"]
+    treatments: ["cefazolin", "vancomycin", "limb elevation"]
+    duration_treatments: ["cefazolin", "vancomycin"]
+    duration_days:
+      short: [5, 7]
+      standard: [10, 14]
+      prolonged: [14, 21]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with visiting nursing after pain and swelling improved"
+        - "home therapy after safer ambulation was achieved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation because pain and weakness limited transfers"
+        - "transferred to rehabilitation for mobility recovery after prolonged infection"
+      persistent_deficit:
+        - "persistent pain and limited walking tolerance remained at discharge"
+        - "ongoing swelling and weakness continued to impair mobility"
+
+  ulcerative_colitis_flare:
+    display: "ulcerative colitis flare"
+    terms: ["ulcerative colitis flare", "bloody diarrhea", "methylprednisolone", "colitis"]
+    treatments: ["intravenous methylprednisolone", "infliximab", "bowel rest"]
+    duration_treatments: ["intravenous methylprednisolone", "infliximab"]
+    duration_days:
+      short: [3, 5]
+      standard: [6, 9]
+      prolonged: [10, 14]
+    rehab_outcomes:
+      home_rehab:
+        - "discharged home with nutritional support and outpatient therapy after strength improved"
+        - "home physical therapy after abdominal pain and diarrhea improved"
+      inpatient_rehab:
+        - "required inpatient rehabilitation because prolonged illness led to marked deconditioning"
+        - "transferred to rehabilitation as weakness still limited self-care"
+      persistent_deficit:
+        - "persistent fatigue and poor endurance remained at discharge"
+        - "ongoing weakness limited return to baseline activity"
+
 subgroups:
   age_over_75:
     axis: demographic
@@ -121,6 +381,62 @@ subgroups:
     field: comorbidity
     value: immunosuppression
     aliases: ["patients receiving immunosuppression"]
+
+  obesity:
+    axis: comorbidity
+    label: "patients with obesity"
+    field: comorbidity
+    value: obesity
+    aliases: ["obese patients", "patients with elevated body mass index"]
+
+  malignancy:
+    axis: comorbidity
+    label: "patients with active malignancy"
+    field: comorbidity
+    value: malignancy
+    aliases: ["patients undergoing cancer treatment", "patients with active cancer"]
+
+  atrial_fibrillation:
+    axis: comorbidity
+    label: "patients with atrial fibrillation"
+    field: comorbidity
+    value: atrial_fibrillation
+    aliases: ["patients with AF", "patients with chronic atrial fibrillation"]
+
+  chronic_liver_disease:
+    axis: comorbidity
+    label: "patients with chronic liver disease"
+    field: comorbidity
+    value: chronic_liver_disease
+    aliases: ["patients with cirrhosis", "patients with chronic hepatic disease"]
+
+  dementia:
+    axis: comorbidity
+    label: "patients with dementia"
+    field: comorbidity
+    value: dementia
+    aliases: ["patients with baseline cognitive impairment", "patients with major neurocognitive disorder"]
+
+  frailty:
+    axis: comorbidity
+    label: "frail patients"
+    field: comorbidity
+    value: frailty
+    aliases: ["patients with frailty", "patients with baseline frailty"]
+
+  peripheral_vascular_disease:
+    axis: comorbidity
+    label: "patients with peripheral vascular disease"
+    field: comorbidity
+    value: peripheral_vascular_disease
+    aliases: ["patients with peripheral artery disease", "patients with PAD"]
+
+  autoimmune_disease:
+    axis: comorbidity
+    label: "patients with autoimmune disease"
+    field: comorbidity
+    value: autoimmune_disease
+    aliases: ["patients with systemic autoimmune disease", "patients with chronic inflammatory autoimmune disease"]
 
 clinical_axes:
   treatment_duration:

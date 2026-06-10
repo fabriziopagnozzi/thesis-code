@@ -35,7 +35,7 @@ uv run python -m experiments.medical_dataset_gen.run_pipeline \
 ```
 
 With the default config, every chunk is generated with the local Ollama model.
-The default retrieval scope is `same_condition`, which means each query retrieves from all chunks belonging to the same clinical condition, not just its own hidden source query.
+The default retrieval scope is `query_local`, which means each query retrieves from its own generated gold and distractor pool.
 Use `--no-llm-chunks` only for deterministic smoke tests.
 
 Use SentenceTransformers instead of the default TF-IDF smoke backend:
@@ -46,7 +46,7 @@ uv run python -m experiments.medical_dataset_gen.run_pipeline \
   --embedding-backend sentence_transformers
 ```
 
-The default config is `config.yaml`; the default ontology is `ontology.yaml`.
+The default config is `_config.yaml`; the default ontology is `ontology.yaml`.
 Outputs are written under `_results/<exp>/`.
 
 ## Stages
@@ -104,6 +104,7 @@ The embedding-geometry stage writes:
 - `_figures/embedding_geometry/<query_id>/query_overview_4panel.png`
 - `_figures/embedding_geometry/<query_id>/candidate_pool_map.png`
 - `_figures/embedding_geometry/<query_id>/strategy_selection_overlay.png`
+- `_figures/embedding_geometry/<query_id>/full_strategy_selection_overlay_k<K>.png`
 - `_figures/embedding_geometry/<query_id>/query_cosine_similarity_map.png`
 - `_figures/embedding_geometry/<query_id>/query_similarity_rank.png`
 - `_figures/embedding_geometry/<query_id>/hdbscan_cluster_map.png`

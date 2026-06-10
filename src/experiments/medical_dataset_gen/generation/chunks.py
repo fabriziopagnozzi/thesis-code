@@ -21,7 +21,7 @@ from experiments.medical_dataset_gen.global_configs import (
     write_parquet,
 )
 
-_CACHE_VERSION = 5
+_CACHE_VERSION = 7
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -68,17 +68,23 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
     chunks = pl.DataFrame(rows)
     write_parquet(paths, 'chunks', chunks)
 
-    reject_df = pl.DataFrame(rejects) if rejects else pl.DataFrame(
-        schema={
-            'fact_id': pl.String,
-            'query_id': pl.String,
-            'reason': pl.String,
-            'llm_text': pl.String,
-        }
+    reject_df = (
+        pl.DataFrame(rejects)
+        if rejects
+        else pl.DataFrame(
+            schema={
+                'fact_id': pl.String,
+                'query_id': pl.String,
+                'reason': pl.String,
+                'llm_text': pl.String,
+            }
+        )
     )
     write_parquet(paths, 'generation_rejects', reject_df)
     soft_warning_count = sum(int(row.get('validation_soft_warning_count', 0)) for row in rows)
-    chunks_with_soft_warnings = sum(1 for row in rows if int(row.get('validation_soft_warning_count', 0)) > 0)
+    chunks_with_soft_warnings = sum(
+        1 for row in rows if int(row.get('validation_soft_warning_count', 0)) > 0
+    )
     if chunks_with_soft_warnings:
         print(
             f'[chunks] kept {chunks_with_soft_warnings:,} chunk(s) with soft warnings '
@@ -93,13 +99,17 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
 
 
 def _write_rejects(paths: MedicalDatasetGenPaths, rejects: list[dict[str, Any]]) -> None:
-    reject_df = pl.DataFrame(rejects) if rejects else pl.DataFrame(
-        schema={
-            'fact_id': pl.String,
-            'query_id': pl.String,
-            'reason': pl.String,
-            'llm_text': pl.String,
-        }
+    reject_df = (
+        pl.DataFrame(rejects)
+        if rejects
+        else pl.DataFrame(
+            schema={
+                'fact_id': pl.String,
+                'query_id': pl.String,
+                'reason': pl.String,
+                'llm_text': pl.String,
+            }
+        )
     )
     write_parquet(paths, 'generation_rejects', reject_df)
 
@@ -198,7 +208,9 @@ def _render_chunks_parallel_llm(
     pending: dict[Future[tuple[str, list[str]]], tuple[int, dict[str, Any]]] = {}
     next_idx = 0
     max_in_flight = max(cfg.generation.llm_workers * 2, cfg.generation.llm_workers)
-    executor = ThreadPoolExecutor(max_workers=cfg.generation.llm_workers, thread_name_prefix='mdg-llm')
+    executor = ThreadPoolExecutor(
+        max_workers=cfg.generation.llm_workers, thread_name_prefix='mdg-llm'
+    )
 
     try:
         with tqdm(total=len(facts), desc='Rendering chunks', dynamic_ncols=True) as pbar:
@@ -274,8 +286,7 @@ def _render_chunks_parallel_llm(
         executor.shutdown(wait=True, cancel_futures=True)
 
     materialized_rows = [
-        row for row in rows
-        if row is not None and str(row['query_id']) not in failed_queries
+        row for row in rows if row is not None and str(row['query_id']) not in failed_queries
     ]
     return materialized_rows, rejects, failed_queries
 
@@ -356,7 +367,9 @@ def _word_count_ok(word_count: int, min_words: int, max_words: int, tolerance: i
     return (min_words - tolerance) <= word_count <= (max_words + tolerance)
 
 
-def _word_count_errors(word_count: int, min_words: int, max_words: int, tolerance: int) -> list[str]:
+def _word_count_errors(
+    word_count: int, min_words: int, max_words: int, tolerance: int
+) -> list[str]:
     if _word_count_ok(word_count, min_words, max_words, tolerance):
         return []
     if word_count < min_words:

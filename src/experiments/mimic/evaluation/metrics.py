@@ -84,7 +84,7 @@ def aspect_recall_at_k(
 ) -> float:
     """
     Fraction of facets covered by at least one chunk in the top-k.
-    AR@k = |{f ∈ F : top_k(S) ∩ G_f ≠ ∅}| / |F|
+    ARecall@k = |{f ∈ F : top_k(S) ∩ G_f ≠ ∅}| / |F|
     """
     if not facets:
         return 0.0
@@ -99,7 +99,7 @@ def coverage_auc(
     facets: dict[str, set[str]],
     k_values: list[int],
 ) -> float:
-    """Area under the AR@k curve (trapezoidal), normalized to [0, 1].
+    """Area under the ARecall@k curve (trapezoidal), normalized to [0, 1].
     Args:
         ranked_chunk_ids:
         facets: mapping from facet label to gold chunk ID set.

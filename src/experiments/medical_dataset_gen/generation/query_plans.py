@@ -31,60 +31,101 @@ def run_make_query_plans(
     rng = Random(cfg.global_.seed)
     rows: list[dict[str, Any]] = []
     plan_idx = 0
-    for condition_id, condition in conditions:
-        for (subgroup_a_id, subgroup_a), (subgroup_b_id, subgroup_b) in pairs:
-            for query_type in cfg.generation.query_types:
-                if len(rows) >= cfg.global_.n_queries:
-                    break
-                plan_idx += 1
-                query_id = f'q{plan_idx:05d}'
-                dominant_slot = (plan_idx - 1) % 4
-                facets = _facets_for_plan(
-                    query_id=query_id,
-                    condition_id=condition_id,
-                    condition_display=condition['display'],
-                    subgroup_a_id=subgroup_a_id,
-                    subgroup_a=subgroup_a,
-                    subgroup_b_id=subgroup_b_id,
-                    subgroup_b=subgroup_b,
-                    dominant_slot=dominant_slot,
-                    dominant_size=cfg.generation.gold_chunks_dominant,
-                    complementary_size=cfg.generation.gold_chunks_complementary,
-                )
-                dominant_facet_id = facets[dominant_slot]['facet_id']
-                logical_form = {
-                    'type': query_type,
-                    'condition': condition_id,
-                    'subgroups': [subgroup_a_id, subgroup_b_id],
-                    'axes': ['treatment_duration', 'rehab_outcome'],
-                    'facets': [f['facet_id'] for f in facets],
-                    'dominant_facet_id': dominant_facet_id,
-                }
-                rows.append({
-                    'query_id': query_id,
-                    'plan_seed': rng.randint(0, 2**31 - 1),
-                    'split': _split_for_index(plan_idx),
-                    'query_type': query_type,
-                    'template_id': query_type,
-                    'condition_id': condition_id,
-                    'condition_display': condition['display'],
-                    **_subgroup_fields('subgroup_a', subgroup_a_id, subgroup_a),
-                    **_subgroup_fields('subgroup_b', subgroup_b_id, subgroup_b),
-                    'dominant_facet_id': dominant_facet_id,
-                    'n_facets': len(facets),
-                    'gold_chunks_total': sum(f['target_gold_chunks'] for f in facets),
-                    'distractor_chunks': cfg.generation.distractors_per_query,
-                    'facets_json': json_dumps(facets),
-                    'logical_form_json': json_dumps(logical_form),
-                })
+    per_condition_specs = [
+        _plan_specs_for_condition(condition_id, condition, pairs, cfg.generation.query_types)
+        for condition_id, condition in conditions
+    ]
+    offsets = [0] * len(per_condition_specs)
+    while len(rows) < cfg.global_.n_queries:
+        emitted = False
+        for condition_idx, specs in enumerate(per_condition_specs):
+            offset = offsets[condition_idx]
+            if offset >= len(specs):
+                continue
+            spec = specs[offset]
+            offsets[condition_idx] += 1
+            emitted = True
+            plan_idx += 1
+            rows.append(_materialize_plan_row(cfg, rng, plan_idx, spec))
             if len(rows) >= cfg.global_.n_queries:
                 break
-        if len(rows) >= cfg.global_.n_queries:
+        if not emitted:
             break
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'query_plans', df)
     return df
+
+
+def _plan_specs_for_condition(
+    condition_id: str,
+    condition: dict[str, Any],
+    pairs: list[tuple[tuple[str, dict[str, Any]], tuple[str, dict[str, Any]]]],
+    query_types: list[str],
+) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for (subgroup_a_id, subgroup_a), (subgroup_b_id, subgroup_b) in pairs:
+        for query_type in query_types:
+            specs.append(
+                {
+                    'query_type': query_type,
+                    'condition_id': condition_id,
+                    'condition_display': condition['display'],
+                    'subgroup_a_id': subgroup_a_id,
+                    'subgroup_a': subgroup_a,
+                    'subgroup_b_id': subgroup_b_id,
+                    'subgroup_b': subgroup_b,
+                }
+            )
+    return specs
+
+
+def _materialize_plan_row(
+    cfg: ExperimentCfg,
+    rng: Random,
+    plan_idx: int,
+    spec: dict[str, Any],
+) -> dict[str, Any]:
+    query_id = f'q{plan_idx:05d}'
+    dominant_slot = (plan_idx - 1) % 4
+    facets = _facets_for_plan(
+        query_id=query_id,
+        condition_id=spec['condition_id'],
+        condition_display=spec['condition_display'],
+        subgroup_a_id=spec['subgroup_a_id'],
+        subgroup_a=spec['subgroup_a'],
+        subgroup_b_id=spec['subgroup_b_id'],
+        subgroup_b=spec['subgroup_b'],
+        dominant_slot=dominant_slot,
+        dominant_size=cfg.generation.gold_chunks_dominant,
+        complementary_size=cfg.generation.gold_chunks_complementary,
+    )
+    dominant_facet_id = facets[dominant_slot]['facet_id']
+    logical_form = {
+        'type': spec['query_type'],
+        'condition': spec['condition_id'],
+        'subgroups': [spec['subgroup_a_id'], spec['subgroup_b_id']],
+        'axes': ['treatment_duration', 'rehab_outcome'],
+        'facets': [facet['facet_id'] for facet in facets],
+        'dominant_facet_id': dominant_facet_id,
+    }
+    return {
+        'query_id': query_id,
+        'plan_seed': rng.randint(0, 2**31 - 1),
+        'split': _split_for_index(plan_idx),
+        'query_type': spec['query_type'],
+        'template_id': spec['query_type'],
+        'condition_id': spec['condition_id'],
+        'condition_display': spec['condition_display'],
+        **_subgroup_fields('subgroup_a', spec['subgroup_a_id'], spec['subgroup_a']),
+        **_subgroup_fields('subgroup_b', spec['subgroup_b_id'], spec['subgroup_b']),
+        'dominant_facet_id': dominant_facet_id,
+        'n_facets': len(facets),
+        'gold_chunks_total': sum(facet['target_gold_chunks'] for facet in facets),
+        'distractor_chunks': cfg.generation.distractors_per_query,
+        'facets_json': json_dumps(facets),
+        'logical_form_json': json_dumps(logical_form),
+    }
 
 
 def _facets_for_plan(
@@ -99,30 +140,41 @@ def _facets_for_plan(
     dominant_size: int,
     complementary_size: int,
 ) -> list[dict[str, Any]]:
+    subgroup_a_duration, subgroup_b_duration = (
+        ('short', 'prolonged') if dominant_slot in {0, 1} else ('prolonged', 'short')
+    )
+    subgroup_a_rehab, subgroup_b_rehab = (
+        ('home_rehab', 'inpatient_rehab')
+        if dominant_slot in {0, 2}
+        else ('persistent_deficit', 'home_rehab')
+    )
     raw_facets = [
-        (subgroup_a_id, subgroup_a, 'treatment_duration'),
-        (subgroup_a_id, subgroup_a, 'rehab_outcome'),
-        (subgroup_b_id, subgroup_b, 'treatment_duration'),
-        (subgroup_b_id, subgroup_b, 'rehab_outcome'),
+        (subgroup_a_id, subgroup_a, 'treatment_duration', subgroup_a_duration),
+        (subgroup_a_id, subgroup_a, 'rehab_outcome', subgroup_a_rehab),
+        (subgroup_b_id, subgroup_b, 'treatment_duration', subgroup_b_duration),
+        (subgroup_b_id, subgroup_b, 'rehab_outcome', subgroup_b_rehab),
     ]
     facets = []
-    for idx, (subgroup_id, subgroup, axis) in enumerate(raw_facets):
+    for idx, (subgroup_id, subgroup, axis, value_bin) in enumerate(raw_facets):
         facet_id = f'{query_id}_f{idx + 1}'
         is_dominant = idx == dominant_slot
-        facets.append({
-            'facet_id': facet_id,
-            'condition_id': condition_id,
-            'condition_display': condition_display,
-            'subgroup_id': subgroup_id,
-            'subgroup_label': subgroup['label'],
-            'subgroup_axis': subgroup['axis'],
-            'subgroup_field': subgroup['field'],
-            'subgroup_value': subgroup['value'],
-            'axis': axis,
-            'cluster_id': f'{query_id}_c{idx + 1}',
-            'cluster_role': 'dominant_gold' if is_dominant else 'complementary_gold',
-            'target_gold_chunks': dominant_size if is_dominant else complementary_size,
-        })
+        facets.append(
+            {
+                'facet_id': facet_id,
+                'condition_id': condition_id,
+                'condition_display': condition_display,
+                'subgroup_id': subgroup_id,
+                'subgroup_label': subgroup['label'],
+                'subgroup_axis': subgroup['axis'],
+                'subgroup_field': subgroup['field'],
+                'subgroup_value': subgroup['value'],
+                'axis': axis,
+                'value_bin': value_bin,
+                'cluster_id': f'{query_id}_c{idx + 1}',
+                'cluster_role': 'dominant_gold' if is_dominant else 'complementary_gold',
+                'target_gold_chunks': dominant_size if is_dominant else complementary_size,
+            }
+        )
     return facets
 
 

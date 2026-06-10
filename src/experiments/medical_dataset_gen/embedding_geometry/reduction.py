@@ -13,11 +13,15 @@ def reduce_for_plot(
         coords[:, 0] = np.arange(len(vectors), dtype=np.float32)
         return coords, 'trivial'
 
-    features = pca_preprocess(
-        vectors,
-        cfg.embedding_geometry.pca_dims,
-        cfg.embedding_geometry.random_state,
-    )
+    if cfg.embedding_geometry.pca_dims is None:
+        features = vectors.astype(np.float32)
+    else:
+        features = pca_preprocess(
+            vectors,
+            cfg.embedding_geometry.pca_dims,
+            cfg.embedding_geometry.random_state,
+        )
+
     if cfg.embedding_geometry.reduction == 'umap':
         try:
             import umap
@@ -39,6 +43,9 @@ def reduce_for_plot(
 
 
 def cluster_features(cfg: ExperimentCfg, vectors: NDArray[np.float32]) -> NDArray[np.float32]:
+    if cfg.embedding_geometry.pca_dims is None:
+        return vectors.astype(np.float32)
+
     return pca_preprocess(
         vectors,
         cfg.embedding_geometry.pca_dims,
@@ -48,17 +55,21 @@ def cluster_features(cfg: ExperimentCfg, vectors: NDArray[np.float32]) -> NDArra
 
 def pca_preprocess(
     vectors: NDArray[np.float32],
-    pca_dims: int | None,
+    pca_dims: int,
     random_state: int,
 ) -> NDArray[np.float32]:
-    if pca_dims is None or pca_dims <= 0:
+    if pca_dims <= 0:
         return vectors.astype(np.float32)
     if vectors.shape[1] <= pca_dims or len(vectors) <= 3:
         return vectors.astype(np.float32)
     from sklearn.decomposition import PCA
 
     n_components = min(pca_dims, vectors.shape[1], len(vectors) - 1)
-    return PCA(n_components=n_components, random_state=random_state).fit_transform(vectors).astype(np.float32)
+    return (
+        PCA(n_components=n_components, random_state=random_state)
+        .fit_transform(vectors)
+        .astype(np.float32)
+    )
 
 
 def pca_2d(vectors: NDArray[np.float32], random_state: int) -> NDArray[np.float32]:
@@ -74,7 +85,9 @@ def pca_2d(vectors: NDArray[np.float32], random_state: int) -> NDArray[np.float3
 
 
 def hdbscan_labels(cfg: ExperimentCfg, features: NDArray[np.float32]) -> NDArray[np.int32]:
-    min_cluster_size = min(cfg.embedding_geometry.hdbscan_min_cluster_size, max(2, len(features) // 2))
+    min_cluster_size = min(
+        cfg.embedding_geometry.hdbscan_min_cluster_size, max(2, len(features) // 2)
+    )
     if len(features) < max(4, min_cluster_size):
         return np.full(len(features), -1, dtype=np.int32)
     try:

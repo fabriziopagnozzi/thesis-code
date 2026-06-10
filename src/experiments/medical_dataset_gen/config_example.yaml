@@ -1,7 +1,7 @@
 # Example configuration for the synthetic medical RAG benchmark.
 #
 # Copy this file to a custom YAML and pass it with:
-#   uv run python -m experiments.medical_dataset_gen.run_pipeline --config path/to/config.yaml
+#   uv run python -m experiments.medical_dataset_gen.run_pipeline --config path/to/_config.yaml
 #
 # CLI flags can override the most common fields:
 #   --exp
@@ -49,9 +49,11 @@ generation:
   llm_num_ctx: 4096 # Keep this modest for chunk generation; VRAM scales with context and parallelism.
 
 embeddings:
-  backend: tfidf
+  backend: sentence_transformers
+  # BAAI/bge-m3 | Qwen/Qwen3-Embedding-8B | multi-qa-mpnet-base-cos-v1
   model_name: multi-qa-mpnet-base-cos-v1
-  batch_size: 64
+
+  batch_size: 8
   device: cuda
   query_prompt: null # Optional query prompt passed to the Embedder for models that require one.
   normalize: true
@@ -63,10 +65,10 @@ embeddings:
 retrieval:
   strategies: [top_k, mmr, fac_loc]
   # Candidate-pool scope before top-N semantic retrieval:
-  # - query_local: only chunks generated for the same hidden query; useful for debugging only.
-  # - same_condition: all chunks from the same condition across different subgroup queries; this is the main benchmark setting.
-  # - full_corpus: all chunks across all conditions; use as a harder stress test once same_condition is working.
-  pool_scope: same_condition # "query_local" | "same_condition" | "full_corpus"
+  # - query_local: only chunks generated for the same hidden query plan. This is the current benchmark focus.
+  # - same_condition: all chunks from the same condition across different subgroup queries; harder broad-pool diagnostic.
+  # - full_corpus: all chunks across all conditions; hardest retrieval stress test.
+  pool_scope: query_local # "query_local" | "same_condition" | "full_corpus"
   candidate_pool_n: 300 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
   k_values: [5, 10, 20]
   lambda_values: [0.3, 0.5, 0.7] # Low lambda favors diversity/coverage; high lambda favors query similarity.

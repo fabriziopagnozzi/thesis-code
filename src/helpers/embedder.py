@@ -49,6 +49,17 @@ class Embedder:
         )
         return np.asarray(emb, dtype=np.float32)
 
+    def embed_queries(self, query_texts: list[str], normalize: bool = True) -> NDArray[np.float32]:
+        embs = self._model.encode_query(
+            query_texts,
+            batch_size=self.batch_size,
+            normalize_embeddings=normalize,
+            show_progress_bar=True,
+            convert_to_numpy=True,
+            prompt=self.query_prompt,
+        )
+        return np.asarray(embs, dtype=np.float32)
+
     def release(self) -> None:
         import gc
 

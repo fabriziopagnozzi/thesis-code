@@ -3,7 +3,6 @@ import json
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
-from tqdm import tqdm
 
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
@@ -115,12 +114,7 @@ def _embed_sentence_transformers(
     )
     try:
         chunk_vectors = embedder.embed_docs(chunk_texts, normalize=cfg.embeddings.normalize)
-        query_vectors = np.vstack(
-            [
-                embedder.embed_query(text, normalize=cfg.embeddings.normalize)
-                for text in tqdm(query_texts, desc='Embedding queries', dynamic_ncols=True)
-            ]
-        ).astype(np.float32)
+        query_vectors = embedder.embed_queries(query_texts, normalize=cfg.embeddings.normalize)
         meta = {
             'backend': 'sentence_transformers',
             'model_name': cfg.embeddings.model_name,
@@ -145,4 +139,3 @@ if __name__ == '__main__':
     setup_logging(paths)
     dump_effective_config(cfg, paths)
     run_embed(cfg, paths)
-

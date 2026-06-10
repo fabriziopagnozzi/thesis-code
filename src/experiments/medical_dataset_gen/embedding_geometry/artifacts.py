@@ -18,8 +18,26 @@ from experiments.medical_dataset_gen.retrieval.utils import (
 )
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
-_BEST_SORT = ['FC', 'WFC', 'GP', 'DR']
-_BEST_DESC = [True, True, True, False]
+_BEST_SORT = [
+    'FacetCoverage@k',
+    'MeanFacetRecall@k',
+    'alpha-nDCG@k',
+    'Precision@k',
+    'DistractorRate',
+    'FC',
+    'WFC',
+    'alpha_nDCG',
+    'GP',
+    'DR',
+]
+_BEST_DESC = [True, True, True, True, False, True, True, True, True, False]
+
+_DISTRACTOR_LABELS = {
+    'same_condition_wrong_subgroup': 'soft distractor: same condition, wrong subgroup',
+    'same_subgroup_wrong_condition': 'hard distractor: wrong condition, same subgroup',
+    'same_axis_wrong_condition': 'hard distractor: wrong condition, same answer axis',
+    'hard_distractor': 'hard distractor',
+}
 
 
 def choose_query_ids(
@@ -70,8 +88,7 @@ def choose_query_ids(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base
-        .with_columns(
+        base.with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -89,7 +106,13 @@ def choose_query_ids(
             ).alias('selection_score')
         )
         .sort(
-            ['selection_score', 'passes_filter', 'fac_loc_fc_gain', 'topk_dominant_count', 'query_id'],
+            [
+                'selection_score',
+                'passes_filter',
+                'fac_loc_fc_gain',
+                'topk_dominant_count',
+                'query_id',
+            ],
             descending=[True, True, True, True, False],
         )
     )
@@ -103,10 +126,8 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
     if k not in available_k:
         k = available_k[len(available_k) // 2]
 
-    topk = (
-        eval_results
-        .filter((pl.col('strategy') == 'top_k') & (pl.col('k') == k))
-        .select('query_id', pl.col('facet_coverage').alias('topk_fc'))
+    topk = eval_results.filter((pl.col('strategy') == 'top_k') & (pl.col('k') == k)).select(
+        'query_id', pl.col('facet_coverage').alias('topk_fc')
     )
     rows = [topk]
     for strategy in ['fac_loc', 'mmr']:
@@ -114,15 +135,16 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
         if sub.height == 0:
             continue
         best = (
-            sub
-            .group_by('query_id', 'lam')
+            sub.group_by('query_id', 'lam')
             .agg(
                 pl.col('facet_coverage').mean().alias('fc'),
                 pl.col('weighted_facet_coverage').mean().alias('wfc'),
                 pl.col('gold_precision').mean().alias('gp'),
                 pl.col('distractor_rate').mean().alias('dr'),
             )
-            .sort(['query_id', 'fc', 'wfc', 'gp', 'dr'], descending=[False, True, True, True, False])
+            .sort(
+                ['query_id', 'fc', 'wfc', 'gp', 'dr'], descending=[False, True, True, True, False]
+            )
             .group_by('query_id')
             .first()
             .select('query_id', pl.col('fc').alias(f'{strategy}_fc'))
@@ -137,7 +159,9 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
     if 'mmr_fc' not in joined.columns:
         joined = joined.with_columns(pl.lit(None).alias('mmr_fc'))
     return joined.with_columns(
-        (pl.col('fac_loc_fc').fill_null(pl.col('topk_fc')) - pl.col('topk_fc')).alias('fac_loc_fc_gain'),
+        (pl.col('fac_loc_fc').fill_null(pl.col('topk_fc')) - pl.col('topk_fc')).alias(
+            'fac_loc_fc_gain'
+        ),
         (pl.col('mmr_fc').fill_null(pl.col('topk_fc')) - pl.col('topk_fc')).alias('mmr_fc_gain'),
     ).select('query_id', 'fac_loc_fc_gain', 'mmr_fc_gain')
 
@@ -178,8 +202,11 @@ def build_query_artifact(
     sim_matrix = candidate_vectors @ candidate_vectors.T
     k = min(cfg.embedding_geometry.plot_k, len(topn_global))
     candidate_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
-    labels, label_ids, roles, is_gold = candidate_labels(qid, candidate_chunk_ids, maps['chunk_by_id'], query)
-    selections = strategy_selections(cfg, eval_stats, topn_sims, sim_matrix, k)
+    labels, label_ids, roles, is_gold = candidate_labels(
+        qid, candidate_chunk_ids, maps['chunk_by_id'], query
+    )
+    selection_variants = strategy_selection_variants(cfg, topn_sims, sim_matrix, k)
+    selections = strategy_selections(cfg, eval_stats, selection_variants, k)
     coords, reduction_method = reduce_for_plot(
         cfg,
         np.vstack([candidate_vectors, query_vector[None, :]]).astype(np.float32),
@@ -205,6 +232,9 @@ def build_query_artifact(
         'facets_by_id': facet_label_map(query),
         'cluster_labels': cluster_labels,
         'selections': selections,
+        'selection_variants': selection_variants,
+        'lambda_values': [float(lam) for lam in cfg.retrieval.lambda_values],
+        'mmr_window': cfg.retrieval.mmr_window,
         'k': k,
         'qrels': qrels.filter(pl.col('query_id') == qid),
         'chunk_by_id': maps['chunk_by_id'],
@@ -227,12 +257,13 @@ def candidate_labels(
         roles.append(str(row.get('cluster_role') or 'unknown'))
         gold = bool(row.get('is_gold'))
         gold_flags.append(gold)
-        row_condition_id = row.get('condition_id')
-        query_condition_id = query.get('condition_id')
-        if row_condition_id != query_condition_id:
-            label_ids.append('other_condition')
-            labels.append('other conditions')
-        elif row.get('source_query_id') != qid:
+        if row.get('source_query_id') != qid:
+            row_condition_id = row.get('condition_id')
+            query_condition_id = query.get('condition_id')
+            if row_condition_id != query_condition_id:
+                label_ids.append('other_condition')
+                labels.append('off-query wrong-condition chunks')
+                continue
             label_ids.append('other_same_condition_query')
             labels.append('other same-condition queries')
         elif gold and row.get('facet_id'):
@@ -242,8 +273,12 @@ def candidate_labels(
         else:
             dtype = str(row.get('distractor_type') or 'hard_distractor')
             label_ids.append(dtype)
-            labels.append(dtype.replace('_', ' '))
+            labels.append(distractor_label(dtype))
     return labels, label_ids, roles, gold_flags
+
+
+def distractor_label(distractor_type: str) -> str:
+    return _DISTRACTOR_LABELS.get(distractor_type, distractor_type.replace('_', ' '))
 
 
 def facet_label_map(query: dict[str, Any]) -> dict[str, str]:
@@ -259,25 +294,78 @@ def facet_label_map(query: dict[str, Any]) -> dict[str, str]:
 def strategy_selections(
     cfg: ExperimentCfg,
     eval_stats: pl.DataFrame,
-    sim_to_query: NDArray[np.float32],
-    sim_matrix: NDArray[np.float32],
+    selection_variants: dict[str, list[dict[str, Any]]],
     k: int,
 ) -> dict[str, dict[str, Any]]:
     selections = {}
-    for strategy in _STRATEGY_ORDER:
+    if 'top_k' in cfg.retrieval.strategies and 'top_k' in selection_variants:
+        selections['top_k'] = selection_variants['top_k'][0]
+    for strategy in ['mmr', 'fac_loc']:
         if strategy not in cfg.retrieval.strategies:
             continue
-        lam = None if strategy == 'top_k' else best_lambda(eval_stats, strategy, k, cfg)
-        local = select_indices(
-            strategy=strategy,
-            sim_to_query=sim_to_query,
-            sim_matrix=sim_matrix,
-            k=k,
-            lam=lam,
-            mmr_window=cfg.retrieval.mmr_window,
-        )
+        variants = selection_variants.get(strategy, [])
+        if not variants:
+            continue
+        lam = best_lambda(eval_stats, strategy, k, cfg)
+        local = _selection_for_lambda(variants, lam)
+        if local is None:
+            local = variants[0]['local_indices']
         selections[strategy] = {'local_indices': local, 'lam': lam}
     return selections
+
+
+def strategy_selection_variants(
+    cfg: ExperimentCfg,
+    sim_to_query: NDArray[np.float32],
+    sim_matrix: NDArray[np.float32],
+    k: int,
+) -> dict[str, list[dict[str, Any]]]:
+    variants: dict[str, list[dict[str, Any]]] = {
+        'top_k': [
+            {
+                'local_indices': select_indices(
+                    strategy='top_k',
+                    sim_to_query=sim_to_query,
+                    sim_matrix=sim_matrix,
+                    k=k,
+                    lam=None,
+                    mmr_window=cfg.retrieval.mmr_window,
+                ),
+                'lam': None,
+            }
+        ]
+    }
+    for strategy in ['mmr', 'fac_loc']:
+        if strategy not in cfg.retrieval.strategies:
+            continue
+        variants[strategy] = [
+            {
+                'local_indices': select_indices(
+                    strategy=strategy,
+                    sim_to_query=sim_to_query,
+                    sim_matrix=sim_matrix,
+                    k=k,
+                    lam=float(lam),
+                    mmr_window=cfg.retrieval.mmr_window,
+                ),
+                'lam': float(lam),
+            }
+            for lam in cfg.retrieval.lambda_values
+        ]
+    return variants
+
+
+def _selection_for_lambda(
+    variants: list[dict[str, Any]],
+    lam: float,
+) -> NDArray[np.intp] | None:
+    for variant in variants:
+        variant_lam = variant.get('lam')
+        if variant_lam is None:
+            continue
+        if abs(float(variant_lam) - lam) < 1e-12:
+            return variant['local_indices']
+    return None
 
 
 def best_lambda(
@@ -289,9 +377,22 @@ def best_lambda(
     if eval_stats.height > 0 and strategy in eval_stats['strategy'].unique().to_list():
         sub = eval_stats.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
         if sub.height > 0:
-            return float(sub.sort(_BEST_SORT, descending=_BEST_DESC)['lam'][0])
+            sort_cols, desc = _available_sort(sub)
+            return float(sub.sort(sort_cols, descending=desc)['lam'][0])
+    if not cfg.retrieval.lambda_values:
+        return 0.5
     if strategy == 'fac_loc':
         return min(cfg.retrieval.lambda_values)
     if strategy == 'mmr':
         return max(cfg.retrieval.lambda_values)
     return 0.5
+
+
+def _available_sort(df: pl.DataFrame) -> tuple[list[str], list[bool]]:
+    pairs = [
+        (col, desc) for col, desc in zip(_BEST_SORT, _BEST_DESC, strict=True) if col in df.columns
+    ]
+    if not pairs:
+        return ['lam'], [False]
+    cols, desc = zip(*pairs, strict=True)
+    return list(cols), list(desc)
