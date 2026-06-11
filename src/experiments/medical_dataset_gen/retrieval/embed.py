@@ -12,7 +12,9 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 
 
-def run_embed(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+def run_embed(
+    cfg: ExperimentCfg, paths: MedicalDatasetGenPaths
+) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
     chunks = read_parquet(paths, 'chunks')
     queries = read_parquet(paths, 'queries')
 
@@ -22,7 +24,9 @@ def run_embed(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> tuple[NDArra
     if cfg.embeddings.backend == 'tfidf':
         chunk_vectors, query_vectors, meta = _embed_tfidf(cfg, chunk_texts, query_texts)
     else:
-        chunk_vectors, query_vectors, meta = _embed_sentence_transformers(cfg, chunk_texts, query_texts)
+        chunk_vectors, query_vectors, meta = _embed_sentence_transformers(
+            cfg, chunk_texts, query_texts
+        )
 
     np.savez_compressed(
         paths.embeddings_npz_path,

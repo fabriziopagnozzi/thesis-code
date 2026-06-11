@@ -1,3 +1,11 @@
+"""Compute per-query diagnostics for the benchmark's embedding geometry.
+
+This module exists to measure whether the generated corpus has the expected
+facet separation, redundancy, and distractor structure. It uses simple counts
+and similarity summaries so geometry checks stay fast and directly tied to the
+synthetic design.
+"""
+
 from collections import Counter
 from typing import Any
 

@@ -1,3 +1,5 @@
+"""Load and query the benchmark ontology used to build synthetic medical data."""
+
 from pathlib import Path
 from typing import Any
 
@@ -41,14 +43,20 @@ def other_subgroups(
     ontology: dict[str, Any],
     excluded_ids: set[str],
 ) -> list[tuple[str, dict]]:
-    return [(sid, subgroup) for sid, subgroup in ontology['subgroups'].items() if sid not in excluded_ids]
+    return [
+        (sid, subgroup)
+        for sid, subgroup in ontology['subgroups'].items()
+        if sid not in excluded_ids
+    ]
 
 
 def other_conditions(
     ontology: dict[str, Any],
     excluded_id: str,
 ) -> list[tuple[str, dict]]:
-    return [(cid, condition) for cid, condition in ontology['conditions'].items() if cid != excluded_id]
+    return [
+        (cid, condition) for cid, condition in ontology['conditions'].items() if cid != excluded_id
+    ]
 
 
 def axis_ids(ontology: dict[str, Any]) -> list[str]:
@@ -63,4 +71,3 @@ def _ontology_path(cfg: ExperimentCfg) -> Path:
     if cfg.generation.ontology_path:
         return Path(cfg.generation.ontology_path)
     return MedicalDatasetGenPaths.default_ontology_path
-

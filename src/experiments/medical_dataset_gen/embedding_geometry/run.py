@@ -1,3 +1,11 @@
+"""Run embedding-geometry analysis and persist its outputs.
+
+This module exists to connect the geometry diagnostics with the experiment
+artifacts that downstream plots and evaluation checks consume. It uses the same
+parquet-backed tables as the rest of the pipeline so the analysis remains
+reproducible and easy to inspect.
+"""
+
 from typing import Any
 
 import polars as pl

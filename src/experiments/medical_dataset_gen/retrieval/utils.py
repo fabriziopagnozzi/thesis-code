@@ -1,3 +1,11 @@
+"""Shared retrieval helpers for the synthetic benchmark.
+
+This module exists to keep candidate-pool construction, similarity ranking, and
+selection logic reusable across geometry filtering and evaluation. It uses
+small index maps and existing helper algorithms for top-k, MMR, and
+facility-location selection so the retrieval stages stay consistent.
+"""
+
 from collections import defaultdict
 from typing import Any, Literal
 
@@ -94,8 +102,8 @@ def select_indices(
         )
     if strategy == 'fac_loc':
         return fac_loc(
-            query_sim_scores=sim_to_query,
-            dataset_sim_matrix=sim_matrix,
+            sim_to_query=sim_to_query,
+            sim_matrix=sim_matrix,
             k=k,
             lam=0.5 if lam is None else lam,
         )

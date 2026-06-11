@@ -1,3 +1,12 @@
+"""Filter retrieval candidates by embedding geometry before evaluation.
+
+This module exists to measure whether the synthetic benchmark produces the
+intended query-local geometry, including facet coverage and dominance effects,
+before retrieval metrics are computed. It uses nearest-neighbor scoring,
+pool-scope filtering, and per-query diagnostic aggregation to decide which
+queries are valid for later evaluation.
+"""
+
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -31,7 +40,9 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
 
     facet_gold = _facet_gold_map(qrels)
     rows = []
-    for query in tqdm(queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True):
+    for query in tqdm(
+        queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True
+    ):
         qid = query['query_id']
         qidx = maps['query_id_to_idx'][qid]
         candidate_idx = candidate_pool_indices(
@@ -55,8 +66,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         if not query_facets:
             continue
         facets_present = {
-            facet_id: bool(topn_set & set(gold_ids))
-            for facet_id, gold_ids in query_facets.items()
+            facet_id: bool(topn_set & set(gold_ids)) for facet_id, gold_ids in query_facets.items()
         }
         n_facets_present = sum(facets_present.values())
 
@@ -66,9 +76,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             k=cfg.geometry.topk_dominance_k,
         )
         n_distractors = sum(
-            1
-            for chunk_id in topn_chunk_ids
-            if not bool(maps['chunk_by_id'][chunk_id]['is_gold'])
+            1 for chunk_id in topn_chunk_ids if not bool(maps['chunk_by_id'][chunk_id]['is_gold'])
         )
         in_sim, cross_sim = _facet_separation(
             qid=qid,
@@ -91,21 +99,24 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             and n_distractors >= cfg.geometry.min_distractors_in_pool
         )
 
-        rows.append({
-            'query_id': qid,
-            'pool_scope': cfg.retrieval.pool_scope,
-            'pool_size': len(topn_global),
-            'n_facets': len(query_facets),
-            'n_facets_present': n_facets_present,
-            'all_facets_present': n_facets_present == len(query_facets),
-            'topk_dominant_count': topk_dominant,
-            'n_distractors_in_pool': n_distractors,
-            'mean_in_facet_similarity': in_sim,
-            'mean_cross_facet_similarity': cross_sim,
-            'in_minus_cross_similarity': in_sim - cross_sim,
-            'passes_filter': passes,
-            'facets_present_json': _json_bool_map(facets_present),
-        } | diagnostics)
+        rows.append(
+            {
+                'query_id': qid,
+                'pool_scope': cfg.retrieval.pool_scope,
+                'pool_size': len(topn_global),
+                'n_facets': len(query_facets),
+                'n_facets_present': n_facets_present,
+                'all_facets_present': n_facets_present == len(query_facets),
+                'topk_dominant_count': topk_dominant,
+                'n_distractors_in_pool': n_distractors,
+                'mean_in_facet_similarity': in_sim,
+                'mean_cross_facet_similarity': cross_sim,
+                'in_minus_cross_similarity': in_sim - cross_sim,
+                'passes_filter': passes,
+                'facets_present_json': _json_bool_map(facets_present),
+            }
+            | diagnostics
+        )
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)

@@ -869,7 +869,8 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     if topk.height == 0:
         return int(results_df['k'].max())  # type: ignore[arg-type]
     ranked = (
-        topk.group_by('k')
+        topk
+        .group_by('k')
         .agg(
             pl.col('facet_coverage').median().alias('med_fc'),
         )
@@ -883,7 +884,8 @@ def _best_result_slice(results_df: pl.DataFrame, strategy: str, k: int) -> pl.Da
     if strategy == 'top_k' or strat_df.height == 0:
         return strat_df
     ranked = (
-        strat_df.group_by('lam')
+        strat_df
+        .group_by('lam')
         .agg(
             pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
             pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k')

@@ -1,3 +1,11 @@
+"""Generate the hidden clinical facts that support each benchmark query.
+
+This module exists to populate each query plan with gold evidence chunks and
+hard distractors before any natural-language rendering happens. It uses seeded
+sampling over the ontology plus per-facet cluster construction so the benchmark
+has redundant positives and plausible negatives by design.
+"""
+
 import json
 from random import Random
 from typing import Any
@@ -183,9 +191,11 @@ def _base_fact(
     fact_id = f'{query_id}_{"g" if is_gold else "d"}_{len(cluster_id)}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     admission_id = f'adm_{query_id}_{cluster_id}_{local_idx:03d}'
     patient_id = f'pat_{query_id}_{cluster_id}_{local_idx // 2:03d}'
-    note_style = rng.choice(
-        ['brief_hospital_course', 'brief_hospital_course', 'discharge_diagnosis']
-    )
+    note_style = rng.choice([
+        'brief_hospital_course',
+        'brief_hospital_course',
+        'discharge_diagnosis',
+    ])
     patient_age = _patient_age(subgroup_id, rng)
     patient_sex = rng.choice(['female', 'male'])
     clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, rng)
@@ -246,7 +256,7 @@ def _axis_values(
 ) -> tuple[str, int | None, str | None, str | None]:
     condition = ontology['conditions'][condition_id]
     if axis == 'treatment_duration':
-        bins = list(condition['duration_days'])
+        bins: list[str] = list(condition['duration_days'])
         value_bin = (
             target_value_bin
             if target_value_bin in condition['duration_days']

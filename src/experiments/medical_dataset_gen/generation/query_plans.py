@@ -1,3 +1,11 @@
+"""Build the hidden multi-aspect query plans for the synthetic benchmark.
+
+This module exists to define the benchmark geometry before any text is
+rendered, so each query has explicit facets, conditions, and subgroup
+comparisons. It uses ontology-driven enumeration, seeded randomness, and
+balanced plan materialization to keep the query set controlled and reproducible.
+"""
+
 from random import Random
 from typing import Any
 
@@ -66,17 +74,15 @@ def _plan_specs_for_condition(
     specs: list[dict[str, Any]] = []
     for (subgroup_a_id, subgroup_a), (subgroup_b_id, subgroup_b) in pairs:
         for query_type in query_types:
-            specs.append(
-                {
-                    'query_type': query_type,
-                    'condition_id': condition_id,
-                    'condition_display': condition['display'],
-                    'subgroup_a_id': subgroup_a_id,
-                    'subgroup_a': subgroup_a,
-                    'subgroup_b_id': subgroup_b_id,
-                    'subgroup_b': subgroup_b,
-                }
-            )
+            specs.append({
+                'query_type': query_type,
+                'condition_id': condition_id,
+                'condition_display': condition['display'],
+                'subgroup_a_id': subgroup_a_id,
+                'subgroup_a': subgroup_a,
+                'subgroup_b_id': subgroup_b_id,
+                'subgroup_b': subgroup_b,
+            })
     return specs
 
 
@@ -158,23 +164,21 @@ def _facets_for_plan(
     for idx, (subgroup_id, subgroup, axis, value_bin) in enumerate(raw_facets):
         facet_id = f'{query_id}_f{idx + 1}'
         is_dominant = idx == dominant_slot
-        facets.append(
-            {
-                'facet_id': facet_id,
-                'condition_id': condition_id,
-                'condition_display': condition_display,
-                'subgroup_id': subgroup_id,
-                'subgroup_label': subgroup['label'],
-                'subgroup_axis': subgroup['axis'],
-                'subgroup_field': subgroup['field'],
-                'subgroup_value': subgroup['value'],
-                'axis': axis,
-                'value_bin': value_bin,
-                'cluster_id': f'{query_id}_c{idx + 1}',
-                'cluster_role': 'dominant_gold' if is_dominant else 'complementary_gold',
-                'target_gold_chunks': dominant_size if is_dominant else complementary_size,
-            }
-        )
+        facets.append({
+            'facet_id': facet_id,
+            'condition_id': condition_id,
+            'condition_display': condition_display,
+            'subgroup_id': subgroup_id,
+            'subgroup_label': subgroup['label'],
+            'subgroup_axis': subgroup['axis'],
+            'subgroup_field': subgroup['field'],
+            'subgroup_value': subgroup['value'],
+            'axis': axis,
+            'value_bin': value_bin,
+            'cluster_id': f'{query_id}_c{idx + 1}',
+            'cluster_role': 'dominant_gold' if is_dominant else 'complementary_gold',
+            'target_gold_chunks': dominant_size if is_dominant else complementary_size,
+        })
     return facets
 
 

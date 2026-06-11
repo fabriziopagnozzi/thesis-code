@@ -1,3 +1,11 @@
+"""Derive relevance labels from the synthetic chunk-to-facet mapping.
+
+This module exists to convert the generated chunk metadata into qrels that the
+retrieval evaluation stage can consume directly. It uses a simple label
+derivation rule over the hidden gold/distractor structure so relevance stays
+fully aligned with the benchmark design.
+"""
+
 import polars as pl
 
 from experiments.medical_dataset_gen.global_configs import (
@@ -11,23 +19,23 @@ from experiments.medical_dataset_gen.global_configs import (
 def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     _ = cfg
     chunks = read_parquet(paths, 'chunks')
-    qrels = (
-        chunks
-        .select(
-            'query_id',
-            'chunk_id',
-            'fact_id',
-            'facet_id',
-            'target_facet_id',
-            'cluster_id',
-            'cluster_role',
-            'is_gold',
-            'distractor_type',
-        )
-        .with_columns(
-            pl.when(pl.col('is_gold')).then(1).otherwise(0).alias('relevance_grade'),
-            pl.when(pl.col('is_gold')).then(pl.lit('positive')).otherwise(pl.lit('hard_negative')).alias('support_type'),
-        )
+    qrels = chunks.select(
+        'query_id',
+        'chunk_id',
+        'fact_id',
+        'facet_id',
+        'target_facet_id',
+        'cluster_id',
+        'cluster_role',
+        'is_gold',
+        'distractor_type',
+    ).with_columns(
+        pl.when(pl.col('is_gold')).then(1).otherwise(0).alias('relevance_grade'),
+        pl
+        .when(pl.col('is_gold'))
+        .then(pl.lit('positive'))
+        .otherwise(pl.lit('hard_negative'))
+        .alias('support_type'),
     )
     write_parquet(paths, 'qrels', qrels)
     return qrels
@@ -46,4 +54,3 @@ if __name__ == '__main__':
     setup_logging(paths)
     dump_effective_config(cfg, paths)
     run_make_qrels(cfg, paths)
-

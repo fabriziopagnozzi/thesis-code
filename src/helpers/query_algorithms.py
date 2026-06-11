@@ -171,15 +171,14 @@ def fps(
 #     return np.array(selected, dtype=np.intp)
 
 
-# TODO: try and use apricot
 def fac_loc(
-    query_sim_scores: NDArray[np.float32],
+    sim_to_query: NDArray[np.float32],
     k: int,
-    dataset_sim_matrix: NDArray[np.float32],
+    sim_matrix: NDArray[np.float32],
     lam: float = 0.5,
     **_kwargs: object,
 ) -> NDArray[np.intp]:
-    n = len(query_sim_scores)
+    n = len(sim_to_query)
     if n == 0:
         return np.array([], dtype=np.intp)
     k = min(k, n)
@@ -187,8 +186,8 @@ def fac_loc(
     selected: list[int] = []
     m = np.zeros(n, dtype=np.float64)
 
-    initial_coverage = np.maximum(0, dataset_sim_matrix).sum(axis=0) / n
-    initial_gains = lam * query_sim_scores + (1 - lam) * initial_coverage
+    initial_coverage = np.maximum(0, sim_matrix).sum(axis=0) / n
+    initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
 
     max_heap = [(-initial_gains[i], i, 0) for i in range(n)]
     heapq.heapify(max_heap)
@@ -201,11 +200,11 @@ def fac_loc(
 
             if last_update == step:
                 selected.append(node_idx)
-                m = np.maximum(m, dataset_sim_matrix[:, node_idx])
+                m = np.maximum(m, sim_matrix[:, node_idx])
                 break
 
-            marginal_cov = np.sum(np.maximum(0, dataset_sim_matrix[:, node_idx] - m)) / n
-            new_gain = lam * query_sim_scores[node_idx] + (1 - lam) * marginal_cov
+            marginal_cov = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
+            new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov
             heapq.heappush(max_heap, (-new_gain, node_idx, step))
 
     return np.array(selected, dtype=np.intp)

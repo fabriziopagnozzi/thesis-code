@@ -27,7 +27,7 @@ class PoolAnalysisCfg(BaseModel):
     n_figures: PositiveInt = 30
 
     commit_every: PositiveInt = 10
-    limit: PositiveInt | None
+    limit: PositiveInt | None = None
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> PoolAnalysisCfg:

@@ -3,8 +3,14 @@ from typing import Any
 
 
 class MedicalDatasetGenDefaultPrompts:
+    chunk_generation_prompt_id = 'chunk_generation_v1'
+    chunk_rewrite_prompt_id = 'chunk_rewrite_v1'
+
     chunk_generation_system = inspect.cleandoc("""
         You write concise, realistic synthetic clinical note fragments for retrieval evaluation.
+    """)
+    chunk_rewrite_system = inspect.cleandoc("""
+        You rewrite synthetic clinical evidence chunks into more natural clinical prose while preserving the provided facts exactly.
     """)
 
     @staticmethod
@@ -83,6 +89,66 @@ class MedicalDatasetGenDefaultPrompts:
             - Do not use these words or phrases: {forbidden}.
             - Do not mention qrels, clusters, facets, labels, benchmark design, or document IDs.
             - Do not add facts beyond the required condition, patient descriptor, treatment duration, or rehab status.
+
+            {revision_block}
+        """)
+
+    @staticmethod
+    def chunk_rewrite_prompt(
+        fact: dict[str, Any],
+        draft_text: str,
+        patient_descriptor: str,
+        required_facts: list[str],
+        forbidden_facts: list[str],
+        min_words: int,
+        max_words: int,
+        revision_feedback: str | None = None,
+    ) -> str:
+        style_label = fact['note_style'].replace('_', ' ')
+        required_block = '\n'.join(f'- {fact_line}' for fact_line in required_facts)
+        forbidden_block = '\n'.join(f'- {fact_line}' for fact_line in forbidden_facts)
+        facet_focus = (
+            f'treatment duration with {fact["treatment"]} for {fact["duration_days"]} days'
+            if fact['axis'] == 'treatment_duration'
+            else f'rehabilitation or discharge functional outcome: {fact["rehab_outcome"]}'
+        )
+
+        revision_block = ''
+        if revision_feedback:
+            revision_block = inspect.cleandoc(f"""
+                Your previous rewrite failed validation.
+                Fix these issues in the next rewrite:
+                {revision_feedback}
+
+                Rewrite from scratch. Return only the corrected paragraph.
+            """)
+
+        return inspect.cleandoc(f"""
+            Rewrite the draft note below into more natural, varied clinical prose for a synthetic retrieval benchmark.
+            Preserve the structured facts exactly. Improve wording and sentence flow, but do not change the underlying evidence.
+
+            Output contract:
+            - Return exactly one paragraph and nothing else.
+            - No headings, bullets, JSON, quotation marks around the paragraph, or commentary.
+            - Keep the note deidentified: no names, dates, addresses, phone numbers, medical record numbers, or real identifiers.
+            - Keep the evidence explicit enough that dense retrieval should still match the note to the query.
+            - Do not mention benchmark construction, facets, clusters, source rows, prompt instructions, or IDs.
+            - Do not introduce any diagnosis, treatment, duration, rehabilitation outcome, demographic detail, comorbidity, lab result, imaging result, medication, or disposition detail that is not listed in the required facts.
+
+            Style target:
+            - Clinical note style: {style_label}
+            - Length: {min_words}-{max_words} words
+            - Clinical focus: {facet_focus}
+            - Patient anchor to preserve: {patient_descriptor}
+
+            Required facts to preserve:
+            {required_block}
+
+            Forbidden facts or mentions:
+            {forbidden_block}
+
+            Draft note:
+            {draft_text}
 
             {revision_block}
         """)

@@ -1,3 +1,11 @@
+"""Build and store the geometry-analysis artifacts.
+
+This module exists to keep the embedding-geometry stage's file handling in one
+place, separate from the numerical reduction logic. It uses the shared
+experiment paths and plain JSON/parquet serialization so artifact lookup stays
+consistent with the rest of the pipeline.
+"""
+
 import json
 from typing import Any
 
@@ -88,7 +96,8 @@ def choose_query_ids(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base.with_columns(
+        base
+        .with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -135,7 +144,8 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
         if sub.height == 0:
             continue
         best = (
-            sub.group_by('query_id', 'lam')
+            sub
+            .group_by('query_id', 'lam')
             .agg(
                 pl.col('facet_coverage').mean().alias('fc'),
                 pl.col('weighted_facet_coverage').mean().alias('wfc'),
