@@ -114,7 +114,6 @@ class ExperimentCfg(BaseModel):
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
     results_dir = root / '_results'
-    default_config_path = root / '_config.yaml'
     default_ontology_path = root / 'ontology.yaml'
 
     def __init__(self, exp_name: str):
@@ -138,19 +137,30 @@ class MedicalDatasetGenPaths:
         return self.experiment_dir / f'{table}.{ext}'
 
 
-def load_config(path: str | Path | None = None, exp: str | None = None) -> ExperimentCfg:
-    cfg_path = Path(path) if path is not None else MedicalDatasetGenPaths.default_config_path
+def load_config(exp: str | None = None) -> ExperimentCfg:
+    exp_name = exp or os.getenv('EXP') or os.getenv('EXP_NAME')
+    if exp_name is None:
+        raise ValueError(
+            'missing experiment name; pass --exp or set EXP/EXP_NAME so '
+            'the config can be loaded from _results/<exp>/_config.yaml'
+        )
+
+    cfg_path = MedicalDatasetGenPaths(exp_name).config_path
+    if not cfg_path.exists():
+        raise FileNotFoundError(
+            f'missing experiment config: {cfg_path}. '
+            'Create it manually before running the pipeline; '
+            'src/experiments/medical_dataset_gen/_config.yaml is no longer used.'
+        )
     with open(cfg_path) as f:
         raw = yaml.safe_load(f)
     cfg = ExperimentCfg.model_validate(raw)
-    if exp is not None:
-        cfg.global_.output_experiment = exp
+    cfg.global_.output_experiment = exp_name
     return cfg
 
 
 def load_config_from_cli() -> ExperimentCfg:
     parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--config', type=str, default=None)
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
     parser.add_argument('--max-queries', type=int, default=None)
     parser.add_argument(
@@ -173,9 +183,14 @@ def load_config_from_cli() -> ExperimentCfg:
     llm_chunk_group.add_argument('--llm-chunks', dest='llm_chunks', action='store_true')
     llm_chunk_group.add_argument('--no-llm-chunks', dest='llm_chunks', action='store_false')
     parser.set_defaults(llm_chunks=None)
-    args, _ = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()
+    if any(token == '--config' or token.startswith('--config=') for token in unknown):
+        raise ValueError(
+            '--config is no longer supported for medical_dataset_gen; '
+            'place _config.yaml in the target experiment directory instead'
+        )
 
-    cfg = load_config(args.config, exp=args.exp)
+    cfg = load_config(exp=args.exp)
     if args.max_queries is not None:
         cfg.global_.n_queries = args.max_queries
     if args.embedding_backend is not None:
@@ -210,9 +225,9 @@ def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
 
 
 def dump_effective_config(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
+    # Intentionally do nothing: experiment configs are user-managed files stored
+    # in _results/<exp>/_config.yaml and must never be overwritten here.
     paths.ensure_dirs()
-    with open(paths.config_path, 'w') as f:
-        yaml.safe_dump(cfg.model_dump(by_alias=True), f, sort_keys=False)
 
 
 def read_parquet(paths: MedicalDatasetGenPaths, table: TableName) -> pl.DataFrame:

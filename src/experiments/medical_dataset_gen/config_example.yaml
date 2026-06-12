@@ -1,7 +1,9 @@
 # Example configuration for the synthetic medical RAG benchmark.
 #
-# Copy this file to a custom YAML and pass it with:
-#   uv run python -m experiments.medical_dataset_gen.run_pipeline --config path/to/_config.yaml
+# Copy this file into the target experiment directory as:
+#   src/experiments/medical_dataset_gen/_results/<exp>/_config.yaml
+# The pipeline only reads that per-experiment file; src/experiments/medical_dataset_gen/_config.yaml
+# is no longer used.
 #
 # CLI flags can override the most common fields:
 #   --exp

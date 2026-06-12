@@ -46,7 +46,8 @@ uv run python -m experiments.medical_dataset_gen.run_pipeline \
   --embedding-backend sentence_transformers
 ```
 
-The default config is `_config.yaml`; the default ontology is `ontology.yaml`.
+The config must already exist at `_results/<exp>/_config.yaml` before you run the pipeline.
+The pipeline no longer copies a source-level `_config.yaml`; the default ontology is `ontology.yaml`.
 Outputs are written under `_results/<exp>/`.
 
 ## Stages
