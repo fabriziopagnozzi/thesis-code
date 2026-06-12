@@ -49,6 +49,7 @@ class GenerationCfg(BaseModel):
     llm_name: str = 'gemma4-31b-text'
     llm_workers: int = 1
     use_llm_chunk_generation: bool = True
+    use_llm_chunk_rewriting: bool = False
     use_llm_query_paraphrase: bool = False
     llm_chunk_max_attempts: int = 3
     llm_temperature: float = 0.1
@@ -183,6 +184,14 @@ def load_config_from_cli() -> ExperimentCfg:
     llm_chunk_group.add_argument('--llm-chunks', dest='llm_chunks', action='store_true')
     llm_chunk_group.add_argument('--no-llm-chunks', dest='llm_chunks', action='store_false')
     parser.set_defaults(llm_chunks=None)
+    llm_chunk_rewrite_group = parser.add_mutually_exclusive_group()
+    llm_chunk_rewrite_group.add_argument(
+        '--llm-chunk-rewrite', dest='llm_chunk_rewrite', action='store_true'
+    )
+    llm_chunk_rewrite_group.add_argument(
+        '--no-llm-chunk-rewrite', dest='llm_chunk_rewrite', action='store_false'
+    )
+    parser.set_defaults(llm_chunk_rewrite=None)
     args, unknown = parser.parse_known_args()
     if any(token == '--config' or token.startswith('--config=') for token in unknown):
         raise ValueError(
@@ -215,6 +224,8 @@ def load_config_from_cli() -> ExperimentCfg:
         cfg.embedding_geometry.reduction = args.embedding_geometry_reduction
     if args.llm_chunks is not None:
         cfg.generation.use_llm_chunk_generation = args.llm_chunks
+    if args.llm_chunk_rewrite is not None:
+        cfg.generation.use_llm_chunk_rewriting = args.llm_chunk_rewrite
     return cfg
 
 

@@ -145,6 +145,42 @@ def maybe_generate_chunk_text(
     return cleaned
 
 
+def maybe_rewrite_chunk_text(
+    draft_text: str,
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    llm_name: str,
+    use_llm: bool,
+    temperature: float,
+    num_ctx: int,
+    chunk_min_words: int,
+    chunk_max_words: int,
+    revision_feedback: str | None = None,
+) -> str:
+    if not use_llm:
+        return draft_text
+
+    prompt = MedicalDatasetGenDefaultPrompts.chunk_rewrite_prompt(
+        fact=fact,
+        draft_text=draft_text,
+        patient_descriptor=_patient_descriptor(fact),
+        required_facts=list(fact.must_mention),
+        forbidden_facts=list(fact.must_not_mention),
+        min_words=chunk_min_words,
+        max_words=chunk_max_words,
+        revision_feedback=revision_feedback,
+    )
+    generated = generate(
+        prompt,
+        model=llm_name,
+        system=MedicalDatasetGenDefaultPrompts.chunk_rewrite_system,
+        temperature=temperature,
+        num_ctx=num_ctx,
+    )
+    cleaned = _cleanup_generated_text(generated)
+    return cleaned
+
+
 def render_query(
     plan: QueryPlan,
     ontology: MedicalOntology,
@@ -390,7 +426,7 @@ def _contains_rehab_bin_evidence(
     value_bin = fact.value_bin
 
     for phrase in condition.rehab_outcomes.get(value_bin, []):
-        if str(phrase).lower() in lower:
+        if _rehab_phrase_matches(lower, str(phrase)):
             return True
 
     bin_terms = {
@@ -414,11 +450,114 @@ def _contains_rehab_bin_evidence(
             'impaired balance',
             'ongoing',
             'persistent',
+            'remained',
             'reduced exercise tolerance',
+            'reduced walking tolerance',
+            'limited walking tolerance',
+            'limited ambulation',
+            'mobility',
+            'ambulation',
+            'endurance',
+            'exertional dyspnea',
+            'dyspnea',
+            'weakness',
+            'functional limitation',
             'residual',
         ],
     }
-    return any(term in lower for term in bin_terms.get(value_bin, []))
+    if any(term in lower for term in bin_terms.get(value_bin, [])):
+        return True
+
+    if value_bin == 'persistent_deficit':
+        return _contains_persistent_deficit_evidence(lower)
+
+    return False
+
+
+def _rehab_phrase_matches(lower_text: str, phrase: str) -> bool:
+    phrase_lower = phrase.lower()
+    if phrase_lower in lower_text:
+        return True
+
+    phrase_tokens = _meaningful_tokens(phrase_lower)
+    if len(phrase_tokens) < 2:
+        return False
+
+    text_tokens = _meaningful_tokens(lower_text)
+    overlap = len(phrase_tokens & text_tokens)
+    threshold = 2 if len(phrase_tokens) < 5 else 3
+    return overlap >= threshold
+
+
+def _contains_persistent_deficit_evidence(lower_text: str) -> bool:
+    descriptor_terms = [
+        'continued',
+        'persistent',
+        'ongoing',
+        'residual',
+        'remained',
+        'still',
+        'limited',
+        'reduced',
+        'impaired',
+    ]
+    rehab_terms = [
+        'oxygen requirement',
+        'walking tolerance',
+        'exercise tolerance',
+        'exertional dyspnea',
+        'dyspnea',
+        'mobility',
+        'ambulation',
+        'endurance',
+        'functional limitation',
+        'weakness',
+        'deficit',
+    ]
+    return any(term in lower_text for term in descriptor_terms) and any(
+        term in lower_text for term in rehab_terms
+    )
+
+
+def _meaningful_tokens(text: str) -> set[str]:
+    stopwords = {
+        'a',
+        'an',
+        'and',
+        'at',
+        'by',
+        'for',
+        'in',
+        'into',
+        'of',
+        'on',
+        'or',
+        'the',
+        'to',
+        'with',
+        'without',
+        'was',
+        'were',
+        'is',
+        'are',
+        'be',
+        'been',
+        'being',
+        'after',
+        'before',
+        'during',
+        'discharge',
+        'discharged',
+        'status',
+        'outcome',
+        'functional',
+        'rehabilitation',
+    }
+    return {
+        token
+        for token in re.findall(r'[a-z0-9]+', text.lower())
+        if len(token) > 2 and token not in stopwords
+    }
 
 
 def _extra_condition_treatments(

@@ -127,7 +127,7 @@ The plotting stage writes:
 LLM chunk generation is on by default and uses `generation.llm_name` from the experiment config. You can also override it with `--llm-name`.
 Parallel chunk generation is controlled by `generation.llm_workers` or `--llm-workers`.
 To get actual concurrent decoding, start the Ollama server with `OLLAMA_NUM_PARALLEL` at least as large as `llm_workers`.
-Generated chunks are cached incrementally in `_results/<exp>/chunk_generation_cache.jsonl`, so interrupted chunk generation can be restarted without repeating accepted rows.
+Generated LLM chunks are cached incrementally in `_results/<exp>/chunk_generation_cache.jsonl`, so interrupted chunk generation can be restarted without repeating accepted rows. If you enable deterministic template rewriting, rewritten chunks are stored in the isolated global cache at `src/experiments/medical_dataset_gen/_cache/chunk_rewrite_cache.jsonl`.
 Chunk generation is binary: either all chunks are LLM-generated, or all chunks are deterministic fallback chunks.
 
 To disable LLM chunks for fast debugging, use `--no-llm-chunks` or set:

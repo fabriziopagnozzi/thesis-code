@@ -17,6 +17,8 @@
 #   --pool-scope
 #   --no-llm-chunks
 #   --llm-chunks
+#   --no-llm-chunk-rewrite
+#   --llm-chunk-rewrite
 #   --embedding-geometry-queries
 #   --embedding-geometry-k
 #   --embedding-geometry-reduction
@@ -45,6 +47,7 @@ generation:
   llm_name: gemma4:12b # Ollama generation model. This pipeline passes it explicitly; no OLLAMA_MODEL env var is needed.
   llm_workers: 2 # Parallel chunk-generation workers. Match this with Ollama server OLLAMA_NUM_PARALLEL.
   use_llm_chunk_generation: true #   false = every chunk uses deterministic clinical fallback text.
+  use_llm_chunk_rewriting: false # If true and chunk generation is deterministic, rewrite fallback chunks with the LLM via the isolated global rewrite cache.
   use_llm_query_paraphrase: false # If true, generated query strings are paraphrased by LLM.
   llm_chunk_max_attempts: 3 # Maximum LLM retries per chunk before that query is dropped from the benchmark.
   llm_temperature: 0.5

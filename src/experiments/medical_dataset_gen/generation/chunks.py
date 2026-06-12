@@ -10,6 +10,9 @@ import polars as pl
 from tqdm import tqdm
 
 from experiments.medical_dataset_gen.generation.ontology import load_ontology
+from experiments.medical_dataset_gen.generation.prompts_default import (
+    MedicalDatasetGenDefaultPrompts,
+)
 from experiments.medical_dataset_gen.generation.schemas import (
     ChunkGenerationCacheEntry,
     ChunkRow,
@@ -20,6 +23,7 @@ from experiments.medical_dataset_gen.generation.schemas import (
 from experiments.medical_dataset_gen.generation.text_templates import (
     ChunkValidation,
     maybe_generate_chunk_text,
+    maybe_rewrite_chunk_text,
     render_chunk_text,
     validate_chunk_text,
 )
@@ -31,6 +35,7 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 
 _CACHE_VERSION = 9
+_REWRITE_CACHE_VERSION = 1
 
 
 @dataclass
@@ -55,14 +60,40 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             )
     else:
         print('[chunks] LLM generation disabled; using deterministic clinical fallback')
+        if cfg.generation.use_llm_chunk_rewriting:
+            print(
+                '[chunks] deterministic chunks will be LLM-rewritten with the isolated global '
+                'rewrite cache'
+            )
+    if cfg.generation.use_llm_chunk_generation and cfg.generation.use_llm_chunk_rewriting:
+        print(
+            '[chunks] use_llm_chunk_rewriting is ignored when use_llm_chunk_generation is enabled'
+        )
 
     local_cache_path = paths.experiment_dir / 'chunk_generation_cache.jsonl'
     shared_cache_path = paths.root / '_cache' / 'chunk_generation_cache.jsonl'
-    cache = _load_generation_cache([shared_cache_path, local_cache_path])
-    if cache.loaded_rows:
+    rewrite_cache_path = paths.root / '_cache' / 'chunk_rewrite_cache.jsonl'
+    generation_cache = (
+        _load_generation_cache([shared_cache_path, local_cache_path], cache_version=_CACHE_VERSION)
+        if cfg.generation.use_llm_chunk_generation
+        else GenerationCache(by_fact_id={}, by_reuse_key={})
+    )
+    if generation_cache.loaded_rows:
         print(
-            f'[chunks] loaded {cache.loaded_rows:,} cached chunk generation row(s) '
-            f'({len(cache.by_fact_id):,} exact fact keys, {len(cache.by_reuse_key):,} reusable keys)'
+            f'[chunks] loaded {generation_cache.loaded_rows:,} cached chunk generation row(s) '
+            f'({len(generation_cache.by_fact_id):,} exact fact keys, '
+            f'{len(generation_cache.by_reuse_key):,} reusable keys)'
+        )
+    rewrite_cache = (
+        _load_generation_cache([rewrite_cache_path], cache_version=_REWRITE_CACHE_VERSION)
+        if (not cfg.generation.use_llm_chunk_generation and cfg.generation.use_llm_chunk_rewriting)
+        else GenerationCache(by_fact_id={}, by_reuse_key={})
+    )
+    if rewrite_cache.loaded_rows:
+        print(
+            f'[chunks] loaded {rewrite_cache.loaded_rows:,} cached template rewrite row(s) '
+            f'({len(rewrite_cache.by_fact_id):,} exact fact keys, '
+            f'{len(rewrite_cache.by_reuse_key):,} reusable keys)'
         )
 
     if cfg.generation.use_llm_chunk_generation:
@@ -70,7 +101,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             cfg=cfg,
             facts=fact_rows,
             ontology=ontology,
-            cache=cache,
+            cache=generation_cache,
             local_cache_path=local_cache_path,
             shared_cache_path=shared_cache_path,
         )
@@ -80,8 +111,10 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             paths=paths,
             facts=fact_rows,
             ontology=ontology,
-            cache=cache,
-            cache_path=local_cache_path,
+            generation_cache=generation_cache,
+            generation_cache_path=local_cache_path,
+            rewrite_cache=rewrite_cache,
+            rewrite_cache_path=rewrite_cache_path,
             rng=rng,
         )
 
@@ -139,8 +172,10 @@ def _render_chunks_sequential(
     paths: MedicalDatasetGenPaths,
     facts: list[ClinicalFact],
     ontology: MedicalOntology,
-    cache: GenerationCache,
-    cache_path: Path,
+    generation_cache: GenerationCache,
+    generation_cache_path: Path,
+    rewrite_cache: GenerationCache,
+    rewrite_cache_path: Path,
     rng: Random,
 ) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
     rows: list[ChunkRow] = []
@@ -155,7 +190,7 @@ def _render_chunks_sequential(
     ):
         if fact.query_id in failed_queries:
             continue
-        cached = _cached_chunk_state(cfg, fact, ontology, cache)
+        cached = _cached_chunk_state(cfg, fact, ontology, generation_cache)
         if cached is not None:
             rows.append(_row_from_state(i, fact, cached[0]))
             continue
@@ -179,15 +214,60 @@ def _render_chunks_sequential(
                 validation=validation,
             )
         else:
-            final_text = render_chunk_text(fact, ontology, rng)
-            validation = validate_chunk_text(final_text, fact, ontology)
-            state = _new_chunk_state(
-                final_text,
-                text_generation_source='fallback',
-                llm_attempted=False,
-                llm_rejected=False,
-                validation=validation,
-            )
+            draft_text = render_chunk_text(fact, ontology, rng)
+            cache_key: str | None = None
+            if cfg.generation.use_llm_chunk_rewriting:
+                cached = _cached_rewrite_chunk_state(
+                    cfg=cfg,
+                    fact=fact,
+                    ontology=ontology,
+                    cache=rewrite_cache,
+                    draft_text=draft_text,
+                )
+                if cached is not None:
+                    rows.append(_row_from_state(i, fact, cached[0]))
+                    continue
+
+                rewrite_key = _chunk_rewrite_cache_key(cfg, fact, draft_text)
+                rewritten_text, attempt_errors = _rewrite_llm_chunk(
+                    cfg=cfg,
+                    fact=fact,
+                    ontology=ontology,
+                    draft_text=draft_text,
+                )
+                if attempt_errors:
+                    print(
+                        f'[chunks] keeping deterministic template for {fact.query_id} after rewrite '
+                        f'failure in {fact.fact_id}: ' + '; '.join(attempt_errors)
+                    )
+                    final_text = draft_text
+                    state = _new_chunk_state(
+                        final_text,
+                        text_generation_source='fallback',
+                        llm_attempted=True,
+                        llm_rejected=True,
+                        validation=validate_chunk_text(final_text, fact, ontology),
+                    )
+                    cache_key = None
+                else:
+                    final_text = rewritten_text
+                    state = _new_chunk_state(
+                        final_text,
+                        text_generation_source='llm',
+                        llm_attempted=True,
+                        llm_rejected=False,
+                        validation=validate_chunk_text(final_text, fact, ontology),
+                    )
+                    cache_key = rewrite_key
+            else:
+                final_text = draft_text
+                state = _new_chunk_state(
+                    final_text,
+                    text_generation_source='fallback',
+                    llm_attempted=False,
+                    llm_rejected=False,
+                    validation=validate_chunk_text(final_text, fact, ontology),
+                )
 
         try:
             row, cache_entry = _finalize_chunk_row(
@@ -196,7 +276,13 @@ def _render_chunks_sequential(
                 ontology=ontology,
                 index=i,
                 state=state,
-                should_cache=True,
+                should_cache=cfg.generation.use_llm_chunk_generation or (
+                    cfg.generation.use_llm_chunk_rewriting and state.text_generation_source == 'llm'
+                ),
+                cache_key=cache_key if not cfg.generation.use_llm_chunk_generation else None,
+                cache_version=(
+                    _CACHE_VERSION if cfg.generation.use_llm_chunk_generation else _REWRITE_CACHE_VERSION
+                ),
             )
         except RuntimeError as exc:
             rejects.append(_reject_row(fact, str(exc), state.final_text))
@@ -207,8 +293,12 @@ def _render_chunks_sequential(
             continue
 
         if cache_entry is not None:
-            _append_generation_cache(cache_path, cache_entry)
-            _remember_cache_entry(cache, cache_entry)
+            if cfg.generation.use_llm_chunk_generation:
+                _append_generation_cache(generation_cache_path, cache_entry)
+                _remember_cache_entry(generation_cache, cache_entry)
+            else:
+                _append_generation_cache(rewrite_cache_path, cache_entry)
+                _remember_cache_entry(rewrite_cache, cache_entry)
         rows.append(row)
 
     kept_rows = [row for row in rows if str(row['query_id']) not in failed_queries]
@@ -465,7 +555,7 @@ def _materialize_generated_group(
     pbar.update(len(group))
 
 
-def _load_generation_cache(paths: list[Path]) -> GenerationCache:
+def _load_generation_cache(paths: list[Path], cache_version: int) -> GenerationCache:
     cache = GenerationCache(by_fact_id={}, by_reuse_key={})
 
     for path in paths:
@@ -480,7 +570,7 @@ def _load_generation_cache(paths: list[Path]) -> GenerationCache:
                     row = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if row.get('cache_version') != _CACHE_VERSION:
+                if row.get('cache_version') != cache_version:
                     continue
                 text = row.get('text')
                 if not text:
@@ -560,6 +650,47 @@ def _generate_llm_chunk(
     return last_text, last_errors
 
 
+def _rewrite_llm_chunk(
+    cfg: ExperimentCfg,
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    draft_text: str,
+) -> tuple[str, list[str]]:
+    last_errors = ['empty LLM rewrite']
+    feedback: str | None = None
+
+    for attempt in range(1, max(1, cfg.generation.llm_chunk_max_attempts) + 1):
+        candidate_text = maybe_rewrite_chunk_text(
+            draft_text=draft_text,
+            fact=fact,
+            ontology=ontology,
+            llm_name=cfg.generation.llm_name,
+            use_llm=True,
+            temperature=cfg.generation.llm_temperature,
+            num_ctx=cfg.generation.llm_num_ctx,
+            chunk_min_words=cfg.generation.chunk_min_words,
+            chunk_max_words=cfg.generation.chunk_max_words,
+            revision_feedback=feedback,
+        )
+        word_count = len(candidate_text.split())
+        validation = validate_chunk_text(candidate_text, fact, ontology)
+        word_errors = _word_count_errors(
+            word_count,
+            min_words=cfg.generation.chunk_min_words,
+            max_words=cfg.generation.chunk_max_words,
+            tolerance=cfg.generation.chunk_word_tolerance,
+        )
+        errors = validation.hard_errors + word_errors
+        if not errors:
+            return candidate_text, []
+
+        last_errors = [f'attempt={attempt}', *errors]
+        feedback = '\n'.join(f'- {error}' for error in errors)
+        print(f'[chunks] retry rewrite {attempt} for {fact.fact_id}: ' + '; '.join(errors))
+
+    return draft_text, last_errors
+
+
 def _word_count_ok(word_count: int, min_words: int, max_words: int, tolerance: int) -> bool:
     return (min_words - tolerance) <= word_count <= (max_words + tolerance)
 
@@ -602,6 +733,50 @@ def _chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
                 'llm_num_ctx': cfg.generation.llm_num_ctx,
             }
         )
+    if fact.axis == 'treatment_duration':
+        payload.update(
+            {
+                'duration_days': fact.duration_days,
+                'treatment': fact.treatment,
+            }
+        )
+    else:
+        payload['rehab_outcome'] = fact.rehab_outcome
+
+    raw = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _chunk_rewrite_cache_key(
+    cfg: ExperimentCfg,
+    fact: ClinicalFact,
+    draft_text: str,
+) -> str:
+    payload: dict[str, object] = {
+        'cache_version': _REWRITE_CACHE_VERSION,
+        'prompt_id': MedicalDatasetGenDefaultPrompts.chunk_rewrite_prompt_id,
+        'llm_name': cfg.generation.llm_name,
+        'llm_temperature': cfg.generation.llm_temperature,
+        'llm_num_ctx': cfg.generation.llm_num_ctx,
+        'draft_text_sha256': hashlib.sha256(draft_text.encode()).hexdigest(),
+        'fact_chunk_reuse_key': fact.chunk_reuse_key,
+        'condition_id': fact.condition_id,
+        'condition_display': fact.condition_display,
+        'subgroup_id': fact.subgroup_id,
+        'subgroup_label': fact.subgroup_label,
+        'subgroup_axis': fact.subgroup_axis,
+        'axis': fact.axis,
+        'value_bin': fact.value_bin,
+        'patient_age': fact.patient_age,
+        'patient_sex': fact.patient_sex,
+        'clinical_subgroup_phrase': fact.clinical_subgroup_phrase,
+        'note_style': fact.note_style,
+        'chunk_min_words': cfg.generation.chunk_min_words,
+        'chunk_max_words': cfg.generation.chunk_max_words,
+        'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
+        'must_mention': fact.must_mention,
+        'must_not_mention': fact.must_not_mention,
+    }
     if fact.axis == 'treatment_duration':
         payload.update(
             {
@@ -667,6 +842,53 @@ def _cached_chunk_state(
     )
 
 
+def _cached_rewrite_chunk_state(
+    cfg: ExperimentCfg,
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    cache: GenerationCache,
+    draft_text: str,
+) -> tuple[ChunkState, str] | None:
+    current_cache_key = _chunk_rewrite_cache_key(cfg, fact, draft_text)
+    hit_kind: Literal['fact_id', 'reuse_key'] = 'fact_id'
+    cached = cache.by_fact_id.get(fact.fact_id)
+    if cached and cached.chunk_generation_cache_key not in {None, current_cache_key}:
+        cached = None
+    if not cached:
+        hit_kind = 'reuse_key'
+        cached = cache.by_reuse_key.get(current_cache_key)
+    if not cached:
+        return None
+
+    cached_text = cached.text
+    validation = validate_chunk_text(cached_text, fact, ontology)
+    errors = [*validation.hard_errors]
+    errors.extend(
+        _word_count_errors(
+            len(cached_text.split()),
+            min_words=cfg.generation.chunk_min_words,
+            max_words=cfg.generation.chunk_max_words,
+            tolerance=cfg.generation.chunk_word_tolerance,
+        )
+    )
+    cache_matches_mode = cached.text_generation_source == 'llm'
+    if errors or not cache_matches_mode:
+        return None
+
+    return (
+        _new_chunk_state(
+            cached_text,
+            text_generation_source='cache',
+            llm_attempted=cached.llm_attempted,
+            llm_rejected=cached.llm_rejected,
+            cache_hit=True,
+            cache_hit_kind=hit_kind,
+            validation=validation,
+        ),
+        hit_kind,
+    )
+
+
 def _new_chunk_state(
     final_text: str,
     text_generation_source: Literal['llm', 'fallback', 'cache'],
@@ -694,6 +916,8 @@ def _finalize_chunk_row(
     index: int,
     state: ChunkState,
     should_cache: bool,
+    cache_key: str | None = None,
+    cache_version: int = _CACHE_VERSION,
 ) -> tuple[ChunkRow, ChunkGenerationCacheEntry | None]:
     final_text = state.final_text
     validation = validate_chunk_text(final_text, fact, ontology)
@@ -717,10 +941,12 @@ def _finalize_chunk_row(
             'llm' if state.text_generation_source == 'cache' else state.text_generation_source
         )
         cache_entry = ChunkGenerationCacheEntry(
-            cache_version=_CACHE_VERSION,
+            cache_version=cache_version,
             fact_id=fact.fact_id,
             fact_chunk_reuse_key=fact.chunk_reuse_key,
-            chunk_generation_cache_key=_chunk_generation_cache_key(cfg, fact),
+            chunk_generation_cache_key=(
+                cache_key if cache_key is not None else _chunk_generation_cache_key(cfg, fact)
+            ),
             text=final_text,
             text_generation_source=cache_text_source,
             llm_attempted=state.llm_attempted,
