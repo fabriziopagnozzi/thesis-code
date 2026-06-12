@@ -129,8 +129,8 @@ def _materialize_plan_row(
         template_id=spec.query_type,
         condition_id=spec.condition_id,
         condition_display=spec.condition_display,
-        **_subgroup_fields('subgroup_a', spec.subgroup_a_id, spec.subgroup_a),
-        **_subgroup_fields('subgroup_b', spec.subgroup_b_id, spec.subgroup_b),
+        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),
+        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),
         dominant_facet_id=dominant_facet_id,
         n_facets=len(facets),
         gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
@@ -197,18 +197,6 @@ def _split_for_index(plan_idx: int) -> Split:
     if bucket in {3, 4, 5}:
         return 'validation'
     return 'train'
-
-
-def _subgroup_fields(
-    prefix: str, subgroup_id: str, subgroup: ClinicalSubgroupOntology
-) -> dict[str, object]:
-    return {
-        f'{prefix}_id': subgroup_id,
-        f'{prefix}_label': subgroup.label,
-        f'{prefix}_axis': subgroup.axis,
-        f'{prefix}_field': subgroup.field,
-        f'{prefix}_value': subgroup.value,
-    }
 
 
 if __name__ == '__main__':

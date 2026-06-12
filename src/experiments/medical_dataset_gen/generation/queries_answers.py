@@ -16,7 +16,6 @@ from experiments.medical_dataset_gen.generation.text_templates import (
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
-    json_dumps,
     read_parquet,
     write_parquet,
 )
@@ -59,14 +58,13 @@ def run_make_queries_answers(
         )
         answer_text = canonical_answer(plan, facet_summaries)
 
-        query_rows.append(_query_row(plan, query_text))
+        query_rows.append(plan.to_query_row(query_text))
         answer_rows.append(
-            _answer_row(
-                plan=plan,
+            plan.to_answer_row(
                 answer_text=answer_text,
                 facet_summaries=facet_summaries,
                 facet_answer_objects=facet_answer_objects,
-                supporting_facts=facts_by_query[plan.query_id],
+                supporting_fact_ids=[fact.fact_id for fact in facts_by_query[plan.query_id]],
             )
         )
 
@@ -124,44 +122,6 @@ def _facet_summaries(
         )
 
     return summaries, answer_facts
-
-
-def _query_row(plan: QueryPlan, query_text: str) -> dict[str, object]:
-    row = plan.to_row()
-    return {
-        'query_id': plan.query_id,
-        'query_type': plan.query_type,
-        'template_id': plan.template_id,
-        'condition_id': plan.condition_id,
-        'condition_display': plan.condition_display,
-        'subgroup_a_id': plan.subgroup_a_id,
-        'subgroup_a_label': plan.subgroup_a_label,
-        'subgroup_b_id': plan.subgroup_b_id,
-        'subgroup_b_label': plan.subgroup_b_label,
-        'dominant_facet_id': plan.dominant_facet_id,
-        'split': plan.split,
-        'n_facets': plan.n_facets,
-        'facets_json': row['facets_json'],
-        'logical_form_json': row['logical_form_json'],
-        'query_text': query_text,
-    }
-
-
-def _answer_row(
-    plan: QueryPlan,
-    answer_text: str,
-    facet_summaries: dict[str, str],
-    facet_answer_objects: list[dict[str, object]],
-    supporting_facts: list[ClinicalFact],
-) -> dict[str, object]:
-    return {
-        'query_id': plan.query_id,
-        'answer_text': answer_text,
-        'facet_summaries_json': json_dumps(facet_summaries),
-        'answer_facts_json': json_dumps(facet_answer_objects),
-        'supporting_fact_ids_json': json_dumps([fact.fact_id for fact in supporting_facts]),
-        'supporting_facet_ids_json': json_dumps([facet.facet_id for facet in plan.facets]),
-    }
 
 
 def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:

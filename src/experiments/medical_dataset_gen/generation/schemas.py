@@ -39,6 +39,15 @@ class ClinicalSubgroupOntology(BenchmarkModel):
     value: str
     aliases: list[str] = Field(default_factory=list)
 
+    def prefixed_fields(self, prefix: str, subgroup_id: str) -> dict[str, object]:
+        return {
+            f'{prefix}_id': subgroup_id,
+            f'{prefix}_label': self.label,
+            f'{prefix}_axis': self.axis,
+            f'{prefix}_field': self.field,
+            f'{prefix}_value': self.value,
+        }
+
 
 class ClinicalAxisOntology(BenchmarkModel):
     label: str
@@ -131,15 +140,58 @@ class QueryPlan(BenchmarkModel):
             )
         return row
 
-    def to_row(self) -> dict[str, object]:
-        row = self.model_dump(mode='python', exclude={'facets', 'logical_form'})
-        row['facets_json'] = json.dumps(
+    def _json_columns(self) -> tuple[str, str]:
+        facets_json = json.dumps(
             [facet.model_dump(mode='json') for facet in self.facets], sort_keys=True
         )
-        row['logical_form_json'] = json.dumps(
+        logical_form_json = json.dumps(
             self.logical_form.model_dump(mode='json', by_alias=True), sort_keys=True
         )
+        return facets_json, logical_form_json
+
+    def to_row(self) -> dict[str, object]:
+        row = self.model_dump(mode='python', exclude={'facets', 'logical_form'})
+        row['facets_json'], row['logical_form_json'] = self._json_columns()
         return row
+
+    def to_query_row(self, query_text: str) -> dict[str, object]:
+        facets_json, logical_form_json = self._json_columns()
+        return {
+            'query_id': self.query_id,
+            'query_type': self.query_type,
+            'template_id': self.template_id,
+            'condition_id': self.condition_id,
+            'condition_display': self.condition_display,
+            'subgroup_a_id': self.subgroup_a_id,
+            'subgroup_a_label': self.subgroup_a_label,
+            'subgroup_b_id': self.subgroup_b_id,
+            'subgroup_b_label': self.subgroup_b_label,
+            'dominant_facet_id': self.dominant_facet_id,
+            'split': self.split,
+            'n_facets': self.n_facets,
+            'facets_json': facets_json,
+            'logical_form_json': logical_form_json,
+            'query_text': query_text,
+        }
+
+    def to_answer_row(
+        self,
+        *,
+        answer_text: str,
+        facet_summaries: dict[str, str],
+        facet_answer_objects: list[dict[str, object]],
+        supporting_fact_ids: list[str],
+    ) -> dict[str, object]:
+        return {
+            'query_id': self.query_id,
+            'answer_text': answer_text,
+            'facet_summaries_json': json.dumps(facet_summaries, sort_keys=True),
+            'answer_facts_json': json.dumps(facet_answer_objects, sort_keys=True),
+            'supporting_fact_ids_json': json.dumps(supporting_fact_ids, sort_keys=True),
+            'supporting_facet_ids_json': json.dumps(
+                [facet.facet_id for facet in self.facets], sort_keys=True
+            ),
+        }
 
 
 class ClinicalFact(BenchmarkModel):
@@ -224,6 +276,17 @@ class ChunkGenerationCacheEntry(BenchmarkModel):
     llm_rejected: bool
 
 
+@dataclass
+class ChunkState:
+    final_text: str
+    text_generation_source: Literal['llm', 'fallback', 'cache']
+    llm_attempted: bool
+    llm_rejected: bool
+    cache_hit: bool = False
+    cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss'
+    validation_soft_warnings: list[str] = field(default_factory=list)
+
+
 class ChunkRow(ClinicalFact):
     chunk_id: str
     text: str
@@ -236,13 +299,46 @@ class ChunkRow(ClinicalFact):
     validation_soft_warning_count: int
     validation_soft_warnings_json: str
 
+    @classmethod
+    def from_fact(
+        cls,
+        fact: ClinicalFact,
+        *,
+        chunk_id: str,
+        final_text: str,
+        word_count: int,
+        text_generation_source: Literal['llm', 'fallback', 'cache'],
+        llm_attempted: bool,
+        llm_rejected: bool,
+        cache_hit: bool,
+        cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'],
+        validation_soft_warnings: list[str],
+    ) -> ChunkRow:
+        return cls(
+            **fact.model_dump(mode='python'),
+            chunk_id=chunk_id,
+            text=final_text,
+            approx_words=word_count,
+            text_generation_source=text_generation_source,
+            llm_attempted=llm_attempted,
+            llm_rejected=llm_rejected,
+            generation_cache_hit=cache_hit,
+            generation_cache_hit_kind=cache_hit_kind,
+            validation_soft_warning_count=len(validation_soft_warnings),
+            validation_soft_warnings_json=json.dumps(validation_soft_warnings, sort_keys=True),
+        )
 
-@dataclass
-class ChunkState:
-    final_text: str
-    text_generation_source: Literal['llm', 'fallback', 'cache']
-    llm_attempted: bool
-    llm_rejected: bool
-    cache_hit: bool = False
-    cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss'
-    validation_soft_warnings: list[str] = field(default_factory=list)
+    @classmethod
+    def from_state(cls, fact: ClinicalFact, *, chunk_id: str, state: ChunkState) -> ChunkRow:
+        return cls.from_fact(
+            fact,
+            chunk_id=chunk_id,
+            final_text=state.final_text,
+            word_count=len(state.final_text.split()),
+            text_generation_source=state.text_generation_source,
+            llm_attempted=state.llm_attempted,
+            llm_rejected=state.llm_rejected,
+            cache_hit=state.cache_hit,
+            cache_hit_kind=state.cache_hit_kind,
+            validation_soft_warnings=list(state.validation_soft_warnings),
+        )

@@ -156,10 +156,8 @@ class MedicalDatasetGenDefaultPrompts:
             Output contract:
             - Return exactly one paragraph and nothing else.
             - No headings, bullets, JSON, quotation marks around the paragraph, or commentary.
-            - Keep the note deidentified: no names, dates, addresses, phone numbers, medical record numbers, or real identifiers.
-            - Keep the evidence explicit enough that dense retrieval should still match the note to the query.
             - Do not mention benchmark construction, facets, clusters, source rows, prompt instructions, or IDs.
-            - Do not introduce any diagnosis, treatment, duration, rehabilitation outcome, demographic detail, comorbidity, lab result, imaging result, medication, or disposition detail that is not listed in the required facts.
+            - Do not introduce any evidence besides what's already included.
 
             Style target:
             - Clinical note style: {style_label}
@@ -173,7 +171,7 @@ class MedicalDatasetGenDefaultPrompts:
             Forbidden facts or mentions:
             {forbidden_block}
 
-            Draft note:
+            Draft note to be rewritten:
             {draft_text}
 
             {revision_block}

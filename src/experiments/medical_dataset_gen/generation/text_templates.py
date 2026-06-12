@@ -67,16 +67,16 @@ def _render_duration_chunk(
     condition = fact.condition_display
     presentation = rng.choice(_condition_presentations(fact.condition_id))
     response = rng.choice(_condition_status_phrases(fact.condition_id))
-    course_noun = rng.choice(
-        ['active treatment course', 'inpatient treatment course', 'documented therapy course']
-    )
-    duration_phrase = rng.choice(
-        [
-            f'{fact.treatment} was continued for {fact.duration_days} days',
-            f'the {course_noun} used {fact.treatment} for {fact.duration_days} days',
-            f'clinicians completed {fact.duration_days} days of {fact.treatment}',
-        ]
-    )
+    course_noun = rng.choice([
+        'active treatment course',
+        'inpatient treatment course',
+        'documented therapy course',
+    ])
+    duration_phrase = rng.choice([
+        f'{fact.treatment} was continued for {fact.duration_days} days',
+        f'the {course_noun} used {fact.treatment} for {fact.duration_days} days',
+        f'clinicians completed {fact.duration_days} days of {fact.treatment}',
+    ])
     close = rng.choice(_duration_closing_sentences(fact.condition_id))
 
     return (
@@ -94,13 +94,11 @@ def _render_rehab_chunk(
     condition = fact.condition_display
     presentation = rng.choice(_condition_presentations(fact.condition_id))
     functional_detail = rng.choice(_functional_status_phrases(fact.condition_id, fact.value_bin))
-    transition = rng.choice(
-        [
-            'By discharge',
-            'At discharge',
-            'Near the end of the hospitalization',
-        ]
-    )
+    transition = rng.choice([
+        'By discharge',
+        'At discharge',
+        'Near the end of the hospitalization',
+    ])
     close = rng.choice(_rehab_closing_sentences(fact.condition_id, fact.value_bin))
 
     return (
