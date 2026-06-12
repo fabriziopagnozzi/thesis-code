@@ -4,12 +4,19 @@ from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
 from random import Random
-from typing import Any
+from typing import Literal
 
 import polars as pl
 from tqdm import tqdm
 
 from experiments.medical_dataset_gen.generation.ontology import load_ontology
+from experiments.medical_dataset_gen.generation.schemas import (
+    ChunkGenerationCacheEntry,
+    ChunkRow,
+    ChunkState,
+    ClinicalFact,
+    MedicalOntology,
+)
 from experiments.medical_dataset_gen.generation.text_templates import (
     ChunkValidation,
     maybe_generate_chunk_text,
@@ -28,15 +35,15 @@ _CACHE_VERSION = 9
 
 @dataclass
 class GenerationCache:
-    by_fact_id: dict[str, dict[str, Any]]
-    by_reuse_key: dict[str, dict[str, Any]]
+    by_fact_id: dict[str, ChunkGenerationCacheEntry]
+    by_reuse_key: dict[str, ChunkGenerationCacheEntry]
     loaded_rows: int = 0
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     facts = read_parquet(paths, 'clinical_facts')
-    fact_rows = [dict(row) for row in facts.iter_rows(named=True)]
+    fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
     rng = Random(cfg.global_.seed + 1000)
     if cfg.generation.use_llm_chunk_generation:
         print(f'[chunks] LLM generation enabled for all {len(facts):,} facts')
@@ -78,7 +85,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             rng=rng,
         )
 
-    chunks = pl.DataFrame(rows)
+    chunks = pl.DataFrame([row.model_dump(mode='python') for row in rows])
     write_parquet(paths, 'chunks', chunks)
 
     reject_df = (
@@ -94,9 +101,9 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
         )
     )
     write_parquet(paths, 'generation_rejects', reject_df)
-    soft_warning_count = sum(int(row.get('validation_soft_warning_count', 0)) for row in rows)
+    soft_warning_count = sum(row.validation_soft_warning_count for row in rows)
     chunks_with_soft_warnings = sum(
-        1 for row in rows if int(row.get('validation_soft_warning_count', 0)) > 0
+        1 for row in rows if row.validation_soft_warning_count > 0
     )
     if chunks_with_soft_warnings:
         print(
@@ -111,7 +118,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
     return chunks
 
 
-def _write_rejects(paths: MedicalDatasetGenPaths, rejects: list[dict[str, Any]]) -> None:
+def _write_rejects(paths: MedicalDatasetGenPaths, rejects: list[dict[str, object]]) -> None:
     reject_df = (
         pl.DataFrame(rejects)
         if rejects
@@ -130,14 +137,14 @@ def _write_rejects(paths: MedicalDatasetGenPaths, rejects: list[dict[str, Any]])
 def _render_chunks_sequential(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
-    facts: list[dict[str, Any]],
-    ontology: dict[str, Any],
+    facts: list[ClinicalFact],
+    ontology: MedicalOntology,
     cache: GenerationCache,
     cache_path: Path,
     rng: Random,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[str]]:
-    rows: list[dict[str, Any]] = []
-    rejects: list[dict[str, Any]] = []
+) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
+    rows: list[ChunkRow] = []
+    rejects: list[dict[str, object]] = []
     failed_queries: set[str] = set()
 
     for i, fact in tqdm(
@@ -146,7 +153,7 @@ def _render_chunks_sequential(
         desc='Rendering chunks',
         dynamic_ncols=True,
     ):
-        if fact['query_id'] in failed_queries:
+        if fact.query_id in failed_queries:
             continue
         cached = _cached_chunk_state(cfg, fact, ontology, cache)
         if cached is not None:
@@ -157,9 +164,9 @@ def _render_chunks_sequential(
             final_text, attempt_errors = _generate_llm_chunk(cfg=cfg, fact=fact, ontology=ontology)
             if attempt_errors:
                 rejects.append(_reject_row(fact, '; '.join(attempt_errors), final_text))
-                failed_queries.add(str(fact['query_id']))
+                failed_queries.add(fact.query_id)
                 print(
-                    f'[chunks] dropping query {fact["query_id"]} after failed chunk {fact["fact_id"]}: '
+                    f'[chunks] dropping query {fact.query_id} after failed chunk {fact.fact_id}: '
                     + '; '.join(attempt_errors)
                 )
                 continue
@@ -192,10 +199,10 @@ def _render_chunks_sequential(
                 should_cache=True,
             )
         except RuntimeError as exc:
-            rejects.append(_reject_row(fact, str(exc), state['final_text']))
-            failed_queries.add(str(fact['query_id']))
+            rejects.append(_reject_row(fact, str(exc), state.final_text))
+            failed_queries.add(fact.query_id)
             print(
-                f'[chunks] dropping query {fact["query_id"]} after final validation failure in {fact["fact_id"]}: {exc}'
+                f'[chunks] dropping query {fact.query_id} after final validation failure in {fact.fact_id}: {exc}'
             )
             continue
 
@@ -210,16 +217,16 @@ def _render_chunks_sequential(
 
 def _render_chunks_grouped_llm(
     cfg: ExperimentCfg,
-    facts: list[dict[str, Any]],
-    ontology: dict[str, Any],
+    facts: list[ClinicalFact],
+    ontology: MedicalOntology,
     cache: GenerationCache,
     local_cache_path: Path,
     shared_cache_path: Path,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[str]]:
-    rows: list[dict[str, Any] | None] = [None] * len(facts)
-    rejects: list[dict[str, Any]] = []
+) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
+    rows: list[ChunkRow | None] = [None] * len(facts)
+    rejects: list[dict[str, object]] = []
     failed_queries: set[str] = set()
-    missing_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    missing_groups: dict[str, list[tuple[int, ClinicalFact]]] = {}
     exact_cache_hits = 0
     reusable_cache_hits = 0
 
@@ -276,7 +283,7 @@ def _render_chunks_grouped_llm(
                 pbar=pbar,
             )
 
-    materialized_rows = [
+    materialized_rows: list[ChunkRow] = [
         row for row in rows if row is not None and str(row['query_id']) not in failed_queries
     ]
     return materialized_rows, rejects, failed_queries
@@ -284,13 +291,13 @@ def _render_chunks_grouped_llm(
 
 def _generate_missing_groups_sequential(
     cfg: ExperimentCfg,
-    ontology: dict[str, Any],
+    ontology: MedicalOntology,
     cache: GenerationCache,
     local_cache_path: Path,
     shared_cache_path: Path,
-    group_items: list[tuple[str, list[tuple[int, dict[str, Any]]]]],
-    rows: list[dict[str, Any] | None],
-    rejects: list[dict[str, Any]],
+    group_items: list[tuple[str, list[tuple[int, ClinicalFact]]]],
+    rows: list[ChunkRow | None],
+    rejects: list[dict[str, object]],
     failed_queries: set[str],
     pbar: tqdm,
 ) -> None:
@@ -321,19 +328,19 @@ def _generate_missing_groups_sequential(
 
 def _generate_missing_groups_parallel(
     cfg: ExperimentCfg,
-    ontology: dict[str, Any],
+    ontology: MedicalOntology,
     cache: GenerationCache,
     local_cache_path: Path,
     shared_cache_path: Path,
-    group_items: list[tuple[str, list[tuple[int, dict[str, Any]]]]],
-    rows: list[dict[str, Any] | None],
-    rejects: list[dict[str, Any]],
+    group_items: list[tuple[str, list[tuple[int, ClinicalFact]]]],
+    rows: list[ChunkRow | None],
+    rejects: list[dict[str, object]],
     failed_queries: set[str],
     pbar: tqdm,
 ) -> None:
     pending: dict[
         Future[tuple[str, list[str]]],
-        tuple[str, list[tuple[int, dict[str, Any]]]],
+        tuple[str, list[tuple[int, ClinicalFact]]],
     ] = {}
     next_idx = 0
     max_in_flight = max(cfg.generation.llm_workers * 2, cfg.generation.llm_workers)
@@ -380,22 +387,22 @@ def _generate_missing_groups_parallel(
 
 
 def _active_group(
-    group: list[tuple[int, dict[str, Any]]],
+    group: list[tuple[int, ClinicalFact]],
     failed_queries: set[str],
-) -> list[tuple[int, dict[str, Any]]]:
-    return [(idx, fact) for idx, fact in group if str(fact['query_id']) not in failed_queries]
+) -> list[tuple[int, ClinicalFact]]:
+    return [(idx, fact) for idx, fact in group if fact.query_id not in failed_queries]
 
 
 def _materialize_generated_group(
     cfg: ExperimentCfg,
-    ontology: dict[str, Any],
+    ontology: MedicalOntology,
     cache: GenerationCache,
     local_cache_path: Path,
     shared_cache_path: Path,
     cache_key: str,
-    group: list[tuple[int, dict[str, Any]]],
-    rows: list[dict[str, Any] | None],
-    rejects: list[dict[str, Any]],
+    group: list[tuple[int, ClinicalFact]],
+    rows: list[ChunkRow | None],
+    rejects: list[dict[str, object]],
     failed_queries: set[str],
     final_text: str,
     attempt_errors: list[str],
@@ -410,9 +417,9 @@ def _materialize_generated_group(
         reason = '; '.join(attempt_errors)
         for _, fact in active:
             rejects.append(_reject_row(fact, reason, final_text))
-            failed_queries.add(str(fact['query_id']))
+            failed_queries.add(fact.query_id)
             print(
-                f'[chunks] dropping query {fact["query_id"]} after failed chunk {fact["fact_id"]}: '
+                f'[chunks] dropping query {fact.query_id} after failed chunk {fact.fact_id}: '
                 + reason
             )
         pbar.update(len(group))
@@ -439,10 +446,10 @@ def _materialize_generated_group(
             )
         except RuntimeError as exc:
             rejects.append(_reject_row(fact, str(exc), final_text))
-            failed_queries.add(str(fact['query_id']))
+            failed_queries.add(fact.query_id)
             print(
-                f'[chunks] dropping query {fact["query_id"]} after final validation failure in '
-                f'{fact["fact_id"]}: {exc}'
+                f'[chunks] dropping query {fact.query_id} after final validation failure in '
+                f'{fact.fact_id}: {exc}'
             )
             continue
 
@@ -483,26 +490,38 @@ def _load_generation_cache(paths: list[Path]) -> GenerationCache:
     return cache
 
 
-def _append_generation_cache(path: Path, row: dict[str, Any]) -> None:
+def _append_generation_cache(
+    path: Path, row: ChunkGenerationCacheEntry | dict[str, object]
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (
+        row.model_dump(mode='json') if isinstance(row, ChunkGenerationCacheEntry) else row
+    )
     with open(path, 'a') as f:
-        f.write(json.dumps(row, sort_keys=True) + '\n')
+        f.write(json.dumps(payload, sort_keys=True) + '\n')
         f.flush()
 
 
-def _remember_cache_entry(cache: GenerationCache, row: dict[str, Any]) -> None:
-    fact_id = row.get('fact_id')
+def _remember_cache_entry(
+    cache: GenerationCache, row: ChunkGenerationCacheEntry | dict[str, object]
+) -> None:
+    entry = (
+        row
+        if isinstance(row, ChunkGenerationCacheEntry)
+        else ChunkGenerationCacheEntry.model_validate(row)
+    )
+    fact_id = entry.fact_id
     if fact_id:
-        cache.by_fact_id[str(fact_id)] = row
-    reuse_key = row.get('chunk_generation_cache_key')
+        cache.by_fact_id[str(fact_id)] = entry
+    reuse_key = entry.chunk_generation_cache_key
     if reuse_key:
-        cache.by_reuse_key[str(reuse_key)] = row
+        cache.by_reuse_key[str(reuse_key)] = entry
 
 
 def _generate_llm_chunk(
     cfg: ExperimentCfg,
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
 ) -> tuple[str, list[str]]:
     last_text = ''
     last_errors = ['empty LLM generation']
@@ -555,22 +574,22 @@ def _word_count_errors(
     return [f'word_count={word_count} above maximum {max_words} (tolerance {tolerance})']
 
 
-def _chunk_generation_cache_key(cfg: ExperimentCfg, fact: dict[str, Any]) -> str:
-    payload: dict[str, Any] = {
+def _chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
+    payload: dict[str, object] = {
         'cache_version': _CACHE_VERSION,
         'source': 'llm' if cfg.generation.use_llm_chunk_generation else 'fallback',
-        'fact_chunk_reuse_key': fact.get('chunk_reuse_key'),
-        'condition_id': fact['condition_id'],
-        'condition_display': fact['condition_display'],
-        'subgroup_id': fact['subgroup_id'],
-        'subgroup_label': fact['subgroup_label'],
-        'subgroup_axis': fact['subgroup_axis'],
-        'axis': fact['axis'],
-        'value_bin': fact['value_bin'],
-        'patient_age': fact['patient_age'],
-        'patient_sex': fact['patient_sex'],
-        'clinical_subgroup_phrase': fact['clinical_subgroup_phrase'],
-        'note_style': fact['note_style'],
+        'fact_chunk_reuse_key': fact.chunk_reuse_key,
+        'condition_id': fact.condition_id,
+        'condition_display': fact.condition_display,
+        'subgroup_id': fact.subgroup_id,
+        'subgroup_label': fact.subgroup_label,
+        'subgroup_axis': fact.subgroup_axis,
+        'axis': fact.axis,
+        'value_bin': fact.value_bin,
+        'patient_age': fact.patient_age,
+        'patient_sex': fact.patient_sex,
+        'clinical_subgroup_phrase': fact.clinical_subgroup_phrase,
+        'note_style': fact.note_style,
         'chunk_min_words': cfg.generation.chunk_min_words,
         'chunk_max_words': cfg.generation.chunk_max_words,
         'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
@@ -583,15 +602,15 @@ def _chunk_generation_cache_key(cfg: ExperimentCfg, fact: dict[str, Any]) -> str
                 'llm_num_ctx': cfg.generation.llm_num_ctx,
             }
         )
-    if fact['axis'] == 'treatment_duration':
+    if fact.axis == 'treatment_duration':
         payload.update(
             {
-                'duration_days': fact['duration_days'],
-                'treatment': fact['treatment'],
+                'duration_days': fact.duration_days,
+                'treatment': fact.treatment,
             }
         )
     else:
-        payload['rehab_outcome'] = fact['rehab_outcome']
+        payload['rehab_outcome'] = fact.rehab_outcome
 
     raw = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -599,14 +618,14 @@ def _chunk_generation_cache_key(cfg: ExperimentCfg, fact: dict[str, Any]) -> str
 
 def _cached_chunk_state(
     cfg: ExperimentCfg,
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
     cache: GenerationCache,
-) -> tuple[dict[str, Any], str] | None:
+) -> tuple[ChunkState, str] | None:
     current_cache_key = _chunk_generation_cache_key(cfg, fact)
-    hit_kind = 'fact_id'
-    cached = cache.by_fact_id.get(str(fact['fact_id']))
-    if cached and cached.get('chunk_generation_cache_key') not in {None, current_cache_key}:
+    hit_kind: Literal['fact_id', 'reuse_key'] = 'fact_id'
+    cached = cache.by_fact_id.get(fact.fact_id)
+    if cached and cached.chunk_generation_cache_key not in {None, current_cache_key}:
         cached = None
     if not cached:
         hit_kind = 'reuse_key'
@@ -614,7 +633,7 @@ def _cached_chunk_state(
     if not cached:
         return None
 
-    cached_text = str(cached['text'])
+    cached_text = cached.text
     validation = validate_chunk_text(cached_text, fact, ontology)
     errors = [*validation.hard_errors]
     errors.extend(
@@ -625,7 +644,7 @@ def _cached_chunk_state(
             tolerance=cfg.generation.chunk_word_tolerance,
         )
     )
-    cache_source = str(cached.get('text_generation_source', 'cache'))
+    cache_source = cached.text_generation_source
     cache_matches_mode = (
         cache_source == 'llm'
         if cfg.generation.use_llm_chunk_generation
@@ -637,9 +656,9 @@ def _cached_chunk_state(
     return (
         _new_chunk_state(
             cached_text,
-            text_generation_source=cache_source,
-            llm_attempted=bool(cached.get('llm_attempted', False)),
-            llm_rejected=bool(cached.get('llm_rejected', False)),
+            text_generation_source='cache',
+            llm_attempted=cached.llm_attempted,
+            llm_rejected=cached.llm_rejected,
             cache_hit=True,
             cache_hit_kind=hit_kind,
             validation=validation,
@@ -650,37 +669,37 @@ def _cached_chunk_state(
 
 def _new_chunk_state(
     final_text: str,
-    text_generation_source: str,
+    text_generation_source: Literal['llm', 'fallback', 'cache'],
     llm_attempted: bool,
     llm_rejected: bool,
     validation: ChunkValidation,
     cache_hit: bool = False,
-    cache_hit_kind: str = 'miss',
-) -> dict[str, Any]:
-    return {
-        'final_text': final_text,
-        'text_generation_source': text_generation_source,
-        'llm_attempted': llm_attempted,
-        'llm_rejected': llm_rejected,
-        'cache_hit': cache_hit,
-        'cache_hit_kind': cache_hit_kind,
-        'validation_soft_warnings': list(validation.soft_warnings),
-    }
+    cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss',
+) -> ChunkState:
+    return ChunkState(
+        final_text=final_text,
+        text_generation_source=text_generation_source,
+        llm_attempted=llm_attempted,
+        llm_rejected=llm_rejected,
+        cache_hit=cache_hit,
+        cache_hit_kind=cache_hit_kind,
+        validation_soft_warnings=list(validation.soft_warnings),
+    )
 
 
 def _finalize_chunk_row(
     cfg: ExperimentCfg,
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
     index: int,
-    state: dict[str, Any],
+    state: ChunkState,
     should_cache: bool,
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    final_text = str(state['final_text'])
+) -> tuple[ChunkRow, ChunkGenerationCacheEntry | None]:
+    final_text = state.final_text
     validation = validate_chunk_text(final_text, fact, ontology)
     if validation.hard_errors:
         raise RuntimeError('; '.join(validation.hard_errors))
-    state['validation_soft_warnings'] = list(validation.soft_warnings)
+    state.validation_soft_warnings = list(validation.soft_warnings)
 
     word_count = len(final_text.split())
     word_errors = _word_count_errors(
@@ -694,80 +713,84 @@ def _finalize_chunk_row(
 
     cache_entry = None
     if should_cache:
-        cache_entry = {
-            'cache_version': _CACHE_VERSION,
-            'fact_id': fact['fact_id'],
-            'fact_chunk_reuse_key': fact.get('chunk_reuse_key'),
-            'chunk_generation_cache_key': _chunk_generation_cache_key(cfg, fact),
-            'text': final_text,
-            'text_generation_source': state['text_generation_source'],
-            'llm_attempted': state['llm_attempted'],
-            'llm_rejected': state['llm_rejected'],
-        }
+        cache_text_source: Literal['llm', 'fallback'] = (
+            'llm' if state.text_generation_source == 'cache' else state.text_generation_source
+        )
+        cache_entry = ChunkGenerationCacheEntry(
+            cache_version=_CACHE_VERSION,
+            fact_id=fact.fact_id,
+            fact_chunk_reuse_key=fact.chunk_reuse_key,
+            chunk_generation_cache_key=_chunk_generation_cache_key(cfg, fact),
+            text=final_text,
+            text_generation_source=cache_text_source,
+            llm_attempted=state.llm_attempted,
+            llm_rejected=state.llm_rejected,
+        )
 
     row = _chunk_row(
         fact=fact,
         chunk_id=f'chunk_{index + 1:07d}',
         final_text=final_text,
         word_count=word_count,
-        text_generation_source=state['text_generation_source'],
-        llm_attempted=state['llm_attempted'],
-        llm_rejected=state['llm_rejected'],
-        cache_hit=state['cache_hit'],
-        cache_hit_kind=state['cache_hit_kind'],
-        validation_soft_warnings=list(state['validation_soft_warnings']),
+        text_generation_source=state.text_generation_source,
+        llm_attempted=state.llm_attempted,
+        llm_rejected=state.llm_rejected,
+        cache_hit=state.cache_hit,
+        cache_hit_kind=state.cache_hit_kind,
+        validation_soft_warnings=list(state.validation_soft_warnings),
     )
     return row, cache_entry
 
 
-def _row_from_state(index: int, fact: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+def _row_from_state(index: int, fact: ClinicalFact, state: ChunkState) -> ChunkRow:
     return _chunk_row(
         fact=fact,
         chunk_id=f'chunk_{index + 1:07d}',
-        final_text=str(state['final_text']),
-        word_count=len(str(state['final_text']).split()),
-        text_generation_source=str(state['text_generation_source']),
-        llm_attempted=bool(state['llm_attempted']),
-        llm_rejected=bool(state['llm_rejected']),
-        cache_hit=bool(state['cache_hit']),
-        cache_hit_kind=str(state.get('cache_hit_kind', 'miss')),
-        validation_soft_warnings=list(state.get('validation_soft_warnings', [])),
+        final_text=state.final_text,
+        word_count=len(state.final_text.split()),
+        text_generation_source=state.text_generation_source,
+        llm_attempted=state.llm_attempted,
+        llm_rejected=state.llm_rejected,
+        cache_hit=state.cache_hit,
+        cache_hit_kind=state.cache_hit_kind,
+        validation_soft_warnings=list(state.validation_soft_warnings),
     )
 
 
-def _reject_row(fact: dict[str, Any], reason: str, text: str) -> dict[str, Any]:
+def _reject_row(fact: ClinicalFact, reason: str, text: str) -> dict[str, object]:
     return {
-        'fact_id': fact['fact_id'],
-        'query_id': fact['query_id'],
+        'fact_id': fact.fact_id,
+        'query_id': fact.query_id,
         'reason': reason,
         'llm_text': text,
     }
 
 
 def _chunk_row(
-    fact: dict[str, Any],
+    fact: ClinicalFact,
     chunk_id: str,
     final_text: str,
     word_count: int,
-    text_generation_source: str,
+    text_generation_source: Literal['llm', 'fallback', 'cache'],
     llm_attempted: bool,
     llm_rejected: bool,
     cache_hit: bool,
-    cache_hit_kind: str,
+    cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'],
     validation_soft_warnings: list[str],
-) -> dict[str, Any]:
-    return fact | {
-        'chunk_id': chunk_id,
-        'text': final_text,
-        'approx_words': word_count,
-        'text_generation_source': text_generation_source,
-        'llm_attempted': llm_attempted,
-        'llm_rejected': llm_rejected,
-        'generation_cache_hit': cache_hit,
-        'generation_cache_hit_kind': cache_hit_kind,
-        'validation_soft_warning_count': len(validation_soft_warnings),
-        'validation_soft_warnings_json': json.dumps(validation_soft_warnings, sort_keys=True),
-    }
+) -> ChunkRow:
+    return ChunkRow(
+        **fact.model_dump(mode='python'),
+        chunk_id=chunk_id,
+        text=final_text,
+        approx_words=word_count,
+        text_generation_source=text_generation_source,
+        llm_attempted=llm_attempted,
+        llm_rejected=llm_rejected,
+        generation_cache_hit=cache_hit,
+        generation_cache_hit_kind=cache_hit_kind,
+        validation_soft_warning_count=len(validation_soft_warnings),
+        validation_soft_warnings_json=json.dumps(validation_soft_warnings, sort_keys=True),
+    )
 
 
 if __name__ == '__main__':

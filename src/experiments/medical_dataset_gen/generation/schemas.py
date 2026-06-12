@@ -1,5 +1,6 @@
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -210,3 +211,38 @@ class ClinicalFact(BenchmarkModel):
         if not self.is_gold and self.facet_id is not None:
             raise ValueError('distractor facts must not have facet_id')
         return self
+
+
+class ChunkGenerationCacheEntry(BenchmarkModel):
+    cache_version: int
+    fact_id: str
+    fact_chunk_reuse_key: str | None = None
+    chunk_generation_cache_key: str
+    text: str
+    text_generation_source: Literal['llm', 'fallback']
+    llm_attempted: bool
+    llm_rejected: bool
+
+
+class ChunkRow(ClinicalFact):
+    chunk_id: str
+    text: str
+    approx_words: int
+    text_generation_source: Literal['llm', 'fallback', 'cache']
+    llm_attempted: bool
+    llm_rejected: bool
+    generation_cache_hit: bool
+    generation_cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key']
+    validation_soft_warning_count: int
+    validation_soft_warnings_json: str
+
+
+@dataclass
+class ChunkState:
+    final_text: str
+    text_generation_source: Literal['llm', 'fallback', 'cache']
+    llm_attempted: bool
+    llm_rejected: bool
+    cache_hit: bool = False
+    cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss'
+    validation_soft_warnings: list[str] = field(default_factory=list)

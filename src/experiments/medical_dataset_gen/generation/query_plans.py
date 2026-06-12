@@ -35,10 +35,7 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 
 
-def run_make_query_plans(
-    cfg: ExperimentCfg,
-    paths: MedicalDatasetGenPaths,
-) -> pl.DataFrame:
+def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     conditions = selected_conditions(ontology, cfg.global_.conditions)
     pairs = subgroup_pairs(ontology)
@@ -99,10 +96,7 @@ def _plan_specs_for_condition(
 
 
 def _materialize_plan_row(
-    cfg: ExperimentCfg,
-    rng: Random,
-    plan_idx: int,
-    spec: QueryPlanSpec,
+    cfg: ExperimentCfg, rng: Random, plan_idx: int, spec: QueryPlanSpec
 ) -> QueryPlan:
     query_id = f'q{plan_idx:05d}'
     dominant_slot = (plan_idx - 1) % 4
@@ -206,9 +200,7 @@ def _split_for_index(plan_idx: int) -> Split:
 
 
 def _subgroup_fields(
-    prefix: str,
-    subgroup_id: str,
-    subgroup: ClinicalSubgroupOntology,
+    prefix: str, subgroup_id: str, subgroup: ClinicalSubgroupOntology
 ) -> dict[str, object]:
     return {
         f'{prefix}_id': subgroup_id,

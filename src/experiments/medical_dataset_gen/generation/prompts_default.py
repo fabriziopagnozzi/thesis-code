@@ -1,6 +1,5 @@
 import hashlib
 import inspect
-from collections.abc import Mapping
 
 from experiments.medical_dataset_gen.generation.schemas import (
     ClinicalFact,
@@ -22,30 +21,30 @@ class MedicalDatasetGenDefaultPrompts:
 
     @staticmethod
     def chunk_generation_prompt(
-        fact: ClinicalFact | Mapping[str, object],
-        ontology: MedicalOntology | Mapping[str, object],
+        fact: ClinicalFact,
+        ontology: MedicalOntology,
         patient_descriptor: str,
         forbidden_terms: list[str],
         min_words: int,
         max_words: int,
         revision_feedback: str | None = None,
     ) -> str:
-        condition = fact['condition_display']
-        condition_terms = ', '.join(ontology['conditions'][fact['condition_id']]['terms'][:3])
+        condition = fact.condition_display
+        condition_terms = ', '.join(ontology.conditions[fact.condition_id].terms[:3])
         forbidden = ', '.join(forbidden_terms)
-        style_label = str(fact.get('note_style', 'brief_hospital_course')).replace('_', ' ')
+        style_label = fact.note_style.replace('_', ' ')
         structure_variant = _chunk_structure_variant(fact)
         style_directive = _chunk_style_directive(fact)
         clinical_detail = _chunk_clinical_detail(fact)
 
-        if fact['axis'] == 'treatment_duration':
+        if fact.axis == 'treatment_duration':
             evidence = inspect.cleandoc(f"""
                 Evidence focus: treatment course length.
                 Required facts to preserve exactly:
                 - Condition: {condition}
                 - Patient anchor: {patient_descriptor}
-                - Treatment: {fact['treatment']}
-                - Duration: {fact['duration_days']} days
+                - Treatment: {fact.treatment}
+                - Duration: {fact.duration_days} days
 
                 Excluded content:
                 - Do not mention discharge destination, rehabilitation placement, outpatient therapy,
@@ -61,7 +60,7 @@ class MedicalDatasetGenDefaultPrompts:
                 Required facts to preserve exactly:
                 - Condition: {condition}
                 - Patient anchor: {patient_descriptor}
-                - Rehabilitation or functional outcome: {fact['rehab_outcome']}
+                - Rehabilitation or functional outcome: {fact.rehab_outcome}
 
                 Excluded content:
                 - Do not mention number of treatment days, therapy-course length, or duration labels.
@@ -122,7 +121,7 @@ class MedicalDatasetGenDefaultPrompts:
 
     @staticmethod
     def chunk_rewrite_prompt(
-        fact: ClinicalFact | Mapping[str, object],
+        fact: ClinicalFact,
         draft_text: str,
         patient_descriptor: str,
         required_facts: list[str],
@@ -131,13 +130,13 @@ class MedicalDatasetGenDefaultPrompts:
         max_words: int,
         revision_feedback: str | None = None,
     ) -> str:
-        style_label = fact['note_style'].replace('_', ' ')
+        style_label = fact.note_style.replace('_', ' ')
         required_block = '\n'.join(f'- {fact_line}' for fact_line in required_facts)
         forbidden_block = '\n'.join(f'- {fact_line}' for fact_line in forbidden_facts)
         facet_focus = (
-            f'treatment duration with {fact["treatment"]} for {fact["duration_days"]} days'
-            if fact['axis'] == 'treatment_duration'
-            else f'rehabilitation or discharge functional outcome: {fact["rehab_outcome"]}'
+            f'treatment duration with {fact.treatment} for {fact.duration_days} days'
+            if fact.axis == 'treatment_duration'
+            else f'rehabilitation or discharge functional outcome: {fact.rehab_outcome}'
         )
 
         revision_block = ''
@@ -183,14 +182,14 @@ class MedicalDatasetGenDefaultPrompts:
     @staticmethod
     def query_paraphrase_prompt(
         query_text: str,
-        plan: QueryPlan | Mapping[str, object],
+        plan: QueryPlan,
     ) -> str:
         return inspect.cleandoc(f"""
             Paraphrase this synthetic clinical benchmark query in one sentence.
             Keep these exact labels present:
-            - {plan['condition_display']}
-            - {plan['subgroup_a_label']}
-            - {plan['subgroup_b_label']}
+            - {plan.condition_display}
+            - {plan.subgroup_a_label}
+            - {plan.subgroup_b_label}
 
             Query:
             {query_text}
@@ -199,8 +198,8 @@ class MedicalDatasetGenDefaultPrompts:
         """)
 
 
-def _chunk_style_directive(fact: ClinicalFact | Mapping[str, object]) -> str:
-    note_style = str(fact.get('note_style', 'brief_hospital_course'))
+def _chunk_style_directive(fact: ClinicalFact) -> str:
+    note_style = fact.note_style
     directives = {
         'brief_hospital_course': (
             'Write as a hospital-course sentence set: admission reason, relevant course detail, '
@@ -217,7 +216,7 @@ def _chunk_style_directive(fact: ClinicalFact | Mapping[str, object]) -> str:
     )
 
 
-def _chunk_structure_variant(fact: ClinicalFact | Mapping[str, object]) -> str:
+def _chunk_structure_variant(fact: ClinicalFact) -> str:
     variants = [
         'Begin with the patient anchor and condition, then give the evidence in the second sentence.',
         'Begin with the clinical course, include the patient anchor in an appositive phrase, then state the evidence.',
@@ -226,14 +225,14 @@ def _chunk_structure_variant(fact: ClinicalFact | Mapping[str, object]) -> str:
         'Use three compact sentences with no repeated transition phrase.',
         'Place the exact treatment or outcome phrase before the final status sentence.',
     ]
-    seed_source = str(fact.get('chunk_reuse_key') or fact.get('fact_id') or fact)
+    seed_source = str(fact.chunk_reuse_key or fact.fact_id)
     idx = int(hashlib.sha256(seed_source.encode()).hexdigest()[:8], 16) % len(variants)
     return variants[idx]
 
 
-def _chunk_clinical_detail(fact: ClinicalFact | Mapping[str, object]) -> str:
-    condition_id = str(fact['condition_id'])
-    if fact['axis'] == 'treatment_duration':
+def _chunk_clinical_detail(fact: ClinicalFact) -> str:
+    condition_id = str(fact.condition_id)
+    if fact.axis == 'treatment_duration':
         details = {
             'encephalitis_myelitis': [
                 'fever curve improved',
@@ -301,6 +300,6 @@ def _chunk_clinical_detail(fact: ClinicalFact | Mapping[str, object]) -> str:
         ]
 
     choices = details.get(condition_id, fallback)
-    seed_source = f'{fact.get("chunk_reuse_key") or fact.get("fact_id")}:clinical_detail'
+    seed_source = f'{fact.chunk_reuse_key or fact.fact_id}:clinical_detail'
     idx = int(hashlib.sha256(seed_source.encode()).hexdigest()[:8], 16) % len(choices)
     return choices[idx]
