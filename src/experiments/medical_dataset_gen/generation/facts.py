@@ -6,6 +6,7 @@ sampling over the ontology plus per-facet cluster construction so the benchmark
 has redundant positives and plausible negatives by design.
 """
 
+import hashlib
 import json
 from random import Random
 from typing import Any
@@ -178,27 +179,43 @@ def _base_fact(
     cluster_id: str,
     cluster_role: str,
 ) -> dict[str, Any]:
-    value_bin, duration_days, treatment, rehab_outcome = _axis_values(
+    value_bin = _axis_value_bin(
         ontology=ontology,
         condition_id=condition_id,
         axis=axis,
         target_value_bin=facet.get('value_bin'),
-        rng=rng,
         local_idx=local_idx,
+    )
+    chunk_reuse_key = _chunk_reuse_key(
+        condition_id=condition_id,
+        subgroup_id=subgroup_id,
+        axis=axis,
+        value_bin=value_bin,
+        local_idx=local_idx,
+    )
+    surface_rng = Random(_stable_seed(chunk_reuse_key))
+    duration_days, treatment, rehab_outcome = _axis_values(
+        ontology=ontology,
+        condition_id=condition_id,
+        axis=axis,
+        value_bin=value_bin,
+        rng=surface_rng,
     )
     query_id = plan['query_id']
     support_facet_id = facet['facet_id'] if is_gold else None
     fact_id = f'{query_id}_{"g" if is_gold else "d"}_{len(cluster_id)}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     admission_id = f'adm_{query_id}_{cluster_id}_{local_idx:03d}'
     patient_id = f'pat_{query_id}_{cluster_id}_{local_idx // 2:03d}'
-    note_style = rng.choice([
-        'brief_hospital_course',
-        'brief_hospital_course',
-        'discharge_diagnosis',
-    ])
-    patient_age = _patient_age(subgroup_id, rng)
-    patient_sex = rng.choice(['female', 'male'])
-    clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, rng)
+    note_style = surface_rng.choice(
+        [
+            'brief_hospital_course',
+            'brief_hospital_course',
+            'discharge_diagnosis',
+        ]
+    )
+    patient_age = _patient_age(subgroup_id, surface_rng)
+    patient_sex = surface_rng.choice(['female', 'male'])
+    clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, surface_rng)
 
     must_mention = [condition_display, subgroup_label]
     if axis == 'treatment_duration':
@@ -216,6 +233,7 @@ def _base_fact(
         'query_id': query_id,
         'source_query_id': query_id,
         'fact_id': fact_id,
+        'chunk_reuse_key': chunk_reuse_key,
         'facet_id': support_facet_id,
         'target_facet_id': facet['facet_id'],
         'cluster_id': cluster_id,
@@ -246,36 +264,66 @@ def _base_fact(
     }
 
 
-def _axis_values(
+def _axis_value_bin(
     ontology: dict[str, Any],
     condition_id: str,
     axis: str,
     target_value_bin: str | None,
-    rng: Random,
     local_idx: int,
-) -> tuple[str, int | None, str | None, str | None]:
+) -> str:
     condition = ontology['conditions'][condition_id]
     if axis == 'treatment_duration':
         bins: list[str] = list(condition['duration_days'])
-        value_bin = (
-            target_value_bin
-            if target_value_bin in condition['duration_days']
-            else bins[(local_idx + rng.randint(0, 2)) % len(bins)]
-        )
+        if target_value_bin in condition['duration_days']:
+            return str(target_value_bin)
+        return bins[local_idx % len(bins)]
+
+    bins = list(condition['rehab_outcomes'])
+    if target_value_bin in condition['rehab_outcomes']:
+        return str(target_value_bin)
+    return bins[local_idx % len(bins)]
+
+
+def _axis_values(
+    ontology: dict[str, Any],
+    condition_id: str,
+    axis: str,
+    value_bin: str,
+    rng: Random,
+) -> tuple[int | None, str | None, str | None]:
+    condition = ontology['conditions'][condition_id]
+    if axis == 'treatment_duration':
         low, high = condition['duration_days'][value_bin]
         duration_days = rng.randint(int(low), int(high))
         duration_treatments = condition.get('duration_treatments') or condition['treatments']
         treatment = rng.choice(duration_treatments)
-        return value_bin, duration_days, treatment, None
+        return duration_days, treatment, None
 
-    bins = list(condition['rehab_outcomes'])
-    value_bin = (
-        target_value_bin
-        if target_value_bin in condition['rehab_outcomes']
-        else bins[(local_idx + rng.randint(0, 2)) % len(bins)]
-    )
     rehab_outcome = rng.choice(condition['rehab_outcomes'][value_bin])
-    return value_bin, None, None, rehab_outcome
+    return None, None, rehab_outcome
+
+
+def _chunk_reuse_key(
+    condition_id: str,
+    subgroup_id: str,
+    axis: str,
+    value_bin: str,
+    local_idx: int,
+) -> str:
+    payload = {
+        'schema': 'medical_chunk_reuse_v1',
+        'condition_id': condition_id,
+        'subgroup_id': subgroup_id,
+        'axis': axis,
+        'value_bin': value_bin,
+        'local_idx': local_idx,
+    }
+    raw = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _stable_seed(value: str) -> int:
+    return int(hashlib.sha256(value.encode()).hexdigest()[:16], 16)
 
 
 def _patient_age(subgroup_id: str, rng: Random) -> int:

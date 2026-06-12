@@ -1,9 +1,10 @@
+import hashlib
 import inspect
 from typing import Any
 
 
 class MedicalDatasetGenDefaultPrompts:
-    chunk_generation_prompt_id = 'chunk_generation_v1'
+    chunk_generation_prompt_id = 'chunk_generation_v3'
     chunk_rewrite_prompt_id = 'chunk_rewrite_v1'
 
     chunk_generation_system = inspect.cleandoc("""
@@ -26,31 +27,42 @@ class MedicalDatasetGenDefaultPrompts:
         condition = fact['condition_display']
         condition_terms = ', '.join(ontology['conditions'][fact['condition_id']]['terms'][:3])
         forbidden = ', '.join(forbidden_terms)
+        style_label = str(fact.get('note_style', 'brief_hospital_course')).replace('_', ' ')
+        structure_variant = _chunk_structure_variant(fact)
+        style_directive = _chunk_style_directive(fact)
+        clinical_detail = _chunk_clinical_detail(fact)
 
         if fact['axis'] == 'treatment_duration':
             evidence = inspect.cleandoc(f"""
                 Evidence focus: treatment course length.
-                Must include: {condition}; {patient_descriptor}; {fact['treatment']}; {fact['duration_days']} days.
-                Must not include: discharge destination, rehabilitation placement, outpatient therapy,
-                home health, home nursing, inpatient rehab, persistent functional deficits, or rehab outcome.
-            """)
-            examples = inspect.cleandoc("""
-                Good examples:
-                - The 82-year-old woman was treated for encephalitis with acyclovir for 14 days. Fever resolved and orientation improved before discharge, and neurology follow-up was arranged.
-                - The 79-year-old man with uncomplicated type 2 diabetes was managed for myelitis with intravenous methylprednisolone for 5 days, followed by an oral taper. Lower-extremity strength improved modestly before discharge.
-                - The 43-year-old woman with immunosuppression was treated for encephalitis with acyclovir for 21 days. Headache lessened and mental status normalized by discharge.
+                Required facts to preserve exactly:
+                - Condition: {condition}
+                - Patient anchor: {patient_descriptor}
+                - Treatment: {fact['treatment']}
+                - Duration: {fact['duration_days']} days
+
+                Excluded content:
+                - Do not mention discharge destination, rehabilitation placement, outpatient therapy,
+                  home health, home nursing, inpatient rehab, persistent functional deficits, or rehab outcome.
+
+                Required clinical texture:
+                - Add one concrete non-rehabilitation course detail: {clinical_detail}
+                - Describe response without using generic "stable" or "significant improvement" language.
             """)
         else:
             evidence = inspect.cleandoc(f"""
                 Evidence focus: discharge functional or rehabilitation status.
-                Must include: {condition}; {patient_descriptor}; {fact['rehab_outcome']}.
-                Must not include: number of treatment days, therapy-course length, duration labels.
-            """)
-            examples = inspect.cleandoc("""
-                Good examples:
-                - The 84-year-old woman treated for encephalitis was discharged to inpatient rehabilitation after persistent gait instability and impaired balance limited safe ambulation.
-                - The 67-year-old man with uncomplicated type 2 diabetes was hospitalized for myelitis. At discharge, he required home physical therapy because residual leg weakness continued to limit transfers.
-                - The 48-year-old woman with chronic kidney disease was managed for encephalitis and was cleared for discharge home with visiting nursing after cognition returned to baseline and mobility remained intact.
+                Required facts to preserve exactly:
+                - Condition: {condition}
+                - Patient anchor: {patient_descriptor}
+                - Rehabilitation or functional outcome: {fact['rehab_outcome']}
+
+                Excluded content:
+                - Do not mention number of treatment days, therapy-course length, or duration labels.
+
+                Required clinical texture:
+                - Add one concrete functional detail: {clinical_detail}
+                - Tie the functional detail directly to the listed rehabilitation or discharge outcome.
             """)
 
         revision_block = ''
@@ -70,10 +82,16 @@ class MedicalDatasetGenDefaultPrompts:
             Related condition terms you may use naturally: {condition_terms}
             {evidence}
 
-            {examples}
+            Style target:
+            - Note style: {style_label}
+            - {style_directive}
+            - Sentence structure variant: {structure_variant}
 
             Bad examples to avoid:
             - Any note-section heading followed by a colon before the clinical sentence.
+            - Repeated boilerplate such as "presented with acute onset" followed by "was started on" followed by "following completion".
+            - Generic endings such as "clinical status improved significantly", "remains stable", "stable for transition", or "transition of care".
+            - Thin two-fact notes that only say diagnosis plus treatment duration or diagnosis plus discharge destination.
             - The structured cohort descriptor is patients older than 75.
             - The excerpt supports the duration facet only.
             - Index terms: encephalitis; treatment duration; rehabilitation outcome.
@@ -82,10 +100,13 @@ class MedicalDatasetGenDefaultPrompts:
             Constraints:
             - {min_words} to {max_words} words.
             - Sound like concise discharge-summary prose.
-            - Start directly with the patient and clinical content, not with a note-section heading.
-            - Mention the subgroup-defining evidence early in the fragment.
+            - Return 3 to 4 sentences in one paragraph.
+            - Start directly with clinical content, not with a note-section heading.
+            - Include the patient anchor in the first sentence, but vary the opening syntax.
             - Make the requested evidence clinically explicit and easy to retrieve semantically.
             - Keep the fragment focused on the requested evidence focus.
+            - Do not imitate a fixed template across chunks; vary verbs, clause order, and sentence rhythm.
+            - Avoid these overused words and phrases unless they are part of a required fact: stable, significant, transition of care, admitted for management, received a course.
             - Do not use these words or phrases: {forbidden}.
             - Do not mention qrels, clusters, facets, labels, benchmark design, or document IDs.
             - Do not add facts beyond the required condition, patient descriptor, treatment duration, or rehab status.
@@ -167,3 +188,110 @@ class MedicalDatasetGenDefaultPrompts:
 
             Return only the paraphrased query.
         """)
+
+
+def _chunk_style_directive(fact: dict[str, Any]) -> str:
+    note_style = str(fact.get('note_style', 'brief_hospital_course'))
+    directives = {
+        'brief_hospital_course': (
+            'Write as a hospital-course sentence set: admission reason, relevant course detail, '
+            'and status near discharge.'
+        ),
+        'discharge_diagnosis': (
+            'Write as a problem-focused discharge diagnosis note: compact diagnosis statement, '
+            'supporting course evidence, and final clinical status.'
+        ),
+    }
+    return directives.get(
+        note_style,
+        'Write as concise clinical note prose with the required evidence embedded naturally.',
+    )
+
+
+def _chunk_structure_variant(fact: dict[str, Any]) -> str:
+    variants = [
+        'Begin with the patient anchor and condition, then give the evidence in the second sentence.',
+        'Begin with the clinical course, include the patient anchor in an appositive phrase, then state the evidence.',
+        'Begin with response or functional status, then identify the condition and patient anchor.',
+        'Use one longer clinical sentence followed by one short status sentence.',
+        'Use three compact sentences with no repeated transition phrase.',
+        'Place the exact treatment or outcome phrase before the final status sentence.',
+    ]
+    seed_source = str(fact.get('chunk_reuse_key') or fact.get('fact_id') or fact)
+    idx = int(hashlib.sha256(seed_source.encode()).hexdigest()[:8], 16) % len(variants)
+    return variants[idx]
+
+
+def _chunk_clinical_detail(fact: dict[str, Any]) -> str:
+    condition_id = str(fact['condition_id'])
+    if fact['axis'] == 'treatment_duration':
+        details = {
+            'encephalitis_myelitis': [
+                'fever curve improved',
+                'orientation became more consistent',
+                'headache and neck discomfort lessened',
+                'limb strength was documented as improving on serial exams',
+            ],
+            'pneumonia': [
+                'oxygen requirement decreased',
+                'work of breathing eased',
+                'cough became less productive',
+                'repeat lung exam showed fewer crackles',
+            ],
+            'ischemic_stroke': [
+                'speech clarity improved during neurologic checks',
+                'swallow evaluation allowed diet advancement',
+                'right-sided drift was less pronounced',
+                'blood pressure was controlled during neurologic monitoring',
+            ],
+            'heart_failure': [
+                'leg edema decreased with diuresis',
+                'orthopnea improved',
+                'daily weights trended down',
+                'lung exam showed less congestion',
+            ],
+        }
+        fallback = [
+            'vital-sign abnormalities improved',
+            'symptom burden decreased on serial exams',
+            'repeat bedside assessment showed clinical improvement',
+            'laboratory markers moved toward baseline',
+        ]
+    else:
+        details = {
+            'encephalitis_myelitis': [
+                'gait testing showed residual imbalance',
+                'transfer safety required therapist cueing',
+                'cognitive endurance limited independent activity',
+                'lower-extremity weakness affected stair training',
+            ],
+            'pneumonia': [
+                'walking distance remained below baseline',
+                'exertional dyspnea limited hallway ambulation',
+                'stair tolerance was reduced after the respiratory illness',
+                'fatigue limited independent self-care',
+            ],
+            'ischemic_stroke': [
+                'hemiparesis limited dressing and transfers',
+                'dysarthria persisted during therapy assessment',
+                'balance testing showed fall risk',
+                'fine-motor weakness affected activities of daily living',
+            ],
+            'heart_failure': [
+                'deconditioning limited hallway ambulation',
+                'fatigue restricted transfer independence',
+                'exertional dyspnea limited therapy tolerance',
+                'volume-related weakness slowed mobility recovery',
+            ],
+        }
+        fallback = [
+            'therapy assessment documented reduced endurance',
+            'mobility remained below pre-hospital baseline',
+            'transfer safety required additional support',
+            'fatigue limited independent activity',
+        ]
+
+    choices = details.get(condition_id, fallback)
+    seed_source = f'{fact.get("chunk_reuse_key") or fact.get("fact_id")}:clinical_detail'
+    idx = int(hashlib.sha256(seed_source.encode()).hexdigest()[:8], 16) % len(choices)
+    return choices[idx]

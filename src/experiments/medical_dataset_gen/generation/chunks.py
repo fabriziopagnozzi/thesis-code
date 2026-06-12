@@ -1,5 +1,7 @@
+import hashlib
 import json
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass
 from pathlib import Path
 from random import Random
 from typing import Any
@@ -21,7 +23,14 @@ from experiments.medical_dataset_gen.global_configs import (
     write_parquet,
 )
 
-_CACHE_VERSION = 7
+_CACHE_VERSION = 9
+
+
+@dataclass
+class GenerationCache:
+    by_fact_id: dict[str, dict[str, Any]]
+    by_reuse_key: dict[str, dict[str, Any]]
+    loaded_rows: int = 0
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -40,19 +49,23 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
     else:
         print('[chunks] LLM generation disabled; using deterministic clinical fallback')
 
-    cache_path = paths.experiment_dir / 'chunk_generation_cache.jsonl'
-    cache = _load_generation_cache(cache_path)
-    if cache:
-        print(f'[chunks] loaded {len(cache):,} cached chunk generations from {cache_path}')
+    local_cache_path = paths.experiment_dir / 'chunk_generation_cache.jsonl'
+    shared_cache_path = paths.root / '_cache' / 'chunk_generation_cache.jsonl'
+    cache = _load_generation_cache([shared_cache_path, local_cache_path])
+    if cache.loaded_rows:
+        print(
+            f'[chunks] loaded {cache.loaded_rows:,} cached chunk generation row(s) '
+            f'({len(cache.by_fact_id):,} exact fact keys, {len(cache.by_reuse_key):,} reusable keys)'
+        )
 
-    if cfg.generation.use_llm_chunk_generation and cfg.generation.llm_workers > 1:
-        rows, rejects, failed_queries = _render_chunks_parallel_llm(
+    if cfg.generation.use_llm_chunk_generation:
+        rows, rejects, failed_queries = _render_chunks_grouped_llm(
             cfg=cfg,
-            paths=paths,
             facts=fact_rows,
             ontology=ontology,
             cache=cache,
-            cache_path=cache_path,
+            local_cache_path=local_cache_path,
+            shared_cache_path=shared_cache_path,
         )
     else:
         rows, rejects, failed_queries = _render_chunks_sequential(
@@ -61,7 +74,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             facts=fact_rows,
             ontology=ontology,
             cache=cache,
-            cache_path=cache_path,
+            cache_path=local_cache_path,
             rng=rng,
         )
 
@@ -119,7 +132,7 @@ def _render_chunks_sequential(
     paths: MedicalDatasetGenPaths,
     facts: list[dict[str, Any]],
     ontology: dict[str, Any],
-    cache: dict[str, dict[str, Any]],
+    cache: GenerationCache,
     cache_path: Path,
     rng: Random,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[str]]:
@@ -137,7 +150,7 @@ def _render_chunks_sequential(
             continue
         cached = _cached_chunk_state(cfg, fact, ontology, cache)
         if cached is not None:
-            rows.append(_row_from_state(i, fact, cached))
+            rows.append(_row_from_state(i, fact, cached[0]))
             continue
 
         if cfg.generation.use_llm_chunk_generation:
@@ -188,102 +201,80 @@ def _render_chunks_sequential(
 
         if cache_entry is not None:
             _append_generation_cache(cache_path, cache_entry)
+            _remember_cache_entry(cache, cache_entry)
         rows.append(row)
 
     kept_rows = [row for row in rows if str(row['query_id']) not in failed_queries]
     return kept_rows, rejects, failed_queries
 
 
-def _render_chunks_parallel_llm(
+def _render_chunks_grouped_llm(
     cfg: ExperimentCfg,
-    paths: MedicalDatasetGenPaths,
     facts: list[dict[str, Any]],
     ontology: dict[str, Any],
-    cache: dict[str, dict[str, Any]],
-    cache_path: Path,
+    cache: GenerationCache,
+    local_cache_path: Path,
+    shared_cache_path: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[str]]:
     rows: list[dict[str, Any] | None] = [None] * len(facts)
     rejects: list[dict[str, Any]] = []
     failed_queries: set[str] = set()
-    pending: dict[Future[tuple[str, list[str]]], tuple[int, dict[str, Any]]] = {}
-    next_idx = 0
-    max_in_flight = max(cfg.generation.llm_workers * 2, cfg.generation.llm_workers)
-    executor = ThreadPoolExecutor(
-        max_workers=cfg.generation.llm_workers, thread_name_prefix='mdg-llm'
+    missing_groups: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    exact_cache_hits = 0
+    reusable_cache_hits = 0
+
+    for idx, fact in enumerate(facts):
+        cached = _cached_chunk_state(cfg, fact, ontology, cache)
+        if cached is not None:
+            state, hit_kind = cached
+            rows[idx] = _row_from_state(idx, fact, state)
+            if hit_kind == 'fact_id':
+                exact_cache_hits += 1
+            else:
+                reusable_cache_hits += 1
+            continue
+        cache_key = _chunk_generation_cache_key(cfg, fact)
+        missing_groups.setdefault(cache_key, []).append((idx, fact))
+
+    cache_hits = exact_cache_hits + reusable_cache_hits
+    facts_to_generate = len(facts) - cache_hits
+    duplicate_jobs_saved = max(0, facts_to_generate - len(missing_groups))
+    print(
+        f'[chunks] grouped LLM generation: facts={len(facts):,}, cache_hits={cache_hits:,} '
+        f'(exact={exact_cache_hits:,}, reusable={reusable_cache_hits:,}), '
+        f'unique_llm_jobs={len(missing_groups):,}, duplicate_jobs_saved={duplicate_jobs_saved:,}'
     )
 
-    try:
-        with tqdm(total=len(facts), desc='Rendering chunks', dynamic_ncols=True) as pbar:
-            while next_idx < len(facts) or pending:
-                while next_idx < len(facts) and len(pending) < max_in_flight:
-                    fact = facts[next_idx]
-                    if fact['query_id'] in failed_queries:
-                        pbar.update(1)
-                        next_idx += 1
-                        continue
-                    cached = _cached_chunk_state(cfg, fact, ontology, cache)
-                    if cached is not None:
-                        rows[next_idx] = _row_from_state(next_idx, fact, cached)
-                        pbar.update(1)
-                        next_idx += 1
-                        continue
-
-                    future = executor.submit(_generate_llm_chunk, cfg, fact, ontology)
-                    pending[future] = (next_idx, fact)
-                    next_idx += 1
-
-                if not pending:
-                    continue
-
-                done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
-                for future in done:
-                    idx, fact = pending.pop(future)
-                    final_text, attempt_errors = future.result()
-                    if fact['query_id'] in failed_queries:
-                        pbar.update(1)
-                        continue
-                    if attempt_errors:
-                        rejects.append(_reject_row(fact, '; '.join(attempt_errors), final_text))
-                        failed_queries.add(str(fact['query_id']))
-                        print(
-                            f'[chunks] dropping query {fact["query_id"]} after failed chunk {fact["fact_id"]}: '
-                            + '; '.join(attempt_errors)
-                        )
-                        pbar.update(1)
-                        continue
-
-                    state = _new_chunk_state(
-                        final_text,
-                        text_generation_source='llm',
-                        llm_attempted=True,
-                        llm_rejected=False,
-                        validation=validate_chunk_text(final_text, fact, ontology),
-                    )
-                    try:
-                        row, cache_entry = _finalize_chunk_row(
-                            cfg=cfg,
-                            fact=fact,
-                            ontology=ontology,
-                            index=idx,
-                            state=state,
-                            should_cache=True,
-                        )
-                    except RuntimeError as exc:
-                        rejects.append(_reject_row(fact, str(exc), final_text))
-                        failed_queries.add(str(fact['query_id']))
-                        print(
-                            f'[chunks] dropping query {fact["query_id"]} after final validation failure in '
-                            f'{fact["fact_id"]}: {exc}'
-                        )
-                        pbar.update(1)
-                        continue
-
-                    if cache_entry is not None:
-                        _append_generation_cache(cache_path, cache_entry)
-                    rows[idx] = row
-                    pbar.update(1)
-    finally:
-        executor.shutdown(wait=True, cancel_futures=True)
+    group_items = list(missing_groups.items())
+    with tqdm(total=len(facts), desc='Rendering chunks', dynamic_ncols=True) as pbar:
+        if cache_hits:
+            pbar.update(cache_hits)
+        if cfg.generation.llm_workers > 1:
+            _generate_missing_groups_parallel(
+                cfg=cfg,
+                ontology=ontology,
+                cache=cache,
+                local_cache_path=local_cache_path,
+                shared_cache_path=shared_cache_path,
+                group_items=group_items,
+                rows=rows,
+                rejects=rejects,
+                failed_queries=failed_queries,
+                pbar=pbar,
+            )
+        else:
+            _generate_missing_groups_sequential(
+                cfg=cfg,
+                ontology=ontology,
+                cache=cache,
+                local_cache_path=local_cache_path,
+                shared_cache_path=shared_cache_path,
+                group_items=group_items,
+                rows=rows,
+                rejects=rejects,
+                failed_queries=failed_queries,
+                pbar=pbar,
+            )
 
     materialized_rows = [
         row for row in rows if row is not None and str(row['query_id']) not in failed_queries
@@ -291,26 +282,204 @@ def _render_chunks_parallel_llm(
     return materialized_rows, rejects, failed_queries
 
 
-def _load_generation_cache(path: Path) -> dict[str, dict[str, Any]]:
-    if not path.exists():
-        return {}
+def _generate_missing_groups_sequential(
+    cfg: ExperimentCfg,
+    ontology: dict[str, Any],
+    cache: GenerationCache,
+    local_cache_path: Path,
+    shared_cache_path: Path,
+    group_items: list[tuple[str, list[tuple[int, dict[str, Any]]]]],
+    rows: list[dict[str, Any] | None],
+    rejects: list[dict[str, Any]],
+    failed_queries: set[str],
+    pbar: tqdm,
+) -> None:
+    for cache_key, group in group_items:
+        active = _active_group(group, failed_queries)
+        if not active:
+            pbar.update(len(group))
+            continue
+        final_text, attempt_errors = _generate_llm_chunk(
+            cfg=cfg, fact=active[0][1], ontology=ontology
+        )
+        _materialize_generated_group(
+            cfg=cfg,
+            ontology=ontology,
+            cache=cache,
+            local_cache_path=local_cache_path,
+            shared_cache_path=shared_cache_path,
+            cache_key=cache_key,
+            group=group,
+            rows=rows,
+            rejects=rejects,
+            failed_queries=failed_queries,
+            final_text=final_text,
+            attempt_errors=attempt_errors,
+            pbar=pbar,
+        )
 
-    cache: dict[str, dict[str, Any]] = {}
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
+
+def _generate_missing_groups_parallel(
+    cfg: ExperimentCfg,
+    ontology: dict[str, Any],
+    cache: GenerationCache,
+    local_cache_path: Path,
+    shared_cache_path: Path,
+    group_items: list[tuple[str, list[tuple[int, dict[str, Any]]]]],
+    rows: list[dict[str, Any] | None],
+    rejects: list[dict[str, Any]],
+    failed_queries: set[str],
+    pbar: tqdm,
+) -> None:
+    pending: dict[
+        Future[tuple[str, list[str]]],
+        tuple[str, list[tuple[int, dict[str, Any]]]],
+    ] = {}
+    next_idx = 0
+    max_in_flight = max(cfg.generation.llm_workers * 2, cfg.generation.llm_workers)
+    executor = ThreadPoolExecutor(
+        max_workers=cfg.generation.llm_workers, thread_name_prefix='mdg-llm'
+    )
+
+    try:
+        while next_idx < len(group_items) or pending:
+            while next_idx < len(group_items) and len(pending) < max_in_flight:
+                cache_key, group = group_items[next_idx]
+                next_idx += 1
+                active = _active_group(group, failed_queries)
+                if not active:
+                    pbar.update(len(group))
+                    continue
+                future = executor.submit(_generate_llm_chunk, cfg, active[0][1], ontology)
+                pending[future] = (cache_key, group)
+
+            if not pending:
                 continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if row.get('cache_version') != _CACHE_VERSION:
-                continue
-            fact_id = row.get('fact_id')
-            text = row.get('text')
-            if fact_id and text:
-                cache[str(fact_id)] = row
+
+            done, _ = wait(pending.keys(), return_when=FIRST_COMPLETED)
+            for future in done:
+                cache_key, group = pending.pop(future)
+                final_text, attempt_errors = future.result()
+                _materialize_generated_group(
+                    cfg=cfg,
+                    ontology=ontology,
+                    cache=cache,
+                    local_cache_path=local_cache_path,
+                    shared_cache_path=shared_cache_path,
+                    cache_key=cache_key,
+                    group=group,
+                    rows=rows,
+                    rejects=rejects,
+                    failed_queries=failed_queries,
+                    final_text=final_text,
+                    attempt_errors=attempt_errors,
+                    pbar=pbar,
+                )
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
+def _active_group(
+    group: list[tuple[int, dict[str, Any]]],
+    failed_queries: set[str],
+) -> list[tuple[int, dict[str, Any]]]:
+    return [(idx, fact) for idx, fact in group if str(fact['query_id']) not in failed_queries]
+
+
+def _materialize_generated_group(
+    cfg: ExperimentCfg,
+    ontology: dict[str, Any],
+    cache: GenerationCache,
+    local_cache_path: Path,
+    shared_cache_path: Path,
+    cache_key: str,
+    group: list[tuple[int, dict[str, Any]]],
+    rows: list[dict[str, Any] | None],
+    rejects: list[dict[str, Any]],
+    failed_queries: set[str],
+    final_text: str,
+    attempt_errors: list[str],
+    pbar: tqdm,
+) -> None:
+    active = _active_group(group, failed_queries)
+    if not active:
+        pbar.update(len(group))
+        return
+
+    if attempt_errors:
+        reason = '; '.join(attempt_errors)
+        for _, fact in active:
+            rejects.append(_reject_row(fact, reason, final_text))
+            failed_queries.add(str(fact['query_id']))
+            print(
+                f'[chunks] dropping query {fact["query_id"]} after failed chunk {fact["fact_id"]}: '
+                + reason
+            )
+        pbar.update(len(group))
+        return
+
+    local_cache_written = cache_key in cache.by_reuse_key
+    shared_cache_written = cache_key in cache.by_reuse_key
+    for idx, fact in active:
+        state = _new_chunk_state(
+            final_text,
+            text_generation_source='llm',
+            llm_attempted=True,
+            llm_rejected=False,
+            validation=validate_chunk_text(final_text, fact, ontology),
+        )
+        try:
+            row, cache_entry = _finalize_chunk_row(
+                cfg=cfg,
+                fact=fact,
+                ontology=ontology,
+                index=idx,
+                state=state,
+                should_cache=True,
+            )
+        except RuntimeError as exc:
+            rejects.append(_reject_row(fact, str(exc), final_text))
+            failed_queries.add(str(fact['query_id']))
+            print(
+                f'[chunks] dropping query {fact["query_id"]} after final validation failure in '
+                f'{fact["fact_id"]}: {exc}'
+            )
+            continue
+
+        if cache_entry is not None:
+            _remember_cache_entry(cache, cache_entry)
+            if not local_cache_written:
+                _append_generation_cache(local_cache_path, cache_entry)
+                local_cache_written = True
+            if not shared_cache_written:
+                _append_generation_cache(shared_cache_path, cache_entry)
+                shared_cache_written = True
+        rows[idx] = row
+    pbar.update(len(group))
+
+
+def _load_generation_cache(paths: list[Path]) -> GenerationCache:
+    cache = GenerationCache(by_fact_id={}, by_reuse_key={})
+
+    for path in paths:
+        if not path.exists():
+            continue
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get('cache_version') != _CACHE_VERSION:
+                    continue
+                text = row.get('text')
+                if not text:
+                    continue
+                cache.loaded_rows += 1
+                _remember_cache_entry(cache, row)
     return cache
 
 
@@ -319,6 +488,15 @@ def _append_generation_cache(path: Path, row: dict[str, Any]) -> None:
     with open(path, 'a') as f:
         f.write(json.dumps(row, sort_keys=True) + '\n')
         f.flush()
+
+
+def _remember_cache_entry(cache: GenerationCache, row: dict[str, Any]) -> None:
+    fact_id = row.get('fact_id')
+    if fact_id:
+        cache.by_fact_id[str(fact_id)] = row
+    reuse_key = row.get('chunk_generation_cache_key')
+    if reuse_key:
+        cache.by_reuse_key[str(reuse_key)] = row
 
 
 def _generate_llm_chunk(
@@ -377,13 +555,62 @@ def _word_count_errors(
     return [f'word_count={word_count} above maximum {max_words} (tolerance {tolerance})']
 
 
+def _chunk_generation_cache_key(cfg: ExperimentCfg, fact: dict[str, Any]) -> str:
+    payload: dict[str, Any] = {
+        'cache_version': _CACHE_VERSION,
+        'source': 'llm' if cfg.generation.use_llm_chunk_generation else 'fallback',
+        'fact_chunk_reuse_key': fact.get('chunk_reuse_key'),
+        'condition_id': fact['condition_id'],
+        'condition_display': fact['condition_display'],
+        'subgroup_id': fact['subgroup_id'],
+        'subgroup_label': fact['subgroup_label'],
+        'subgroup_axis': fact['subgroup_axis'],
+        'axis': fact['axis'],
+        'value_bin': fact['value_bin'],
+        'patient_age': fact['patient_age'],
+        'patient_sex': fact['patient_sex'],
+        'clinical_subgroup_phrase': fact['clinical_subgroup_phrase'],
+        'note_style': fact['note_style'],
+        'chunk_min_words': cfg.generation.chunk_min_words,
+        'chunk_max_words': cfg.generation.chunk_max_words,
+        'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
+    }
+    if cfg.generation.use_llm_chunk_generation:
+        payload.update(
+            {
+                'llm_name': cfg.generation.llm_name,
+                'llm_temperature': cfg.generation.llm_temperature,
+                'llm_num_ctx': cfg.generation.llm_num_ctx,
+            }
+        )
+    if fact['axis'] == 'treatment_duration':
+        payload.update(
+            {
+                'duration_days': fact['duration_days'],
+                'treatment': fact['treatment'],
+            }
+        )
+    else:
+        payload['rehab_outcome'] = fact['rehab_outcome']
+
+    raw = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def _cached_chunk_state(
     cfg: ExperimentCfg,
     fact: dict[str, Any],
     ontology: dict[str, Any],
-    cache: dict[str, dict[str, Any]],
-) -> dict[str, Any] | None:
-    cached = cache.get(fact['fact_id'])
+    cache: GenerationCache,
+) -> tuple[dict[str, Any], str] | None:
+    current_cache_key = _chunk_generation_cache_key(cfg, fact)
+    hit_kind = 'fact_id'
+    cached = cache.by_fact_id.get(str(fact['fact_id']))
+    if cached and cached.get('chunk_generation_cache_key') not in {None, current_cache_key}:
+        cached = None
+    if not cached:
+        hit_kind = 'reuse_key'
+        cached = cache.by_reuse_key.get(current_cache_key)
     if not cached:
         return None
 
@@ -407,13 +634,17 @@ def _cached_chunk_state(
     if errors or not cache_matches_mode:
         return None
 
-    return _new_chunk_state(
-        cached_text,
-        text_generation_source=cache_source,
-        llm_attempted=bool(cached.get('llm_attempted', False)),
-        llm_rejected=bool(cached.get('llm_rejected', False)),
-        cache_hit=True,
-        validation=validation,
+    return (
+        _new_chunk_state(
+            cached_text,
+            text_generation_source=cache_source,
+            llm_attempted=bool(cached.get('llm_attempted', False)),
+            llm_rejected=bool(cached.get('llm_rejected', False)),
+            cache_hit=True,
+            cache_hit_kind=hit_kind,
+            validation=validation,
+        ),
+        hit_kind,
     )
 
 
@@ -424,6 +655,7 @@ def _new_chunk_state(
     llm_rejected: bool,
     validation: ChunkValidation,
     cache_hit: bool = False,
+    cache_hit_kind: str = 'miss',
 ) -> dict[str, Any]:
     return {
         'final_text': final_text,
@@ -431,6 +663,7 @@ def _new_chunk_state(
         'llm_attempted': llm_attempted,
         'llm_rejected': llm_rejected,
         'cache_hit': cache_hit,
+        'cache_hit_kind': cache_hit_kind,
         'validation_soft_warnings': list(validation.soft_warnings),
     }
 
@@ -464,6 +697,8 @@ def _finalize_chunk_row(
         cache_entry = {
             'cache_version': _CACHE_VERSION,
             'fact_id': fact['fact_id'],
+            'fact_chunk_reuse_key': fact.get('chunk_reuse_key'),
+            'chunk_generation_cache_key': _chunk_generation_cache_key(cfg, fact),
             'text': final_text,
             'text_generation_source': state['text_generation_source'],
             'llm_attempted': state['llm_attempted'],
@@ -479,6 +714,7 @@ def _finalize_chunk_row(
         llm_attempted=state['llm_attempted'],
         llm_rejected=state['llm_rejected'],
         cache_hit=state['cache_hit'],
+        cache_hit_kind=state['cache_hit_kind'],
         validation_soft_warnings=list(state['validation_soft_warnings']),
     )
     return row, cache_entry
@@ -494,6 +730,7 @@ def _row_from_state(index: int, fact: dict[str, Any], state: dict[str, Any]) -> 
         llm_attempted=bool(state['llm_attempted']),
         llm_rejected=bool(state['llm_rejected']),
         cache_hit=bool(state['cache_hit']),
+        cache_hit_kind=str(state.get('cache_hit_kind', 'miss')),
         validation_soft_warnings=list(state.get('validation_soft_warnings', [])),
     )
 
@@ -516,6 +753,7 @@ def _chunk_row(
     llm_attempted: bool,
     llm_rejected: bool,
     cache_hit: bool,
+    cache_hit_kind: str,
     validation_soft_warnings: list[str],
 ) -> dict[str, Any]:
     return fact | {
@@ -526,6 +764,7 @@ def _chunk_row(
         'llm_attempted': llm_attempted,
         'llm_rejected': llm_rejected,
         'generation_cache_hit': cache_hit,
+        'generation_cache_hit_kind': cache_hit_kind,
         'validation_soft_warning_count': len(validation_soft_warnings),
         'validation_soft_warnings_json': json.dumps(validation_soft_warnings, sort_keys=True),
     }
