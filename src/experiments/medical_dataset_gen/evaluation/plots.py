@@ -77,9 +77,8 @@ def plot_strategy_comparison(
 ) -> None:
     """Metric-vs-k lines.
 
-    Diversity methods show per-lambda traces. Hollow markers identify the
-    lambda* selected at each k by mean FacetCoverage@k. Shaded bands are 95%
-    CIs across queries.
+    Top-k is shown as the baseline. Diversity methods show only the selected
+    lambda* path for each k, with the exact lambda annotated at each marker.
     """
     import matplotlib.pyplot as plt
 
@@ -106,28 +105,26 @@ def plot_strategy_comparison(
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
                 continue
 
-            for lam in sorted(sub['lam'].drop_nulls().unique().to_list()):
-                lsub = sub.filter(pl.col('lam') == lam).sort('k')
-                ax.plot(
-                    lsub['k'].to_list(),
-                    lsub[stats_col].to_list(),
-                    color=style['color'],
-                    ls=style['ls'],
-                    lw=1.0,
-                    alpha=0.45,
-                    zorder=1,
-                )
-
             best_df = _best_lam_rows(stats_df, strategy, k_values)
             if best_df.height == 0:
                 continue
             xs = best_df['k'].to_list()
             ys = [float(v) for v in best_df[stats_col].to_list()]
-            k_to_lam = dict(zip(best_df['k'].to_list(), best_df['lam'].to_list(), strict=True))
+            lams = [float(v) for v in best_df['lam'].to_list()]
+            k_to_lam = dict(zip(xs, lams, strict=True))
             ci = [
                 _ci_half_width(_query_vals(results_df, strategy, k, k_to_lam.get(k), result_col))
                 for k in xs
             ]
+            ax.plot(
+                xs,
+                ys,
+                color=style['color'],
+                ls=style['ls'],
+                lw=2.0,
+                label=style['label'],
+                zorder=3,
+            )
             ax.scatter(
                 xs,
                 ys,
@@ -135,10 +132,17 @@ def plot_strategy_comparison(
                 facecolors='white',
                 edgecolors=style['color'],
                 linewidths=1.4,
-                label=style['label'],
-                zorder=3,
+                zorder=4,
             )
             _plot_error_caps(ax, xs, ys, ci, style, zorder=2)
+            _annotate_lambda_points(
+                ax,
+                xs,
+                ys,
+                lams,
+                color=style['color'],
+                placement='above' if strategy == 'mmr' else 'below',
+            )
 
         ax.set_title(title, fontsize=10)
         ax.set_ylabel(stats_col, fontsize=9)
@@ -163,19 +167,17 @@ def plot_strategy_comparison(
 
     _figure_legend(fig, axes.flatten())
     fig.suptitle(
-        'Strategy comparison - traces show all lambdas, hollow markers show lambda* at each strategy x k',
+        'Strategy comparison - lambda* path per strategy with exact lambda labels at each k',
         fontsize=12,
     )
-    _figure_note(
-        fig, _best_lambda_note(stats_df, [s for s in strategies if s != 'top_k'], k_values)
-    )
+    _figure_note(fig, 'Exact λ values are printed beside the selected points; see lambda_sensitivity.png for the full lambda sweep')
     fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(out_dir / 'strategy_comparison.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
 def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
-    """Facet coverage and distractor rate as lambda changes."""
+    """All strategy metrics as lambda changes."""
     import matplotlib.pyplot as plt
 
     diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
@@ -183,22 +185,28 @@ def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
         return
 
     k_values = sorted(stats_df['k'].unique().to_list())
+    lambda_values = _lambda_values(stats_df)
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
+    metric_cols = [
+        (stats_col, title)
+        for stats_col, _, title, _ in _METRICS
+        if stats_col in stats_df.columns
+    ]
     cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
     k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
 
     fig, axes = plt.subplots(
+        len(metric_cols),
         len(diversity_strategies),
-        2,
-        figsize=(12, 4.2 * len(diversity_strategies)),
+        figsize=(4.0 * len(diversity_strategies), 2.0 * len(metric_cols) + 2.0),
+        sharex=True,
         squeeze=False,
     )
 
-    for row_idx, strategy in enumerate(diversity_strategies):
-        style = get_style(strategy)
-        sub = stats_df.filter(pl.col('strategy') == strategy)
-        metric_pair = [('FacetCoverage@k', 'FacetCoverage@k'), ('DistractorRate', 'DistractorRate')]
-        for col_idx, (metric, title) in enumerate(metric_pair):
+    for row_idx, (metric, title) in enumerate(metric_cols):
+        for col_idx, strategy in enumerate(diversity_strategies):
+            style = get_style(strategy)
+            sub = stats_df.filter(pl.col('strategy') == strategy)
             ax = axes[row_idx][col_idx]
             for k in k_values:
                 ksub = sub.filter(pl.col('k') == k).sort('lam')
@@ -218,10 +226,15 @@ def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
                 if ref.height > 0:
                     ax.axhline(float(ref[metric][0]), color=k_colors[k], ls='--', lw=1.0, alpha=0.5)
 
-            ax.set_title(f'{style["label"]}: {title} vs lambda', fontsize=10)
-            ax.set_xlabel('lambda', fontsize=9)
-            ax.set_ylabel(metric, fontsize=9)
-            ax.set_xticks(sorted(sub['lam'].drop_nulls().unique().to_list()))
+            if row_idx == 0:
+                ax.set_title(style['label'], fontsize=10)
+            if col_idx == 0:
+                ax.set_ylabel(title, fontsize=10)
+            if row_idx == len(metric_cols) - 1:
+                ax.set_xlabel('lambda', fontsize=9)
+            else:
+                ax.tick_params(labelbottom=False)
+            ax.set_xticks(lambda_values)
             ax.grid(alpha=0.3)
 
     handles, labels = axes[0][0].get_legend_handles_labels()
@@ -235,7 +248,8 @@ def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
             frameon=False,
             bbox_to_anchor=(0.5, -0.01),
         )
-    fig.suptitle('Lambda sensitivity - solid=strategy, dashed=top-k reference', fontsize=12)
+    fig.suptitle('Lambda sensitivity - each row is a metric, each column is a strategy', fontsize=12)
+    _figure_note(fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k')
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(out_dir / 'lambda_sensitivity.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
@@ -830,6 +844,41 @@ def _lambda_shade(
     mix = 0.82 - 0.72 * strength
     mix = min(max(mix, 0.1), 0.82)
     return tuple(channel * (1.0 - mix) + mix for channel in base_rgb)
+
+
+def _annotate_lambda_points(
+    ax: object,
+    xs: list[int],
+    ys: list[float],
+    lambda_values: list[float],
+    *,
+    color: str,
+    placement: str,
+) -> None:
+    offsets = {
+        'above': (0, 7, 'bottom'),
+        'below': (0, -9, 'top'),
+    }
+    dx, dy, va = offsets.get(placement, offsets['above'])
+    for x, y, lam in zip(xs, ys, lambda_values, strict=True):
+        ax.annotate(
+            f'λ={lam:.2f}',
+            xy=(x, y),
+            xytext=(dx, dy),
+            textcoords='offset points',
+            ha='center',
+            va=va,
+            fontsize=6.5,
+            color=color,
+            bbox={
+                'boxstyle': 'round,pad=0.18',
+                'facecolor': 'white',
+                'edgecolor': color,
+                'linewidth': 0.45,
+                'alpha': 0.92,
+            },
+            zorder=5,
+        )
 
 
 def _annotate_delta_bars(ax: object, bars: object, values: list[float]) -> None:

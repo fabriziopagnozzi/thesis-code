@@ -1,6 +1,12 @@
 import hashlib
 import inspect
-from typing import Any
+from collections.abc import Mapping
+
+from experiments.medical_dataset_gen.generation.schemas import (
+    ClinicalFact,
+    MedicalOntology,
+    QueryPlan,
+)
 
 
 class MedicalDatasetGenDefaultPrompts:
@@ -16,8 +22,8 @@ class MedicalDatasetGenDefaultPrompts:
 
     @staticmethod
     def chunk_generation_prompt(
-        fact: dict[str, Any],
-        ontology: dict[str, Any],
+        fact: ClinicalFact | Mapping[str, object],
+        ontology: MedicalOntology | Mapping[str, object],
         patient_descriptor: str,
         forbidden_terms: list[str],
         min_words: int,
@@ -116,7 +122,7 @@ class MedicalDatasetGenDefaultPrompts:
 
     @staticmethod
     def chunk_rewrite_prompt(
-        fact: dict[str, Any],
+        fact: ClinicalFact | Mapping[str, object],
         draft_text: str,
         patient_descriptor: str,
         required_facts: list[str],
@@ -175,7 +181,10 @@ class MedicalDatasetGenDefaultPrompts:
         """)
 
     @staticmethod
-    def query_paraphrase_prompt(query_text: str, plan: dict[str, Any]) -> str:
+    def query_paraphrase_prompt(
+        query_text: str,
+        plan: QueryPlan | Mapping[str, object],
+    ) -> str:
         return inspect.cleandoc(f"""
             Paraphrase this synthetic clinical benchmark query in one sentence.
             Keep these exact labels present:
@@ -190,7 +199,7 @@ class MedicalDatasetGenDefaultPrompts:
         """)
 
 
-def _chunk_style_directive(fact: dict[str, Any]) -> str:
+def _chunk_style_directive(fact: ClinicalFact | Mapping[str, object]) -> str:
     note_style = str(fact.get('note_style', 'brief_hospital_course'))
     directives = {
         'brief_hospital_course': (
@@ -208,7 +217,7 @@ def _chunk_style_directive(fact: dict[str, Any]) -> str:
     )
 
 
-def _chunk_structure_variant(fact: dict[str, Any]) -> str:
+def _chunk_structure_variant(fact: ClinicalFact | Mapping[str, object]) -> str:
     variants = [
         'Begin with the patient anchor and condition, then give the evidence in the second sentence.',
         'Begin with the clinical course, include the patient anchor in an appositive phrase, then state the evidence.',
@@ -222,7 +231,7 @@ def _chunk_structure_variant(fact: dict[str, Any]) -> str:
     return variants[idx]
 
 
-def _chunk_clinical_detail(fact: dict[str, Any]) -> str:
+def _chunk_clinical_detail(fact: ClinicalFact | Mapping[str, object]) -> str:
     condition_id = str(fact['condition_id'])
     if fact['axis'] == 'treatment_duration':
         details = {

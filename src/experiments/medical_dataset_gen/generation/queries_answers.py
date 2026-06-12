@@ -1,10 +1,13 @@
-import json
 from collections import Counter, defaultdict
-from typing import Any
 
 import polars as pl
 
 from experiments.medical_dataset_gen.generation.ontology import load_ontology
+from experiments.medical_dataset_gen.generation.schemas import (
+    ClinicalFact,
+    QueryPlan,
+    QueryPlanFacet,
+)
 from experiments.medical_dataset_gen.generation.text_templates import (
     canonical_answer,
     maybe_paraphrase_query,
@@ -28,18 +31,18 @@ def run_make_queries_answers(
     facts_df = read_parquet(paths, 'clinical_facts')
     failed_query_ids = _failed_query_ids(paths)
 
-    facts_by_query: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    facts_by_query: dict[str, list[ClinicalFact]] = defaultdict(list)
     for fact in facts_df.filter(pl.col('is_gold')).iter_rows(named=True):
-        facts_by_query[fact['query_id']].append(dict(fact))
+        fact_model = ClinicalFact.model_validate(fact)
+        facts_by_query[fact_model.query_id].append(fact_model)
 
-    query_rows: list[dict[str, Any]] = []
-    answer_rows: list[dict[str, Any]] = []
+    query_rows: list[dict[str, object]] = []
+    answer_rows: list[dict[str, object]] = []
 
     for plan_row in plans_df.iter_rows(named=True):
-        plan = dict(plan_row)
-        if plan['query_id'] in failed_query_ids:
+        plan = QueryPlan.model_validate(plan_row)
+        if plan.query_id in failed_query_ids:
             continue
-        plan['facets'] = json.loads(plan['facets_json'])
         query_text = render_query(plan, ontology)
         query_text = maybe_paraphrase_query(
             query_text=query_text,
@@ -51,8 +54,8 @@ def run_make_queries_answers(
         )
 
         facet_summaries, facet_answer_objects = _facet_summaries(
-            plan['facets'],
-            facts_by_query[plan['query_id']],
+            plan.facets,
+            facts_by_query[plan.query_id],
         )
         answer_text = canonical_answer(plan, facet_summaries)
 
@@ -63,7 +66,7 @@ def run_make_queries_answers(
                 answer_text=answer_text,
                 facet_summaries=facet_summaries,
                 facet_answer_objects=facet_answer_objects,
-                supporting_facts=facts_by_query[plan['query_id']],
+                supporting_facts=facts_by_query[plan.query_id],
             )
         )
 
@@ -72,89 +75,93 @@ def run_make_queries_answers(
     write_parquet(paths, 'queries', queries)
     write_parquet(paths, 'gold_answers', answers)
     if failed_query_ids:
-        print(f'[queries_answers] skipped {len(failed_query_ids):,} failed query/queries from chunk generation')
+        print(
+            f'[queries_answers] skipped {len(failed_query_ids):,} failed query/queries from chunk generation'
+        )
     return queries, answers
 
 
 def _facet_summaries(
-    facets: list[dict[str, Any]],
-    facts: list[dict[str, Any]],
-) -> tuple[dict[str, str], list[dict[str, Any]]]:
-    by_facet: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    facets: list[QueryPlanFacet],
+    facts: list[ClinicalFact],
+) -> tuple[dict[str, str], list[dict[str, object]]]:
+    by_facet: dict[str, list[ClinicalFact]] = defaultdict(list)
     for fact in facts:
-        by_facet[fact['facet_id']].append(fact)
+        by_facet[fact.facet_id].append(fact)
 
-    summaries = {}
-    answer_facts = []
+    summaries: dict[str, str] = {}
+    answer_facts: list[dict[str, object]] = []
     for facet in facets:
-        facet_id = facet['facet_id']
+        facet_id = facet.facet_id
         rows = by_facet[facet_id]
         if not rows:
             summaries[facet_id] = 'no generated evidence'
             continue
 
-        bins = Counter(row['value_bin'] for row in rows)
+        bins = Counter(row.value_bin for row in rows)
         mode_bin = bins.most_common(1)[0][0]
-        if facet['axis'] == 'treatment_duration':
-            durations = [int(row['duration_days']) for row in rows if row['duration_days'] is not None]
+        if facet.axis == 'treatment_duration':
+            durations = [int(row.duration_days) for row in rows if row.duration_days is not None]
             avg_duration = round(sum(durations) / len(durations), 1)
-            treatment = Counter(row['treatment'] for row in rows).most_common(1)[0][0]
-            text = f'a {mode_bin.replace("_", " ")} course, averaging {avg_duration} days, most often with {treatment}'
+            treatment = Counter(row.treatment for row in rows).most_common(1)[0][0]
+            text = (
+                f'a {mode_bin.replace("_", " ")} course, averaging {avg_duration} days, '
+                f'most often with {treatment}'
+            )
         else:
-            example = Counter(row['rehab_outcome'] for row in rows).most_common(1)[0][0]
+            example = Counter(row.rehab_outcome for row in rows).most_common(1)[0][0]
             text = f'a {mode_bin.replace("_", " ")} pattern, commonly described as {example}'
 
         summaries[facet_id] = text
-        answer_facts.append({
-            'facet_id': facet_id,
-            'subgroup_label': facet['subgroup_label'],
-            'axis': facet['axis'],
-            'summary': text,
-            'supporting_fact_ids': [row['fact_id'] for row in rows],
-        })
+        answer_facts.append(
+            {
+                'facet_id': facet_id,
+                'subgroup_label': facet.subgroup_label,
+                'axis': facet.axis,
+                'summary': text,
+                'supporting_fact_ids': [row.fact_id for row in rows],
+            }
+        )
 
     return summaries, answer_facts
 
 
-def _query_row(plan: dict[str, Any], query_text: str) -> dict[str, Any]:
-    return _pick(
-        plan,
-        'query_id',
-        'query_type',
-        'template_id',
-        'condition_id',
-        'condition_display',
-        'subgroup_a_id',
-        'subgroup_a_label',
-        'subgroup_b_id',
-        'subgroup_b_label',
-        'dominant_facet_id',
-        'split',
-        'n_facets',
-        'facets_json',
-        'logical_form_json',
-    ) | {'query_text': query_text}
-
-
-def _answer_row(
-    plan: dict[str, Any],
-    answer_text: str,
-    facet_summaries: dict[str, str],
-    facet_answer_objects: list[dict[str, Any]],
-    supporting_facts: list[dict[str, Any]],
-) -> dict[str, Any]:
+def _query_row(plan: QueryPlan, query_text: str) -> dict[str, object]:
+    row = plan.to_row()
     return {
-        'query_id': plan['query_id'],
-        'answer_text': answer_text,
-        'facet_summaries_json': json_dumps(facet_summaries),
-        'answer_facts_json': json_dumps(facet_answer_objects),
-        'supporting_fact_ids_json': json_dumps([fact['fact_id'] for fact in supporting_facts]),
-        'supporting_facet_ids_json': json_dumps([facet['facet_id'] for facet in plan['facets']]),
+        'query_id': plan.query_id,
+        'query_type': plan.query_type,
+        'template_id': plan.template_id,
+        'condition_id': plan.condition_id,
+        'condition_display': plan.condition_display,
+        'subgroup_a_id': plan.subgroup_a_id,
+        'subgroup_a_label': plan.subgroup_a_label,
+        'subgroup_b_id': plan.subgroup_b_id,
+        'subgroup_b_label': plan.subgroup_b_label,
+        'dominant_facet_id': plan.dominant_facet_id,
+        'split': plan.split,
+        'n_facets': plan.n_facets,
+        'facets_json': row['facets_json'],
+        'logical_form_json': row['logical_form_json'],
+        'query_text': query_text,
     }
 
 
-def _pick(row: dict[str, Any], *keys: str) -> dict[str, Any]:
-    return {key: row[key] for key in keys}
+def _answer_row(
+    plan: QueryPlan,
+    answer_text: str,
+    facet_summaries: dict[str, str],
+    facet_answer_objects: list[dict[str, object]],
+    supporting_facts: list[ClinicalFact],
+) -> dict[str, object]:
+    return {
+        'query_id': plan.query_id,
+        'answer_text': answer_text,
+        'facet_summaries_json': json_dumps(facet_summaries),
+        'answer_facts_json': json_dumps(facet_answer_objects),
+        'supporting_fact_ids_json': json_dumps([fact.fact_id for fact in supporting_facts]),
+        'supporting_facet_ids_json': json_dumps([facet.facet_id for facet in plan.facets]),
+    }
 
 
 def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:

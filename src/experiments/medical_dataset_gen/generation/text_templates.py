@@ -1,10 +1,15 @@
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from random import Random
-from typing import Any
 
 from experiments.medical_dataset_gen.generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
+)
+from experiments.medical_dataset_gen.generation.schemas import (
+    ClinicalFact,
+    MedicalOntology,
+    QueryPlan,
 )
 from helpers.ollama_client import generate
 
@@ -39,7 +44,11 @@ class ChunkValidation:
     soft_warnings: list[str]
 
 
-def render_chunk_text(fact: dict[str, Any], ontology: dict[str, Any], rng: Random) -> str:
+def render_chunk_text(
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
+    rng: Random,
+) -> str:
     """Deterministic clinical fallback used when LLM generation is disabled or rejected."""
     if fact['axis'] == 'treatment_duration':
         body = _render_duration_chunk(fact, rng)
@@ -51,7 +60,10 @@ def render_chunk_text(fact: dict[str, Any], ontology: dict[str, Any], rng: Rando
     return _squash_ws(body)
 
 
-def _render_duration_chunk(fact: dict[str, Any], rng: Random) -> str:
+def _render_duration_chunk(
+    fact: ClinicalFact | Mapping[str, object],
+    rng: Random,
+) -> str:
     patient = _sentence_start(_patient_descriptor(fact))
     condition = fact['condition_display']
     presentation = rng.choice(_condition_presentations(fact['condition_id']))
@@ -75,7 +87,10 @@ def _render_duration_chunk(fact: dict[str, Any], rng: Random) -> str:
     )
 
 
-def _render_rehab_chunk(fact: dict[str, Any], rng: Random) -> str:
+def _render_rehab_chunk(
+    fact: ClinicalFact | Mapping[str, object],
+    rng: Random,
+) -> str:
     patient = _sentence_start(_patient_descriptor(fact))
     condition = fact['condition_display']
     presentation = rng.choice(_condition_presentations(fact['condition_id']))
@@ -100,8 +115,8 @@ def _render_rehab_chunk(fact: dict[str, Any], rng: Random) -> str:
 
 def maybe_generate_chunk_text(
     fallback_text: str,
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
     llm_name: str,
     use_llm: bool,
     temperature: float,
@@ -133,7 +148,10 @@ def maybe_generate_chunk_text(
     return cleaned
 
 
-def render_query(plan: dict[str, Any], ontology: dict[str, Any]) -> str:
+def render_query(
+    plan: QueryPlan | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
+) -> str:
     condition = plan['condition_display']
     a = plan['subgroup_a_label']
     b = plan['subgroup_b_label']
@@ -154,7 +172,7 @@ def render_query(plan: dict[str, Any], ontology: dict[str, Any]) -> str:
 
 def maybe_paraphrase_query(
     query_text: str,
-    plan: dict[str, Any],
+    plan: QueryPlan | Mapping[str, object],
     llm_name: str,
     use_llm: bool,
     temperature: float,
@@ -171,7 +189,10 @@ def maybe_paraphrase_query(
     return query_text
 
 
-def canonical_answer(plan: dict[str, Any], facet_summaries: dict[str, str]) -> str:
+def canonical_answer(
+    plan: QueryPlan | Mapping[str, object],
+    facet_summaries: dict[str, str],
+) -> str:
     a = plan['subgroup_a_label']
     b = plan['subgroup_b_label']
 
@@ -183,7 +204,7 @@ def canonical_answer(plan: dict[str, Any], facet_summaries: dict[str, str]) -> s
     )
 
 
-def facets_by(plan: dict[str, Any], subgroup_label: str, axis: str) -> str:
+def facets_by(plan: QueryPlan | Mapping[str, object], subgroup_label: str, axis: str) -> str:
     for facet in plan['facets']:
         if facet['subgroup_label'] == subgroup_label and facet['axis'] == axis:
             return facet['facet_id']
@@ -191,7 +212,9 @@ def facets_by(plan: dict[str, Any], subgroup_label: str, axis: str) -> str:
 
 
 def validate_chunk_text(
-    text: str, fact: dict[str, Any], ontology: dict[str, Any]
+    text: str,
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
 ) -> ChunkValidation:
     lower = text.lower()
     hard_errors: list[str] = []
@@ -247,7 +270,7 @@ def _cleanup_generated_text(text: str) -> str:
     return _squash_ws(_SECTION_HEADER_RE.sub('', text))
 
 
-def _patient_descriptor(fact: dict[str, Any]) -> str:
+def _patient_descriptor(fact: ClinicalFact | Mapping[str, object]) -> str:
     age = int(fact['patient_age'])
     noun = 'woman' if fact['patient_sex'] == 'female' else 'man'
     phrase = fact['clinical_subgroup_phrase']
@@ -260,7 +283,11 @@ def _sentence_start(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _contains_condition(text: str, fact: dict[str, Any], ontology: dict[str, Any]) -> bool:
+def _contains_condition(
+    text: str,
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
+) -> bool:
     lower = text.lower()
     if fact['condition_display'].lower() in lower:
         return True
@@ -268,7 +295,11 @@ def _contains_condition(text: str, fact: dict[str, Any], ontology: dict[str, Any
     return any(str(term).lower() in lower for term in condition['terms'][:3])
 
 
-def _contains_subgroup_evidence(text: str, fact: dict[str, Any], ontology: dict[str, Any]) -> bool:
+def _contains_subgroup_evidence(
+    text: str,
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
+) -> bool:
     lower = text.lower()
     subgroup_id = fact['subgroup_id']
 
@@ -343,7 +374,10 @@ def _contains_rehab_language(text: str) -> bool:
     return any(term in lower for term in terms)
 
 
-def _contains_exact_rehab_outcome(text: str, fact: dict[str, Any]) -> bool:
+def _contains_exact_rehab_outcome(
+    text: str,
+    fact: ClinicalFact | Mapping[str, object],
+) -> bool:
     lower = text.lower()
     outcome = str(fact['rehab_outcome']).lower()
     return bool(outcome and outcome in lower)
@@ -351,8 +385,8 @@ def _contains_exact_rehab_outcome(text: str, fact: dict[str, Any]) -> bool:
 
 def _contains_rehab_bin_evidence(
     text: str,
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
 ) -> bool:
     lower = text.lower()
     condition = ontology['conditions'][fact['condition_id']]
@@ -392,8 +426,8 @@ def _contains_rehab_bin_evidence(
 
 def _extra_condition_treatments(
     text: str,
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
 ) -> list[str]:
     lower = text.lower()
     expected = str(fact['treatment']).lower()
@@ -406,8 +440,8 @@ def _extra_condition_treatments(
 
 
 def _duration_treatment_terms(
-    fact: dict[str, Any],
-    ontology: dict[str, Any],
+    fact: ClinicalFact | Mapping[str, object],
+    ontology: MedicalOntology | Mapping[str, object],
 ) -> list[str]:
     condition = ontology['conditions'][fact['condition_id']]
     treatments = condition.get('duration_treatments') or condition['treatments']
