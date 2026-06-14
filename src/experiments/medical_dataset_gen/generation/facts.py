@@ -12,6 +12,7 @@ from random import Random
 from typing import Literal, cast
 
 import polars as pl
+import pyarrow.parquet as pq
 
 from experiments.medical_dataset_gen.generation.ontology import (
     load_ontology,
@@ -29,43 +30,63 @@ from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     read_parquet,
-    write_parquet,
 )
 
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     plans = read_parquet(paths, 'query_plans')
-    rows: list[dict[str, object]] = []
+    path = paths.table_path('clinical_facts')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    writer: pq.ParquetWriter | None = None
+    total_rows = 0
+    last_df = pl.DataFrame()
+    try:
+        for plan_row in plans.iter_rows(named=True):
+            plan = QueryPlan.model_validate(plan_row)
+            rng = Random(plan.plan_seed)
+            rows: list[dict[str, object]] = []
+            for facet in plan.facets:
+                for local_idx in range(int(facet.target_gold_chunks)):
+                    rows.append(
+                        _gold_fact(
+                            plan=plan,
+                            facet=facet,
+                            ontology=ontology,
+                            local_idx=local_idx,
+                            rng=rng,
+                        ).model_dump(mode='python')
+                    )
 
-    for plan_row in plans.iter_rows(named=True):
-        plan = QueryPlan.model_validate(plan_row)
-        rng = Random(plan.plan_seed)
-        for facet in plan.facets:
-            for local_idx in range(int(facet.target_gold_chunks)):
-                rows.append(
-                    _gold_fact(
-                        plan=plan,
-                        facet=facet,
-                        ontology=ontology,
-                        local_idx=local_idx,
-                        rng=rng,
-                    ).model_dump(mode='python')
+            rows.extend(
+                fact.model_dump(mode='python')
+                for fact in _distractor_facts(
+                    plan=plan,
+                    ontology=ontology,
+                    rng=rng,
+                    n=cfg.generation.distractors_per_query,
                 )
-
-        rows.extend(
-            fact.model_dump(mode='python')
-            for fact in _distractor_facts(
-                plan=plan,
-                ontology=ontology,
-                rng=rng,
-                n=cfg.generation.distractors_per_query,
             )
-        )
 
-    df = pl.DataFrame(rows)
-    write_parquet(paths, 'clinical_facts', df)
-    return df
+            df = _facts_frame(rows)
+            table = df.to_arrow()
+            if writer is None:
+                writer = pq.ParquetWriter(path, table.schema)
+            writer.write_table(table)
+            total_rows += len(df)
+            last_df = df
+    finally:
+        if writer is not None:
+            writer.close()
+
+    if total_rows == 0:
+        raise ValueError('no query plans available to generate clinical facts')
+    print(f'[write] clinical_facts: {total_rows:,} rows -> {path}')
+    return last_df
+
+
+def _facts_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
+    return pl.from_dicts(rows, infer_schema_length=None)
 
 
 def _gold_fact(

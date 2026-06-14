@@ -1,7 +1,10 @@
+import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from random import Random
 
 import polars as pl
+import pyarrow.parquet as pq
 from tqdm import tqdm
 
 from experiments.medical_dataset_gen.generation.chunk_cache import (
@@ -50,7 +53,6 @@ from experiments.medical_dataset_gen.global_configs import (
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     facts = read_parquet(paths, 'clinical_facts')
-    fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
     rng = Random(cfg.global_.seed + 1000)
     if cfg.generation.use_llm_chunk_generation:
         print(f'[chunks] LLM generation enabled for all {len(facts):,} facts')
@@ -107,6 +109,17 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             f'{len(rewrite_cache.by_reuse_key):,} reusable keys)'
         )
 
+    if not cfg.generation.use_llm_chunk_generation and not cfg.generation.use_llm_chunk_rewriting:
+        return _render_chunks_deterministic_parallel(
+            cfg=cfg,
+            paths=paths,
+            facts=facts,
+            ontology=ontology,
+            output_path=paths.table_path('chunks'),
+        )
+
+    fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
+
     if cfg.generation.use_llm_chunk_generation:
         rows, rejects, failed_queries = render_chunks_grouped_llm(
             cfg=cfg,
@@ -139,7 +152,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             rng=rng,
         )
 
-    chunks = pl.DataFrame([row.model_dump(mode='python') for row in rows])
+    chunks = pl.from_dicts([row.model_dump(mode='python') for row in rows], infer_schema_length=None)
     write_parquet(paths, 'chunks', chunks)
 
     write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
@@ -156,6 +169,159 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             f'kept {len(chunks):,}/{len(facts):,} chunk rows'
         )
     return chunks
+
+
+def _render_chunks_deterministic_parallel(
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    facts: pl.DataFrame,
+    ontology: MedicalOntology,
+    output_path: Path,
+    ) -> pl.DataFrame:
+    cfg_dump = cfg.model_dump(mode='python')
+    ontology_dump = ontology.model_dump(mode='python')
+    n_batches = facts.select(pl.col('query_id').n_unique()).item()
+    workers = max(1, os.cpu_count() or 1)
+    writer: pq.ParquetWriter | None = None
+    kept_rows = 0
+    soft_warning_count = 0
+    chunks_with_soft_warnings = 0
+    rejects: list[dict[str, object]] = []
+    failed_queries: set[str] = set()
+
+    with ProcessPoolExecutor(
+        max_workers=workers,
+        initializer=_init_deterministic_worker,
+        initargs=(cfg_dump, ontology_dump),
+    ) as executor:
+        batch_iter = _iter_fact_batches(facts)
+        for _query_id, rows, batch_soft_warning_count, batch_chunks_with_soft_warnings, reject_rows, failed in tqdm(
+            executor.map(_render_deterministic_chunk_batch, batch_iter, chunksize=1),
+            total=n_batches,
+            desc='Rendering chunks',
+            dynamic_ncols=True,
+        ):
+            soft_warning_count += batch_soft_warning_count
+            chunks_with_soft_warnings += batch_chunks_with_soft_warnings
+            rejects.extend(reject_rows)
+            if failed is not None:
+                failed_queries.add(failed)
+                print(
+                    f'[chunks] dropping query {failed} after deterministic validation failure: '
+                    f'{reject_rows[0]["reason"] if reject_rows else "validation failure"}'
+                )
+                continue
+
+            df = _chunk_rows_frame(rows)
+            table = df.to_arrow()
+            if writer is None:
+                writer = pq.ParquetWriter(output_path, table.schema)
+            writer.write_table(table)
+            kept_rows += len(df)
+
+    if writer is not None:
+        writer.close()
+
+    write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
+    if chunks_with_soft_warnings:
+        print(
+            f'[chunks] kept {chunks_with_soft_warnings:,} chunk(s) with soft warnings '
+            f'({soft_warning_count:,} warnings total)'
+        )
+    if failed_queries:
+        print(
+            f'[chunks] dropped {len(failed_queries):,} query/queries after deterministic '
+            f'validation failure; kept {kept_rows:,}/{len(facts):,} chunk rows'
+        )
+    print(f'[write] chunks: {kept_rows:,} rows -> {output_path}')
+    return pl.DataFrame()
+
+
+_DETERMINISTIC_WORKER_CFG: ExperimentCfg | None = None
+_DETERMINISTIC_WORKER_ONTOLOGY: MedicalOntology | None = None
+
+
+def _init_deterministic_worker(cfg_dump: dict[str, object], ontology_dump: dict[str, object]) -> None:
+    global _DETERMINISTIC_WORKER_CFG, _DETERMINISTIC_WORKER_ONTOLOGY
+    _DETERMINISTIC_WORKER_CFG = ExperimentCfg.model_validate(cfg_dump)
+    _DETERMINISTIC_WORKER_ONTOLOGY = MedicalOntology.model_validate(ontology_dump)
+
+
+def _render_deterministic_chunk_batch(
+    batch: tuple[int, list[dict[str, object]]],
+) -> tuple[str, list[dict[str, object]], int, int, list[dict[str, object]], str | None]:
+    if _DETERMINISTIC_WORKER_CFG is None or _DETERMINISTIC_WORKER_ONTOLOGY is None:
+        raise RuntimeError('deterministic chunk worker was not initialized')
+
+    start_index, fact_rows = batch
+    first_fact = ClinicalFact.model_validate(fact_rows[0])
+    rng = Random(_stable_seed(f'{_DETERMINISTIC_WORKER_CFG.global_.seed}:{first_fact.query_id}'))
+    rows: list[dict[str, object]] = []
+    rejects: list[dict[str, object]] = []
+    soft_warning_count = 0
+    chunks_with_soft_warnings = 0
+
+    for offset, fact_row in enumerate(fact_rows):
+        fact = ClinicalFact.model_validate(fact_row)
+        draft_text = render_chunk_text(fact, _DETERMINISTIC_WORKER_ONTOLOGY, rng)
+        state = new_chunk_state(
+            draft_text,
+            text_generation_source='fallback',
+            llm_attempted=False,
+            llm_rejected=False,
+            validation=validate_chunk_text(draft_text, fact, _DETERMINISTIC_WORKER_ONTOLOGY),
+        )
+        try:
+            row, _ = finalize_chunk_row(
+                cfg=_DETERMINISTIC_WORKER_CFG,
+                fact=fact,
+                ontology=_DETERMINISTIC_WORKER_ONTOLOGY,
+                index=start_index + offset,
+                state=state,
+                should_cache=False,
+            )
+        except RuntimeError as exc:
+            reject = reject_row(fact, str(exc), state.final_text)
+            rejects.append(reject)
+            return fact.query_id, [], 0, 0, rejects, fact.query_id
+
+        rows.append(row.model_dump(mode='python'))
+        soft_warning_count += row.validation_soft_warning_count
+        if row.validation_soft_warning_count > 0:
+            chunks_with_soft_warnings += 1
+
+    return first_fact.query_id, rows, soft_warning_count, chunks_with_soft_warnings, rejects, None
+
+
+def _iter_fact_batches(facts: pl.DataFrame):
+    current_query_id: str | None = None
+    current_rows: list[dict[str, object]] = []
+    start_index = 0
+
+    for fact_index, fact_row in enumerate(facts.iter_rows(named=True)):
+        query_id = str(fact_row['query_id'])
+        if current_query_id is None:
+            current_query_id = query_id
+            start_index = fact_index
+        elif query_id != current_query_id:
+            yield start_index, current_rows
+            current_rows = []
+            current_query_id = query_id
+            start_index = fact_index
+        current_rows.append(fact_row)
+
+    if current_rows:
+        yield start_index, current_rows
+
+
+def _chunk_rows_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
+    return pl.from_dicts(rows, infer_schema_length=None)
+
+
+def _stable_seed(value: str) -> int:
+    import hashlib
+
+    return int(hashlib.sha256(value.encode()).hexdigest()[:16], 16)
 
 
 def _render_chunks_sequential(

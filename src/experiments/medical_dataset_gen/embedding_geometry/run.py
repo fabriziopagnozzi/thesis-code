@@ -87,6 +87,7 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
             chunk_ids=chunk_ids,
             maps=maps,
             eval_stats=eval_stats,
+            eval_results=eval_results,
         )
         if artifact is None:
             continue

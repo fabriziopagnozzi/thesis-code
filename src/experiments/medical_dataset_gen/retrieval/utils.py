@@ -7,6 +7,7 @@ facility-location selection so the retrieval stages stay consistent.
 """
 
 from collections import defaultdict
+from collections.abc import Sequence
 from typing import Any, Literal
 
 import numpy as np
@@ -22,8 +23,8 @@ type Strategy = Literal['top_k', 'mmr', 'fac_loc']
 def build_index_maps(
     chunks: pl.DataFrame,
     queries: pl.DataFrame,
-    chunk_ids: list[str],
-    query_ids: list[str],
+    chunk_ids: Sequence[str],
+    query_ids: Sequence[str],
 ) -> dict[str, Any]:
     chunk_id_to_idx = {chunk_id: idx for idx, chunk_id in enumerate(chunk_ids)}
     query_id_to_idx = {query_id: idx for idx, query_id in enumerate(query_ids)}

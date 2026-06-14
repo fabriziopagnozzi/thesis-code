@@ -38,8 +38,12 @@ _DIAGNOSTIC_METRICS = [
     ('jac', 'jaccard_vs_topk', 'Jaccard vs top-k', True),
 ]
 
-_PRIMARY_SORT = ['FacetCoverage@k', 'alpha-nDCG@k', 'Precision@k', 'DistractorRate']
-_PRIMARY_DESC = [True, True, True, False]
+_PRIMARY_SORT = ['FacetCoverage@k', 'Precision@k', 'DistractorRate', 'alpha-nDCG@k']
+_PRIMARY_DESC = [True, True, False, True]
+_LAMBDA_POLICY_NOTE = (
+    'lambda*: max mean FacetCoverage@k within strategy x k; ties prefer higher '
+    'Precision@k, then lower DistractorRate'
+)
 
 
 def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
@@ -170,7 +174,7 @@ def plot_strategy_comparison(
         'Strategy comparison - lambda* path per strategy with exact lambda labels at each k',
         fontsize=12,
     )
-    _figure_note(fig, 'Exact λ values are printed beside the selected points; see lambda_sensitivity.png for the full lambda sweep')
+    _figure_note(fig, f'{_LAMBDA_POLICY_NOTE}; see lambda_sensitivity.png for the full sweep')
     fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(out_dir / 'strategy_comparison.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
@@ -303,7 +307,7 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
         )
         ax.set_xticks(range(len(strategies)))
         ax.set_xticklabels(labels, fontsize=9, rotation=15)
-        ax.set_title(f'{title} (k={best_k}, lambda* by mean FacetCoverage@k)', fontsize=10)
+        ax.set_title(f'{title} (k={best_k}, coverage-first lambda*)', fontsize=10)
         ax.set_ylabel(title, fontsize=9)
         ax.grid(axis='y', alpha=0.3)
     for ax in axes.flatten()[len(metric_cols) :]:
@@ -500,7 +504,7 @@ def plot_gain_over_topk_simple(
         ax.set_visible(False)
 
     fig.suptitle(
-        'Gain over top-k - lambda* selected by mean FacetCoverage@k within strategy x k, paired 95% CI',
+        'Gain over top-k - coverage-first lambda* within strategy x k, paired 95% CI',
         fontsize=12,
     )
     _figure_note(
@@ -617,7 +621,7 @@ def plot_coverage_precision_tradeoff(stats_df: pl.DataFrame, out_dir: Path) -> N
         frameon=False,
         loc='upper left',
     )
-    _figure_note(fig, 'lambda* points use the best mean FacetCoverage@k per strategy and k')
+    _figure_note(fig, _LAMBDA_POLICY_NOTE)
     fig.tight_layout()
     fig.savefig(out_dir / 'coverage_precision_tradeoff.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
@@ -680,7 +684,7 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
 
     _figure_legend(fig, axes.flatten())
     fig.suptitle(
-        'Selection diagnostics - lambda* selected by mean FacetCoverage@k within strategy x k',
+        'Selection diagnostics - coverage-first lambda* within strategy x k',
         fontsize=12,
     )
     _figure_note(
@@ -747,7 +751,7 @@ def _best_lambda_note(
     strategies: list[str],
     k_values: list[int],
 ) -> str:
-    parts = ['lambda*: best mean FacetCoverage@k within strategy x k']
+    parts = [_LAMBDA_POLICY_NOTE]
     for strategy in strategies:
         best_df = _best_lam_rows(stats_df, strategy, k_values)
         if best_df.height == 0 or 'lam' not in best_df.columns:
@@ -904,11 +908,11 @@ def _annotate_delta_bars(ax: object, bars: object, values: list[float]) -> None:
 
 def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -> pl.DataFrame:
     sub = stats_df.filter(pl.col('strategy') == strategy)
-    sort_cols, desc = _available_sort(stats_df)
     rows = []
     for k in k_values:
         ksub = sub.filter(pl.col('k') == k)
         if ksub.height > 0:
+            sort_cols, desc = _available_sort(ksub)
             rows.append(ksub.sort(sort_cols, descending=desc).head(1))
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
 

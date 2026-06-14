@@ -61,7 +61,8 @@ def main() -> None:
     print(f'[pipeline] running stages: {[name for name, _ in STAGES[start_idx : stop_idx + 1]]}')
     for name, fn in STAGES[start_idx : stop_idx + 1]:
         if name == 'embed':
-            _release_ollama_before_embeddings(cfg)
+            pass
+            # _release_ollama_before_embeddings(cfg)
         print(f'\n=== Stage: {name} ===')
         fn(cfg, paths)
 

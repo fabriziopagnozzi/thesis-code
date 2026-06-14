@@ -26,19 +26,28 @@ from experiments.medical_dataset_gen.retrieval.utils import (
 )
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
-_BEST_SORT = [
+_STATS_BEST_SORT = [
     'FacetCoverage@k',
-    'MeanFacetRecall@k',
-    'alpha-nDCG@k',
     'Precision@k',
     'DistractorRate',
+    'MeanFacetRecall@k',
+    'alpha-nDCG@k',
     'FC',
-    'WFC',
-    'alpha_nDCG',
     'GP',
     'DR',
+    'WFC',
+    'alpha_nDCG',
 ]
-_BEST_DESC = [True, True, True, True, False, True, True, True, True, False]
+_STATS_BEST_DESC = [True, True, False, True, True, True, True, False, True, True]
+_QUERY_BEST_SORT = [
+    'facet_coverage',
+    'gold_precision',
+    'distractor_rate',
+    'weighted_facet_coverage',
+    'alpha_ndcg',
+    'gold_recall',
+]
+_QUERY_BEST_DESC = [True, True, False, True, True, True]
 
 _DISTRACTOR_LABELS = {
     'same_condition_wrong_subgroup': 'soft distractor: same condition, wrong subgroup',
@@ -143,18 +152,23 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
         sub = eval_results.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
         if sub.height == 0:
             continue
+        agg_exprs = [
+            pl.col('facet_coverage').mean().alias('fc'),
+            pl.col('gold_precision').mean().alias('gp'),
+            pl.col('distractor_rate').mean().alias('dr'),
+            pl.col('weighted_facet_coverage').mean().alias('wfc'),
+        ]
+        sort_cols = ['query_id', 'fc', 'gp', 'dr', 'wfc']
+        descending = [False, True, True, False, True]
+        if 'alpha_ndcg' in sub.columns:
+            agg_exprs.append(pl.col('alpha_ndcg').mean().alias('alpha_ndcg'))
+            sort_cols.append('alpha_ndcg')
+            descending.append(True)
         best = (
             sub
             .group_by('query_id', 'lam')
-            .agg(
-                pl.col('facet_coverage').mean().alias('fc'),
-                pl.col('weighted_facet_coverage').mean().alias('wfc'),
-                pl.col('gold_precision').mean().alias('gp'),
-                pl.col('distractor_rate').mean().alias('dr'),
-            )
-            .sort(
-                ['query_id', 'fc', 'wfc', 'gp', 'dr'], descending=[False, True, True, True, False]
-            )
+            .agg(agg_exprs)
+            .sort(sort_cols, descending=descending)
             .group_by('query_id')
             .first()
             .select('query_id', pl.col('fc').alias(f'{strategy}_fc'))
@@ -186,6 +200,7 @@ def build_query_artifact(
     chunk_ids: list[str],
     maps: dict[str, Any],
     eval_stats: pl.DataFrame,
+    eval_results: pl.DataFrame,
 ) -> dict[str, Any] | None:
     query = queries.filter(pl.col('query_id') == qid).row(0, named=True)
     qidx = maps['query_id_to_idx'][qid]
@@ -216,7 +231,7 @@ def build_query_artifact(
         qid, candidate_chunk_ids, maps['chunk_by_id'], query
     )
     selection_variants = strategy_selection_variants(cfg, topn_sims, sim_matrix, k)
-    selections = strategy_selections(cfg, eval_stats, selection_variants, k)
+    selections = strategy_selections(cfg, eval_stats, eval_results, qid, selection_variants, k)
     coords, reduction_method = reduce_for_plot(
         cfg,
         np.vstack([candidate_vectors, query_vector[None, :]]).astype(np.float32),
@@ -304,6 +319,8 @@ def facet_label_map(query: dict[str, Any]) -> dict[str, str]:
 def strategy_selections(
     cfg: ExperimentCfg,
     eval_stats: pl.DataFrame,
+    eval_results: pl.DataFrame,
+    qid: str,
     selection_variants: dict[str, list[dict[str, Any]]],
     k: int,
 ) -> dict[str, dict[str, Any]]:
@@ -316,7 +333,14 @@ def strategy_selections(
         variants = selection_variants.get(strategy, [])
         if not variants:
             continue
-        lam = best_lambda(eval_stats, strategy, k, cfg)
+        lam = best_lambda(
+            eval_stats,
+            strategy,
+            k,
+            cfg,
+            eval_results=eval_results,
+            query_id=qid,
+        )
         local = _selection_for_lambda(variants, lam)
         if local is None:
             local = variants[0]['local_indices']
@@ -382,25 +406,59 @@ def best_lambda(
     eval_stats: pl.DataFrame,
     strategy: str,
     k: int,
-    cfg: ExperimentCfg,
+    cfg: ExperimentCfg | None,
+    *,
+    eval_results: pl.DataFrame | None = None,
+    query_id: str | None = None,
 ) -> float:
-    if eval_stats.height > 0 and strategy in eval_stats['strategy'].unique().to_list():
+    if eval_results is not None and query_id is not None:
+        query_lam = _best_query_lambda(eval_results, query_id, strategy, k)
+        if query_lam is not None:
+            return query_lam
+
+    if (
+        eval_stats.height > 0
+        and {'strategy', 'k', 'lam'}.issubset(eval_stats.columns)
+        and strategy in eval_stats['strategy'].unique().to_list()
+    ):
         sub = eval_stats.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
         if sub.height > 0:
-            sort_cols, desc = _available_sort(sub)
+            sort_cols, desc = _available_sort(sub, _STATS_BEST_SORT, _STATS_BEST_DESC)
             return float(sub.sort(sort_cols, descending=desc)['lam'][0])
-    if not cfg.retrieval.lambda_values:
+    lambda_values = [] if cfg is None else cfg.retrieval.lambda_values
+    if not lambda_values:
         return 0.5
     if strategy == 'fac_loc':
-        return min(cfg.retrieval.lambda_values)
+        return min(lambda_values)
     if strategy == 'mmr':
-        return max(cfg.retrieval.lambda_values)
+        return max(lambda_values)
     return 0.5
 
 
-def _available_sort(df: pl.DataFrame) -> tuple[list[str], list[bool]]:
+def _best_query_lambda(
+    eval_results: pl.DataFrame,
+    query_id: str,
+    strategy: str,
+    k: int,
+) -> float | None:
+    if not {'query_id', 'strategy', 'k', 'lam'}.issubset(eval_results.columns):
+        return None
+    sub = eval_results.filter(
+        (pl.col('query_id') == query_id) & (pl.col('strategy') == strategy) & (pl.col('k') == k)
+    )
+    if sub.height == 0:
+        return None
+    sort_cols, desc = _available_sort(sub, _QUERY_BEST_SORT, _QUERY_BEST_DESC)
+    return float(sub.sort(sort_cols, descending=desc)['lam'][0])
+
+
+def _available_sort(
+    df: pl.DataFrame, preferred_cols: list[str], preferred_desc: list[bool]
+) -> tuple[list[str], list[bool]]:
     pairs = [
-        (col, desc) for col, desc in zip(_BEST_SORT, _BEST_DESC, strict=True) if col in df.columns
+        (col, desc)
+        for col, desc in zip(preferred_cols, preferred_desc, strict=True)
+        if col in df.columns
     ]
     if not pairs:
         return ['lam'], [False]

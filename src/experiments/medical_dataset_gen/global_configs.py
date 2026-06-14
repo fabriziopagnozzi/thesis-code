@@ -124,6 +124,10 @@ class MedicalDatasetGenPaths:
         self.figures_dir = self.experiment_dir / '_figures'
         self.config_path = self.experiment_dir / '_config.yaml'
         self.embeddings_npz_path = self.experiment_dir / 'embeddings.npz'
+        self.embeddings_chunk_vectors_path = self.experiment_dir / 'embeddings_chunk_vectors.npy'
+        self.embeddings_query_vectors_path = self.experiment_dir / 'embeddings_query_vectors.npy'
+        self.embeddings_chunk_ids_path = self.experiment_dir / 'embeddings_chunk_ids.npy'
+        self.embeddings_query_ids_path = self.experiment_dir / 'embeddings_query_ids.npy'
         self.embeddings_meta_path = self.experiment_dir / 'embeddings_metadata.json'
 
     def ensure_dirs(self) -> None:
