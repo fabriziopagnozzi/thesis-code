@@ -2,70 +2,24 @@ import json
 from collections.abc import Sequence
 
 import numpy as np
-import polars as pl
 import pyarrow.parquet as pq
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
-)
+from experiments.medical_dataset_gen.global_configs import ExperimentCfg, MedicalDatasetGenPaths
 
 
 def run_embed(
     cfg: ExperimentCfg, paths: MedicalDatasetGenPaths
 ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
-    if cfg.embeddings.backend == 'tfidf':
-        chunks = read_parquet(paths, 'chunks')
-        queries = read_parquet(paths, 'queries')
-        chunk_texts = chunks['text'].to_list()
-        query_texts = queries['query_text'].to_list()
-        chunk_vectors, query_vectors, meta = _embed_tfidf(cfg, chunk_texts, query_texts)
-    else:
-        chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
+    chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
 
     with open(paths.embeddings_meta_path, 'w') as f:
         json.dump(meta, f, indent=2)
 
-    if cfg.embeddings.backend == 'tfidf':
-        np.savez_compressed(
-            paths.embeddings_npz_path,
-            chunk_vectors=chunk_vectors,
-            query_vectors=query_vectors,
-            chunk_ids=np.array(chunks['chunk_id'].to_list()),
-            query_ids=np.array(queries['query_id'].to_list()),
-        )
-        index_rows = [
-            {
-                'kind': 'chunk',
-                'object_id': chunk_id,
-                'row_idx': i,
-                'backend': cfg.embeddings.backend,
-                'model_name': cfg.embeddings.model_name,
-                'vector_file': str(paths.embeddings_npz_path),
-            }
-            for i, chunk_id in enumerate(chunks['chunk_id'].to_list())
-        ]
-        index_rows.extend(
-            {
-                'kind': 'query',
-                'object_id': query_id,
-                'row_idx': i,
-                'backend': cfg.embeddings.backend,
-                'model_name': cfg.embeddings.model_name,
-                'vector_file': str(paths.embeddings_npz_path),
-            }
-            for i, query_id in enumerate(queries['query_id'].to_list())
-        )
-        write_parquet(paths, 'embeddings', pl.DataFrame(index_rows))
-        print(f'[write] embeddings arrays -> {paths.embeddings_npz_path}')
-    else:
-        print(
-            '[write] embeddings arrays -> '
-            f'{paths.embeddings_chunk_vectors_path}, {paths.embeddings_query_vectors_path}'
-        )
+    print(
+        '[write] embeddings arrays -> '
+        f'{paths.embeddings_chunk_vectors_path}, {paths.embeddings_query_vectors_path}'
+    )
     return chunk_vectors, query_vectors
 
 
@@ -93,60 +47,6 @@ def load_embedding_arrays(
     return chunk_vectors, query_vectors, chunk_ids, query_ids
 
 
-def _embed_tfidf(
-    cfg: ExperimentCfg,
-    chunk_texts: list[str],
-    query_texts: list[str],
-) -> tuple[NDArray[np.float32], NDArray[np.float32], dict]:
-    from sklearn.feature_extraction.text import TfidfVectorizer
-
-    vectorizer = TfidfVectorizer(
-        ngram_range=(cfg.embeddings.tfidf_ngram_min, cfg.embeddings.tfidf_ngram_max),
-        min_df=1,
-        norm='l2' if cfg.embeddings.normalize else None,
-        dtype=np.float32,
-    )
-    matrix = vectorizer.fit_transform([*chunk_texts, *query_texts])
-    dense = np.asarray(matrix.toarray(), dtype=np.float32)
-    chunk_vectors = dense[: len(chunk_texts)]
-    query_vectors = dense[len(chunk_texts) :]
-    meta = {
-        'backend': 'tfidf',
-        'model_name': 'sklearn.TfidfVectorizer',
-        'dimension': int(dense.shape[1]),
-        'ngram_range': [cfg.embeddings.tfidf_ngram_min, cfg.embeddings.tfidf_ngram_max],
-        'normalized': cfg.embeddings.normalize,
-    }
-    return chunk_vectors, query_vectors, meta
-
-
-def _embed_sentence_transformers(
-    cfg: ExperimentCfg,
-    chunk_texts: list[str],
-    query_texts: list[str],
-) -> tuple[NDArray[np.float32], NDArray[np.float32], dict]:
-    from helpers.embedder import Embedder
-
-    embedder = Embedder(
-        model_name=cfg.embeddings.model_name,
-        batch_size=cfg.embeddings.batch_size,
-        query_prompt=cfg.embeddings.query_prompt,
-        device=cfg.embeddings.device,
-    )
-    try:
-        chunk_vectors = embedder.embed_docs(chunk_texts, normalize=cfg.embeddings.normalize)
-        query_vectors = embedder.embed_queries(query_texts, normalize=cfg.embeddings.normalize)
-        meta = {
-            'backend': 'sentence_transformers',
-            'model_name': cfg.embeddings.model_name,
-            'dimension': int(chunk_vectors.shape[1]),
-            'normalized': cfg.embeddings.normalize,
-        }
-        return chunk_vectors, query_vectors, meta
-    finally:
-        embedder.release()
-
-
 def _embed_sentence_transformers_streaming(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
@@ -157,7 +57,7 @@ def _embed_sentence_transformers_streaming(
     query_file = pq.ParquetFile(paths.table_path('queries'))
     n_chunks = chunk_file.metadata.num_rows
     n_queries = query_file.metadata.num_rows
-    batch_size = max(cfg.embeddings.batch_size * 16, 256)
+    bucket_size = max(cfg.embeddings.batch_size * 32, 32768)
 
     embedder = Embedder(
         model_name=cfg.embeddings.model_name,
@@ -199,7 +99,7 @@ def _embed_sentence_transformers_streaming(
             vectors=chunk_vectors,
             ids=chunk_ids,
             embed_fn=lambda texts: embedder.embed_docs(texts, normalize=cfg.embeddings.normalize),
-            batch_size=batch_size,
+            batch_size=bucket_size,
             desc='Embedding chunks',
         )
         query_written = _fill_embedding_memmaps(
@@ -212,7 +112,7 @@ def _embed_sentence_transformers_streaming(
                 texts,
                 normalize=cfg.embeddings.normalize,
             ),
-            batch_size=batch_size,
+            batch_size=bucket_size,
             desc='Embedding queries',
         )
         if chunk_written != n_chunks or query_written != n_queries:

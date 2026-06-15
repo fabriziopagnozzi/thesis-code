@@ -84,6 +84,7 @@ def query_stats(artifact: dict[str, Any]) -> dict[str, Any]:
 
     row: dict[str, Any] = {
         'query_id': artifact['query_id'],
+        'selection_group': artifact.get('selection_group'),
         'query_type': artifact['query']['query_type'],
         'condition_id': artifact['query']['condition_id'],
         'pool_scope': artifact['pool_scope'],
@@ -210,6 +211,7 @@ def _point_row(
     _ = idx
     return {
         'query_id': artifact['query_id'],
+        'selection_group': artifact.get('selection_group'),
         'point_kind': point_kind,
         'chunk_id': chunk_id,
         'rank': rank,

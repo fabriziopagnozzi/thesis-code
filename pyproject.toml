@@ -43,34 +43,40 @@ dev = [
 
 
 [tool.taskipy.tasks]
+# Medical Dataset Generation
+med_pipeline = "uv run -m experiments.medical_dataset_gen.run_pipeline"
+
+# -----------------------------------------------------
+# MIMIC Experiments
 # Chunking
-chunking_full = "uv run -m experiments.mimic.chunking.run_chunking_steps"
-conditions_stats = "uv run -m experiments.mimic.chunking.a_conditions_stats"
-note_chunking = "uv run -m experiments.mimic.chunking.b_note_chunking"
-dedup_chunks = "uv run -m experiments.mimic.chunking.c_dedup"
+mimic_chunking_full = "uv run -m experiments.mimic.chunking.run_chunking_steps"
+mimic_conditions_stats = "uv run -m experiments.mimic.chunking.a_conditions_stats"
+mimic_note_chunking = "uv run -m experiments.mimic.chunking.b_note_chunking"
+mimic_dedup_chunks = "uv run -m experiments.mimic.chunking.c_dedup"
 
 # Embeddings
-embed_whole = "uv run -m experiments.mimic.embeddings.run_embed_whole_corpus"
-embed_selective = "uv run -m experiments.mimic.embeddings.run_embed_selective"
+mimic_embed_whole = "uv run -m experiments.mimic.embeddings.run_embed_whole_corpus"
+mimic_embed_selective = "uv run -m experiments.mimic.embeddings.run_embed_selective"
 
 # Evaluation
-gold_annotation = "uv run -m experiments.mimic.evaluation.run_gold_annotation"
-regenerate_gold_ans = "uv run -m experiments.mimic.evaluation.run_regenerate_gold_ans"
-evaluation = "uv run -m experiments.mimic.evaluation.run_evaluate"
-evaluation_plots = "uv run -m experiments.mimic.evaluation.plots"
+mimic_gold_annotation = "uv run -m experiments.mimic.evaluation.run_gold_annotation"
+mimic_regenerate_gold_ans = "uv run -m experiments.mimic.evaluation.run_regenerate_gold_ans"
+mimic_evaluation = "uv run -m experiments.mimic.evaluation.run_evaluate"
+mimic_evaluation_plots = "uv run -m experiments.mimic.evaluation.plots"
 
 # Pool Analysis
-pool_analysis = "uv run -m experiments.mimic.pool_analysis.run_pool_analysis"
-pool_analysis_plots = "uv run -m experiments.mimic.pool_analysis.plots"
+mimic_pool_analysis = "uv run -m experiments.mimic.pool_analysis.run_pool_analysis"
+mimic_pool_analysis_plots = "uv run -m experiments.mimic.pool_analysis.plots"
 
 # Queries
-queries_full = "uv run -m experiments.mimic.queries.run_queries_steps"
-build_prompts = "uv run -m experiments.mimic.queries.a_build_prompts"
-gen_queries_llm = "uv run -m experiments.mimic.queries.b_gen_queries_llm"
-filter_queries = "uv run -m experiments.mimic.queries.c_filter_queries"
+mimic_queries_full = "uv run -m experiments.mimic.queries.run_queries_steps"
+mimic_build_prompts = "uv run -m experiments.mimic.queries.a_build_prompts"
+mimic_gen_queries_llm = "uv run -m experiments.mimic.queries.b_gen_queries_llm"
+mimic_filter_queries = "uv run -m experiments.mimic.queries.c_filter_queries"
 
-# Miscellaneous
-lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"/home/pagnozzi/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
+# Utils
+mimic_lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"/home/pagnozzi/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
+# -----------------------------------------------------
 
 
 [tool.uv]

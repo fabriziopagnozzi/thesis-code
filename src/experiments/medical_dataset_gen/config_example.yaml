@@ -8,7 +8,6 @@
 # CLI flags can override the most common fields:
 #   --exp
 #   --max-queries
-#   --embedding-backend
 #   --embedding-model
 #   --llm-name
 #   --llm-workers
@@ -54,7 +53,6 @@ generation:
   llm_num_ctx: 4096 # Keep this modest for chunk generation; VRAM scales with context and parallelism.
 
 embeddings:
-  backend: sentence_transformers
   # BAAI/bge-m3 | Qwen/Qwen3-Embedding-8B | multi-qa-mpnet-base-cos-v1
   model_name: multi-qa-mpnet-base-cos-v1
 
@@ -62,10 +60,6 @@ embeddings:
   device: cuda
   query_prompt: null # Optional query prompt passed to the Embedder for models that require one.
   normalize: true
-
-  # TF-IDF settings used only when backend=tfidf.
-  tfidf_ngram_min: 1
-  tfidf_ngram_max: 2
 
 retrieval:
   strategies: [top_k, mmr, fac_loc]
@@ -97,8 +91,9 @@ embedding_geometry:
   n_queries: 6
 
   # Optional explicit query IDs. If empty, representative queries are chosen automatically
-  # using geometry-pass status, FacLoc gain, top-k dominance, and cluster separation.
+  # using query_selection.
   query_ids: []
+  query_selection: mixed # "mixed" = good/mid/bad ranking slices; "best" = old good-query ranking only.
 
   # Candidate pool size for embedding-geometry plots.
   # null means reuse retrieval.candidate_pool_n.
@@ -108,9 +103,10 @@ embedding_geometry:
   plot_k: 10
   reduction: umap # "umap" | "pca"
   umap_metric: cosine # Use cosine for normalized semantic embeddings. Euclidean is mainly useful for debugging PCA maps.
-  pca_dims: null # null = direct UMAP/HDBSCAN features; integer = PCA to this many dimensions before UMAP/HDBSCAN.
+  pca_dims: null # null = direct embedding features; integer = PCA to this many dimensions before UMAP.
   umap_neighbors: 15 # UMAP neighborhood size. Smaller values show local clusters; larger values preserve broader structure.
   umap_min_dist: 0.08 # UMAP minimum distance. Smaller values create tighter visual clusters.
 
+  hdbscan_umap_dims: 10 # HDBSCAN runs on this many UMAP components; plotting still uses the 2D UMAP/PCA map.
   hdbscan_min_cluster_size: 5
   hdbscan_min_samples: null

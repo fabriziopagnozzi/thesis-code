@@ -1,8 +1,12 @@
+import re
 from collections.abc import Callable
 from typing import Literal
 
 import polars as pl
 
+from experiments.medical_dataset_gen.generation.prompts_default import (
+    MedicalDatasetGenDefaultPrompts,
+)
 from experiments.medical_dataset_gen.generation.schemas import (
     ChunkGenerationCacheEntry,
     ChunkRow,
@@ -11,12 +15,20 @@ from experiments.medical_dataset_gen.generation.schemas import (
     MedicalOntology,
 )
 from experiments.medical_dataset_gen.generation.text_templates import (
+    TEMPLATE_UTILS,
     ChunkValidation,
-    maybe_generate_chunk_text,
-    maybe_rewrite_chunk_text,
+    patient_descriptor,
+    squash_whitespaces,
     validate_chunk_text,
 )
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from helpers.ollama_client import generate
+
+_SECTION_HEADER_RE = re.compile(
+    r'^\s*(?:brief hospital course|hospital course|discharge summary|'
+    r'discharge diagnosis|clinical summary)\s*:\s*',
+    re.IGNORECASE,
+)
 
 
 def rejects_frame(rejects: list[dict[str, object]]) -> pl.DataFrame:
@@ -44,12 +56,10 @@ def generate_llm_chunk(
     feedback: str | None = None
 
     for attempt in range(1, max(1, cfg.generation.llm_chunk_max_attempts) + 1):
-        candidate_text = maybe_generate_chunk_text(
-            fallback_text='',
+        candidate_text = generate_chunk_text_with_llm(
             fact=fact,
             ontology=ontology,
             llm_name=cfg.generation.llm_name,
-            use_llm=True,
             temperature=cfg.generation.llm_temperature,
             num_ctx=cfg.generation.llm_num_ctx,
             chunk_min_words=cfg.generation.chunk_min_words,
@@ -86,12 +96,11 @@ def rewrite_llm_chunk(
     feedback: str | None = None
 
     for attempt in range(1, max(1, cfg.generation.llm_chunk_max_attempts) + 1):
-        candidate_text = maybe_rewrite_chunk_text(
+        candidate_text = rewrite_chunk_text_with_llm(
             draft_text=draft_text,
             fact=fact,
             ontology=ontology,
             llm_name=cfg.generation.llm_name,
-            use_llm=True,
             temperature=cfg.generation.llm_temperature,
             num_ctx=cfg.generation.llm_num_ctx,
             chunk_min_words=cfg.generation.chunk_min_words,
@@ -115,6 +124,80 @@ def rewrite_llm_chunk(
         print(f'[chunks] retry rewrite {attempt} for {fact.fact_id}: ' + '; '.join(errors))
 
     return draft_text, last_errors
+
+
+def generate_chunk_text_with_llm(
+    *,
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    llm_name: str,
+    temperature: float,
+    num_ctx: int,
+    chunk_min_words: int,
+    chunk_max_words: int,
+    revision_feedback: str | None = None,
+) -> str:
+    prompt = MedicalDatasetGenDefaultPrompts.chunk_generation_prompt(
+        fact=fact,
+        ontology=ontology,
+        patient_descriptor=patient_descriptor(fact),
+        forbidden_terms=TEMPLATE_UTILS.hidden_benchmark_terms,
+        min_words=chunk_min_words,
+        max_words=chunk_max_words,
+        revision_feedback=revision_feedback,
+    )
+    generated = generate(
+        prompt,
+        model=llm_name,
+        system=MedicalDatasetGenDefaultPrompts.chunk_generation_system,
+        temperature=temperature,
+        num_ctx=num_ctx,
+    )
+    return _cleanup_generated_text(generated)
+
+
+def rewrite_chunk_text_with_llm(
+    *,
+    draft_text: str,
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    llm_name: str,
+    temperature: float,
+    num_ctx: int,
+    chunk_min_words: int,
+    chunk_max_words: int,
+    revision_feedback: str | None = None,
+) -> str:
+    prompt = MedicalDatasetGenDefaultPrompts.chunk_rewrite_prompt(
+        fact=fact,
+        draft_text=draft_text,
+        patient_descriptor=patient_descriptor(fact),
+        required_facts=list(fact.must_mention),
+        forbidden_facts=list(fact.must_not_mention),
+        min_words=chunk_min_words,
+        max_words=chunk_max_words,
+        revision_feedback=revision_feedback,
+    )
+    generated = generate(
+        prompt,
+        model=llm_name,
+        system=MedicalDatasetGenDefaultPrompts.chunk_rewrite_system,
+        temperature=temperature,
+        num_ctx=num_ctx,
+    )
+    return _cleanup_generated_text(generated)
+
+
+def _cleanup_generated_text(text: str) -> str:
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
+    fence = re.search(r'```(?:text)?\s*(.*?)```', text, flags=re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    text = text.strip().strip('"').strip("'").strip()
+    lines = [line.strip('- ').strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > 1:
+        text = ' '.join(lines)
+    return squash_whitespaces(_SECTION_HEADER_RE.sub('', text))
 
 
 def word_count_ok(word_count: int, min_words: int, max_words: int, tolerance: int) -> bool:

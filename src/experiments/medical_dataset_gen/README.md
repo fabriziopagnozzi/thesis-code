@@ -28,7 +28,6 @@ uv run python -m experiments.medical_dataset_gen.run_pipeline \
   --exp llm_chunks_qwen8b \
   --llm-name gemma4:12b \
   --llm-workers 2 \
-  --embedding-backend sentence_transformers \
   --embedding-model Qwen/Qwen3-Embedding-8B \
   --device cuda \
   --batch-size 8
@@ -38,12 +37,12 @@ With the default config, every chunk is generated with the local Ollama model.
 The default retrieval scope is `query_local`, which means each query retrieves from its own generated gold and distractor pool.
 Use `--no-llm-chunks` only for deterministic smoke tests.
 
-Use SentenceTransformers instead of the default TF-IDF smoke backend:
+Use a different SentenceTransformers model:
 
 ```bash
 uv run python -m experiments.medical_dataset_gen.run_pipeline \
   --exp mvp_st \
-  --embedding-backend sentence_transformers
+  --embedding-model Qwen/Qwen3-Embedding-8B
 ```
 
 The config must already exist at `_results/<exp>/_config.yaml` before you run the pipeline.
@@ -57,7 +56,7 @@ Outputs are written under `_results/<exp>/`.
 3. `generation/chunks.py`: generates realistic note chunks with Ollama when LLM mode is enabled, or deterministic clinical prose when disabled.
 4. `generation/queries_answers.py`: creates `queries.parquet` and `gold_answers.parquet`.
 5. `generation/qrels.py`: creates `qrels.parquet` from structured facts and chunks.
-6. `retrieval/embed.py`: creates `embeddings.npz` and `embeddings.parquet`.
+6. `retrieval/embed.py`: creates the embedding memmaps and metadata files.
 7. `retrieval/filter_geometry.py`: creates `geometry_stats.parquet`.
 8. `evaluation/evaluate.py`: creates `evaluation_results.parquet` and `evaluation_stats.parquet`.
 9. `embedding_geometry/run.py`: creates embedding geometry figures and diagnostics for the configured candidate-pool scope.
@@ -102,16 +101,18 @@ Pool-scope options:
 
 The embedding-geometry stage writes:
 
-- `_figures/embedding_geometry/<query_id>/query_overview_4panel.png`
-- `_figures/embedding_geometry/<query_id>/candidate_pool_map.png`
-- `_figures/embedding_geometry/<query_id>/strategy_selection_overlay.png`
-- `_figures/embedding_geometry/<query_id>/full_strategy_selection_overlay_k<K>.png`
-- `_figures/embedding_geometry/<query_id>/query_cosine_similarity_map.png`
-- `_figures/embedding_geometry/<query_id>/query_similarity_rank.png`
-- `_figures/embedding_geometry/<query_id>/hdbscan_cluster_map.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/query_overview_4panel.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/candidate_pool_map.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/strategy_selection_overlay.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/full_strategy_selection_overlay_k<K>.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/query_cosine_similarity_map.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/query_similarity_rank.png`
+- `_figures/embedding_geometry/<selection_group>/<query_id>/hdbscan_cluster_map.png`
 - `_figures/embedding_geometry/cluster_quality_overview.png`
 - `embedding_geometry_points.parquet`
 - `embedding_geometry_query_stats.parquet`
+
+`selection_group` is `good`, `mid`, or `bad` for automatic mixed query selection, `good` for best-only selection, and `manual` when `embedding_geometry.query_ids` is set.
 
 The plotting stage writes:
 

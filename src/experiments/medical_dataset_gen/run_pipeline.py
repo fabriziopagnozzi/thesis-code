@@ -41,28 +41,39 @@ STAGES: list[tuple[str, StageFn]] = [
 
 def main() -> None:
     stage_parser = argparse.ArgumentParser()
-    stage_parser.add_argument('--start-at', choices=[name for name, _ in STAGES], default=None)
-    stage_parser.add_argument('--stop-after', choices=[name for name, _ in STAGES], default=None)
+    stage_parser.add_argument(
+        '--from', dest='from_stage', choices=[name for name, _ in STAGES], default=None
+    )
+    stage_parser.add_argument(
+        '--to', dest='to_stage', choices=[name for name, _ in STAGES], default=None
+    )
+    stage_parser.add_argument('--only', choices=[name for name, _ in STAGES], default=None)
+    stage_parser.add_argument('--release-llm', type=bool, default=None)
     stage_parser.add_argument('--no-log-tee', action='store_true')
     args, _ = stage_parser.parse_known_args()
 
     cfg = load_config_from_cli()
+
     paths = paths_for(cfg)
     if not args.no_log_tee:
         setup_logging(paths)
     dump_effective_config(cfg, paths)
 
-    start_idx = _stage_index(args.start_at) if args.start_at else 0
-    stop_idx = _stage_index(args.stop_after) if args.stop_after else len(STAGES) - 1
+    if args.only:
+        start_idx = _stage_index(args.only)
+        stop_idx = _stage_index(args.only)
+    else:
+        start_idx = _stage_index(args.from_stage) if args.from_stage else 0
+        stop_idx = _stage_index(args.to_stage) if args.to_stage else len(STAGES) - 1
+
     if stop_idx < start_idx:
-        raise ValueError('--stop-after must be the same as or later than --start-at')
+        raise ValueError('--to must be the same as or later than --from')
 
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
     print(f'[pipeline] running stages: {[name for name, _ in STAGES[start_idx : stop_idx + 1]]}')
     for name, fn in STAGES[start_idx : stop_idx + 1]:
-        if name == 'embed':
-            pass
-            # _release_ollama_before_embeddings(cfg)
+        if name == 'embed' and args.release_llm:
+            _release_ollama(cfg)
         print(f'\n=== Stage: {name} ===')
         fn(cfg, paths)
 
@@ -74,7 +85,7 @@ def _stage_index(name: str) -> int:
     raise KeyError(name)
 
 
-def _release_ollama_before_embeddings(cfg: ExperimentCfg) -> None:
+def _release_ollama(cfg: ExperimentCfg) -> None:
     llm_used = cfg.generation.use_llm_chunk_generation or cfg.generation.use_llm_query_paraphrase
     if not llm_used:
         return

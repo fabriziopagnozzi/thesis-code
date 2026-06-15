@@ -5,12 +5,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-FacetAxis = Literal['treatment_duration', 'rehab_outcome']
-ClusterRole = Literal['dominant_gold', 'complementary_gold', 'hard_distractor']
-QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
-Split = Literal['train', 'validation', 'test']
-PatientSex = Literal['female', 'male']
-SubgroupAxis = Literal['demographic', 'comorbidity']
+type FacetAxis = Literal['treatment_duration', 'rehab_outcome']
+type ClusterRole = Literal['dominant_gold', 'complementary_gold', 'hard_distractor']
+type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
+type Split = Literal['train', 'validation', 'test']
+type PatientSex = Literal['female', 'male']
+type SubgroupAxis = Literal['demographic', 'comorbidity']
+type SubgroupKey = str  # todo: enforce literals maybe
+type ConditionKey = str
+type ClinicalAxisKey = str
 
 
 class BenchmarkModel(BaseModel):
@@ -23,7 +26,7 @@ class BenchmarkModel(BaseModel):
         return getattr(self, key, default)
 
 
-class ClinicalConditionOntology(BenchmarkModel):
+class ConditionOntology(BenchmarkModel):
     display: str
     terms: list[str]
     treatments: list[str]
@@ -32,7 +35,7 @@ class ClinicalConditionOntology(BenchmarkModel):
     rehab_outcomes: dict[str, list[str]]
 
 
-class ClinicalSubgroupOntology(BenchmarkModel):
+class SubgroupOntology(BenchmarkModel):
     axis: SubgroupAxis
     label: str
     field: str
@@ -57,9 +60,9 @@ class ClinicalAxisOntology(BenchmarkModel):
 
 
 class MedicalOntology(BenchmarkModel):
-    conditions: dict[str, ClinicalConditionOntology]
-    subgroups: dict[str, ClinicalSubgroupOntology]
-    clinical_axes: dict[str, ClinicalAxisOntology]
+    conditions: dict[ConditionKey, ConditionOntology]
+    subgroups: dict[SubgroupKey, SubgroupOntology]
+    clinical_axes: dict[ClinicalAxisKey, ClinicalAxisOntology]
 
 
 class QueryPlanFacet(BenchmarkModel):
@@ -91,12 +94,12 @@ class QueryLogicalForm(BenchmarkModel):
 
 class QueryPlanSpec(BenchmarkModel):
     query_type: QueryType
-    condition_id: str
+    condition_key: str
     condition_display: str
     subgroup_a_id: str
-    subgroup_a: ClinicalSubgroupOntology
+    subgroup_a: SubgroupOntology
     subgroup_b_id: str
-    subgroup_b: ClinicalSubgroupOntology
+    subgroup_b: SubgroupOntology
 
 
 class QueryPlan(BenchmarkModel):
@@ -342,3 +345,31 @@ class ChunkRow(ClinicalFact):
             cache_hit_kind=state.cache_hit_kind,
             validation_soft_warnings=list(state.validation_soft_warnings),
         )
+
+
+class RehabClosingSentences(BenchmarkModel):
+    home_rehab: list[str]
+    inpatient_rehab: list[str]
+    persistent_deficit: dict[str, list[str]]
+
+
+class ChunkTemplateUtils(BenchmarkModel):
+    condition_presentations: dict[str, list[str]]
+    condition_status_phrases: dict[str, list[str]]
+    duration_closing_sentences: dict[str, list[str]]
+    functional_status_phrases: dict[str, dict[str, list[str]]]
+    rehab_closing_sentences: RehabClosingSentences
+    hidden_benchmark_terms: list[str]
+    duration_course_nouns: list[str]
+    duration_phrase_templates: list[str]
+    duration_response_verbs: list[str]
+    duration_chunk_templates: list[str]
+    rehab_transitions: list[str]
+    rehab_outcome_verbs: list[str]
+    rehab_chunk_templates: list[str]
+    subgroup_terms: dict[str, list[str]]
+    rehab_language_terms: list[str]
+    rehab_bin_terms: dict[str, list[str]]
+    persistent_deficit_descriptor_terms: list[str]
+    persistent_deficit_rehab_terms: list[str]
+    meaningful_token_stopwords: list[str]

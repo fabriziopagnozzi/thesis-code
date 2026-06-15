@@ -125,7 +125,8 @@ def plot_full_strategy_selection_overlay(
     for col_idx in range(2, n_cols):
         axes[0, col_idx].axis('off')
 
-    for col_idx, lam in enumerate(lambda_values):
+    lambda_columns = sorted(lambda_values, reverse=True)
+    for col_idx, lam in enumerate(lambda_columns):
         for row_idx, strategy in enumerate(rows, start=1):
             variants = selection_variants.get(strategy, [])
             if not variants:
@@ -150,7 +151,7 @@ def plot_full_strategy_selection_overlay(
             )
 
     for row_idx in [1, 2]:
-        for col_idx in range(len(lambda_values), n_cols):
+        for col_idx in range(len(lambda_columns), n_cols):
             axes[row_idx, col_idx].axis('off')
 
     legend_handles = _selection_legend_handles([ax for ax in axes.ravel() if ax.get_visible()])

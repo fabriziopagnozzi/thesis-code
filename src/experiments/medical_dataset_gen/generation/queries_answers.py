@@ -4,15 +4,13 @@ import polars as pl
 import pyarrow.parquet as pq
 
 from experiments.medical_dataset_gen.generation.ontology import load_ontology
+from experiments.medical_dataset_gen.generation.prompts_default import (
+    MedicalDatasetGenDefaultPrompts,
+)
 from experiments.medical_dataset_gen.generation.schemas import (
     MedicalOntology,
     QueryPlan,
     QueryPlanFacet,
-)
-from experiments.medical_dataset_gen.generation.text_templates import (
-    canonical_answer,
-    maybe_paraphrase_query,
-    render_query,
 )
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
@@ -20,6 +18,7 @@ from experiments.medical_dataset_gen.global_configs import (
     read_parquet,
     write_parquet,
 )
+from helpers.ollama_client import generate
 
 
 def run_make_queries_answers(
@@ -134,6 +133,69 @@ def _finalize_query(
             supporting_fact_ids=[str(fact['fact_id']) for fact in fact_rows],
         )
     )
+
+
+def render_query(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+) -> str:
+    condition = plan.condition_display
+    a = plan.subgroup_a_label
+    b = plan.subgroup_b_label
+
+    if plan.query_type == 'outcome_synthesis':
+        return (
+            f'Among patients diagnosed with {condition}, compare therapy-course length and '
+            f'discharge rehabilitation status for {a} versus {b}.'
+        )
+
+    duration = ontology.clinical_axes['treatment_duration'].label
+    rehab = ontology.clinical_axes['rehab_outcome'].label
+    return (
+        f'For patients diagnosed with {condition}, how do {duration} and {rehab} differ '
+        f'between {a} and {b}?'
+    )
+
+
+def maybe_paraphrase_query(
+    query_text: str,
+    plan: QueryPlan,
+    llm_name: str,
+    use_llm: bool,
+    temperature: float,
+    num_ctx: int,
+) -> str:
+    if not use_llm:
+        return query_text
+
+    prompt = MedicalDatasetGenDefaultPrompts.query_paraphrase_prompt(query_text, plan)
+    paraphrase = generate(prompt, model=llm_name, temperature=temperature, num_ctx=num_ctx).strip()
+    required = [plan.condition_display, plan.subgroup_a_label, plan.subgroup_b_label]
+    if paraphrase and all(label.lower() in paraphrase.lower() for label in required):
+        return paraphrase
+    return query_text
+
+
+def canonical_answer(
+    plan: QueryPlan,
+    facet_summaries: dict[str, str],
+) -> str:
+    a = plan.subgroup_a_label
+    b = plan.subgroup_b_label
+
+    return (
+        f'For {a}, the synthetic corpus shows {facet_summaries[facets_by(plan, a, "treatment_duration")]} '
+        f'for treatment duration and {facet_summaries[facets_by(plan, a, "rehab_outcome")]} for rehabilitation outcome. '
+        f'For {b}, it shows {facet_summaries[facets_by(plan, b, "treatment_duration")]} for treatment duration '
+        f'and {facet_summaries[facets_by(plan, b, "rehab_outcome")]} for rehabilitation outcome.'
+    )
+
+
+def facets_by(plan: QueryPlan, subgroup_label: str, axis: str) -> str:
+    for facet in plan.facets:
+        if facet.subgroup_label == subgroup_label and facet.axis == axis:
+            return facet.facet_id
+    raise KeyError((subgroup_label, axis))
 
 
 def _facet_summaries(

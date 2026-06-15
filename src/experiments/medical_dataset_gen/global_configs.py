@@ -9,8 +9,9 @@ from uuid import uuid4
 
 import polars as pl
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
 
+from experiments.medical_dataset_gen.generation.schemas import QueryType
 from helpers.dir_paths import ROOT_DIR
 
 type TableName = Literal[
@@ -31,47 +32,44 @@ type TableName = Literal[
 
 
 class GlobalCfg(BaseModel):
-    seed: int = 42
-    n_queries: int = 120
-    conditions: int = 4
+    seed: PositiveInt = 42
+    n_queries: PositiveInt = 120
+    conditions: PositiveInt = 4
     output_experiment: str = 'mvp'
 
 
 class GenerationCfg(BaseModel):
     ontology_path: str | None = None
-    query_types: list[str] = Field(default_factory=lambda: ['subgroup_comparison'])
-    gold_chunks_dominant: int = 18
-    gold_chunks_complementary: int = 8
-    distractors_per_query: int = 30
-    chunk_min_words: int = 25
-    chunk_max_words: int = 90
-    chunk_word_tolerance: int = 2
-    llm_name: str = 'gemma4-31b-text'
-    llm_workers: int = 1
+    query_types: list[QueryType] = Field(default_factory=lambda: ['subgroup_comparison'])
+    gold_chunks_dominant: PositiveInt = 25
+    gold_chunks_complementary: PositiveInt = 14
+    distractors_per_query: PositiveInt = 30
+    chunk_min_words: PositiveInt = 25
+    chunk_max_words: PositiveInt = 90
+    chunk_word_tolerance: PositiveInt = 2
+    llm_name: str = 'gemma4:12b-ud_q8_xl'
+    llm_workers: PositiveInt = 1
     use_llm_chunk_generation: bool = True
     use_llm_chunk_rewriting: bool = False
     use_llm_query_paraphrase: bool = False
-    llm_chunk_max_attempts: int = 3
-    llm_temperature: float = 0.1
-    llm_num_ctx: int = 4096
+    llm_chunk_max_attempts: PositiveInt = 3
+    llm_temperature: PositiveFloat = 0.1
+    llm_num_ctx: PositiveInt = 4096
 
 
 class EmbeddingCfg(BaseModel):
-    backend: Literal['tfidf', 'sentence_transformers'] = 'tfidf'
     model_name: str = 'multi-qa-mpnet-base-cos-v1'
-    batch_size: int = 64
-    device: Literal['cpu', 'cuda'] = 'cpu'
+    batch_size: PositiveInt = 64
+    device: Literal['cpu', 'cuda'] = 'cuda'
     query_prompt: str | None = None
     normalize: bool = True
-    tfidf_ngram_min: int = 1
-    tfidf_ngram_max: int = 2
 
 
 class RetrievalCfg(BaseModel):
     pool_scope: Literal['query_local', 'same_condition', 'full_corpus'] = 'query_local'
-    candidate_pool_n: int = 300
-    k_values: list[int] = Field(default_factory=lambda: [5, 10, 20])
-    lambda_values: list[float] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
+    candidate_pool_n: PositiveInt = 300
+    k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
+    lambda_values: list[PositiveFloat] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
     strategies: list[Literal['top_k', 'mmr', 'fac_loc']] = Field(
         default_factory=lambda: ['top_k', 'mmr', 'fac_loc']
     )
@@ -80,25 +78,27 @@ class RetrievalCfg(BaseModel):
 
 
 class GeometryCfg(BaseModel):
-    topk_dominance_k: int = 10
-    min_topk_dominant_count: int = 5
-    min_in_minus_cross_similarity: float = 0.03
-    min_distractors_in_pool: int = 10
+    topk_dominance_k: PositiveInt = 10
+    min_topk_dominant_count: PositiveInt = 5
+    min_in_minus_cross_similarity: PositiveFloat = 0.03
+    min_distractors_in_pool: PositiveInt = 10
 
 
 class EmbeddingGeometryCfg(BaseModel):
-    n_queries: int = 6
+    n_queries: PositiveInt = 6
     query_ids: list[str] = Field(default_factory=list)
-    candidate_pool_n: int | None = None
-    plot_k: int = 10
+    query_selection: Literal['mixed', 'best'] = 'mixed'
+    candidate_pool_n: PositiveInt | None = None
+    plot_k: PositiveInt = 10
     reduction: Literal['umap', 'pca'] = 'umap'
-    pca_dims: int | None = None
+    pca_dims: PositiveInt | None = None
     umap_metric: Literal['cosine', 'euclidean'] = 'cosine'
-    umap_neighbors: int = 15
-    umap_min_dist: float = 0.08
-    hdbscan_min_cluster_size: int = 5
-    hdbscan_min_samples: int | None = None
-    random_state: int = 42
+    umap_neighbors: PositiveInt = 15
+    umap_min_dist: PositiveFloat = 0.08
+    hdbscan_umap_dims: PositiveInt = 10
+    hdbscan_min_cluster_size: PositiveInt = 5
+    hdbscan_min_samples: PositiveInt | None = None
+    random_state: PositiveInt = 42
 
 
 class ExperimentCfg(BaseModel):
@@ -142,6 +142,29 @@ class MedicalDatasetGenPaths:
         return self.experiment_dir / f'{table}.{ext}'
 
 
+def _resolve_experiment_name(
+    exp_name: str, results_dir: Path = MedicalDatasetGenPaths.results_dir
+) -> str:
+    exact_dir = results_dir / exp_name
+    if exact_dir.is_dir():
+        return exp_name
+
+    matches = sorted(
+        path.name
+        for path in results_dir.iterdir()
+        if path.is_dir() and path.name.startswith(exp_name)
+    )
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(f'exp={exp_name!r} is ambiguous in {results_dir}: {matches}')
+
+    raise FileNotFoundError(
+        f'no experiment directory matching {exp_name!r} in {results_dir}. '
+        'Use the full directory name or a unique prefix.'
+    )
+
+
 def load_config(exp: str | None = None) -> ExperimentCfg:
     exp_name = exp or os.getenv('EXP') or os.getenv('EXP_NAME')
     if exp_name is None:
@@ -150,6 +173,7 @@ def load_config(exp: str | None = None) -> ExperimentCfg:
             'the config can be loaded from _results/<exp>/_config.yaml'
         )
 
+    exp_name = _resolve_experiment_name(exp_name)
     cfg_path = MedicalDatasetGenPaths(exp_name).config_path
     if not cfg_path.exists():
         raise FileNotFoundError(
@@ -168,9 +192,6 @@ def load_config_from_cli() -> ExperimentCfg:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
     parser.add_argument('--max-queries', type=int, default=None)
-    parser.add_argument(
-        '--embedding-backend', choices=['tfidf', 'sentence_transformers'], default=None
-    )
     parser.add_argument('--embedding-model', type=str, default=None)
     parser.add_argument('--device', choices=['cpu', 'cuda'], default=None)
     parser.add_argument('--batch-size', type=int, default=None)
@@ -184,6 +205,9 @@ def load_config_from_cli() -> ExperimentCfg:
     parser.add_argument('--embedding-geometry-queries', type=int, default=None)
     parser.add_argument('--embedding-geometry-k', type=int, default=None)
     parser.add_argument('--embedding-geometry-reduction', choices=['umap', 'pca'], default=None)
+    parser.add_argument(
+        '--embedding-geometry-query-selection', choices=['mixed', 'best'], default=None
+    )
     llm_chunk_group = parser.add_mutually_exclusive_group()
     llm_chunk_group.add_argument('--llm-chunks', dest='llm_chunks', action='store_true')
     llm_chunk_group.add_argument('--no-llm-chunks', dest='llm_chunks', action='store_false')
@@ -206,8 +230,6 @@ def load_config_from_cli() -> ExperimentCfg:
     cfg = load_config(exp=args.exp)
     if args.max_queries is not None:
         cfg.global_.n_queries = args.max_queries
-    if args.embedding_backend is not None:
-        cfg.embeddings.backend = args.embedding_backend
     if args.embedding_model is not None:
         cfg.embeddings.model_name = args.embedding_model
     if args.device is not None:
@@ -226,6 +248,8 @@ def load_config_from_cli() -> ExperimentCfg:
         cfg.embedding_geometry.plot_k = args.embedding_geometry_k
     if args.embedding_geometry_reduction is not None:
         cfg.embedding_geometry.reduction = args.embedding_geometry_reduction
+    if args.embedding_geometry_query_selection is not None:
+        cfg.embedding_geometry.query_selection = args.embedding_geometry_query_selection
     if args.llm_chunks is not None:
         cfg.generation.use_llm_chunk_generation = args.llm_chunks
     if args.llm_chunk_rewrite is not None:

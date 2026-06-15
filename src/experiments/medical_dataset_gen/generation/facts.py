@@ -41,15 +41,17 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
     writer: pq.ParquetWriter | None = None
     total_rows = 0
     last_df = pl.DataFrame()
+
     try:
         for plan_row in plans.iter_rows(named=True):
             plan = QueryPlan.model_validate(plan_row)
             rng = Random(plan.plan_seed)
             rows: list[dict[str, object]] = []
+
             for facet in plan.facets:
                 for local_idx in range(int(facet.target_gold_chunks)):
                     rows.append(
-                        _gold_fact(
+                        make_gold_fact(
                             plan=plan,
                             facet=facet,
                             ontology=ontology,
@@ -60,7 +62,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
 
             rows.extend(
                 fact.model_dump(mode='python')
-                for fact in _distractor_facts(
+                for fact in make_distractor_facts(
                     plan=plan,
                     ontology=ontology,
                     rng=rng,
@@ -73,6 +75,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             if writer is None:
                 writer = pq.ParquetWriter(path, table.schema)
             writer.write_table(table)
+
             total_rows += len(df)
             last_df = df
     finally:
@@ -89,14 +92,14 @@ def _facts_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
     return pl.from_dicts(rows, infer_schema_length=None)
 
 
-def _gold_fact(
+def make_gold_fact(
     plan: QueryPlan,
     facet: QueryPlanFacet,
     ontology: MedicalOntology,
     local_idx: int,
     rng: Random,
 ) -> ClinicalFact:
-    return _base_fact(
+    return make_base_fact(
         plan=plan,
         facet=facet,
         ontology=ontology,
@@ -117,7 +120,7 @@ def _gold_fact(
     )
 
 
-def _distractor_facts(
+def make_distractor_facts(
     plan: QueryPlan,
     ontology: MedicalOntology,
     rng: Random,
@@ -167,7 +170,7 @@ def _distractor_facts(
             subgroup_value = subgroup.value
 
         rows.append(
-            _base_fact(
+            make_base_fact(
                 plan=plan,
                 facet=target_facet,
                 ontology=ontology,
@@ -190,7 +193,7 @@ def _distractor_facts(
     return rows
 
 
-def _base_fact(
+def make_base_fact(
     plan: QueryPlan,
     facet: QueryPlanFacet,
     ontology: MedicalOntology,

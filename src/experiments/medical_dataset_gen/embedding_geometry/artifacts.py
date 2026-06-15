@@ -55,6 +55,15 @@ _DISTRACTOR_LABELS = {
     'same_axis_wrong_condition': 'hard distractor: wrong condition, same answer axis',
     'hard_distractor': 'hard distractor',
 }
+_QUERY_SELECTION_SORT = [
+    'selection_score',
+    'passes_filter',
+    'fac_loc_fc_gain',
+    'topk_dominant_count',
+    'query_id',
+]
+_QUERY_SELECTION_BEST_DESC = [True, True, True, True, False]
+_QUERY_SELECTION_WORST_DESC = [False, False, False, False, False]
 
 
 def choose_query_ids(
@@ -63,9 +72,31 @@ def choose_query_ids(
     geometry: pl.DataFrame,
     eval_results: pl.DataFrame,
 ) -> list[str]:
-    if cfg.embedding_geometry.query_ids:
-        return cfg.embedding_geometry.query_ids[: cfg.embedding_geometry.n_queries]
+    groups = choose_query_groups(cfg, queries, geometry, eval_results)
+    return [query_id for query_ids in groups.values() for query_id in query_ids]
 
+
+def choose_query_groups(
+    cfg: ExperimentCfg,
+    queries: pl.DataFrame,
+    geometry: pl.DataFrame,
+    eval_results: pl.DataFrame,
+) -> dict[str, list[str]]:
+    if cfg.embedding_geometry.query_ids:
+        return {'manual': cfg.embedding_geometry.query_ids[: cfg.embedding_geometry.n_queries]}
+
+    ranked = ranked_queries_for_embedding_geometry(cfg, queries, geometry, eval_results)
+    if cfg.embedding_geometry.query_selection == 'best':
+        return {'good': ranked['query_id'].head(cfg.embedding_geometry.n_queries).to_list()}
+    return mixed_query_groups(ranked, cfg.embedding_geometry.n_queries)
+
+
+def ranked_queries_for_embedding_geometry(
+    cfg: ExperimentCfg,
+    queries: pl.DataFrame,
+    geometry: pl.DataFrame,
+    eval_results: pl.DataFrame,
+) -> pl.DataFrame:
     base = queries.select('query_id')
     if geometry.height > 0:
         gcols = [
@@ -105,8 +136,7 @@ def choose_query_ids(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base
-        .with_columns(
+        base.with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -123,18 +153,43 @@ def choose_query_ids(
                 + pl.col('n_distractors_in_pool') * 0.02
             ).alias('selection_score')
         )
-        .sort(
-            [
-                'selection_score',
-                'passes_filter',
-                'fac_loc_fc_gain',
-                'topk_dominant_count',
-                'query_id',
-            ],
-            descending=[True, True, True, True, False],
-        )
+        .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_BEST_DESC)
     )
-    return ranked['query_id'].head(cfg.embedding_geometry.n_queries).to_list()
+    return ranked
+
+
+def mixed_query_ids(ranked: pl.DataFrame, n_queries: int) -> list[str]:
+    groups = mixed_query_groups(ranked, n_queries)
+    return [query_id for query_ids in groups.values() for query_id in query_ids]
+
+
+def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[str]]:
+    n_good, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
+    good_ids = ranked['query_id'].head(n_good).to_list()
+    bad_ids = (
+        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
+        .head(n_bad)
+        .to_list()
+    )
+    excluded_ids = [*good_ids, *bad_ids]
+    remaining = ranked.filter(~pl.col('query_id').is_in(excluded_ids))
+    mid_start = max(0, (remaining.height - n_mid) // 2)
+    mid_ids = remaining['query_id'].slice(mid_start, n_mid).to_list()
+
+    return {
+        group: query_ids
+        for group, query_ids in [('good', good_ids), ('mid', mid_ids), ('bad', bad_ids)]
+        if query_ids
+    }
+
+
+def mixed_group_sizes(n_queries: int) -> tuple[int, int, int]:
+    base = n_queries // 3
+    remainder = n_queries % 3
+    n_good = base + int(remainder >= 1)
+    n_mid = base + int(remainder >= 2)
+    n_bad = base
+    return n_good, n_mid, n_bad
 
 
 def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
@@ -165,8 +220,7 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
             sort_cols.append('alpha_ndcg')
             descending.append(True)
         best = (
-            sub
-            .group_by('query_id', 'lam')
+            sub.group_by('query_id', 'lam')
             .agg(agg_exprs)
             .sort(sort_cols, descending=descending)
             .group_by('query_id')

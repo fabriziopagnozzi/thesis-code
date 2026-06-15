@@ -34,7 +34,7 @@ from experiments.medical_dataset_gen.generation.schemas import (
     MedicalOntology,
 )
 from experiments.medical_dataset_gen.generation.text_templates import (
-    render_chunk_text,
+    render_chunk_text_template,
     validate_chunk_text,
 )
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
@@ -395,7 +395,7 @@ def _render_rewrite_query_group(
     reusable_cache_hits = 0
 
     for idx, fact in query_group:
-        draft_text = render_chunk_text(fact, ontology, rng)
+        draft_text = render_chunk_text_template(fact, ontology, rng)
         draft_text_by_index[idx] = draft_text
         rng_state_after_index[idx] = rng.getstate()
         cached = cached_rewrite_chunk_state(cfg, fact, ontology, cache, draft_text)

@@ -13,28 +13,11 @@ def reduce_for_plot(
         coords[:, 0] = np.arange(len(vectors), dtype=np.float32)
         return coords, 'trivial'
 
-    if cfg.embedding_geometry.pca_dims is None:
-        features = vectors.astype(np.float32)
-    else:
-        features = pca_preprocess(
-            vectors,
-            cfg.embedding_geometry.pca_dims,
-            cfg.embedding_geometry.random_state,
-        )
+    features = embedding_geometry_features(cfg, vectors)
 
     if cfg.embedding_geometry.reduction == 'umap':
         try:
-            import umap
-
-            n_neighbors = min(cfg.embedding_geometry.umap_neighbors, len(features) - 1)
-            reducer = umap.UMAP(
-                n_components=2,
-                metric=cfg.embedding_geometry.umap_metric,
-                n_neighbors=max(2, n_neighbors),
-                min_dist=cfg.embedding_geometry.umap_min_dist,
-                random_state=cfg.embedding_geometry.random_state,
-            )
-            coords = reducer.fit_transform(features).astype(np.float32)
+            coords = umap_reduce(cfg, features, n_components=2)
             return coords, 'pca_umap' if features.shape[1] != vectors.shape[1] else 'umap'
         except Exception as exc:
             print(f'[embedding_geometry] UMAP failed; falling back to PCA: {exc}')
@@ -42,7 +25,10 @@ def reduce_for_plot(
     return pca_2d(vectors, cfg.embedding_geometry.random_state), 'pca'
 
 
-def cluster_features(cfg: ExperimentCfg, vectors: NDArray[np.float32]) -> NDArray[np.float32]:
+def embedding_geometry_features(
+    cfg: ExperimentCfg,
+    vectors: NDArray[np.float32],
+) -> NDArray[np.float32]:
     if cfg.embedding_geometry.pca_dims is None:
         return vectors.astype(np.float32)
 
@@ -51,6 +37,37 @@ def cluster_features(cfg: ExperimentCfg, vectors: NDArray[np.float32]) -> NDArra
         cfg.embedding_geometry.pca_dims,
         cfg.embedding_geometry.random_state,
     )
+
+
+def cluster_features(cfg: ExperimentCfg, vectors: NDArray[np.float32]) -> NDArray[np.float32]:
+    features = embedding_geometry_features(cfg, vectors)
+    if len(features) < 4:
+        return features
+
+    n_components = min(cfg.embedding_geometry.hdbscan_umap_dims, max(1, len(features) - 2))
+    try:
+        return umap_reduce(cfg, features, n_components=n_components)
+    except Exception as exc:
+        print(f'[embedding_geometry] clustering UMAP failed; using unreduced features: {exc}')
+        return features
+
+
+def umap_reduce(
+    cfg: ExperimentCfg,
+    features: NDArray[np.float32],
+    n_components: int,
+) -> NDArray[np.float32]:
+    import umap
+
+    n_neighbors = min(cfg.embedding_geometry.umap_neighbors, len(features) - 1)
+    reducer = umap.UMAP(
+        n_components=n_components,
+        metric=cfg.embedding_geometry.umap_metric,
+        n_neighbors=max(2, n_neighbors),
+        min_dist=cfg.embedding_geometry.umap_min_dist,
+        random_state=cfg.embedding_geometry.random_state,
+    )
+    return reducer.fit_transform(features).astype(np.float32)
 
 
 def pca_preprocess(

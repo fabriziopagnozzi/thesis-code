@@ -39,7 +39,7 @@ from experiments.medical_dataset_gen.generation.schemas import (
     MedicalOntology,
 )
 from experiments.medical_dataset_gen.generation.text_templates import (
-    render_chunk_text,
+    render_chunk_text_template,
     validate_chunk_text,
 )
 from experiments.medical_dataset_gen.global_configs import (
@@ -152,7 +152,9 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             rng=rng,
         )
 
-    chunks = pl.from_dicts([row.model_dump(mode='python') for row in rows], infer_schema_length=None)
+    chunks = pl.from_dicts(
+        [row.model_dump(mode='python') for row in rows], infer_schema_length=None
+    )
     write_parquet(paths, 'chunks', chunks)
 
     write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
@@ -177,7 +179,7 @@ def _render_chunks_deterministic_parallel(
     facts: pl.DataFrame,
     ontology: MedicalOntology,
     output_path: Path,
-    ) -> pl.DataFrame:
+) -> pl.DataFrame:
     cfg_dump = cfg.model_dump(mode='python')
     ontology_dump = ontology.model_dump(mode='python')
     n_batches = facts.select(pl.col('query_id').n_unique()).item()
@@ -195,7 +197,14 @@ def _render_chunks_deterministic_parallel(
         initargs=(cfg_dump, ontology_dump),
     ) as executor:
         batch_iter = _iter_fact_batches(facts)
-        for _query_id, rows, batch_soft_warning_count, batch_chunks_with_soft_warnings, reject_rows, failed in tqdm(
+        for (
+            _query_id,
+            rows,
+            batch_soft_warning_count,
+            batch_chunks_with_soft_warnings,
+            reject_rows,
+            failed,
+        ) in tqdm(
             executor.map(_render_deterministic_chunk_batch, batch_iter, chunksize=1),
             total=n_batches,
             desc='Rendering chunks',
@@ -241,7 +250,9 @@ _DETERMINISTIC_WORKER_CFG: ExperimentCfg | None = None
 _DETERMINISTIC_WORKER_ONTOLOGY: MedicalOntology | None = None
 
 
-def _init_deterministic_worker(cfg_dump: dict[str, object], ontology_dump: dict[str, object]) -> None:
+def _init_deterministic_worker(
+    cfg_dump: dict[str, object], ontology_dump: dict[str, object]
+) -> None:
     global _DETERMINISTIC_WORKER_CFG, _DETERMINISTIC_WORKER_ONTOLOGY
     _DETERMINISTIC_WORKER_CFG = ExperimentCfg.model_validate(cfg_dump)
     _DETERMINISTIC_WORKER_ONTOLOGY = MedicalOntology.model_validate(ontology_dump)
@@ -263,7 +274,7 @@ def _render_deterministic_chunk_batch(
 
     for offset, fact_row in enumerate(fact_rows):
         fact = ClinicalFact.model_validate(fact_row)
-        draft_text = render_chunk_text(fact, _DETERMINISTIC_WORKER_ONTOLOGY, rng)
+        draft_text = render_chunk_text_template(fact, _DETERMINISTIC_WORKER_ONTOLOGY, rng)
         state = new_chunk_state(
             draft_text,
             text_generation_source='fallback',
@@ -370,7 +381,7 @@ def _render_chunks_sequential(
                 validation=validation,
             )
         else:
-            draft_text = render_chunk_text(fact, ontology, rng)
+            draft_text = render_chunk_text_template(fact, ontology, rng)
             cache_key: str | None = None
             if cfg.generation.use_llm_chunk_rewriting:
                 cached = cached_rewrite_chunk_state(

@@ -1,0 +1,738 @@
+condition_presentations:
+  encephalitis_myelitis:
+    - fever, confusion, and gait change
+    - headache, altered mental status, and lower-extremity weakness
+    - new neurologic deficits and inflammatory cerebrospinal fluid findings
+  pneumonia:
+    - hypoxemia, fever, and productive cough
+    - new oxygen requirement and bibasilar infiltrates
+    - dyspnea, leukocytosis, and radiographic consolidation
+  ischemic_stroke:
+    - acute dysarthria and unilateral weakness
+    - new focal neurologic deficits on arrival
+    - hemiparesis with imaging consistent with acute infarct
+  heart_failure:
+    - volume overload, edema, and exertional dyspnea
+    - pulmonary congestion and elevated filling pressures
+    - worsening orthopnea with lower-extremity edema
+  bacterial_meningitis:
+    - fever, headache, neck stiffness, and photophobia
+    - meningeal signs with confusion and inflammatory cerebrospinal fluid findings
+    - sepsis physiology with meningismus and altered mental status
+  multiple_sclerosis_relapse:
+    - new weakness, sensory change, and gait instability
+    - demyelinating flare with leg weakness and urinary urgency
+    - worsening neurologic symptoms without evidence of acute infection
+  spinal_epidural_abscess:
+    - severe back pain, fever, and evolving leg weakness
+    - epidural infection with canal narrowing and concern for cord compression
+    - back pain with neurologic symptoms and elevated inflammatory markers
+  pulmonary_embolism:
+    - acute dyspnea, pleuritic chest pain, and hypoxemia
+    - tachycardia with pulmonary emboli and concern for right heart strain
+    - new oxygen requirement after imaging confirmed pulmonary embolism
+  copd_exacerbation:
+    - wheezing, increased sputum, and worsening dyspnea
+    - hypercapnia with increased work of breathing
+    - acute bronchospasm and hypoxemia above baseline oxygen needs
+  infective_endocarditis:
+    - persistent bacteremia, fever, and concern for valvular infection
+    - new murmur with bloodstream infection and embolic risk
+    - positive blood cultures with echocardiographic concern for endocarditis
+  osteomyelitis:
+    - focal bone pain, inflammatory markers, and imaging concerning for infection
+    - chronic wound changes with contiguous bone infection
+    - localized swelling and tenderness with suspected osteomyelitis
+  pyelonephritis_sepsis:
+    - fever, flank pain, hypotension, and urinary infection
+    - urosepsis with leukocytosis and acute kidney stress
+    - pyelonephritis complicated by bacteremia and systemic inflammatory response
+  diabetic_foot_infection:
+    - plantar ulceration, cellulitis, and concern for deep soft-tissue infection
+    - infected diabetic foot wound with drainage and offloading needs
+    - progressive foot erythema, pain, and wound-care complexity
+  cirrhosis_encephalopathy:
+    - confusion, asterixis, and decompensated cirrhosis
+    - hepatic encephalopathy with sleep-wake reversal and poor orientation
+    - worsening mentation in the setting of chronic liver disease
+  lupus_nephritis:
+    - proteinuria, edema, and immune-mediated kidney injury
+    - active lupus serologies with worsening renal function
+    - nephritic urine findings and volume overload during lupus flare
+  severe_cellulitis:
+    - limb erythema, swelling, pain, and systemic inflammatory signs
+    - rapidly progressive soft-tissue infection without drainable abscess
+    - cellulitis with fever, leukocytosis, and impaired ambulation
+  ulcerative_colitis_flare:
+    - bloody diarrhea, abdominal pain, and elevated inflammatory markers
+    - severe colitis symptoms with dehydration and poor oral intake
+    - frequent stools, cramping, and worsening inflammatory bowel disease activity
+
+condition_status_phrases:
+  encephalitis_myelitis:
+    - improving mentation and reduced headache
+    - improved strength and stable neurologic checks
+    - resolution of fever and stable neurologic examination
+  pneumonia:
+    - improved oxygenation and reduced cough
+    - stable oxygen saturation on room air
+    - improving dyspnea and downtrending fever
+  ischemic_stroke:
+    - stable neurologic examination
+    - improved speech clarity
+    - no new neurologic deficits
+  heart_failure:
+    - improved volume status
+    - decreased edema and easier breathing
+    - stable renal function after diuresis
+  bacterial_meningitis:
+    - defervescence with improving headache and mentation
+    - stable neurologic checks after antimicrobial therapy
+    - improved neck stiffness and clearer cognition
+  multiple_sclerosis_relapse:
+    - partial strength recovery after relapse treatment
+    - improved sensation with persistent gait fatigue
+    - stable neurologic examination without new deficits
+  spinal_epidural_abscess:
+    - improved pain control and stable neurologic checks
+    - downtrending inflammatory markers after source control planning
+    - stable leg strength after antimicrobial and procedural management
+  pulmonary_embolism:
+    - improved oxygenation after anticoagulation
+    - reduced dyspnea with stable hemodynamics
+    - stable heart rate and improving exertional symptoms
+  copd_exacerbation:
+    - improved air movement and reduced wheezing
+    - stable gas exchange after bronchodilator and steroid therapy
+    - decreased work of breathing near discharge
+  infective_endocarditis:
+    - blood cultures cleared after directed antibiotic therapy
+    - fever resolved with stable valvular assessment
+    - clinical stability during prolonged intravenous antibiotic planning
+  osteomyelitis:
+    - improved local pain after antimicrobial therapy
+    - stable wound appearance with inflammatory markers trending down
+    - infection control improved while mobility restrictions remained
+  pyelonephritis_sepsis:
+    - resolved shock physiology and improving leukocytosis
+    - defervescence with improved flank pain
+    - stable renal function after treatment of urinary infection
+  diabetic_foot_infection:
+    - improved erythema after antibiotics and wound care
+    - stable wound bed with reduced drainage
+    - infection control improved while offloading remained necessary
+  cirrhosis_encephalopathy:
+    - clearer mentation after bowel regimen adjustment
+    - improved orientation with ongoing liver-disease monitoring
+    - reduced asterixis and stable volume status
+  lupus_nephritis:
+    - stabilized renal function after immunosuppressive treatment
+    - improved edema with ongoing nephrology monitoring
+    - proteinuria evaluation stabilized during flare management
+  severe_cellulitis:
+    - reduced erythema and improved pain control
+    - defervescence with stable soft-tissue examination
+    - decreased swelling after antibiotics and limb elevation
+  ulcerative_colitis_flare:
+    - reduced stool frequency and improved abdominal pain
+    - improved hydration and inflammatory symptoms
+    - stable hemoglobin with better oral intake
+
+duration_closing_sentences:
+  encephalitis_myelitis:
+    - Neurology follow-up was arranged to monitor recovery after completion of the anti-inflammatory or antiviral course.
+    - The discharge medication list matched the completed neurologic treatment plan and outpatient neurology follow-up.
+    - Repeat examination was stable, and the team documented no escalation beyond the completed inpatient course.
+  pneumonia:
+    - The discharge medication list matched the completed antimicrobial plan and outpatient pulmonary follow-up.
+    - Respiratory status was stable, and no additional inpatient antibiotic escalation was documented.
+    - The plan emphasized completion of antimicrobial management and reassessment by the primary clinician.
+  ischemic_stroke:
+    - The discharge medication list emphasized vascular prevention and outpatient neurology follow-up.
+    - Repeat examination was stable, and the team documented no extension of the acute infarct.
+    - The plan focused on secondary stroke prevention and close neurologic reassessment.
+  heart_failure:
+    - The discharge medication list reflected the completed decongestive plan and cardiology follow-up.
+    - Volume status was stable, and the team documented no further inpatient escalation.
+    - The plan emphasized weight monitoring, medication adjustment, and early outpatient reassessment.
+  bacterial_meningitis:
+    - The discharge medication plan matched the completed meningitis treatment course and neurologic monitoring plan.
+    - The team documented stable examination findings after directed antimicrobial therapy.
+    - Follow-up emphasized monitoring for recurrent fever, headache, or cognitive change.
+  multiple_sclerosis_relapse:
+    - The discharge plan emphasized neurology follow-up after completion of relapse-directed therapy.
+    - The team documented no additional acute demyelinating symptoms before discharge.
+    - Medication reconciliation matched the completed relapse treatment and outpatient disease-management plan.
+  spinal_epidural_abscess:
+    - The plan emphasized completion of antimicrobial therapy and close spine or infectious-disease follow-up.
+    - Neurologic checks were stable, and no further inpatient escalation was documented.
+    - The discharge medication plan matched the infection-control strategy and mobility precautions.
+  pulmonary_embolism:
+    - The discharge medication list matched the anticoagulation plan and pulmonary follow-up.
+    - Hemodynamics were stable, and the team documented no further inpatient escalation.
+    - The plan emphasized anticoagulation adherence, bleeding precautions, and reassessment of oxygen needs.
+  copd_exacerbation:
+    - The discharge medication list reflected the completed respiratory exacerbation plan and inhaler teaching.
+    - Breathing was stable, and no additional inpatient ventilatory escalation was documented.
+    - The plan emphasized pulmonary follow-up, trigger avoidance, and reassessment of oxygen needs.
+  infective_endocarditis:
+    - The plan emphasized completion of intravenous antibiotics and infectious-disease follow-up.
+    - The team documented clinical stability during transition to the prolonged antibiotic plan.
+    - Follow-up focused on culture clearance, valve assessment, and antibiotic monitoring.
+  osteomyelitis:
+    - The plan emphasized antimicrobial completion, wound monitoring, and mobility precautions.
+    - The discharge plan matched the bone-infection treatment strategy and follow-up imaging or laboratory monitoring.
+    - The team documented stable local examination findings before transition out of the hospital.
+  pyelonephritis_sepsis:
+    - The discharge medication list matched the completed urinary-infection treatment plan and renal follow-up.
+    - Hemodynamics were stable, and the team documented no further sepsis-related escalation.
+    - The plan emphasized infection follow-up and monitoring for recurrent fever or urinary symptoms.
+  diabetic_foot_infection:
+    - The plan emphasized antibiotic completion, wound care, glycemic management, and offloading.
+    - The discharge plan matched the foot-infection treatment strategy and close podiatry follow-up.
+    - The team documented stable wound findings before transition to outpatient or facility-based care.
+  cirrhosis_encephalopathy:
+    - The medication plan matched the hepatic encephalopathy regimen and liver follow-up.
+    - Mentation was stable, and the team documented no further inpatient escalation.
+    - The plan emphasized adherence to bowel-regimen therapy and monitoring for recurrent confusion.
+  lupus_nephritis:
+    - The plan emphasized nephrology and rheumatology follow-up after flare-directed therapy.
+    - Renal status was stable, and the team documented no further inpatient escalation.
+    - The discharge medication plan matched the immunosuppressive treatment strategy and laboratory monitoring.
+  severe_cellulitis:
+    - The discharge medication list matched the completed soft-tissue infection plan and wound reassessment.
+    - The limb examination was stable, and the team documented no further inpatient escalation.
+    - The plan emphasized skin monitoring, limb elevation, and reassessment for recurrent infection.
+  ulcerative_colitis_flare:
+    - The plan emphasized gastroenterology follow-up after flare-directed therapy.
+    - Oral intake was stable, and the team documented no further inpatient escalation.
+    - The discharge medication plan matched the colitis treatment strategy and monitoring for recurrent bleeding.
+
+functional_status_phrases:
+  encephalitis_myelitis:
+    home_rehab:
+      - orientation improved and gait was safe with supervised exercises
+      - headache resolved and mild balance deficits could be managed with supervision
+      - mental status returned near baseline with residual fatigue
+    inpatient_rehab:
+      - orientation improved but gait instability still made independent mobility unsafe
+      - weakness persisted despite improved fever and stable neurologic checks
+      - cognitive slowing and balance deficits still limited safe transfers
+    persistent_deficit:
+      - focal weakness and impaired balance remained prominent
+      - confusion improved only partially and mobility stayed limited
+      - residual neurologic deficits were still documented on the final examination
+  pneumonia:
+    home_rehab:
+      - oxygen needs improved and endurance was adequate for supervised activity
+      - cough and fever improved, but conditioning remained below baseline
+      - breathing was stable on room air with mild residual weakness
+    inpatient_rehab:
+      - respiratory status improved but deconditioning limited transfers
+      - oxygenation stabilized while weakness still prevented independent ambulation
+      - fatigue after respiratory illness made self-care unsafe
+    persistent_deficit:
+      - exertional dyspnea persisted despite improvement in fever
+      - oxygen requirement remained a barrier to baseline activity
+      - exercise tolerance stayed reduced at the end of the stay
+  ischemic_stroke:
+    home_rehab:
+      - speech improved and gait was safe with outpatient support
+      - mild dysarthria persisted but transfers were independent
+      - strength improved enough for home discharge planning
+    inpatient_rehab:
+      - hemiparesis still limited transfers and gait safety
+      - aphasia improved but mobility deficits required supervised practice
+      - motor deficits remained too significant for independent self-care
+    persistent_deficit:
+      - hemiparesis remained prominent on the final neurologic examination
+      - aphasia and mobility impairment persisted
+      - residual focal deficits continued to limit safe ambulation
+  heart_failure:
+    home_rehab:
+      - dyspnea improved and walking tolerance was adequate for a supervised home plan
+      - edema decreased and activity tolerance was improving
+      - volume status stabilized with residual fatigue
+    inpatient_rehab:
+      - deconditioning remained marked despite improved volume status
+      - fatigue and poor endurance still limited transfers
+      - breathing improved, but mobility remained unsafe without supervised strengthening
+    persistent_deficit:
+      - exertional dyspnea continued to limit hallway ambulation
+      - fatigue and mobility limitation remained near discharge
+      - residual congestion symptoms kept exercise tolerance reduced
+  bacterial_meningitis:
+    home_rehab:
+      - headache improved and orientation was adequate for supervised home activity
+      - balance was mildly impaired but safe with outpatient therapy support
+      - cognition improved enough for a home recovery plan
+    inpatient_rehab:
+      - cognitive slowing and balance deficits still limited safe transfers
+      - weakness and slowed processing required daily therapy intensity
+      - gait instability remained unsafe without supervised rehabilitation
+    persistent_deficit:
+      - cognitive slowing and gait instability remained evident
+      - residual weakness and impaired balance continued to limit mobility
+      - ongoing neurologic deficits were still documented on final examination
+  multiple_sclerosis_relapse:
+    home_rehab:
+      - gait improved enough for home therapy with assistive-device teaching
+      - fatigue persisted but transfers were safe with outpatient support
+      - weakness improved and the patient could continue recovery outside the hospital
+    inpatient_rehab:
+      - leg weakness still limited transfers and safe ambulation
+      - fatigue and imbalance made independent mobility unsafe
+      - persistent mobility deficits required supervised therapy before return home
+    persistent_deficit:
+      - lower-extremity weakness and imbalance remained prominent
+      - sensory symptoms and gait deficits continued to limit safe ambulation
+      - neurologic deficits remained functionally important at discharge
+  spinal_epidural_abscess:
+    home_rehab:
+      - pain control improved and leg strength was adequate for protected home ambulation
+      - mobility improved after treatment and outpatient therapy was feasible
+      - transfers were safe with precautions and home physical therapy planning
+    inpatient_rehab:
+      - leg weakness and pain still limited transfers after decompression planning
+      - gait remained unsafe despite improved infection control
+      - mobility deficits required supervised strengthening before return home
+    persistent_deficit:
+      - lower-extremity weakness and sensory loss remained functionally limiting
+      - residual neurologic deficits continued to impair independent mobility
+      - pain and gait impairment stayed prominent near discharge
+  pulmonary_embolism:
+    home_rehab:
+      - dyspnea improved and activity could advance gradually at home
+      - oxygenation stabilized with mild residual exertional limitation
+      - walking tolerance improved enough for outpatient therapy support
+    inpatient_rehab:
+      - hypoxemia improved but deconditioning still limited safe ambulation
+      - severe fatigue after pulmonary embolism prevented independent transfers
+      - mobility remained limited despite stable anticoagulation planning
+    persistent_deficit:
+      - exertional dyspnea continued to limit hallway walking
+      - oxygen requirement and reduced walking tolerance remained near discharge
+      - endurance stayed below baseline despite hemodynamic stability
+  copd_exacerbation:
+    home_rehab:
+      - breathing improved and inhaler teaching supported a home plan
+      - endurance was reduced but safe for supervised pulmonary rehabilitation
+      - work of breathing improved enough for home therapy planning
+    inpatient_rehab:
+      - deconditioning and dyspnea still limited safe ambulation
+      - weakness after respiratory failure prevented independent transfers
+      - poor endurance required supervised rehabilitation before return home
+    persistent_deficit:
+      - dyspnea and exertional limitation remained prominent
+      - ongoing oxygen need reduced baseline activity tolerance
+      - poor endurance continued to limit safe ambulation
+  infective_endocarditis:
+    home_rehab:
+      - strength improved enough for home infusion support and outpatient therapy
+      - endurance was improving while antibiotic completion continued outside the hospital
+      - mobility was safe with home rehabilitation and line-care planning
+    inpatient_rehab:
+      - marked deconditioning during prolonged antibiotic therapy limited transfers
+      - endurance and mobility remained unsafe for independent home care
+      - weakness after prolonged infection required supervised rehabilitation
+    persistent_deficit:
+      - fatigue and reduced mobility remained functionally important
+      - ongoing endurance limitation complicated antibiotic completion
+      - persistent weakness continued to limit daily activity
+  osteomyelitis:
+    home_rehab:
+      - pain and swelling improved enough for protected weight bearing at home
+      - mobility was safe with offloading instructions and outpatient therapy
+      - transfers improved while wound and antibiotic follow-up continued
+    inpatient_rehab:
+      - weight-bearing restrictions and weakness still limited independent gait
+      - transfers required supervised practice because offloading needs remained complex
+      - pain and mobility limits made home return unsafe without rehabilitation
+    persistent_deficit:
+      - pain and impaired mobility remained prominent
+      - difficulty with ambulation continued despite infection-control planning
+      - weight-bearing limits and weakness still reduced independence
+  pyelonephritis_sepsis:
+    home_rehab:
+      - strength improved after sepsis treatment and visiting nursing was feasible
+      - fatigue was improving with safe home activity advancement
+      - mobility returned close enough to baseline for home physical therapy
+    inpatient_rehab:
+      - deconditioning after septic illness still limited transfers
+      - weakness and poor endurance kept mobility below baseline
+      - safe ambulation required supervised rehabilitation after infection control
+    persistent_deficit:
+      - weakness and limited endurance remained at discharge
+      - ongoing fatigue after sepsis reduced safe activity tolerance
+      - mobility stayed below baseline despite resolution of acute infection
+  diabetic_foot_infection:
+    home_rehab:
+      - pain improved and protected ambulation was feasible with wound-care support
+      - offloading precautions were manageable with outpatient gait therapy
+      - mobility improved enough for home therapy and close wound follow-up
+    inpatient_rehab:
+      - offloading precautions and weakness still limited safe transfers
+      - mobility remained unsafe because wound-care restrictions were complex
+      - gait training required supervised rehabilitation before return home
+    persistent_deficit:
+      - gait limitation and wound-related pain remained prominent
+      - ongoing mobility difficulty required close podiatry and therapy follow-up
+      - offloading needs continued to reduce independent ambulation
+  cirrhosis_encephalopathy:
+    home_rehab:
+      - mentation improved and balance was adequate for supervised home therapy
+      - orientation returned near baseline with mild residual fatigue
+      - safe activity advancement was feasible with visiting nursing support
+    inpatient_rehab:
+      - weakness and cognitive slowing still limited safe mobility
+      - falls risk and deconditioning required supervised rehabilitation
+      - orientation improved but transfers remained unsafe without daily therapy
+    persistent_deficit:
+      - cognitive slowing and poor balance remained at discharge
+      - fatigue and impaired mobility continued to limit independence
+      - residual encephalopathy symptoms still affected safe activity
+  lupus_nephritis:
+    home_rehab:
+      - edema improved and weakness was manageable with outpatient therapy
+      - renal function stabilized enough for home physical therapy planning
+      - activity tolerance improved while nephrology follow-up remained close
+    inpatient_rehab:
+      - deconditioning after immunosuppressive therapy still limited transfers
+      - weakness and edema made independent mobility unsafe
+      - poor endurance required supervised rehabilitation before return home
+    persistent_deficit:
+      - fatigue and reduced mobility remained prominent
+      - ongoing weakness continued to limit safe activity
+      - edema and poor endurance still reduced functional independence
+  severe_cellulitis:
+    home_rehab:
+      - pain and swelling improved enough for safer ambulation at home
+      - limb symptoms were improving with visiting nursing and home therapy planning
+      - walking tolerance improved after antibiotics and limb elevation
+    inpatient_rehab:
+      - pain and weakness still limited transfers
+      - mobility remained unsafe after prolonged soft-tissue infection
+      - swelling and deconditioning required supervised rehabilitation
+    persistent_deficit:
+      - pain and limited walking tolerance remained at discharge
+      - swelling and weakness continued to impair mobility
+      - residual limb discomfort still reduced safe ambulation
+  ulcerative_colitis_flare:
+    home_rehab:
+      - strength improved after flare control and outpatient therapy was feasible
+      - abdominal pain improved enough for home physical therapy planning
+      - oral intake and endurance improved with residual fatigue
+    inpatient_rehab:
+      - marked deconditioning after prolonged illness still limited self-care
+      - weakness and poor endurance made independent home activity unsafe
+      - fatigue after severe colitis required supervised rehabilitation
+    persistent_deficit:
+      - fatigue and poor endurance remained at discharge
+      - ongoing weakness continued to limit return to baseline activity
+      - reduced activity tolerance persisted despite improved bowel symptoms
+
+rehab_closing_sentences:
+  home_rehab:
+    - The plan emphasized caregiver teaching, home safety, and close outpatient reassessment.
+    - The patient left with clear activity precautions and follow-up for functional recovery.
+    - The team documented a stable medical condition with continued recovery outside the hospital.
+  inpatient_rehab:
+    - The plan emphasized supervised strengthening, mobility training, and reassessment before return home.
+    - The team documented a need for daily therapy intensity after medical stabilization.
+    - Transfer planning focused on fall prevention, endurance, and recovery of daily activities.
+  persistent_deficit:
+    encephalitis_myelitis:
+      - Neurology follow-up was arranged because recovery remained incomplete.
+      - The plan emphasized monitoring residual neurologic deficits after discharge.
+    pneumonia:
+      - Pulmonary follow-up was arranged because respiratory recovery remained incomplete.
+      - The plan emphasized monitoring oxygen needs and gradual return of endurance.
+    ischemic_stroke:
+      - Neurology follow-up was arranged because focal deficits remained functionally important.
+      - The plan emphasized continued monitoring of neurologic recovery after discharge.
+    heart_failure:
+      - Cardiology follow-up was arranged because functional recovery remained limited.
+      - The plan emphasized symptom monitoring and gradual activity advancement.
+    bacterial_meningitis:
+      - Neurology and infectious-disease follow-up were arranged because recovery remained incomplete.
+      - The plan emphasized monitoring residual cognitive, gait, and hearing-related concerns.
+    multiple_sclerosis_relapse:
+      - Neurology follow-up was arranged because relapse recovery remained incomplete.
+      - The plan emphasized monitoring residual weakness, gait difficulty, and fatigue.
+    spinal_epidural_abscess:
+      - Spine and infectious-disease follow-up were arranged because neurologic recovery remained incomplete.
+      - The plan emphasized monitoring residual weakness, sensory loss, and recurrent infection symptoms.
+    pulmonary_embolism:
+      - Pulmonary follow-up was arranged because exertional recovery remained incomplete.
+      - The plan emphasized monitoring oxygen needs, dyspnea, and anticoagulation tolerance.
+    copd_exacerbation:
+      - Pulmonary follow-up was arranged because respiratory recovery remained incomplete.
+      - The plan emphasized inhaler adherence, oxygen monitoring, and gradual activity advancement.
+    infective_endocarditis:
+      - Infectious-disease follow-up was arranged because functional recovery remained limited during antibiotic completion.
+      - The plan emphasized monitoring fatigue, mobility, and complications of prolonged infection.
+    osteomyelitis:
+      - Infectious-disease and wound follow-up were arranged because mobility recovery remained incomplete.
+      - The plan emphasized monitoring pain, ambulation limits, and infection-control markers.
+    pyelonephritis_sepsis:
+      - Primary-care follow-up was arranged because recovery from sepsis-related weakness remained incomplete.
+      - The plan emphasized monitoring fatigue, endurance, and recurrent urinary symptoms.
+    diabetic_foot_infection:
+      - Podiatry and wound follow-up were arranged because gait recovery remained incomplete.
+      - The plan emphasized monitoring offloading adherence, wound pain, and mobility limits.
+    cirrhosis_encephalopathy:
+      - Hepatology follow-up was arranged because cognitive and mobility recovery remained incomplete.
+      - The plan emphasized monitoring mentation, falls risk, and adherence to encephalopathy therapy.
+    lupus_nephritis:
+      - Nephrology and rheumatology follow-up were arranged because functional recovery remained incomplete.
+      - The plan emphasized monitoring fatigue, edema, renal function, and immunosuppressive therapy.
+    severe_cellulitis:
+      - Wound and primary-care follow-up were arranged because limb function remained limited.
+      - The plan emphasized monitoring swelling, pain, and recurrent soft-tissue infection.
+    ulcerative_colitis_flare:
+      - Gastroenterology follow-up was arranged because endurance recovery remained incomplete.
+      - The plan emphasized monitoring nutrition, recurrent bleeding, and gradual activity advancement.
+
+hidden_benchmark_terms:
+  - admission adm_
+  - benchmark
+  - chunk
+  - cohort descriptor
+  - distractor
+  - facet
+  - gold
+  - index terms
+  - qrel
+  - source query
+  - structured cohort
+  - synthetic
+  - target query
+
+duration_course_nouns:
+  - active treatment course
+  - inpatient treatment course
+  - documented therapy course
+  - hospital treatment interval
+  - monitored inpatient regimen
+  - recorded treatment plan
+
+duration_phrase_templates:
+  - "{treatment} was continued for {duration_days} days"
+  - "the {course_noun} used {treatment} for {duration_days} days"
+  - "clinicians completed {duration_days} days of {treatment}"
+  - "the team documented a {duration_days}-day course of {treatment}"
+  - "records showed {duration_days} days of treatment with {treatment}"
+  - "{treatment} remained in place across a {duration_days}-day course"
+
+duration_response_verbs:
+  - the record described
+  - clinicians documented
+  - the discharge summary noted
+  - the team documented
+  - the chart reflected
+  - the final inpatient note described
+
+duration_chunk_templates:
+  - "{patient} was admitted with {condition}, with {presentation}. {duration_sentence}, and {response_verb} {response} before discharge. {close}"
+  - "{patient} presented with {condition}, including {presentation}. {duration_sentence}, while {response_verb} {response} near discharge. {close}"
+  - "{patient} required hospitalization for {condition} after developing {presentation}. {duration_sentence}, and by discharge {response_verb} {response}. {close}"
+  - "{patient} was treated inpatient for {condition}, with {presentation} on presentation. {duration_sentence}; {response_verb} {response} before transition out of the hospital. {close}"
+  - "{patient} was hospitalized for {condition} in the setting of {presentation}. {duration_sentence}, and {response_verb} {response} by the end of the stay. {close}"
+
+rehab_transitions:
+  - By discharge
+  - At discharge
+  - Near the end of the hospitalization
+  - In the final therapy assessment
+  - On the day of discharge
+  - Before leaving the hospital
+
+rehab_outcome_verbs:
+  - the discharge record described
+  - therapy documentation noted
+  - the final rehabilitation assessment documented
+  - the discharge summary described
+  - the care team documented
+  - the therapy plan noted
+
+rehab_chunk_templates:
+  - "{patient} was managed for {condition}, with {presentation}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "{patient} received inpatient care for {condition} after {presentation}. {transition}, {functional_detail}, and {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "Hospitalization for {condition} included {presentation} in {patient_lower}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "{patient} was treated for {condition}, with the early course notable for {presentation}. {transition}, {functional_detail}. {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "{patient} remained hospitalized for {condition} with {presentation}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
+
+subgroup_terms:
+  uncomplicated_diabetes:
+    - uncomplicated diabetes
+    - type 2 diabetes
+    - diabetes without complications
+  chronic_kidney_disease:
+    - chronic kidney disease
+    - ckd
+  copd:
+    - copd
+    - chronic obstructive pulmonary disease
+  immunosuppression:
+    - immunosuppression
+    - immunosuppressed
+  obesity:
+    - obesity
+    - obese
+    - body mass index
+  malignancy:
+    - malignancy
+    - active cancer
+    - cancer treatment
+  atrial_fibrillation:
+    - atrial fibrillation
+    - af
+  chronic_liver_disease:
+    - chronic liver disease
+    - cirrhosis
+    - hepatic disease
+  dementia:
+    - dementia
+    - cognitive impairment
+    - neurocognitive disorder
+  frailty:
+    - frailty
+    - frail
+  peripheral_vascular_disease:
+    - peripheral vascular disease
+    - peripheral artery disease
+    - pad
+  autoimmune_disease:
+    - autoimmune disease
+    - systemic autoimmune disease
+    - inflammatory autoimmune disease
+
+rehab_language_terms:
+  - acute rehabilitation
+  - cleared for home
+  - discharged home
+  - discharged to home
+  - gait training
+  - home health
+  - home nursing
+  - home occupational therapy
+  - home physical therapy
+  - home therapy
+  - home exercise program
+  - home services
+  - home with
+  - inpatient rehabilitation
+  - inpatient rehab placement
+  - outpatient neurorehabilitation
+  - outpatient therapy
+  - physical therapy follow-up
+  - rehab
+  - rehabilitation
+  - rehabilitation assessment
+  - skilled rehabilitation
+  - therapy evaluation
+  - therapy was arranged
+  - transferred to rehabilitation
+  - visiting nursing
+
+rehab_bin_terms:
+  home_rehab:
+    - breathing exercises
+    - discharged home
+    - home physical therapy
+    - home therapy
+    - home occupational therapy
+    - home exercise program
+    - home services
+    - home with
+    - outpatient
+    - visiting nursing
+  inpatient_rehab:
+    - acute rehabilitation
+    - inpatient rehabilitation
+    - inpatient rehab placement
+    - intensive therapy program
+    - required inpatient therapy
+    - skilled rehabilitation
+    - transferred to rehabilitation
+  persistent_deficit:
+    - continued exertional limitation
+    - cognitive slowing
+    - deconditioning
+    - gait instability
+    - impaired balance
+    - ongoing
+    - persistent
+    - remained
+    - reduced exercise tolerance
+    - reduced walking tolerance
+    - transfer difficulty
+    - limited walking tolerance
+    - limited ambulation
+    - mobility
+    - ambulation
+    - endurance
+    - exertional dyspnea
+    - dyspnea
+    - weakness
+    - functional limitation
+    - residual
+
+persistent_deficit_descriptor_terms:
+  - continued
+  - persistent
+  - ongoing
+  - residual
+  - remained
+  - still
+  - limited
+  - reduced
+  - impaired
+
+persistent_deficit_rehab_terms:
+  - oxygen requirement
+  - walking tolerance
+  - exercise tolerance
+  - exertional dyspnea
+  - dyspnea
+  - mobility
+  - ambulation
+  - gait instability
+  - transfer difficulty
+  - endurance
+  - functional limitation
+  - weakness
+  - deficit
+
+meaningful_token_stopwords:
+  - a
+  - an
+  - and
+  - at
+  - by
+  - for
+  - in
+  - into
+  - of
+  - "on"
+  - or
+  - the
+  - to
+  - with
+  - without
+  - was
+  - were
+  - is
+  - are
+  - be
+  - been
+  - being
+  - after
+  - before
+  - during
+  - discharge
+  - discharged
+  - status
+  - outcome
+  - functional
+  - rehabilitation

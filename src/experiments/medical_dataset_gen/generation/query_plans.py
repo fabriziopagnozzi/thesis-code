@@ -12,21 +12,24 @@ from typing import cast
 import polars as pl
 
 from experiments.medical_dataset_gen.generation.ontology import (
-    axis_ids,
+    get_axes_keys,
+    get_selected_conditions,
     load_ontology,
-    selected_conditions,
-    subgroup_pairs,
+    make_subgroup_pairs,
 )
 from experiments.medical_dataset_gen.generation.schemas import (
-    ClinicalConditionOntology,
-    ClinicalSubgroupOntology,
+    ConditionKey,
+    ConditionOntology,
     FacetAxis,
+    MedicalOntology,
     QueryLogicalForm,
     QueryPlan,
     QueryPlanFacet,
     QueryPlanSpec,
     QueryType,
     Split,
+    SubgroupKey,
+    SubgroupOntology,
 )
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
@@ -36,29 +39,50 @@ from experiments.medical_dataset_gen.global_configs import (
 
 
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    ontology = load_ontology(cfg)
-    conditions = selected_conditions(ontology, cfg.global_.conditions)
-    pairs = subgroup_pairs(ontology)
-    axes = axis_ids(ontology)
-    if set(axes) != {'treatment_duration', 'rehab_outcome'}:
-        raise ValueError(f'MVP expects treatment_duration and rehab_outcome axes, got {axes}')
+    ontology: MedicalOntology = load_ontology(cfg)
+    conditions: list[tuple[ConditionKey, ConditionOntology]] = get_selected_conditions(
+        ontology, cfg.global_.conditions
+    )
+    pairs: list[
+        tuple[tuple[SubgroupKey, SubgroupOntology], tuple[SubgroupKey, SubgroupOntology]]
+    ] = make_subgroup_pairs(ontology)
+    axes_keys: list[str] = get_axes_keys(ontology)
+    if set(axes_keys) != {'treatment_duration', 'rehab_outcome'}:
+        raise ValueError(f'MVP expects treatment_duration and rehab_outcome axes, got {axes_keys}')
 
     rng = Random(cfg.global_.seed)
     rows: list[dict[str, object]] = []
     plan_idx = 0
-    per_condition_specs = [
-        _plan_specs_for_condition(condition_id, condition, pairs, cfg.generation.query_types)
-        for condition_id, condition in conditions
-    ]
-    offsets = [0] * len(per_condition_specs)
+
+    per_condition_specs: dict[ConditionKey, list[QueryPlanSpec]] = {
+        condition_key: [
+            QueryPlanSpec(
+                query_type=cast(QueryType, query_type),
+                condition_key=condition_key,
+                condition_display=condition.display,
+                subgroup_a_id=subgroup_a_id,
+                subgroup_a=subgroup_a,
+                subgroup_b_id=subgroup_b_id,
+                subgroup_b=subgroup_b,
+            )
+            for query_type in cfg.generation.query_types
+            for (subgroup_a_id, subgroup_a), (subgroup_b_id, subgroup_b) in pairs
+        ]
+        for (condition_key, condition) in conditions
+    }
+
+    offsets: dict[str, int] = {condition_key: 0 for condition_key in per_condition_specs}
+
+    # round-robin scheduler over query plans, keyed by condition
+    # This avoids one condition dominating the whole dataset.
     while len(rows) < cfg.global_.n_queries:
         emitted = False
-        for condition_idx, specs in enumerate(per_condition_specs):
-            offset = offsets[condition_idx]
+        for condition_key, specs in per_condition_specs.items():
+            offset = offsets[condition_key]
             if offset >= len(specs):
                 continue
             spec = specs[offset]
-            offsets[condition_idx] += 1
+            offsets[condition_key] += 1
             emitted = True
             plan_idx += 1
             rows.append(_materialize_plan_row(cfg, rng, plan_idx, spec).to_row())
@@ -72,29 +96,6 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     return df
 
 
-def _plan_specs_for_condition(
-    condition_id: str,
-    condition: ClinicalConditionOntology,
-    pairs: list[tuple[tuple[str, ClinicalSubgroupOntology], tuple[str, ClinicalSubgroupOntology]]],
-    query_types: list[str],
-) -> list[QueryPlanSpec]:
-    specs: list[QueryPlanSpec] = []
-    for (subgroup_a_id, subgroup_a), (subgroup_b_id, subgroup_b) in pairs:
-        for query_type in query_types:
-            specs.append(
-                QueryPlanSpec(
-                    query_type=cast(QueryType, query_type),
-                    condition_id=condition_id,
-                    condition_display=condition.display,
-                    subgroup_a_id=subgroup_a_id,
-                    subgroup_a=subgroup_a,
-                    subgroup_b_id=subgroup_b_id,
-                    subgroup_b=subgroup_b,
-                )
-            )
-    return specs
-
-
 def _materialize_plan_row(
     cfg: ExperimentCfg, rng: Random, plan_idx: int, spec: QueryPlanSpec
 ) -> QueryPlan:
@@ -102,7 +103,7 @@ def _materialize_plan_row(
     dominant_slot = (plan_idx - 1) % 4
     facets = _facets_for_plan(
         query_id=query_id,
-        condition_id=spec.condition_id,
+        condition_id=spec.condition_key,
         condition_display=spec.condition_display,
         subgroup_a_id=spec.subgroup_a_id,
         subgroup_a=spec.subgroup_a,
@@ -115,7 +116,7 @@ def _materialize_plan_row(
     dominant_facet_id = facets[dominant_slot].facet_id
     logical_form = QueryLogicalForm(
         type=spec.query_type,
-        condition=spec.condition_id,
+        condition=spec.condition_key,
         subgroups=[spec.subgroup_a_id, spec.subgroup_b_id],
         axes=['treatment_duration', 'rehab_outcome'],
         facets=[facet.facet_id for facet in facets],
@@ -127,7 +128,7 @@ def _materialize_plan_row(
         split=_split_for_index(plan_idx),
         query_type=spec.query_type,
         template_id=spec.query_type,
-        condition_id=spec.condition_id,
+        condition_id=spec.condition_key,
         condition_display=spec.condition_display,
         **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),
         **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),
@@ -145,9 +146,9 @@ def _facets_for_plan(
     condition_id: str,
     condition_display: str,
     subgroup_a_id: str,
-    subgroup_a: ClinicalSubgroupOntology,
+    subgroup_a: SubgroupOntology,
     subgroup_b_id: str,
-    subgroup_b: ClinicalSubgroupOntology,
+    subgroup_b: SubgroupOntology,
     dominant_slot: int,
     dominant_size: int,
     complementary_size: int,

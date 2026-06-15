@@ -3,7 +3,6 @@ from typing import Any
 
 import polars as pl
 from matplotlib.figure import Figure
-from matplotlib.markers import MarkerStyle
 from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.global_configs import (
@@ -64,11 +63,11 @@ def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> Non
     out_dir.mkdir(parents=True, exist_ok=True)
 
     plot_strategy_comparison(stats_df, results_df, out_dir)
+    plot_strategy_comparison_all_lambdas(stats_df, results_df, out_dir)
     plot_lambda_sensitivity(stats_df, out_dir)
     plot_per_query_distributions(results_df, out_dir)
     plot_gain_over_topk(stats_df, results_df, out_dir)
     plot_gain_over_topk_simple(stats_df, results_df, out_dir)
-    plot_coverage_precision_tradeoff(stats_df, out_dir)
     plot_selection_diagnostics(stats_df, out_dir)
 
     print(f'[plots] saved evaluation figures to {out_dir}')
@@ -192,9 +191,7 @@ def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
     lambda_values = _lambda_values(stats_df)
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
     metric_cols = [
-        (stats_col, title)
-        for stats_col, _, title, _ in _METRICS
-        if stats_col in stats_df.columns
+        (stats_col, title) for stats_col, _, title, _ in _METRICS if stats_col in stats_df.columns
     ]
     cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
     k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
@@ -252,10 +249,108 @@ def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
             frameon=False,
             bbox_to_anchor=(0.5, -0.01),
         )
-    fig.suptitle('Lambda sensitivity - each row is a metric, each column is a strategy', fontsize=12)
-    _figure_note(fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k')
+    fig.suptitle(
+        'Lambda sensitivity - each row is a metric, each column is a strategy', fontsize=12
+    )
+    _figure_note(
+        fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
+    )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(out_dir / 'lambda_sensitivity.png', dpi=140, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_strategy_comparison_all_lambdas(
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    out_dir: Path,
+) -> None:
+    """Metric-vs-k lines, fac-loc vs MMR, split into one column per lambda."""
+    import matplotlib.pyplot as plt
+
+    lambda_values = _lambda_values(stats_df)
+    if not lambda_values:
+        return
+
+    present_strategies = set(stats_df['strategy'].unique().to_list())
+    strategies = [strategy for strategy in ['fac_loc', 'mmr'] if strategy in present_strategies]
+    if len(strategies) < 2:
+        return
+
+    k_values = sorted(stats_df['k'].unique().to_list())
+    metrics = _available_metrics(stats_df, results_df)
+    if not metrics:
+        return
+
+    fig, axes = _variable_grid_figure(
+        rows=len(metrics),
+        cols=len(lambda_values),
+        sharex=True,
+        width_per_col=3.8,
+        height_per_row=2.4,
+        footer_height=1.4,
+    )
+
+    for row_idx, (stats_col, result_col, title, higher_is_better) in enumerate(metrics):
+        for col_idx, lam in enumerate(lambda_values):
+            ax = axes[row_idx][col_idx]
+            for strategy in strategies:
+                style = get_style(strategy)
+                sub = stats_df.filter(
+                    (pl.col('strategy') == strategy) & (pl.col('lam') == lam)
+                ).sort('k')
+                if sub.height == 0:
+                    continue
+                xs = [int(k) for k in sub['k'].to_list()]
+                ys = [float(v) for v in sub[stats_col].to_list()]
+                ci = [
+                    _ci_half_width(_query_vals(results_df, strategy, k, lam, result_col))
+                    for k in xs
+                ]
+                _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
+                ax.scatter(
+                    xs,
+                    ys,
+                    s=28,
+                    facecolors='white',
+                    edgecolors=style['color'],
+                    linewidths=1.2,
+                    zorder=4,
+                )
+                _plot_error_caps(ax, xs, ys, ci, style, zorder=2)
+
+            if row_idx == 0:
+                ax.set_title(f'lambda={lam:.2f}', fontsize=10)
+            if col_idx == 0:
+                ax.set_ylabel(title, fontsize=9)
+            ax.set_xticks(k_values)
+            ax.grid(axis='y', alpha=0.3)
+            if not higher_is_better:
+                ax.text(
+                    0.98,
+                    0.04,
+                    'lower is better',
+                    transform=ax.transAxes,
+                    ha='right',
+                    va='bottom',
+                    fontsize=7,
+                    color='#555555',
+                )
+            if row_idx == len(metrics) - 1:
+                ax.set_xlabel('k', fontsize=9)
+            else:
+                ax.tick_params(labelbottom=False)
+
+    _figure_legend(fig, axes.flatten())
+    fig.suptitle(
+        'Strategy comparison across all lambdas - each row is a metric, each column is a lambda',
+        fontsize=12,
+    )
+    _figure_note(
+        fig, 'Each panel compares FacLoc and MMR at a fixed lambda; shaded bands are 95% CI'
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.savefig(out_dir / 'strategy_comparison_all_lambdas.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
@@ -516,117 +611,6 @@ def plot_gain_over_topk_simple(
     plt.close(fig)
 
 
-def plot_coverage_precision_tradeoff(stats_df: pl.DataFrame, out_dir: Path) -> None:
-    """Balanced coverage score vs distractor rate for each strategy/lambda/k cell."""
-    import matplotlib.pyplot as plt
-    from matplotlib.lines import Line2D
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-    y_col = 'FacetCoverage@k' if 'FacetCoverage@k' in stats_df.columns else 'facet_coverage'
-    x_col = 'DistractorRate' if 'DistractorRate' in stats_df.columns else 'distractor_rate'
-    y_label = 'FacetCoverage@k'
-    k_values = sorted(stats_df['k'].unique().to_list())
-    markers: list[MarkerStyle] = ['o', 's', '^', 'D', 'P', 'X', 'v']  # type:ignore
-    line_styles = ['-', '--', '-.', ':', (0, (3, 1, 1, 1)), (0, (5, 1))]
-    k_to_marker = {k: markers[i % len(markers)] for i, k in enumerate(k_values)}
-    k_to_line_style = {k: line_styles[i % len(line_styles)] for i, k in enumerate(k_values)}
-
-    for strategy in _ordered_strategies(stats_df):
-        style = get_style(strategy)
-        sub = stats_df.filter(pl.col('strategy') == strategy)
-        if strategy == 'top_k':
-            for row in sub.iter_rows(named=True):
-                k = int(row['k'])
-                ax.scatter(
-                    float(row[x_col]),
-                    float(row[y_col]),
-                    color=style['color'],
-                    marker=k_to_marker[k],
-                    s=90,
-                    label=style['label'] if k == k_values[0] else None,
-                    zorder=4,
-                )
-            continue
-
-        best_df = _best_lam_rows(stats_df, strategy, k_values)
-        if best_df.height == 0:
-            continue
-        xs = best_df[x_col].to_list()
-        ys = best_df[y_col].to_list()
-        ax.plot(
-            xs,
-            ys,
-            color=style['color'],
-            ls=style['ls'],
-            lw=1.7,
-            alpha=0.85,
-            label=style['label'],
-        )
-        for row in best_df.iter_rows(named=True):
-            k = int(row['k'])
-            ax.scatter(
-                float(row[x_col]),
-                float(row[y_col]),
-                color=style['color'],
-                marker=k_to_marker[k],
-                s=80,
-                edgecolors='white',
-                linewidths=0.8,
-                zorder=4,
-            )
-
-    ax.set_xlabel('DistractorRate (lower is better)', fontsize=9)
-    ax.set_ylabel(f'{y_label} (higher is better)', fontsize=9)
-    ax.set_title('Balanced coverage vs distractor tradeoff', fontsize=11)
-    ax.grid(alpha=0.3)
-
-    strategy_handles = [
-        Line2D(
-            [0],
-            [0],
-            color=get_style(strategy)['color'],
-            lw=2.0,
-            label=get_style(strategy)['label'],
-        )
-        for strategy in _ordered_strategies(stats_df)
-    ]
-    k_handles = [
-        Line2D(
-            [0],
-            [0],
-            color='#555555',
-            ls=k_to_line_style[k],
-            marker=k_to_marker[k],
-            markerfacecolor='white',
-            markeredgewidth=1.1,
-            lw=1.7,
-            label=f'k={k}',
-        )
-        for k in k_values
-    ]
-    first_legend = ax.legend(
-        handles=strategy_handles,
-        title='Strategy',
-        fontsize=8,
-        title_fontsize=8,
-        frameon=False,
-        loc='lower right',
-    )
-    ax.add_artist(first_legend)
-    ax.legend(
-        handles=k_handles,
-        title='k',
-        fontsize=8,
-        title_fontsize=8,
-        frameon=False,
-        loc='upper left',
-    )
-    _figure_note(fig, _LAMBDA_POLICY_NOTE)
-    fig.tight_layout()
-    fig.savefig(out_dir / 'coverage_precision_tradeoff.png', dpi=140, bbox_inches='tight')
-    plt.close(fig)
-
-
 def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Diagnostic metrics that explain why a strategy wins or fails."""
     import matplotlib.pyplot as plt
@@ -742,6 +726,23 @@ def _metric_grid_figure(
     cols = 3
     width = 4.2 * cols * width_scale
     height = 3.4 * rows + 1.4
+    fig, axes = plt.subplots(rows, cols, figsize=(width, height), sharex=sharex, squeeze=False)
+    return fig, axes
+
+
+def _variable_grid_figure(
+    *,
+    rows: int,
+    cols: int,
+    sharex: bool = False,
+    width_per_col: float = 4.0,
+    height_per_row: float = 3.0,
+    footer_height: float = 1.2,
+) -> tuple[Figure, NDArray[Any]]:
+    import matplotlib.pyplot as plt
+
+    width = width_per_col * cols
+    height = height_per_row * rows + footer_height
     fig, axes = plt.subplots(rows, cols, figsize=(width, height), sharex=sharex, squeeze=False)
     return fig, axes
 
@@ -922,8 +923,7 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     if topk.height == 0:
         return int(results_df['k'].max())  # type: ignore[arg-type]
     ranked = (
-        topk
-        .group_by('k')
+        topk.group_by('k')
         .agg(
             pl.col('facet_coverage').median().alias('med_fc'),
         )
@@ -937,8 +937,7 @@ def _best_result_slice(results_df: pl.DataFrame, strategy: str, k: int) -> pl.Da
     if strategy == 'top_k' or strat_df.height == 0:
         return strat_df
     ranked = (
-        strat_df
-        .group_by('lam')
+        strat_df.group_by('lam')
         .agg(
             pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
             pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k')

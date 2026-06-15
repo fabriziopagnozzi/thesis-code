@@ -1,13 +1,12 @@
-"""Load and query the benchmark ontology used to build synthetic medical data."""
-
 from pathlib import Path
 
 import yaml
 
 from experiments.medical_dataset_gen.generation.schemas import (
-    ClinicalConditionOntology,
-    ClinicalSubgroupOntology,
+    ConditionOntology,
     MedicalOntology,
+    SubgroupKey,
+    SubgroupOntology,
 )
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
@@ -26,18 +25,18 @@ def load_ontology(cfg: ExperimentCfg) -> MedicalOntology:
     return ontology
 
 
-def selected_conditions(
+def get_selected_conditions(
     ontology: MedicalOntology, n_conditions: int
-) -> list[tuple[str, ClinicalConditionOntology]]:
+) -> list[tuple[str, ConditionOntology]]:
     items = list(ontology.conditions.items())
     if n_conditions > len(items):
         raise ValueError(f'Config asks for {n_conditions} conditions but ontology has {len(items)}')
     return items[:n_conditions]
 
 
-def subgroup_pairs(
+def make_subgroup_pairs(
     ontology: MedicalOntology,
-) -> list[tuple[tuple[str, ClinicalSubgroupOntology], tuple[str, ClinicalSubgroupOntology]]]:
+) -> list[tuple[tuple[SubgroupKey, SubgroupOntology], tuple[SubgroupKey, SubgroupOntology]]]:
     items = list(ontology.subgroups.items())
     pairs = []
     for i, left in enumerate(items):
@@ -47,24 +46,22 @@ def subgroup_pairs(
 
 
 def other_subgroups(
-    ontology: MedicalOntology,
-    excluded_ids: set[str],
-) -> list[tuple[str, ClinicalSubgroupOntology]]:
+    ontology: MedicalOntology, excluded_ids: set[str]
+) -> list[tuple[str, SubgroupOntology]]:
     return [
         (sid, subgroup) for sid, subgroup in ontology.subgroups.items() if sid not in excluded_ids
     ]
 
 
 def other_conditions(
-    ontology: MedicalOntology,
-    excluded_id: str,
-) -> list[tuple[str, ClinicalConditionOntology]]:
+    ontology: MedicalOntology, excluded_id: str
+) -> list[tuple[str, ConditionOntology]]:
     return [
         (cid, condition) for cid, condition in ontology.conditions.items() if cid != excluded_id
     ]
 
 
-def axis_ids(ontology: MedicalOntology) -> list[str]:
+def get_axes_keys(ontology: MedicalOntology) -> list[str]:
     return list(ontology.clinical_axes.keys())
 
 
