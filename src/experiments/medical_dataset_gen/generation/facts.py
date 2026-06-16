@@ -309,6 +309,11 @@ def make_base_fact(
         axis=axis,
         value_bin=value_bin,
         local_idx=local_idx,
+        reuse_scope=_chunk_reuse_scope(
+            is_gold=is_gold,
+            distractor_type=distractor_type,
+            cluster_role=cluster_role,
+        ),
     )
     surface_rng = Random(_stable_seed(chunk_reuse_key))
     duration_days, treatment, rehab_outcome = _axis_values(
@@ -453,9 +458,11 @@ def _chunk_reuse_key(
     axis: str,
     value_bin: str,
     local_idx: int,
+    reuse_scope: str,
 ) -> str:
     payload = {
-        'schema': 'medical_chunk_reuse_v1',
+        'schema': 'medical_chunk_reuse_v2',
+        'reuse_scope': reuse_scope,
         'condition_id': condition_id,
         'subgroup_id': subgroup_id,
         'axis': axis,
@@ -464,6 +471,19 @@ def _chunk_reuse_key(
     }
     raw = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _chunk_reuse_scope(
+    *,
+    is_gold: bool,
+    distractor_type: str | None,
+    cluster_role: str,
+) -> str:
+    if is_gold:
+        return 'gold'
+    if distractor_type:
+        return f'distractor:{distractor_type}'
+    return f'non_gold:{cluster_role}'
 
 
 def _stable_seed(value: str) -> int:
