@@ -7,6 +7,8 @@ pool-scope filtering, and per-query diagnostic aggregation to decide which
 queries are valid for later evaluation.
 """
 
+from __future__ import annotations
+
 from collections import Counter, defaultdict
 from typing import Any
 

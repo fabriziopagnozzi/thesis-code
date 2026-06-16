@@ -6,6 +6,8 @@ sampling over the ontology plus per-facet cluster construction so the benchmark
 has redundant positives and plausible negatives by design.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from random import Random
@@ -242,11 +244,13 @@ def make_base_fact(
     )
     admission_id = f'adm_{query_id}_{cluster_id}_{local_idx:03d}'
     patient_id = f'pat_{query_id}_{cluster_id}_{local_idx // 2:03d}'
-    note_style = surface_rng.choice([
-        'brief_hospital_course',
-        'brief_hospital_course',
-        'discharge_diagnosis',
-    ])
+    note_style = surface_rng.choice(
+        [
+            'brief_hospital_course',
+            'brief_hospital_course',
+            'discharge_diagnosis',
+        ]
+    )
     patient_age = _patient_age(subgroup_id, surface_rng)
     patient_sex = surface_rng.choice(['female', 'male'])
     clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, surface_rng)

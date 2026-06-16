@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any, cast
 
@@ -547,9 +549,9 @@ def label_palette(labels: list[str]) -> dict[str, Any]:
     unique = [label for label in sorted(set(labels)) if label not in _FIXED_LABEL_COLORS]
     cmap = plt.get_cmap('tab20')  # type: ignore
     palette = {label: cmap(i % 20) for i, label in enumerate(unique)}
-    palette.update({
-        label: color for label, color in _FIXED_LABEL_COLORS.items() if label in labels
-    })
+    palette.update(
+        {label: color for label, color in _FIXED_LABEL_COLORS.items() if label in labels}
+    )
     return palette
 
 

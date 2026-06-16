@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,14 +56,16 @@ def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
     presentation = rng.choice(TEMPLATE_UTILS.condition_presentations[fact.condition_id])
     response = rng.choice(TEMPLATE_UTILS.condition_status_phrases[fact.condition_id])
     course_noun = rng.choice(TEMPLATE_UTILS.duration_course_nouns)
-    duration_phrase = rng.choice([
-        template.format(
-            treatment=fact.treatment,
-            duration_days=fact.duration_days,
-            course_noun=course_noun,
-        )
-        for template in TEMPLATE_UTILS.duration_phrase_templates
-    ])
+    duration_phrase = rng.choice(
+        [
+            template.format(
+                treatment=fact.treatment,
+                duration_days=fact.duration_days,
+                course_noun=course_noun,
+            )
+            for template in TEMPLATE_UTILS.duration_phrase_templates
+        ]
+    )
     response_verb = rng.choice(TEMPLATE_UTILS.duration_response_verbs)
     close = rng.choice(TEMPLATE_UTILS.duration_closing_sentences[fact.condition_id])
     template = rng.choice(TEMPLATE_UTILS.duration_chunk_templates)

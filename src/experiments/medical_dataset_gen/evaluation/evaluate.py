@@ -7,6 +7,8 @@ ranking metrics so the benchmark can expose coverage differences rather than
 just nearest-neighbor accuracy.
 """
 
+from __future__ import annotations
+
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -166,8 +168,7 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
     if len(results) == 0:
         return pl.DataFrame()
     stats = (
-        results
-        .group_by('strategy', 'lam', 'k')
+        results.group_by('strategy', 'lam', 'k')
         .agg(
             pl.col('query_id').n_unique().alias('n_queries'),
             pl.col('gold_precision').mean().alias('Precision@k'),
@@ -252,9 +253,9 @@ def _retrieval_metrics(
         **facet_coverage,
         **diversified_ranking,
         **redundancy,
-        'n_unique_hadms': len({
-            row.get('admission_id') for row in selected_rows if row.get('admission_id')
-        }),
+        'n_unique_hadms': len(
+            {row.get('admission_id') for row in selected_rows if row.get('admission_id')}
+        ),
     }
 
 
@@ -292,11 +293,13 @@ def _facet_coverage_metrics(
     n_facet_hits = len(facet_hits)
     facet_coverage = n_facet_hits / n_facets if n_facets else 0.0
     mean_facet_recall = (
-        np.mean([
-            len(selected & gold_ids) / len(gold_ids)
-            for gold_ids in facet_gold_sets.values()
-            if gold_ids
-        ])
+        np.mean(
+            [
+                len(selected & gold_ids) / len(gold_ids)
+                for gold_ids in facet_gold_sets.values()
+                if gold_ids
+            ]
+        )
         if facet_gold_sets
         else 0.0
     )

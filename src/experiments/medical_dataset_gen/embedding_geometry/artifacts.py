@@ -6,6 +6,8 @@ experiment paths and plain JSON/parquet serialization so artifact lookup stays
 consistent with the rest of the pipeline.
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any
 

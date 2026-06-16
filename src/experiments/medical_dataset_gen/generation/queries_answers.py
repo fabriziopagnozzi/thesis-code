@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import Counter, defaultdict
 
 import polars as pl
@@ -219,7 +221,9 @@ def _facet_summaries(
         bins = Counter(str(row['value_bin']) for row in rows)
         mode_bin = bins.most_common(1)[0][0]
         if facet.axis == 'treatment_duration':
-            durations = [int(row['duration_days']) for row in rows if row['duration_days'] is not None]
+            durations = [
+                int(row['duration_days']) for row in rows if row['duration_days'] is not None
+            ]
             avg_duration = round(sum(durations) / len(durations), 1)
             treatment = Counter(str(row['treatment']) for row in rows).most_common(1)[0][0]
             text = (
