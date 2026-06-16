@@ -82,6 +82,7 @@ retrieval:
 geometry:
   topk_dominance_k: 10 # k used by the geometry prefilter when checking whether top-k is dominated by one facet.
   min_topk_dominant_count: 5 # Minimum number of top-k results from the same dominant gold facet.
+  max_topk_retrieved_facets: 2 # Maximum distinct gold facets top-k may retrieve at topk_dominance_k. Use null to disable.
   min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
   min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
 

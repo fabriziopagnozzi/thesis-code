@@ -9,11 +9,14 @@ just nearest-neighbor accuracy.
 
 from __future__ import annotations
 
+import json
+import re
 from collections import Counter, defaultdict
 from typing import Any
 
 import numpy as np
 import polars as pl
+from rouge_score import rouge_scorer
 from tqdm import tqdm
 
 from experiments.medical_dataset_gen.global_configs import (
@@ -32,12 +35,90 @@ from experiments.medical_dataset_gen.retrieval.utils import (
 )
 
 ALPHA_NDCG_REDUNDANCY = 0.5
+_ANSWER_ROUGE_SCORER = rouge_scorer.RougeScorer(
+    ['rouge1', 'rouge2'],
+    use_stemmer=True,
+)
+_TOKEN_RE = re.compile(r'[a-z0-9]+')
+_MIN_ANSWER_TOKEN_LEN = 3
+_GENERIC_CLINICAL_STOPWORDS = frozenset(
+    {
+        'about',
+        'after',
+        'again',
+        'also',
+        'among',
+        'and',
+        'are',
+        'axis',
+        'been',
+        'being',
+        'between',
+        'but',
+        'can',
+        'care',
+        'case',
+        'clinical',
+        'clinically',
+        'common',
+        'commonly',
+        'compare',
+        'compared',
+        'corpus',
+        'course',
+        'data',
+        'diagnosed',
+        'diagnosis',
+        'discharge',
+        'documented',
+        'during',
+        'each',
+        'evidence',
+        'from',
+        'had',
+        'has',
+        'have',
+        'hospital',
+        'how',
+        'into',
+        'medical',
+        'more',
+        'most',
+        'note',
+        'often',
+        'outcome',
+        'outcomes',
+        'patient',
+        'patients',
+        'pattern',
+        'rehab',
+        'rehabilitation',
+        'shows',
+        'status',
+        'subgroup',
+        'synthetic',
+        'than',
+        'that',
+        'the',
+        'their',
+        'therapy',
+        'this',
+        'through',
+        'treatment',
+        'versus',
+        'was',
+        'were',
+        'with',
+        'without',
+    }
+)
 
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     chunk_documents = read_parquet(paths, 'chunk_documents')
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
+    gold_answers = read_parquet(paths, 'gold_answers')
     qrels = read_parquet(paths, 'qrels')
     geometry = read_parquet(paths, 'geometry_stats')
     _assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
@@ -46,6 +127,7 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
 
     facet_gold = _facet_gold_map(qrels)
     qrels_by_query_chunk = _qrels_by_query_chunk(qrels)
+    answer_refs_by_query = _answer_refs_by_query(gold_answers)
     gold_by_query = {
         qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
         for qid, facet_map in facet_gold.items()
@@ -64,8 +146,14 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
 
         query_facet_gold = facet_gold.get(qid)
         query_all_gold = gold_by_query.get(qid)
+        answer_refs = answer_refs_by_query.get(qid, {})
         if not query_facet_gold or not query_all_gold:
             continue
+        query_terms = _answer_metric_query_terms(str(query.get('query_text') or ''))
+        answer_rouge_refs = _prepare_answer_rouge_refs(
+            answer_refs=answer_refs,
+            query_terms=query_terms,
+        )
 
         qidx = maps['query_id_to_idx'][qid]
         candidate_idx = candidate_pool_indices(
@@ -89,6 +177,12 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
         sim_matrix = candidate_vectors @ candidate_vectors.T
         sim_to_query = topn_sims.astype(np.float32)
         candidate_chunk_ids = [chunk_ids[i] for i in topn_global]
+        candidate_rouge_text_by_id = _preprocess_candidate_chunk_texts(
+            candidate_chunk_ids=candidate_chunk_ids,
+            chunk_by_id=maps['chunk_by_id'],
+            query_terms=query_terms,
+        )
+        answer_rouge_cache: dict[tuple[str, ...], dict[str, float]] = {}
         topk_by_k: dict[int, np.ndarray] = {}
 
         for k in cfg.retrieval.k_values:
@@ -114,6 +208,18 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
                     )
                     selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
                     topk_ref = topk_by_k[k]
+                    answer_rouge_key = tuple(str(chunk_id) for chunk_id in selected_chunk_ids)
+                    answer_rouge = answer_rouge_cache.get(answer_rouge_key)
+                    if answer_rouge is None:
+                        answer_rouge = _answer_rouge_metrics(
+                            selected_chunk_ids=selected_chunk_ids,
+                            candidate_rouge_text_by_id=candidate_rouge_text_by_id,
+                            reference_ngrams=dict(answer_rouge_refs['answer_ngrams']),
+                            facet_reference_rouge1_ngrams=list(
+                                answer_rouge_refs['facet_rouge1_ngrams']
+                            ),
+                        )
+                        answer_rouge_cache[answer_rouge_key] = answer_rouge
                     row = {
                         'query_id': qid,
                         'query_type': query['query_type'],
@@ -132,6 +238,7 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
                             all_gold_ids=query_all_gold,
                             dominant_facet_id=query['dominant_facet_id'],
                         ),
+                        **answer_rouge,
                         **retrieval_diagnostics(
                             selected_local,
                             sim_to_query,
@@ -182,6 +289,12 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
             pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
             pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
             pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
+            pl.col('answer_rouge1_recall').mean().alias('AnswerROUGE1Recall@k'),
+            pl.col('answer_rouge1_precision').mean().alias('AnswerROUGE1Precision@k'),
+            pl.col('answer_rouge2_recall').mean().alias('AnswerROUGE2Recall@k'),
+            pl.col('macro_facet_answer_rouge1_recall').mean().alias(
+                'MacroFacetAnswerROUGE1Recall@k'
+            ),
             pl.col('distractor_rate').mean().alias('DistractorRate'),
             pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
             pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
@@ -207,6 +320,10 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
         'MeanFacetRecall@k',
         'FacetMRR@k',
         'alpha-nDCG@k',
+        'AnswerROUGE1Recall@k',
+        'AnswerROUGE1Precision@k',
+        'AnswerROUGE2Recall@k',
+        'MacroFacetAnswerROUGE1Recall@k',
         'DistractorRate',
         'NearMissDistractorRate',
         'BackgroundOutlierRate',
@@ -231,6 +348,65 @@ def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, dict[str, 
     for row in qrels.iter_rows(named=True):
         result[str(row['query_id'])][str(row['chunk_id'])] = row
     return result
+
+
+def _answer_refs_by_query(gold_answers: pl.DataFrame) -> dict[str, dict[str, object]]:
+    refs: dict[str, dict[str, object]] = {}
+    for row in gold_answers.iter_rows(named=True):
+        facet_references = _facet_references_from_answer_row(row)
+        refs[str(row['query_id'])] = {
+            'answer_text': str(row.get('answer_text') or ''),
+            'facet_references': facet_references,
+        }
+    return refs
+
+
+def _prepare_answer_rouge_refs(
+    answer_refs: dict[str, object],
+    query_terms: set[str],
+) -> dict[str, object]:
+    answer_text = _preprocess_answer_metric_text(
+        str(answer_refs.get('answer_text') or ''),
+        query_terms=query_terms,
+    )
+    facet_references = [
+        _preprocess_answer_metric_text(str(facet_reference), query_terms=query_terms)
+        for facet_reference in list(answer_refs.get('facet_references') or [])
+    ]
+    return {
+        'answer_ngrams': _rouge_ngram_bundle(answer_text),
+        'facet_rouge1_ngrams': [
+            _rouge_ngrams(facet_reference, n=1)
+            for facet_reference in facet_references
+            if facet_reference
+        ],
+    }
+
+
+def _facet_references_from_answer_row(row: dict[str, Any]) -> list[str]:
+    summaries_raw = row.get('facet_summaries_json')
+    if summaries_raw:
+        try:
+            summaries = json.loads(str(summaries_raw))
+        except json.JSONDecodeError:
+            summaries = {}
+        if isinstance(summaries, dict):
+            return [str(value) for value in summaries.values() if str(value).strip()]
+
+    facts_raw = row.get('answer_facts_json')
+    if not facts_raw:
+        return []
+    try:
+        facts = json.loads(str(facts_raw))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(facts, list):
+        return []
+    return [
+        str(item.get('summary'))
+        for item in facts
+        if isinstance(item, dict) and str(item.get('summary') or '').strip()
+    ]
 
 
 def _retrieval_metrics(
@@ -273,6 +449,108 @@ def _retrieval_metrics(
         'n_unique_hadms': len(
             {row.get('admission_id') for row in selected_rows if row.get('admission_id')}
         ),
+    }
+
+
+def _answer_rouge_metrics(
+    selected_chunk_ids: list[str],
+    candidate_rouge_text_by_id: dict[str, str],
+    reference_ngrams: dict[str, Counter[tuple[str, ...]]],
+    facet_reference_rouge1_ngrams: list[Counter[tuple[str, ...]]],
+) -> dict[str, float]:
+    selected_text = ' '.join(
+        candidate_rouge_text_by_id.get(str(chunk_id), '') for chunk_id in selected_chunk_ids
+    )
+    candidate_ngrams = _rouge_ngram_bundle(selected_text)
+    scores = _score_answer_rouge_ngrams(reference_ngrams, candidate_ngrams)
+
+    facet_scores = []
+    for facet_rouge1_ngrams in facet_reference_rouge1_ngrams:
+        facet_scores.append(
+            float(
+                rouge_scorer._score_ngrams(
+                    facet_rouge1_ngrams,
+                    candidate_ngrams['rouge1'],
+                ).recall
+            )
+        )
+
+    return {
+        'answer_rouge1_recall': scores['rouge1_recall'],
+        'answer_rouge1_precision': scores['rouge1_precision'],
+        'answer_rouge2_recall': scores['rouge2_recall'],
+        'macro_facet_answer_rouge1_recall': float(np.mean(facet_scores))
+        if facet_scores
+        else 0.0,
+    }
+
+
+def _preprocess_candidate_chunk_texts(
+    candidate_chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    query_terms: set[str],
+) -> dict[str, str]:
+    return {
+        str(chunk_id): _preprocess_answer_metric_text(
+            str(chunk_by_id.get(chunk_id, {}).get('text') or ''),
+            query_terms=query_terms,
+        )
+        for chunk_id in candidate_chunk_ids
+    }
+
+
+def _answer_metric_query_terms(query_text: str) -> set[str]:
+    return {
+        token
+        for token in _TOKEN_RE.findall(query_text.lower())
+        if _is_answer_metric_token(token) and token not in _GENERIC_CLINICAL_STOPWORDS
+    }
+
+
+def _preprocess_answer_metric_text(text: str, query_terms: set[str]) -> str:
+    tokens = []
+    for token in _TOKEN_RE.findall(text.lower()):
+        if not _is_answer_metric_token(token):
+            continue
+        if token in query_terms or token in _GENERIC_CLINICAL_STOPWORDS:
+            continue
+        tokens.append(token)
+    return ' '.join(tokens)
+
+
+def _is_answer_metric_token(token: str) -> bool:
+    return token.isdigit() or len(token) >= _MIN_ANSWER_TOKEN_LEN
+
+
+def _rouge_ngram_bundle(text: str) -> dict[str, Counter[tuple[str, ...]]]:
+    tokens = _ANSWER_ROUGE_SCORER._tokenizer.tokenize(text)
+    return {
+        'rouge1': rouge_scorer._create_ngrams(tokens, 1),
+        'rouge2': rouge_scorer._create_ngrams(tokens, 2),
+    }
+
+
+def _rouge_ngrams(text: str, n: int) -> Counter[tuple[str, ...]]:
+    tokens = _ANSWER_ROUGE_SCORER._tokenizer.tokenize(text)
+    return rouge_scorer._create_ngrams(tokens, n)
+
+
+def _score_answer_rouge_ngrams(
+    reference_ngrams: dict[str, Counter[tuple[str, ...]]],
+    candidate_ngrams: dict[str, Counter[tuple[str, ...]]],
+) -> dict[str, float]:
+    rouge1 = rouge_scorer._score_ngrams(
+        reference_ngrams['rouge1'],
+        candidate_ngrams['rouge1'],
+    )
+    rouge2 = rouge_scorer._score_ngrams(
+        reference_ngrams['rouge2'],
+        candidate_ngrams['rouge2'],
+    )
+    return {
+        'rouge1_recall': float(rouge1.recall),
+        'rouge1_precision': float(rouge1.precision),
+        'rouge2_recall': float(rouge2.recall),
     }
 
 

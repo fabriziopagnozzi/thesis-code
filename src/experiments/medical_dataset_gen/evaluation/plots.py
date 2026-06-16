@@ -41,6 +41,18 @@ _DIAGNOSTIC_METRICS = [
     ('jac', 'jaccard_vs_topk', 'Jaccard vs top-k', True),
 ]
 
+_ANSWER_ROUGE_METRICS = [
+    ('AnswerROUGE1Recall@k', 'answer_rouge1_recall', 'Answer ROUGE-1 Recall@k', True),
+    ('AnswerROUGE1Precision@k', 'answer_rouge1_precision', 'Answer ROUGE-1 Precision@k', True),
+    ('AnswerROUGE2Recall@k', 'answer_rouge2_recall', 'Answer ROUGE-2 Recall@k', True),
+    (
+        'MacroFacetAnswerROUGE1Recall@k',
+        'macro_facet_answer_rouge1_recall',
+        'Macro Facet Answer ROUGE-1 Recall@k',
+        True,
+    ),
+]
+
 _PRIMARY_SORT = ['FacetCoverage@k', 'Precision@k', 'DistractorRate', 'alpha-nDCG@k']
 _PRIMARY_DESC = [True, True, False, True]
 _LAMBDA_POLICY_NOTE = (
@@ -73,6 +85,8 @@ def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> Non
     plot_gain_over_topk(stats_df, results_df, out_dir)
     plot_gain_over_topk_simple(stats_df, results_df, out_dir)
     plot_selection_diagnostics(stats_df, out_dir)
+    plot_answer_rouge_comparison(stats_df, results_df, out_dir)
+    plot_answer_rouge_lambda_sensitivity(stats_df, out_dir)
 
     print(f'[plots] saved evaluation figures to {out_dir}')
 
@@ -683,6 +697,207 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
     plt.close(fig)
 
 
+def plot_answer_rouge_comparison(
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    out_dir: Path,
+) -> None:
+    """Auxiliary answer-token overlap diagnostics."""
+    import matplotlib.pyplot as plt
+
+    metrics = _available_answer_rouge_metrics(stats_df, results_df)
+    if not metrics:
+        return
+
+    k_values = sorted(stats_df['k'].unique().to_list())
+    strategies = _ordered_strategies(stats_df)
+    fig, axes = _metric_grid_figure(len(metrics), sharex=True)
+
+    for ax, (stats_col, result_col, title, higher_is_better) in zip(
+        axes.flatten(),
+        metrics,
+        strict=False,
+    ):
+        for strategy in strategies:
+            style = get_style(strategy)
+            sub = stats_df.filter(pl.col('strategy') == strategy)
+            if strategy == 'top_k':
+                xs = sorted(sub['k'].unique().to_list())
+                ys = [_cell_value(sub, k, None, stats_col) for k in xs]
+                ci = [
+                    _ci_half_width(_query_vals(results_df, strategy, k, None, result_col))
+                    for k in xs
+                ]
+                _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
+                continue
+
+            best_df = _best_lam_rows(stats_df, strategy, k_values)
+            if best_df.height == 0:
+                continue
+            xs = best_df['k'].to_list()
+            ys = [float(v) for v in best_df[stats_col].to_list()]
+            lams = [float(v) for v in best_df['lam'].to_list()]
+            k_to_lam = dict(zip(xs, lams, strict=True))
+            ci = [
+                _ci_half_width(_query_vals(results_df, strategy, k, k_to_lam.get(k), result_col))
+                for k in xs
+            ]
+            ax.plot(
+                xs,
+                ys,
+                color=style['color'],
+                ls=style['ls'],
+                lw=2.0,
+                label=style['label'],
+                zorder=3,
+            )
+            ax.scatter(
+                xs,
+                ys,
+                s=42,
+                facecolors='white',
+                edgecolors=style['color'],
+                linewidths=1.4,
+                zorder=4,
+            )
+            _plot_error_caps(ax, xs, ys, ci, style, zorder=2)
+            _annotate_lambda_points(
+                ax,
+                xs,
+                ys,
+                lams,
+                color=style['color'],
+                placement='above' if strategy == 'mmr' else 'below',
+            )
+
+        ax.set_title(title, fontsize=10)
+        ax.set_ylabel(stats_col, fontsize=9)
+        ax.set_xticks(k_values)
+        ax.grid(axis='y', alpha=0.3)
+        if not higher_is_better:
+            ax.text(
+                0.98,
+                0.04,
+                'lower is better',
+                transform=ax.transAxes,
+                ha='right',
+                va='bottom',
+                fontsize=7,
+                color='#555555',
+            )
+
+    for ax in axes[-1]:
+        ax.set_xlabel('k', fontsize=9)
+    for ax in axes.flatten()[len(metrics) :]:
+        ax.set_visible(False)
+
+    _figure_legend(fig, axes.flatten())
+    fig.suptitle(
+        'Auxiliary answer-token ROUGE diagnostics - lambda* path per strategy',
+        fontsize=12,
+    )
+    _figure_note(
+        fig,
+        f'ROUGE is diagnostic only; lambda* is still selected by coverage metrics. {_LAMBDA_POLICY_NOTE}',
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.savefig(out_dir / 'answer_rouge_comparison.png', dpi=140, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_answer_rouge_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
+    """Auxiliary ROUGE metrics as lambda changes."""
+    import matplotlib.pyplot as plt
+
+    metric_cols = [
+        (stats_col, title)
+        for stats_col, _, title, _ in _ANSWER_ROUGE_METRICS
+        if stats_col in stats_df.columns
+    ]
+    if not metric_cols:
+        return
+
+    diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
+    if not diversity_strategies:
+        return
+
+    k_values = sorted(stats_df['k'].unique().to_list())
+    lambda_values = _lambda_values(stats_df)
+    topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
+    cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
+    k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
+
+    fig, axes = plt.subplots(
+        len(metric_cols),
+        len(diversity_strategies),
+        figsize=(4.0 * len(diversity_strategies), 2.0 * len(metric_cols) + 2.0),
+        sharex=True,
+        squeeze=False,
+    )
+
+    for row_idx, (metric, title) in enumerate(metric_cols):
+        for col_idx, strategy in enumerate(diversity_strategies):
+            style = get_style(strategy)
+            sub = stats_df.filter(pl.col('strategy') == strategy)
+            ax = axes[row_idx][col_idx]
+            for k in k_values:
+                ksub = sub.filter(pl.col('k') == k).sort('lam')
+                if ksub.height == 0:
+                    continue
+                ax.plot(
+                    ksub['lam'].to_list(),
+                    ksub[metric].to_list(),
+                    color=k_colors[k],
+                    ls=style['ls'],
+                    lw=1.8,
+                    marker='o',
+                    ms=4,
+                    label=f'k={k}',
+                )
+                ref = topk_df.filter(pl.col('k') == k)
+                if ref.height > 0:
+                    ax.axhline(
+                        float(ref[metric][0]),
+                        color=k_colors[k],
+                        ls='--',
+                        lw=1.0,
+                        alpha=0.5,
+                    )
+
+            if row_idx == 0:
+                ax.set_title(style['label'], fontsize=10)
+            if col_idx == 0:
+                ax.set_ylabel(title, fontsize=10)
+            if row_idx == len(metric_cols) - 1:
+                ax.set_xlabel('lambda', fontsize=9)
+            else:
+                ax.tick_params(labelbottom=False)
+            ax.set_xticks(lambda_values)
+            ax.grid(alpha=0.3)
+
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc='lower center',
+            ncol=len(k_values),
+            fontsize=8,
+            frameon=False,
+            bbox_to_anchor=(0.5, -0.01),
+        )
+    fig.suptitle(
+        'Auxiliary answer-token ROUGE lambda sensitivity',
+        fontsize=12,
+    )
+    _figure_note(
+        fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
+    )
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.savefig(out_dir / 'answer_rouge_lambda_sensitivity.png', dpi=140, bbox_inches='tight')
+    plt.close(fig)
+
+
 def get_style(strategy: str) -> dict[str, str]:
     return STRATEGY_STYLE.get(strategy, {'color': '#aaaaaa', 'ls': '-', 'label': strategy})
 
@@ -702,6 +917,17 @@ def _available_metrics(
     return [
         metric
         for metric in _METRICS
+        if metric[0] in stats_df.columns and metric[1] in results_df.columns
+    ]
+
+
+def _available_answer_rouge_metrics(
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+) -> list[tuple[str, str, str, bool]]:
+    return [
+        metric
+        for metric in _ANSWER_ROUGE_METRICS
         if metric[0] in stats_df.columns and metric[1] in results_df.columns
     ]
 
@@ -927,7 +1153,8 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     if topk.height == 0:
         return int(results_df['k'].max())  # type: ignore[arg-type]
     ranked = (
-        topk.group_by('k')
+        topk
+        .group_by('k')
         .agg(
             pl.col('facet_coverage').median().alias('med_fc'),
         )
@@ -941,7 +1168,8 @@ def _best_result_slice(results_df: pl.DataFrame, strategy: str, k: int) -> pl.Da
     if strategy == 'top_k' or strat_df.height == 0:
         return strat_df
     ranked = (
-        strat_df.group_by('lam')
+        strat_df
+        .group_by('lam')
         .agg(
             pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
             pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k')

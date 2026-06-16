@@ -85,6 +85,7 @@ class RetrievalCfg(BaseModel):
 class GeometryCfg(BaseModel):
     topk_dominance_k: PositiveInt = 10
     min_topk_dominant_count: PositiveInt = 5
+    max_topk_retrieved_facets: PositiveInt | None = 2
     min_in_minus_cross_similarity: PositiveFloat = 0.03
     min_distractors_in_pool: PositiveInt = 10
 
