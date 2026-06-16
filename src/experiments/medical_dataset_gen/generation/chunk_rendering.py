@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-from __future__ import annotations
-
 import re
 from collections.abc import Callable
 from random import Random

@@ -81,13 +81,14 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             k=cfg.geometry.topk_dominance_k,
         )
         n_distractors = sum(
-            1 for chunk_id in topn_chunk_ids if not bool(query_qrels.get(chunk_id, {}).get('is_gold'))
+            1
+            for chunk_id in topn_chunk_ids
+            if not bool(query_qrels.get(chunk_id, {}).get('is_gold'))
         )
         n_near_miss_distractors = sum(
             1
             for chunk_id in topn_chunk_ids
-            if not bool(maps['chunk_by_id'][chunk_id]['is_gold'])
-            and maps['chunk_by_id'][chunk_id].get('cluster_role') != 'background_outlier'
+            if _is_query_near_miss_distractor(query_qrels, chunk_id)
         )
         in_sim, cross_sim = _facet_separation(
             qid=qid,
@@ -98,7 +99,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         background_diagnostics = _background_outlier_diagnostics(
             topn_chunk_ids=topn_chunk_ids,
             topn_sims=topn_sims,
-            chunk_by_id=maps['chunk_by_id'],
+            query_qrels=query_qrels,
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
             expected_background_chunks=(
@@ -226,7 +227,7 @@ def _facet_separation(
 def _background_outlier_diagnostics(
     topn_chunk_ids: list[str],
     topn_sims: NDArray[np.float32],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
     expected_background_chunks: int,
@@ -234,14 +235,14 @@ def _background_outlier_diagnostics(
     background_positions = [
         idx
         for idx, chunk_id in enumerate(topn_chunk_ids)
-        if chunk_by_id[chunk_id].get('cluster_role') == 'background_outlier'
+        if _is_background_outlier(query_qrels, chunk_id)
     ]
     background_ids = [topn_chunk_ids[idx] for idx in background_positions]
     background_clusters = {
-        str(chunk_by_id[chunk_id].get('cluster_id')) for chunk_id in background_ids
+        str(query_qrels[chunk_id].get('cluster_id')) for chunk_id in background_ids
     }
     gold_positions = [
-        idx for idx, chunk_id in enumerate(topn_chunk_ids) if bool(chunk_by_id[chunk_id]['is_gold'])
+        idx for idx, chunk_id in enumerate(topn_chunk_ids) if _is_query_gold(query_qrels, chunk_id)
     ]
 
     query_to_background = (
@@ -256,7 +257,7 @@ def _background_outlier_diagnostics(
 
     background_in_cluster_similarity = _mean_same_cluster_similarity(
         chunk_ids=background_ids,
-        chunk_by_id=chunk_by_id,
+        query_qrels=query_qrels,
         chunk_id_to_idx=chunk_id_to_idx,
         chunk_vectors=chunk_vectors,
     )
@@ -277,16 +278,35 @@ def _background_outlier_diagnostics(
     }
 
 
+def _is_query_gold(query_qrels: dict[str, dict[str, Any]], chunk_id: str) -> bool:
+    return bool(query_qrels.get(chunk_id, {}).get('is_gold'))
+
+
+def _is_background_outlier(query_qrels: dict[str, dict[str, Any]], chunk_id: str) -> bool:
+    return query_qrels.get(chunk_id, {}).get('cluster_role') == 'background_outlier'
+
+
+def _is_query_near_miss_distractor(
+    query_qrels: dict[str, dict[str, Any]], chunk_id: str
+) -> bool:
+    row = query_qrels.get(chunk_id)
+    return (
+        bool(row)
+        and not bool(row.get('is_gold'))
+        and row.get('cluster_role') != 'background_outlier'
+    )
+
+
 def _mean_same_cluster_similarity(
     chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
 ) -> float | None:
     ids_by_cluster: dict[str, list[str]] = defaultdict(list)
     for chunk_id in chunk_ids:
         if chunk_id in chunk_id_to_idx:
-            ids_by_cluster[str(chunk_by_id[chunk_id].get('cluster_id'))].append(chunk_id)
+            ids_by_cluster[str(query_qrels[chunk_id].get('cluster_id'))].append(chunk_id)
 
     values = []
     for cluster_ids in ids_by_cluster.values():

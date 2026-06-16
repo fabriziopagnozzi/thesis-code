@@ -371,14 +371,18 @@ def _redundancy_metrics(
     n_facet_hits: int,
 ) -> dict[str, float | int]:
     n_selected = len(selected_chunk_ids)
-    non_gold_rows = [
-        chunk_by_id[chunk_id] for chunk_id in selected_chunk_ids if chunk_id not in all_gold_ids
-    ]
-    non_gold_count = len(non_gold_rows)
+    non_gold_ids = [chunk_id for chunk_id in selected_chunk_ids if chunk_id not in all_gold_ids]
+    non_gold_count = len(non_gold_ids)
     background_outlier_count = sum(
-        1 for row in non_gold_rows if row.get('cluster_role') == 'background_outlier'
+        1
+        for chunk_id in non_gold_ids
+        if query_qrels.get(chunk_id, {}).get('cluster_role') == 'background_outlier'
     )
-    near_miss_distractor_count = non_gold_count - background_outlier_count
+    near_miss_distractor_count = sum(
+        1
+        for chunk_id in non_gold_ids
+        if _is_query_near_miss_distractor(query_qrels, chunk_id)
+    )
     dominant_count = sum(
         1
         for chunk_id in selected_chunk_ids
@@ -413,6 +417,17 @@ def _redundancy_metrics(
         'n_selected_background_outliers': background_outlier_count,
         'n_redundant_gold': redundant_gold_count,
     }
+
+
+def _is_query_near_miss_distractor(
+    query_qrels: dict[str, dict[str, Any]], chunk_id: str
+) -> bool:
+    row = query_qrels.get(chunk_id)
+    return (
+        bool(row)
+        and not bool(row.get('is_gold'))
+        and row.get('cluster_role') != 'background_outlier'
+    )
 
 
 def average_precision_at_k(
