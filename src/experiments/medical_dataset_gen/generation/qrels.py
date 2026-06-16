@@ -6,6 +6,8 @@ derivation rule over the hidden gold/distractor structure so relevance stays
 fully aligned with the benchmark design.
 """
 
+from __future__ import annotations
+
 import polars as pl
 
 from experiments.medical_dataset_gen.global_configs import (

@@ -4,6 +4,8 @@ This module owns cache persistence, cache-key derivation, and cache-hit recovery
 for generated and rewritten chunk text.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from dataclasses import dataclass
@@ -107,16 +109,20 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
     }
     if cfg.generation.use_llm_chunk_generation:
-        payload.update({
-            'llm_name': cfg.generation.llm_name,
-            'llm_temperature': cfg.generation.llm_temperature,
-            'llm_num_ctx': cfg.generation.llm_num_ctx,
-        })
+        payload.update(
+            {
+                'llm_name': cfg.generation.llm_name,
+                'llm_temperature': cfg.generation.llm_temperature,
+                'llm_num_ctx': cfg.generation.llm_num_ctx,
+            }
+        )
     if fact.axis == 'treatment_duration':
-        payload.update({
-            'duration_days': fact.duration_days,
-            'treatment': fact.treatment,
-        })
+        payload.update(
+            {
+                'duration_days': fact.duration_days,
+                'treatment': fact.treatment,
+            }
+        )
     else:
         payload['rehab_outcome'] = fact.rehab_outcome
 
@@ -155,10 +161,12 @@ def chunk_rewrite_cache_key(
         'must_not_mention': fact.must_not_mention,
     }
     if fact.axis == 'treatment_duration':
-        payload.update({
-            'duration_days': fact.duration_days,
-            'treatment': fact.treatment,
-        })
+        payload.update(
+            {
+                'duration_days': fact.duration_days,
+                'treatment': fact.treatment,
+            }
+        )
     else:
         payload['rehab_outcome'] = fact.rehab_outcome
 

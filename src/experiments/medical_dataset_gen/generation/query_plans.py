@@ -6,6 +6,8 @@ comparisons. It uses ontology-driven enumeration, seeded randomness, and
 balanced plan materialization to keep the query set controlled and reproducible.
 """
 
+from __future__ import annotations
+
 from random import Random
 from typing import cast
 

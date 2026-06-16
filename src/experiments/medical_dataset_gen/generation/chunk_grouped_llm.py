@@ -5,6 +5,8 @@ them sequentially or in parallel, and materializes the shared outputs back into
 rows.
 """
 
+from __future__ import annotations
+
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
 from random import Random

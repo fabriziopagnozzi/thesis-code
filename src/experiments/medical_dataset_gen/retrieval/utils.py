@@ -6,6 +6,8 @@ small index maps and existing helper algorithms for top-k, MMR, and
 facility-location selection so the retrieval stages stay consistent.
 """
 
+from __future__ import annotations
+
 from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any, Literal

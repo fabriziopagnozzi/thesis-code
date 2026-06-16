@@ -6,6 +6,8 @@ sampling over the ontology plus per-facet cluster construction so the benchmark
 has redundant positives and plausible negatives by design.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from random import Random
@@ -285,7 +287,9 @@ def make_base_fact(
         ontology=ontology,
         condition_id=condition_id,
         axis=axis,
-        target_value_bin=target_value_bin if target_value_bin is not None else facet.value_bin
+        target_value_bin=target_value_bin
+        if target_value_bin is not None
+        else facet.value_bin
         if facet is not None
         else None,
         local_idx=local_idx,
@@ -314,11 +318,13 @@ def make_base_fact(
     )
     admission_id = f'adm_{query_id}_{cluster_id}_{local_idx:03d}'
     patient_id = f'pat_{query_id}_{cluster_id}_{local_idx // 2:03d}'
-    note_style = surface_rng.choice([
-        'brief_hospital_course',
-        'brief_hospital_course',
-        'discharge_diagnosis',
-    ])
+    note_style = surface_rng.choice(
+        [
+            'brief_hospital_course',
+            'brief_hospital_course',
+            'discharge_diagnosis',
+        ]
+    )
     patient_age = _patient_age(subgroup_id, surface_rng)
     patient_sex = surface_rng.choice(['female', 'male'])
     clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, surface_rng)
@@ -344,9 +350,7 @@ def make_base_fact(
         target_facet_id=target_facet_id,
         cluster_id=cluster_id,
         cluster_role=cast(
-            Literal[
-                'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
-            ],
+            Literal['dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'],
             cluster_role,
         ),
         condition_id=condition_id,

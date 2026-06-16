@@ -4,6 +4,8 @@ This module exists to connect the geometry diagnostics with the experiment
 artifacts that downstream plots and evaluation checks consume.
 """
 
+from __future__ import annotations
+
 import multiprocessing as mp
 import os
 from concurrent.futures import ProcessPoolExecutor

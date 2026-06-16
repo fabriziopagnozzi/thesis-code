@@ -6,6 +6,8 @@ and similarity summaries so geometry checks stay fast and directly tied to the
 synthetic design.
 """
 
+from __future__ import annotations
+
 from collections import Counter
 from typing import Any
 

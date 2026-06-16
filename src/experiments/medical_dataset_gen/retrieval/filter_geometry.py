@@ -7,6 +7,8 @@ pool-scope filtering, and per-query diagnostic aggregation to decide which
 queries are valid for later evaluation.
 """
 
+from __future__ import annotations
+
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -111,9 +113,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
 
         missing_facet = n_facets_present != len(query_facets)
         weak_topk_dominance = topk_dominant < cfg.geometry.min_topk_dominant_count
-        weak_facet_separation = (
-            in_sim - cross_sim
-        ) < cfg.geometry.min_in_minus_cross_similarity
+        weak_facet_separation = (in_sim - cross_sim) < cfg.geometry.min_in_minus_cross_similarity
         too_few_near_miss_distractors = (
             n_near_miss_distractors < cfg.geometry.min_distractors_in_pool
         )
@@ -235,13 +235,9 @@ def _background_outlier_diagnostics(
     ]
 
     query_to_background = (
-        float(np.asarray(topn_sims)[background_positions].mean())
-        if background_positions
-        else None
+        float(np.asarray(topn_sims)[background_positions].mean()) if background_positions else None
     )
-    query_to_gold = (
-        float(np.asarray(topn_sims)[gold_positions].mean()) if gold_positions else None
-    )
+    query_to_gold = float(np.asarray(topn_sims)[gold_positions].mean()) if gold_positions else None
     margin = (
         float(query_to_gold - query_to_background)
         if query_to_gold is not None and query_to_background is not None
