@@ -78,11 +78,28 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         n_distractors = sum(
             1 for chunk_id in topn_chunk_ids if not bool(maps['chunk_by_id'][chunk_id]['is_gold'])
         )
+        n_near_miss_distractors = sum(
+            1
+            for chunk_id in topn_chunk_ids
+            if not bool(maps['chunk_by_id'][chunk_id]['is_gold'])
+            and maps['chunk_by_id'][chunk_id].get('cluster_role') != 'background_outlier'
+        )
         in_sim, cross_sim = _facet_separation(
             qid=qid,
             query_facets=query_facets,
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
+        )
+        background_diagnostics = _background_outlier_diagnostics(
+            topn_chunk_ids=topn_chunk_ids,
+            topn_sims=topn_sims,
+            chunk_by_id=maps['chunk_by_id'],
+            chunk_id_to_idx=maps['chunk_id_to_idx'],
+            chunk_vectors=chunk_vectors,
+            expected_background_chunks=(
+                cfg.generation.background_outlier_clusters_per_query
+                * cfg.generation.background_outlier_cluster_size
+            ),
         )
 
         diagnostics = _topk_vs_facloc_diagnostics(
@@ -92,11 +109,24 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             k=cfg.geometry.topk_dominance_k,
         )
 
-        passes = (
-            n_facets_present == len(query_facets)
-            and topk_dominant >= cfg.geometry.min_topk_dominant_count
-            and (in_sim - cross_sim) >= cfg.geometry.min_in_minus_cross_similarity
-            and n_distractors >= cfg.geometry.min_distractors_in_pool
+        missing_facet = n_facets_present != len(query_facets)
+        weak_topk_dominance = topk_dominant < cfg.geometry.min_topk_dominant_count
+        weak_facet_separation = (
+            in_sim - cross_sim
+        ) < cfg.geometry.min_in_minus_cross_similarity
+        too_few_near_miss_distractors = (
+            n_near_miss_distractors < cfg.geometry.min_distractors_in_pool
+        )
+        missing_or_malformed_background_outlier = not bool(
+            background_diagnostics['background_outlier_complete']
+        )
+
+        passes = not (
+            missing_facet
+            or weak_topk_dominance
+            or weak_facet_separation
+            or too_few_near_miss_distractors
+            or missing_or_malformed_background_outlier
         )
 
         rows.append(
@@ -109,12 +139,21 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'all_facets_present': n_facets_present == len(query_facets),
                 'topk_dominant_count': topk_dominant,
                 'n_distractors_in_pool': n_distractors,
+                'n_near_miss_distractors_in_pool': n_near_miss_distractors,
                 'mean_in_facet_similarity': in_sim,
                 'mean_cross_facet_similarity': cross_sim,
                 'in_minus_cross_similarity': in_sim - cross_sim,
                 'passes_filter': passes,
+                'fail_missing_facet': missing_facet,
+                'fail_weak_topk_dominance': weak_topk_dominance,
+                'fail_weak_facet_separation': weak_facet_separation,
+                'fail_too_few_near_miss_distractors': too_few_near_miss_distractors,
+                'fail_missing_or_malformed_background_outlier': (
+                    missing_or_malformed_background_outlier
+                ),
                 'facets_present_json': _json_bool_map(facets_present),
             }
+            | background_diagnostics
             | diagnostics
         )
 
@@ -172,6 +211,86 @@ def _facet_separation(
     in_sim = float(in_vals.mean()) if len(in_vals) else 0.0
     cross_sim = float(cross_vals.mean()) if len(cross_vals) else 0.0
     return in_sim, cross_sim
+
+
+def _background_outlier_diagnostics(
+    topn_chunk_ids: list[str],
+    topn_sims: NDArray[np.float32],
+    chunk_by_id: dict[str, dict[str, Any]],
+    chunk_id_to_idx: dict[str, int],
+    chunk_vectors: NDArray[np.float32],
+    expected_background_chunks: int,
+) -> dict[str, float | int | bool | None]:
+    background_positions = [
+        idx
+        for idx, chunk_id in enumerate(topn_chunk_ids)
+        if chunk_by_id[chunk_id].get('cluster_role') == 'background_outlier'
+    ]
+    background_ids = [topn_chunk_ids[idx] for idx in background_positions]
+    background_clusters = {
+        str(chunk_by_id[chunk_id].get('cluster_id')) for chunk_id in background_ids
+    }
+    gold_positions = [
+        idx for idx, chunk_id in enumerate(topn_chunk_ids) if bool(chunk_by_id[chunk_id]['is_gold'])
+    ]
+
+    query_to_background = (
+        float(np.asarray(topn_sims)[background_positions].mean())
+        if background_positions
+        else None
+    )
+    query_to_gold = (
+        float(np.asarray(topn_sims)[gold_positions].mean()) if gold_positions else None
+    )
+    margin = (
+        float(query_to_gold - query_to_background)
+        if query_to_gold is not None and query_to_background is not None
+        else None
+    )
+
+    background_in_cluster_similarity = _mean_same_cluster_similarity(
+        chunk_ids=background_ids,
+        chunk_by_id=chunk_by_id,
+        chunk_id_to_idx=chunk_id_to_idx,
+        chunk_vectors=chunk_vectors,
+    )
+    ranks = [pos + 1 for pos in background_positions]
+    expected = int(expected_background_chunks)
+    complete = len(background_ids) >= expected if expected > 0 else True
+
+    return {
+        'n_background_outliers_in_pool': len(background_ids),
+        'n_background_outlier_clusters_in_pool': len(background_clusters),
+        'background_outlier_complete': complete,
+        'background_outlier_mean_in_cluster_similarity': background_in_cluster_similarity,
+        'query_to_background_outlier_mean': query_to_background,
+        'query_to_gold_mean': query_to_gold,
+        'gold_minus_background_outlier_similarity_margin': margin,
+        'background_outlier_first_rank': min(ranks) if ranks else None,
+        'background_outlier_median_rank': float(np.median(ranks)) if ranks else None,
+    }
+
+
+def _mean_same_cluster_similarity(
+    chunk_ids: list[str],
+    chunk_by_id: dict[str, dict[str, Any]],
+    chunk_id_to_idx: dict[str, int],
+    chunk_vectors: NDArray[np.float32],
+) -> float | None:
+    ids_by_cluster: dict[str, list[str]] = defaultdict(list)
+    for chunk_id in chunk_ids:
+        if chunk_id in chunk_id_to_idx:
+            ids_by_cluster[str(chunk_by_id[chunk_id].get('cluster_id'))].append(chunk_id)
+
+    values = []
+    for cluster_ids in ids_by_cluster.values():
+        if len(cluster_ids) < 2:
+            continue
+        vectors = chunk_vectors[[chunk_id_to_idx[chunk_id] for chunk_id in cluster_ids]]
+        sim = vectors @ vectors.T
+        not_self = ~np.eye(len(cluster_ids), dtype=bool)
+        values.extend(float(value) for value in sim[not_self])
+    return float(np.mean(values)) if values else None
 
 
 def _topk_vs_facloc_diagnostics(

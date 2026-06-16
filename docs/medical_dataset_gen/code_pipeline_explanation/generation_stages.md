@@ -29,6 +29,8 @@ The relevant config fields are:
 - `generation.gold_chunks_dominant`
 - `generation.gold_chunks_complementary`
 - `generation.distractors_per_query`
+- `generation.background_outlier_clusters_per_query`
+- `generation.background_outlier_cluster_size`
 
 The stage loads the ontology, takes the first `global.conditions` condition entries in YAML order, builds every unique unordered subgroup pair, and validates that the clinical axes are exactly `treatment_duration` and `rehab_outcome`.
 
@@ -73,7 +75,8 @@ The relevant config fields are:
 For each plan, the stage initializes `rng = Random(plan.plan_seed)`. It then generates:
 
 - `target_gold_chunks` gold facts for each facet.
-- `generation.distractors_per_query` hard distractor facts.
+- `generation.distractors_per_query` near-miss hard distractor facts.
+- coherent background outlier clusters, if enabled.
 
 The gold count is already stored on each facet by the plan stage. The dominant facet receives `generation.gold_chunks_dominant`; every complementary facet receives `generation.gold_chunks_complementary`.
 
@@ -105,9 +108,21 @@ Every distractor is anchored to a target facet, but does not support it. That is
 
 The distractor types are close to the query in different ways. Same-condition wrong-subgroup distractors are clinically on-topic but fail the subgroup constraint. Same-subgroup wrong-condition distractors match the subgroup but fail the condition constraint. Same-axis wrong-condition distractors preserve the answer axis but fail both the condition and subgroup selection.
 
+### Background Outlier Facts
+
+`make_background_outlier_facts()` adds autonomous clinical islands that are not derived from any planned facet. Each background cluster uses:
+
+- `is_gold = False`
+- `facet_id = None`
+- `target_facet_id = None`
+- `cluster_role = background_outlier`
+- `distractor_type = background_clinical_cluster`
+
+These rows keep `source_query_id = <query_id>`, so they are present in the query-local candidate pool. They use an ontology condition different from the query condition and a single coherent condition/subgroup/axis/value-bin theme per cluster. This preserves the existing near-miss distractors while adding a separate test: a coverage method should not spend budget on a compact but irrelevant clinical island merely because it covers a region of the point cloud.
+
 ### Axis Values
 
-`make_base_fact()` chooses an axis-specific `value_bin` with `_axis_value_bin()`. For gold facts, the facet's planned value bin is valid and used directly. For distractors, the target facet bin is reused when it exists for the distractor condition; otherwise the code cycles through that condition's available bins.
+`make_base_fact()` chooses an axis-specific `value_bin` with `_axis_value_bin()`. For gold facts, the facet's planned value bin is valid and used directly. For near-miss distractors, the target facet bin is reused when it exists for the distractor condition; otherwise the code cycles through that condition's available bins. For background outliers, the cluster generator chooses one valid bin for the whole background theme.
 
 `_axis_values()` then converts the bin into concrete clinical values:
 

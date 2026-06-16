@@ -69,6 +69,16 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     n=cfg.generation.distractors_per_query,
                 )
             )
+            rows.extend(
+                fact.model_dump(mode='python')
+                for fact in make_background_outlier_facts(
+                    plan=plan,
+                    ontology=ontology,
+                    rng=rng,
+                    n_clusters=cfg.generation.background_outlier_clusters_per_query,
+                    cluster_size=cfg.generation.background_outlier_cluster_size,
+                )
+            )
 
             df = _facts_frame(rows)
             table = df.to_arrow()
@@ -193,9 +203,67 @@ def make_distractor_facts(
     return rows
 
 
+def make_background_outlier_facts(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    rng: Random,
+    n_clusters: int,
+    cluster_size: int,
+) -> list[ClinicalFact]:
+    """Create coherent non-gold clinical islands outside the query facet structure."""
+    if n_clusters <= 0 or cluster_size <= 0:
+        return []
+
+    condition_choices = other_conditions(ontology, plan.condition_id)
+    if not condition_choices:
+        return []
+
+    excluded_subgroups = {plan.subgroup_a_id, plan.subgroup_b_id}
+    subgroup_choices = other_subgroups(ontology, excluded_subgroups)
+    if not subgroup_choices:
+        subgroup_choices = list(ontology.subgroups.items())
+
+    rows: list[ClinicalFact] = []
+    for cluster_idx in range(n_clusters):
+        condition_id, condition = condition_choices[
+            (plan.plan_seed + cluster_idx) % len(condition_choices)
+        ]
+        subgroup_id, subgroup = subgroup_choices[
+            (plan.plan_seed + cluster_idx * 3) % len(subgroup_choices)
+        ]
+        axis = 'treatment_duration' if cluster_idx % 2 == 0 else 'rehab_outcome'
+        value_bin = _background_value_bin(ontology, condition_id, axis, cluster_idx)
+        cluster_id = f'{plan.query_id}_bg{cluster_idx + 1:02d}'
+
+        for local_idx in range(cluster_size):
+            rows.append(
+                make_base_fact(
+                    plan=plan,
+                    facet=None,
+                    ontology=ontology,
+                    rng=rng,
+                    local_idx=local_idx,
+                    is_gold=False,
+                    distractor_type='background_clinical_cluster',
+                    condition_id=condition_id,
+                    condition_display=condition.display,
+                    subgroup_id=subgroup_id,
+                    subgroup_label=subgroup.label,
+                    subgroup_axis=subgroup.axis,
+                    subgroup_field=subgroup.field,
+                    subgroup_value=subgroup.value,
+                    axis=axis,
+                    cluster_id=cluster_id,
+                    cluster_role='background_outlier',
+                    target_value_bin=value_bin,
+                )
+            )
+    return rows
+
+
 def make_base_fact(
     plan: QueryPlan,
-    facet: QueryPlanFacet,
+    facet: QueryPlanFacet | None,
     ontology: MedicalOntology,
     rng: Random,
     local_idx: int,
@@ -211,12 +279,15 @@ def make_base_fact(
     axis: str,
     cluster_id: str,
     cluster_role: str,
+    target_value_bin: str | None = None,
 ) -> ClinicalFact:
     value_bin = _axis_value_bin(
         ontology=ontology,
         condition_id=condition_id,
         axis=axis,
-        target_value_bin=facet.value_bin,
+        target_value_bin=target_value_bin if target_value_bin is not None else facet.value_bin
+        if facet is not None
+        else None,
         local_idx=local_idx,
     )
     chunk_reuse_key = _chunk_reuse_key(
@@ -235,7 +306,8 @@ def make_base_fact(
         rng=surface_rng,
     )
     query_id = plan.query_id
-    support_facet_id = facet.facet_id if is_gold else None
+    support_facet_id = facet.facet_id if is_gold and facet is not None else None
+    target_facet_id = facet.facet_id if facet is not None else None
     fact_id = (
         f'{query_id}_{"g" if is_gold else "d"}_{len(cluster_id)}_{local_idx:03d}_'
         f'{rng.randint(0, 9999):04d}'
@@ -269,10 +341,12 @@ def make_base_fact(
         fact_id=fact_id,
         chunk_reuse_key=chunk_reuse_key,
         facet_id=support_facet_id,
-        target_facet_id=facet.facet_id,
+        target_facet_id=target_facet_id,
         cluster_id=cluster_id,
         cluster_role=cast(
-            Literal['dominant_gold', 'complementary_gold', 'hard_distractor'],
+            Literal[
+                'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
+            ],
             cluster_role,
         ),
         condition_id=condition_id,
@@ -338,6 +412,26 @@ def _axis_values(
 
     rehab_outcome = rng.choice(condition.rehab_outcomes[value_bin])
     return None, None, rehab_outcome
+
+
+def _background_value_bin(
+    ontology: MedicalOntology,
+    condition_id: str,
+    axis: str,
+    cluster_idx: int,
+) -> str:
+    condition = ontology.conditions[condition_id]
+    if axis == 'treatment_duration':
+        preferred = ['standard', 'short', 'prolonged']
+        available = condition.duration_days
+    else:
+        preferred = ['home_rehab', 'inpatient_rehab', 'persistent_deficit']
+        available = condition.rehab_outcomes
+
+    for value_bin in preferred[cluster_idx:] + preferred[:cluster_idx]:
+        if value_bin in available:
+            return value_bin
+    return next(iter(available))
 
 
 def _chunk_reuse_key(

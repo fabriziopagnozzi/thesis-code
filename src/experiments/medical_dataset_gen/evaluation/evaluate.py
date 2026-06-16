@@ -179,6 +179,9 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
             pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
             pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
             pl.col('distractor_rate').mean().alias('DistractorRate'),
+            pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
+            pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
+            pl.col('any_distractor_rate').mean().alias('AnyDistractorRate'),
             pl.col('dominant_facet_rate').mean().alias('DominantFacetRate'),
             pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
             pl.col('fac_cov_score').mean().alias('fac'),
@@ -201,6 +204,9 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
         'FacetMRR@k',
         'alpha-nDCG@k',
         'DistractorRate',
+        'NearMissDistractorRate',
+        'BackgroundOutlierRate',
+        'AnyDistractorRate',
         'DominantFacetRate',
         'RedundantGoldRate',
         'fac',
@@ -351,7 +357,14 @@ def _redundancy_metrics(
     n_facet_hits: int,
 ) -> dict[str, float | int]:
     n_selected = len(selected_chunk_ids)
-    non_gold_count = sum(1 for chunk_id in selected_chunk_ids if chunk_id not in all_gold_ids)
+    non_gold_rows = [
+        chunk_by_id[chunk_id] for chunk_id in selected_chunk_ids if chunk_id not in all_gold_ids
+    ]
+    non_gold_count = len(non_gold_rows)
+    background_outlier_count = sum(
+        1 for row in non_gold_rows if row.get('cluster_role') == 'background_outlier'
+    )
+    near_miss_distractor_count = non_gold_count - background_outlier_count
     dominant_count = sum(
         1
         for chunk_id in selected_chunk_ids
@@ -372,11 +385,18 @@ def _redundancy_metrics(
 
     return {
         'distractor_rate': non_gold_count / n_selected if n_selected else 0.0,
+        'any_distractor_rate': non_gold_count / n_selected if n_selected else 0.0,
+        'near_miss_distractor_rate': (
+            near_miss_distractor_count / n_selected if n_selected else 0.0
+        ),
+        'background_outlier_rate': background_outlier_count / n_selected if n_selected else 0.0,
         'dominant_facet_rate': float(dominant_facet_rate),
         'dominant_cluster_concentration': float(dominant_facet_rate),
         'max_facet_concentration': float(max_facet_concentration),
         'redundant_gold_rate': redundant_gold_count / n_selected if n_selected else 0.0,
         'n_selected_non_gold': non_gold_count,
+        'n_selected_near_miss_distractors': near_miss_distractor_count,
+        'n_selected_background_outliers': background_outlier_count,
         'n_redundant_gold': redundant_gold_count,
     }
 

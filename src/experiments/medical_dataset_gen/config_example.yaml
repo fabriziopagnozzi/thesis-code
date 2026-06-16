@@ -39,7 +39,9 @@ generation:
 
   gold_chunks_dominant: 18 # Number of gold chunks for the intentionally over-represented facet.
   gold_chunks_complementary: 8 # Number of gold chunks for each complementary facet.
-  distractors_per_query: 30 # Number of hard negatives generated per query.
+  distractors_per_query: 30 # Number of near-miss hard negatives generated per query.
+  background_outlier_clusters_per_query: 1 # Coherent non-gold clinical islands per query-local pool.
+  background_outlier_cluster_size: 12 # Chunks in each background outlier cluster.
   chunk_min_words: 40
   chunk_max_words: 200
   chunk_word_tolerance: 2 # Soft tolerance around the target range to avoid crashing on a 1-word miss.

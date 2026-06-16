@@ -139,6 +139,8 @@ The implementation uses a max heap with lazy recomputation. Initial gains are co
 
 Facility location is the key coverage method in this benchmark. It rewards candidates that represent many not-yet-covered candidates in the pool. If facets form local clusters in embedding space, one good representative from each facet can have high marginal coverage.
 
+The implemented selector already combines query relevance and coverage through `lambda * sim(q, j) + (1 - lambda) * marginal_coverage_gain(j)`. The current pipeline does not add a separate relevance-weighted coverage objective; low-query-similarity background clusters are instead measured explicitly through distractor and geometry diagnostics.
+
 ## Retrieval Diagnostics
 
 `retrieval_diagnostics()` computes:
@@ -175,8 +177,10 @@ For each query:
 3. Check whether every hidden gold facet has at least one chunk in the retained candidate pool.
 4. Count how many of the top `geometry.topk_dominance_k` candidates come from the most frequent gold facet.
 5. Count distractors in the retained candidate pool.
-6. Compute same-facet and cross-facet gold similarity.
-7. Compute top-k versus facility-location diagnostics.
+6. Separately count near-miss hard distractors and background outlier chunks.
+7. Compute same-facet and cross-facet gold similarity.
+8. Compute background outlier compactness, query-similarity margin, and first/median query-rank diagnostics.
+9. Compute top-k versus facility-location diagnostics.
 
 The same-facet and cross-facet computation uses only gold chunks for the query. It builds a gold-gold similarity matrix and labels each gold chunk by `facet_id`:
 
@@ -192,7 +196,10 @@ all facets are present in the candidate pool
 topk_dominant_count >= min_topk_dominant_count
 mean_in_facet_similarity - mean_cross_facet_similarity >= min_in_minus_cross_similarity
 n_distractors_in_pool >= min_distractors_in_pool
+background outlier clusters are present and complete when enabled
 ```
+
+`geometry.min_distractors_in_pool` is applied to the near-miss hard negatives, not to background outliers. Background outliers have their own diagnostics because they are meant to test whether a selector wastes budget on an irrelevant but coherent clinical island.
 
 This filter is fundamental because the benchmark claim depends on geometry. If embeddings do not cluster redundant same-facet evidence and separate facets at least somewhat, the retrieval comparison becomes noise.
 

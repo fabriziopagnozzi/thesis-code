@@ -44,6 +44,8 @@ class GenerationCfg(BaseModel):
     gold_chunks_dominant: PositiveInt = 25
     gold_chunks_complementary: PositiveInt = 14
     distractors_per_query: PositiveInt = 30
+    background_outlier_clusters_per_query: int = Field(default=1, ge=0)
+    background_outlier_cluster_size: int = Field(default=12, ge=0)
     chunk_min_words: PositiveInt = 25
     chunk_max_words: PositiveInt = 90
     chunk_word_tolerance: PositiveInt = 2

@@ -6,7 +6,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 type FacetAxis = Literal['treatment_duration', 'rehab_outcome']
-type ClusterRole = Literal['dominant_gold', 'complementary_gold', 'hard_distractor']
+type ClusterRole = Literal[
+    'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
+]
 type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
 type Split = Literal['train', 'validation', 'test']
 type PatientSex = Literal['female', 'male']
@@ -203,7 +205,7 @@ class ClinicalFact(BenchmarkModel):
     fact_id: str
     chunk_reuse_key: str
     facet_id: str | None
-    target_facet_id: str
+    target_facet_id: str | None
     cluster_id: str
     cluster_role: ClusterRole
     condition_id: str

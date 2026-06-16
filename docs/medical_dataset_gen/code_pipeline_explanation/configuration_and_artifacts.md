@@ -59,7 +59,9 @@ The seed does not make every stage use a single global RNG stream. Query plans g
 | `query_types` | `['subgroup_comparison']` | Query templates instantiated for every condition/subgroup pair. Current code supports `subgroup_comparison` and `outcome_synthesis`. |
 | `gold_chunks_dominant` | `25` | Target gold fact count for the dominant facet of each query. |
 | `gold_chunks_complementary` | `14` | Target gold fact count for each non-dominant facet. |
-| `distractors_per_query` | `30` | Number of hard negative facts generated per query. |
+| `distractors_per_query` | `30` | Number of near-miss hard negative facts generated per query. |
+| `background_outlier_clusters_per_query` | `1` | Number of coherent non-gold clinical islands added to each query-local pool. |
+| `background_outlier_cluster_size` | `12` | Number of chunks in each background outlier cluster. |
 | `chunk_min_words` | `25` | Minimum accepted chunk length. |
 | `chunk_max_words` | `90` | Maximum accepted chunk length. |
 | `chunk_word_tolerance` | `2` | Tolerance applied to the min and max word-count checks. |

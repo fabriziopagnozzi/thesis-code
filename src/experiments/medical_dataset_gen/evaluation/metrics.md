@@ -52,6 +52,11 @@ The fraction of selected chunks that are not gold for any facet.
 
 Lower is better.
 
+For runs with background outlier clusters, the raw result rows and summary table
+also split this into `NearMissDistractorRate`, `BackgroundOutlierRate`, and
+`AnyDistractorRate`. `DistractorRate` is kept as the compatibility name for
+total non-gold selections.
+
 ### DominantFacetRate
 
 The fraction of selected chunks whose `facet_id` equals the query's planned dominant facet.

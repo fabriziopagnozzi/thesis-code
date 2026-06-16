@@ -135,7 +135,11 @@ def _materialize_plan_row(
         dominant_facet_id=dominant_facet_id,
         n_facets=len(facets),
         gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
-        distractor_chunks=cfg.generation.distractors_per_query,
+        distractor_chunks=(
+            cfg.generation.distractors_per_query
+            + cfg.generation.background_outlier_clusters_per_query
+            * cfg.generation.background_outlier_cluster_size
+        ),
         facets=facets,
         logical_form=logical_form,
     )

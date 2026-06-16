@@ -172,6 +172,12 @@ distractor_rate = selected_non_gold / selected_total
 
 Lower is better. This is critical for interpreting MMR: a method can be diverse by selecting irrelevant distractors.
 
+The raw `distractor_rate` remains the total non-gold rate for compatibility. Newer runs also split it into:
+
+- `near_miss_distractor_rate`: selected non-gold chunks from facet-like hard negatives.
+- `background_outlier_rate`: selected non-gold chunks from the coherent background clinical island.
+- `any_distractor_rate`: explicit alias for total selected non-gold chunks.
+
 ### `dominant_facet_rate`
 
 ```text

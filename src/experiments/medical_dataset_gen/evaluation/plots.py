@@ -30,6 +30,8 @@ _METRICS = [
 
 _DIAGNOSTIC_METRICS = [
     ('DistractorRate', 'distractor_rate', 'DistractorRate', False),
+    ('NearMissDistractorRate', 'near_miss_distractor_rate', 'NearMissDistractorRate', False),
+    ('BackgroundOutlierRate', 'background_outlier_rate', 'BackgroundOutlierRate', False),
     ('DominantFacetRate', 'dominant_facet_rate', 'DominantFacetRate', False),
     ('RedundantGoldRate', 'redundant_gold_rate', 'RedundantGoldRate', False),
     ('fac', 'fac_cov_score', 'Facility-Location Objective', True),

@@ -34,6 +34,8 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             pl.when(pl.col('is_gold')).then(1).otherwise(0).alias('relevance_grade'),
             pl.when(pl.col('is_gold'))
             .then(pl.lit('positive'))
+            .when(pl.col('cluster_role') == 'background_outlier')
+            .then(pl.lit('background_outlier'))
             .otherwise(pl.lit('hard_negative'))
             .alias('support_type'),
         )
