@@ -118,10 +118,11 @@ The three pool scopes are implemented in `candidate_pool_indices()`:
 | --- | --- | --- |
 | `topk_dominance_k` | `10` | The top-k depth used to test whether one facet dominates nearest-neighbor retrieval. |
 | `min_topk_dominant_count` | `5` | Minimum number of top-k chunks from the most frequent gold facet. |
+| `max_topk_retrieved_facets` | `2` | Maximum number of distinct gold facets that plain top-k may retrieve at `topk_dominance_k`; set to `null` to disable. |
 | `min_in_minus_cross_similarity` | `0.03` | Required gap between mean same-facet and cross-facet gold similarity. |
 | `min_distractors_in_pool` | `10` | Minimum number of hard distractors that must appear in the semantic candidate pool. |
 
-A query passes the filter only if all planned facets are present in the candidate pool, top-k shows enough dominant-facet concentration, same-facet gold chunks are more similar than cross-facet gold chunks by the configured margin, and enough distractors are present.
+A query passes the filter only if all planned facets are present in the candidate pool, top-k shows enough dominant-facet concentration without covering too many distinct facets, same-facet gold chunks are more similar than cross-facet gold chunks by the configured margin, and enough distractors are present.
 
 ## `embedding_geometry`
 

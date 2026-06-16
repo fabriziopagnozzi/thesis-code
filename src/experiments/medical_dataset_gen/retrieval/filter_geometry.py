@@ -9,6 +9,7 @@ queries are valid for later evaluation.
 
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -80,6 +81,12 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             query_qrels=query_qrels,
             k=cfg.geometry.topk_dominance_k,
         )
+        topk_retrieved_facets = _topk_retrieved_facets(
+            topn_chunk_ids=topn_chunk_ids,
+            query_qrels=query_qrels,
+            k=cfg.geometry.topk_dominance_k,
+        )
+        n_topk_retrieved_facets = len(topk_retrieved_facets)
         n_distractors = sum(
             1
             for chunk_id in topn_chunk_ids
@@ -117,6 +124,10 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
 
         missing_facet = n_facets_present != len(query_facets)
         weak_topk_dominance = topk_dominant < cfg.geometry.min_topk_dominant_count
+        too_many_topk_facets = (
+            cfg.geometry.max_topk_retrieved_facets is not None
+            and n_topk_retrieved_facets > cfg.geometry.max_topk_retrieved_facets
+        )
         weak_facet_separation = (in_sim - cross_sim) < cfg.geometry.min_in_minus_cross_similarity
         too_few_near_miss_distractors = (
             n_near_miss_distractors < cfg.geometry.min_distractors_in_pool
@@ -128,6 +139,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         passes = not (
             missing_facet
             or weak_topk_dominance
+            or too_many_topk_facets
             or weak_facet_separation
             or too_few_near_miss_distractors
             or missing_or_malformed_background_outlier
@@ -142,6 +154,8 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'n_facets_present': n_facets_present,
                 'all_facets_present': n_facets_present == len(query_facets),
                 'topk_dominant_count': topk_dominant,
+                'n_topk_retrieved_facets': n_topk_retrieved_facets,
+                'max_topk_retrieved_facets': cfg.geometry.max_topk_retrieved_facets,
                 'n_distractors_in_pool': n_distractors,
                 'n_near_miss_distractors_in_pool': n_near_miss_distractors,
                 'mean_in_facet_similarity': in_sim,
@@ -150,12 +164,14 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'passes_filter': passes,
                 'fail_missing_facet': missing_facet,
                 'fail_weak_topk_dominance': weak_topk_dominance,
+                'fail_too_many_topk_facets': too_many_topk_facets,
                 'fail_weak_facet_separation': weak_facet_separation,
                 'fail_too_few_near_miss_distractors': too_few_near_miss_distractors,
                 'fail_missing_or_malformed_background_outlier': (
                     missing_or_malformed_background_outlier
                 ),
                 'facets_present_json': _json_bool_map(facets_present),
+                'topk_retrieved_facets_json': _json_str_list(topk_retrieved_facets),
             }
             | background_diagnostics
             | diagnostics
@@ -193,6 +209,19 @@ def _topk_dominant_count(
         if row.get('is_gold') and row.get('facet_id'):
             counts[row['facet_id']] += 1
     return counts.most_common(1)[0][1] if counts else 0
+
+
+def _topk_retrieved_facets(
+    topn_chunk_ids: list[str],
+    query_qrels: dict[str, dict[str, Any]],
+    k: int,
+) -> list[str]:
+    facets = {
+        str(row['facet_id'])
+        for chunk_id in topn_chunk_ids[:k]
+        if (row := query_qrels.get(chunk_id, {})).get('is_gold') and row.get('facet_id')
+    }
+    return sorted(facets)
 
 
 def _facet_separation(
@@ -350,8 +379,10 @@ def _topk_vs_facloc_diagnostics(
 
 
 def _json_bool_map(value: dict[str, bool]) -> str:
-    import json
+    return json.dumps(value, sort_keys=True)
 
+
+def _json_str_list(value: list[str]) -> str:
     return json.dumps(value, sort_keys=True)
 
 
