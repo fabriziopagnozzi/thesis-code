@@ -146,7 +146,7 @@ It does not include `query_id`. This is fundamental for controlled redundancy. E
 
 ## Stage 3: Chunk Rendering
 
-`run_make_chunks()` creates `chunks.parquet` and `generation_rejects.parquet`. This stage turns `ClinicalFact` rows into `ChunkRow` rows with actual note text.
+`run_make_chunks()` creates `chunk_documents.parquet`, `chunk_memberships.parquet`, and `generation_rejects.parquet`. This stage turns `ClinicalFact` rows into validated note text, then normalizes the result into unique chunk documents and query-specific membership rows.
 
 The relevant config fields are:
 
@@ -171,16 +171,23 @@ If both direct LLM generation and rewrite are enabled, direct LLM generation win
 
 ### Deterministic Template Mode
 
-When direct LLM generation and rewriting are both disabled, the code uses `_render_chunks_deterministic_parallel()`. This streams query-sized fact batches through a `ProcessPoolExecutor`. Each worker receives serialized config and ontology objects, reconstructs Pydantic models, and renders every fact in a query batch.
+When direct LLM generation and rewriting are both disabled, the code uses `_render_chunks_deterministic_parallel()`. This sends query-sized fact batches through a `ProcessPoolExecutor`. Each worker receives serialized config and ontology objects, reconstructs Pydantic models, and renders every fact in a query batch.
 
 For each fact:
 
-1. `render_chunk_text_template()` chooses the duration or rehab branch.
+1. `render_canonical_chunk_text()` seeds template choices from `chunk_reuse_key`.
 2. `validate_chunk_text()` checks the text against the hidden fact.
 3. `finalize_chunk_row()` enforces hard validation and word-count bounds.
 4. `ChunkRow.from_fact()` materializes the row with inherited labels and validation metadata.
 
 If a deterministic validation failure occurs for any fact in a query batch, the whole query is marked failed and its rows are not written. This preserves the invariant that a kept query has complete local evidence.
+
+After all rows are rendered, `_write_normalized_chunks()` enforces that each `chunk_reuse_key` maps to exactly one text. It writes:
+
+- `chunk_documents.parquet`: one retrievable document per reuse key, with `chunk_id`, text, and document-level clinical fields.
+- `chunk_memberships.parquet`: query-specific links from facts/facets/clusters to those document ids.
+
+This is why embedding runs over documents, while relevance remains query-local.
 
 ### Template Rendering
 
@@ -313,7 +320,7 @@ For `rehab_outcome`, it computes:
 
 ## Stage 5: Qrels
 
-`run_make_qrels()` creates `qrels.parquet` from `chunks.parquet`.
+`run_make_qrels()` creates `qrels.parquet` from `chunk_memberships.parquet`.
 
 The rule is intentionally simple:
 

@@ -24,7 +24,7 @@ The code does not copy or overwrite this file. `load_config()` reads the per-exp
 | --- | --- | --- |
 | `plans` | `run_make_query_plans()` | `query_plans.parquet` |
 | `facts` | `run_make_facts()` | `clinical_facts.parquet` |
-| `chunks` | `run_make_chunks()` | `chunks.parquet`, `generation_rejects.parquet` |
+| `chunks` | `run_make_chunks()` | `chunk_documents.parquet`, `chunk_memberships.parquet`, `generation_rejects.parquet` |
 | `queries_answers` | `run_make_queries_answers()` | `queries.parquet`, `gold_answers.parquet` |
 | `qrels` | `run_make_qrels()` | `qrels.parquet` |
 | `embed` | `run_embed()` | embedding memmap arrays and metadata |
@@ -55,9 +55,9 @@ The later stages ask whether a retrieval method can recover this planned multi-f
 
 The retrieval code supports three pool scopes in [retrieval/utils.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/retrieval/utils.py):
 
-- `query_local`: only chunks whose `source_query_id` is the current query id.
-- `same_condition`: all chunks with the same `condition_id` as the query.
-- `full_corpus`: every generated chunk.
+- `query_local`: only chunk documents linked to the current query through `chunk_memberships.parquet`.
+- `same_condition`: all chunk documents with the same `condition_id` as the query.
+- `full_corpus`: every generated chunk document.
 
 The current experimental focus is `query_local`. In that setting, the candidate pool is the intentionally generated local pool for the hidden query plan: gold chunks plus hard distractors. Off-condition chunks inside that pool are generated distractors, not broad-corpus retrieval misses.
 
@@ -65,11 +65,11 @@ The current experimental focus is `query_local`. In that setting, the candidate 
 
 A single query begins as a `QueryPlan` row. That row contains the condition, the two compared subgroups, four hidden facets, a dominant facet id, and a JSON logical form. `run_make_facts()` expands each facet into multiple `ClinicalFact` rows, with more rows for the dominant facet than for the complementary facets. It also adds distractor facts by perturbing condition, subgroup, or both.
 
-`run_make_chunks()` turns each fact into a `ChunkRow`. Depending on config, this can be deterministic template text, LLM-generated text, or deterministic text rewritten by an LLM. Every chunk is validated against the hidden fact before it is accepted.
+`run_make_chunks()` turns each fact into validated note text. Depending on config, this can be deterministic template text, LLM-generated text, or deterministic text rewritten by an LLM. It then normalizes repeated structural chunks into `chunk_documents.parquet` and stores query/facet links in `chunk_memberships.parquet`.
 
-`run_make_queries_answers()` renders the natural-language query from the same plan and constructs a canonical answer from the gold fact rows. `run_make_qrels()` then derives binary relevance labels directly from `chunks.is_gold`.
+`run_make_queries_answers()` renders the natural-language query from the same plan and constructs a canonical answer from the gold fact rows. `run_make_qrels()` then derives binary relevance labels directly from membership `is_gold` values.
 
-After that, `run_embed()` embeds chunk text and query text. `run_filter_geometry()` checks whether the resulting embedding geometry is suitable for a coverage benchmark. `run_evaluate()` runs top-k, MMR, and facility-location over the configured candidate pools and computes facet-aware metrics.
+After that, `run_embed()` embeds unique chunk-document text and query text. `run_filter_geometry()` checks whether the resulting embedding geometry is suitable for a coverage benchmark. `run_evaluate()` runs top-k, MMR, and facility-location over the configured candidate pools and computes facet-aware metrics from query-local qrels.
 
 ## The Thesis-Relevant Mechanism
 

@@ -55,7 +55,7 @@ def _embed_sentence_transformers_streaming(
 ) -> tuple[NDArray[np.float32], NDArray[np.float32], dict]:
     from helpers.embedder import Embedder
 
-    chunk_file = pq.ParquetFile(paths.table_path('chunks'))
+    chunk_file = pq.ParquetFile(paths.table_path('chunk_documents'))
     query_file = pq.ParquetFile(paths.table_path('queries'))
     n_chunks = chunk_file.metadata.num_rows
     n_queries = query_file.metadata.num_rows

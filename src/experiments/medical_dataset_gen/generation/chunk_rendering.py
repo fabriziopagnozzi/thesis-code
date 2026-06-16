@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+from __future__ import annotations
+
 import re
 from collections.abc import Callable
+from random import Random
 from typing import Literal
 
 import polars as pl
@@ -20,6 +24,7 @@ from experiments.medical_dataset_gen.generation.text_templates import (
     TEMPLATE_UTILS,
     ChunkValidation,
     patient_descriptor,
+    render_chunk_text_template,
     squash_whitespaces,
     validate_chunk_text,
 )
@@ -214,6 +219,12 @@ def word_count_errors(word_count: int, min_words: int, max_words: int, tolerance
     return [f'word_count={word_count} above maximum {max_words} (tolerance {tolerance})']
 
 
+def render_canonical_chunk_text(fact: ClinicalFact, ontology: MedicalOntology) -> str:
+    """Render deterministic chunk prose from the reusable semantic chunk key."""
+    rng = Random(_stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
+    return render_chunk_text_template(fact, ontology, rng)
+
+
 def new_chunk_state(
     final_text: str,
     text_generation_source: Literal['llm', 'fallback', 'cache'],
@@ -311,3 +322,7 @@ def reject_row(fact: ClinicalFact, reason: str, text: str) -> dict[str, object]:
 
 def chunk_id(index: int) -> str:
     return f'chunk_{index + 1:07d}'
+
+
+def _stable_seed(value: str) -> int:
+    return int(hashlib.sha256(value.encode()).hexdigest()[:16], 16)

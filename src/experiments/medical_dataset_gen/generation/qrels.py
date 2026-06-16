@@ -20,7 +20,7 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
     _ = cfg
     qrels_path = paths.table_path('qrels')
     (
-        pl.scan_parquet(paths.table_path('chunks'))
+        pl.scan_parquet(paths.table_path('chunk_memberships'))
         .select(
             'query_id',
             'chunk_id',

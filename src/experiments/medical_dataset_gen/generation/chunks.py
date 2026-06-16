@@ -3,10 +3,8 @@ from __future__ import annotations
 import os
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from random import Random
 
 import polars as pl
-import pyarrow.parquet as pq
 from tqdm import tqdm
 
 from experiments.medical_dataset_gen.generation.chunk_cache import (
@@ -26,11 +24,13 @@ from experiments.medical_dataset_gen.generation.chunk_grouped_llm import (
     render_chunks_grouped_rewrite,
 )
 from experiments.medical_dataset_gen.generation.chunk_rendering import (
+    chunk_id,
     finalize_chunk_row,
     generate_llm_chunk,
     new_chunk_state,
     reject_row,
     rejects_frame,
+    render_canonical_chunk_text,
     rewrite_llm_chunk,
     row_from_state,
 )
@@ -40,10 +40,7 @@ from experiments.medical_dataset_gen.generation.schemas import (
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.generation.text_templates import (
-    render_chunk_text_template,
-    validate_chunk_text,
-)
+from experiments.medical_dataset_gen.generation.text_templates import validate_chunk_text
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
@@ -55,7 +52,6 @@ from experiments.medical_dataset_gen.global_configs import (
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     facts = read_parquet(paths, 'clinical_facts')
-    rng = Random(cfg.global_.seed + 1000)
     if cfg.generation.use_llm_chunk_generation:
         print(f'[chunks] LLM generation enabled for all {len(facts):,} facts')
         if cfg.generation.llm_workers > 1:
@@ -117,7 +113,6 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             paths=paths,
             facts=facts,
             ontology=ontology,
-            output_path=paths.table_path('chunks'),
         )
 
     fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
@@ -139,7 +134,6 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             ontology=ontology,
             cache=rewrite_cache,
             rewrite_cache_path=rewrite_cache_path,
-            rng=rng,
             cache_version=REWRITE_CACHE_VERSION,
         )
     else:
@@ -151,13 +145,12 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             generation_cache_path=local_cache_path,
             rewrite_cache=rewrite_cache,
             rewrite_cache_path=rewrite_cache_path,
-            rng=rng,
         )
 
-    chunks = pl.from_dicts(
+    chunk_rows = pl.from_dicts(
         [row.model_dump(mode='python') for row in rows], infer_schema_length=None
     )
-    write_parquet(paths, 'chunks', chunks)
+    chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
 
     write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
     soft_warning_count = sum(row.validation_soft_warning_count for row in rows)
@@ -170,9 +163,9 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
     if failed_queries:
         print(
             f'[chunks] dropped {len(failed_queries):,} query/queries after LLM validation failure; '
-            f'kept {len(chunks):,}/{len(facts):,} chunk rows'
+            f'kept {len(chunk_memberships):,}/{len(facts):,} chunk membership rows'
         )
-    return chunks
+    return chunk_documents
 
 
 def _render_chunks_deterministic_parallel(
@@ -180,13 +173,12 @@ def _render_chunks_deterministic_parallel(
     paths: MedicalDatasetGenPaths,
     facts: pl.DataFrame,
     ontology: MedicalOntology,
-    output_path: Path,
 ) -> pl.DataFrame:
     cfg_dump = cfg.model_dump(mode='python')
     ontology_dump = ontology.model_dump(mode='python')
     n_batches = facts.select(pl.col('query_id').n_unique()).item()
     workers = max(1, os.cpu_count() or 1)
-    writer: pq.ParquetWriter | None = None
+    rows_all: list[dict[str, object]] = []
     kept_rows = 0
     soft_warning_count = 0
     chunks_with_soft_warnings = 0
@@ -223,15 +215,11 @@ def _render_chunks_deterministic_parallel(
                 )
                 continue
 
-            df = _chunk_rows_frame(rows)
-            table = df.to_arrow()
-            if writer is None:
-                writer = pq.ParquetWriter(output_path, table.schema)
-            writer.write_table(table)
-            kept_rows += len(df)
+            rows_all.extend(rows)
+            kept_rows += len(rows)
 
-    if writer is not None:
-        writer.close()
+    chunk_rows = _chunk_rows_frame(rows_all) if rows_all else pl.DataFrame()
+    chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
 
     write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
     if chunks_with_soft_warnings:
@@ -242,10 +230,13 @@ def _render_chunks_deterministic_parallel(
     if failed_queries:
         print(
             f'[chunks] dropped {len(failed_queries):,} query/queries after deterministic '
-            f'validation failure; kept {kept_rows:,}/{len(facts):,} chunk rows'
+            f'validation failure; kept {kept_rows:,}/{len(facts):,} chunk membership rows'
         )
-    print(f'[write] chunks: {kept_rows:,} rows -> {output_path}')
-    return pl.DataFrame()
+    print(
+        f'[chunks] normalized deterministic rows: '
+        f'{len(chunk_documents):,} documents, {len(chunk_memberships):,} memberships'
+    )
+    return chunk_documents
 
 
 _DETERMINISTIC_WORKER_CFG: ExperimentCfg | None = None
@@ -268,7 +259,6 @@ def _render_deterministic_chunk_batch(
 
     start_index, fact_rows = batch
     first_fact = ClinicalFact.model_validate(fact_rows[0])
-    rng = Random(_stable_seed(f'{_DETERMINISTIC_WORKER_CFG.global_.seed}:{first_fact.query_id}'))
     rows: list[dict[str, object]] = []
     rejects: list[dict[str, object]] = []
     soft_warning_count = 0
@@ -276,7 +266,7 @@ def _render_deterministic_chunk_batch(
 
     for offset, fact_row in enumerate(fact_rows):
         fact = ClinicalFact.model_validate(fact_row)
-        draft_text = render_chunk_text_template(fact, _DETERMINISTIC_WORKER_ONTOLOGY, rng)
+        draft_text = render_canonical_chunk_text(fact, _DETERMINISTIC_WORKER_ONTOLOGY)
         state = new_chunk_state(
             draft_text,
             text_generation_source='fallback',
@@ -331,10 +321,124 @@ def _chunk_rows_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
     return pl.from_dicts(rows, infer_schema_length=None)
 
 
-def _stable_seed(value: str) -> int:
-    import hashlib
+def _write_normalized_chunks(
+    paths: MedicalDatasetGenPaths,
+    chunk_rows: pl.DataFrame,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    if len(chunk_rows) == 0:
+        chunk_documents = pl.DataFrame()
+        chunk_memberships = pl.DataFrame()
+        write_parquet(paths, 'chunk_documents', chunk_documents)
+        write_parquet(paths, 'chunk_memberships', chunk_memberships)
+        _remove_legacy_chunks_table(paths)
+        return chunk_documents, chunk_memberships
 
-    return int(hashlib.sha256(value.encode()).hexdigest()[:16], 16)
+    duplicate_text_keys = (
+        chunk_rows.group_by('chunk_reuse_key')
+        .agg(pl.col('text').n_unique().alias('n_texts'))
+        .filter(pl.col('n_texts') > 1)
+    )
+    if len(duplicate_text_keys):
+        examples = duplicate_text_keys['chunk_reuse_key'].head(5).to_list()
+        raise RuntimeError(
+            'chunk_reuse_key must map to exactly one text after canonical rendering; '
+            f'found {len(duplicate_text_keys):,} violating key(s), examples={examples}'
+        )
+
+    doc_keys = chunk_rows.select('chunk_reuse_key').unique(maintain_order=True)
+    doc_key_to_id = {
+        key: chunk_id(idx) for idx, key in enumerate(doc_keys['chunk_reuse_key'].to_list())
+    }
+
+    with_doc_id = chunk_rows.with_columns(
+        pl.col('chunk_reuse_key')
+        .replace_strict(doc_key_to_id, return_dtype=pl.String)
+        .alias('chunk_id'),
+        pl.col('chunk_id').alias('membership_id'),
+    )
+
+    doc_cols = [
+        'chunk_id',
+        'chunk_reuse_key',
+        'text',
+        'approx_words',
+        'text_generation_source',
+        'llm_attempted',
+        'llm_rejected',
+        'condition_id',
+        'condition_display',
+        'subgroup_id',
+        'subgroup_label',
+        'subgroup_axis',
+        'subgroup_field',
+        'subgroup_value',
+        'axis',
+        'value_bin',
+        'duration_days',
+        'treatment',
+        'rehab_outcome',
+        'patient_age',
+        'patient_sex',
+        'clinical_subgroup_phrase',
+        'note_style',
+        'validation_soft_warning_count',
+        'validation_soft_warnings_json',
+    ]
+    membership_cols = [
+        'membership_id',
+        'chunk_id',
+        'query_id',
+        'source_query_id',
+        'fact_id',
+        'facet_id',
+        'target_facet_id',
+        'cluster_id',
+        'cluster_role',
+        'is_gold',
+        'distractor_type',
+        'split',
+    ]
+
+    chunk_documents = (
+        with_doc_id.select([col for col in doc_cols if col in with_doc_id.columns])
+        .unique(subset=['chunk_id'], keep='first', maintain_order=True)
+        .sort('chunk_id')
+    )
+    chunk_memberships = with_doc_id.select(
+        [col for col in membership_cols if col in with_doc_id.columns]
+    )
+
+    duplicate_memberships = (
+        chunk_memberships.group_by('query_id', 'chunk_id')
+        .agg(pl.len().alias('n'))
+        .filter(pl.col('n') > 1)
+    )
+    if len(duplicate_memberships):
+        examples = duplicate_memberships.select('query_id', 'chunk_id').head(5).to_dicts()
+        raise RuntimeError(
+            'a query may only contain one membership for each chunk document; '
+            f'found {len(duplicate_memberships):,} duplicate pair(s), examples={examples}'
+        )
+
+    write_parquet(paths, 'chunk_documents', chunk_documents)
+    write_parquet(paths, 'chunk_memberships', chunk_memberships)
+    _remove_legacy_chunks_table(paths)
+    print(
+        f'[chunks] normalized {len(chunk_rows):,} generated row(s) -> '
+        f'{len(chunk_documents):,} chunk document(s), '
+        f'{len(chunk_memberships):,} query membership(s)'
+    )
+    return chunk_documents, chunk_memberships
+
+
+def _remove_legacy_chunks_table(paths: MedicalDatasetGenPaths) -> None:
+    experiment_dir = getattr(paths, 'experiment_dir', None)
+    if experiment_dir is None:
+        return
+    legacy_path = experiment_dir / 'chunks.parquet'
+    if legacy_path.exists():
+        legacy_path.unlink()
+        print(f'[chunks] removed legacy denormalized table -> {legacy_path}')
 
 
 def _render_chunks_sequential(
@@ -345,7 +449,6 @@ def _render_chunks_sequential(
     generation_cache_path: Path,
     rewrite_cache: GenerationCache,
     rewrite_cache_path: Path,
-    rng: Random,
 ) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
     rows: list[ChunkRow] = []
     rejects: list[dict[str, object]] = []
@@ -383,7 +486,7 @@ def _render_chunks_sequential(
                 validation=validation,
             )
         else:
-            draft_text = render_chunk_text_template(fact, ontology, rng)
+            draft_text = render_canonical_chunk_text(fact, ontology)
             cache_key: str | None = None
             if cfg.generation.use_llm_chunk_rewriting:
                 cached = cached_rewrite_chunk_state(

@@ -47,7 +47,7 @@ The valid stage names are exactly the names in `STAGES`: `plans`, `facts`, `chun
 | `conditions` | positive int | `4` | Number of ontology conditions to use, selected from `ontology.yaml` in file order. |
 | `output_experiment` | string | `mvp` | Experiment directory name; overwritten by `--exp` during load. |
 
-The seed does not make every stage use a single global RNG stream. Query plans get their own `plan_seed`, facts use `Random(plan.plan_seed)`, chunk reuse keys derive stable SHA-256 seeds, and deterministic chunk rendering batches use query-specific stable seeds.
+The seed does not make every stage use a single global RNG stream. Query plans get their own `plan_seed`, facts use `Random(plan.plan_seed)`, and chunk reuse keys derive stable SHA-256 seeds. Deterministic chunk text is rendered from the reuse key so the same reusable chunk has one canonical text across queries.
 
 ## `generation`
 
@@ -106,7 +106,7 @@ The rest of the retrieval code assumes dot product is the similarity score. With
 
 The three pool scopes are implemented in `candidate_pool_indices()`:
 
-- `query_local`: candidates are chunks with `source_query_id == query_id`.
+- `query_local`: candidates are chunk documents linked to the query through `chunk_memberships.parquet`.
 - `same_condition`: candidates are chunks with the same `condition_id` as the query.
 - `full_corpus`: candidates are all chunks.
 
@@ -171,11 +171,12 @@ The main parquet tables are:
 | --- | --- | --- |
 | `query_plans.parquet` | `plans` | Hidden query/facet design. |
 | `clinical_facts.parquet` | `facts` | Hidden atomic evidence and distractors. |
-| `chunks.parquet` | `chunks` | Rendered note chunks plus inherited hidden labels. |
+| `chunk_documents.parquet` | `chunks` | Unique rendered note chunks keyed by reusable document `chunk_id`. |
+| `chunk_memberships.parquet` | `chunks` | Query-specific membership rows linking queries/facts/facets to chunk documents. |
 | `generation_rejects.parquet` | `chunks` | Failed generation or validation rows. |
 | `queries.parquet` | `queries_answers` | Natural-language query text and query metadata. |
 | `gold_answers.parquet` | `queries_answers` | Canonical answer text and supporting fact ids. |
-| `qrels.parquet` | `qrels` | Chunk-level relevance labels. |
+| `qrels.parquet` | `qrels` | Query-local chunk relevance labels derived from memberships. |
 | `geometry_stats.parquet` | `geom_filter` | Per-query embedding geometry pass/fail diagnostics. |
 | `evaluation_results.parquet` | `eval` | Per-query, per-strategy, per-k, per-lambda metrics. |
 | `evaluation_stats.parquet` | `eval` | Grouped summary metrics. |

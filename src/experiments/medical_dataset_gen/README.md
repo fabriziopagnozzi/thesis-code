@@ -53,9 +53,9 @@ Outputs are written under `_results/<exp>/`.
 
 1. `generation/query_plans.py`: creates `query_plans.parquet`.
 2. `generation/facts.py`: creates hidden structured `clinical_facts.parquet`.
-3. `generation/chunks.py`: generates realistic note chunks with Ollama when LLM mode is enabled, or deterministic clinical prose when disabled.
+3. `generation/chunks.py`: generates realistic note chunks with Ollama when LLM mode is enabled, or deterministic clinical prose when disabled; writes unique `chunk_documents.parquet` plus query-local `chunk_memberships.parquet`.
 4. `generation/queries_answers.py`: creates `queries.parquet` and `gold_answers.parquet`.
-5. `generation/qrels.py`: creates `qrels.parquet` from structured facts and chunks.
+5. `generation/qrels.py`: creates `qrels.parquet` from query/chunk memberships.
 6. `retrieval/embed.py`: creates the embedding memmaps and metadata files.
 7. `retrieval/filter_geometry.py`: creates `geometry_stats.parquet`.
 8. `evaluation/evaluate.py`: creates `evaluation_results.parquet` and `evaluation_stats.parquet`.
