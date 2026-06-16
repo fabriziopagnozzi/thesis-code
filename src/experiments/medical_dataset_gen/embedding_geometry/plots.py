@@ -12,11 +12,17 @@ _FIXED_LABEL_COLORS = {
     'soft distractor: same condition, wrong subgroup': '#f3a6a6',
     'hard distractor: wrong condition, same subgroup': '#d62728',
     'hard distractor: wrong condition, same answer axis': '#8c1d18',
+    'background outlier: clinical cluster': '#d62728',
     'hard distractor': '#d62728',
     'off-query wrong-condition chunks': '#d62728',
 }
 
 _DISTRACTOR_LABELS = set(_FIXED_LABEL_COLORS)
+_BACKGROUND_OUTLIER_LABEL = 'background outlier: clinical cluster'
+_BACKGROUND_OUTLIER_LABEL_ID = 'background_clinical_cluster'
+_BACKGROUND_OUTLIER_ROLE = 'background_outlier'
+_BACKGROUND_OUTLIER_COLOR = '#d62728'
+_UNSELECTED_BACKGROUND_COLOR = '#b8b8b8'
 
 
 def plot_query_map(artifact: dict[str, Any], out_dir: Path) -> None:
@@ -273,6 +279,8 @@ def _plot_selection_panel(
     ax.scatter(coords[:, 0], coords[:, 1], color='#dddddd', s=24, alpha=0.55, edgecolors='none')
     selected = {int(i) for i in local_indices}
     for label in sorted(set(artifact['labels'])):
+        if _is_background_outlier_label(label):
+            continue
         idx = [i for i, value in enumerate(artifact['labels']) if value == label and i in selected]
         if not idx:
             continue
@@ -294,6 +302,12 @@ def _plot_selection_panel(
             label=label,
             **scatter_kwargs,
         )
+    _plot_background_outliers_for_selection(
+        ax,
+        artifact,
+        selected=selected,
+        label=_BACKGROUND_OUTLIER_LABEL,
+    )
     draw_query_marker(ax, artifact)
     ax.set_title(title)
     _apply_embedding_limits(ax, artifact)
@@ -391,6 +405,8 @@ def _plot_query_map_ax(
 ) -> None:
     palette = label_palette(artifact['labels'])
     for label in sorted(set(artifact['labels'])):
+        if _is_background_outlier_label(label):
+            continue
         idx = [i for i, value in enumerate(artifact['labels']) if value == label]
         marker = _label_marker(label)
         scatter_kwargs: dict[str, Any] = {
@@ -409,6 +425,12 @@ def _plot_query_map_ax(
             artifact['coords'][idx, 1],
             **scatter_kwargs,
         )
+    _plot_background_outliers(
+        ax,
+        artifact,
+        color=_BACKGROUND_OUTLIER_COLOR,
+        label=_BACKGROUND_OUTLIER_LABEL,
+    )
     draw_query_marker(ax, artifact)
     title = f'Candidate-pool map ({artifact["reduction_method"]}, n={len(artifact["candidate_chunk_ids"])})'
     ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
@@ -428,6 +450,10 @@ def _plot_query_similarity_map_ax(
     coords = artifact['coords'][order]
     sim_to_query = artifact['sim_to_query'][order]
     is_gold = np.array([artifact['is_gold'][i] for i in order], dtype=bool)
+    is_background = np.array(
+        [_is_background_outlier_point(artifact, int(i)) for i in order], dtype=bool
+    )
+    non_gold_non_background = (~is_gold) & (~is_background)
 
     vmin = float(sim_to_query.min()) if len(sim_to_query) else 0.0
     vmax = float(sim_to_query.max()) if len(sim_to_query) else 1.0
@@ -445,11 +471,11 @@ def _plot_query_similarity_map_ax(
             marker='o',
             edgecolors='none',
         )
-    if (~is_gold).any():
+    if non_gold_non_background.any():
         points = ax.scatter(
-            coords[~is_gold, 0],
-            coords[~is_gold, 1],
-            c=sim_to_query[~is_gold],
+            coords[non_gold_non_background, 0],
+            coords[non_gold_non_background, 1],
+            c=sim_to_query[non_gold_non_background],
             cmap='viridis',
             vmin=vmin,
             vmax=vmax,
@@ -457,6 +483,20 @@ def _plot_query_similarity_map_ax(
             alpha=0.92,
             marker='x',
             linewidths=1.25,
+        )
+    if is_background.any():
+        points = _scatter_circled_x(
+            ax,
+            coords[is_background, 0],
+            coords[is_background, 1],
+            color_values=sim_to_query[is_background],
+            cmap='viridis',
+            vmin=vmin,
+            vmax=vmax,
+            s=74,
+            alpha=0.96,
+            linewidth=0.75,
+            zorder=5,
         )
     if points is None:
         points = ax.scatter([], [], c=[], cmap='viridis', vmin=vmin, vmax=vmax)
@@ -481,6 +521,8 @@ def _plot_query_rank_ax(
     ranks = np.arange(1, len(artifact['sim_to_query']) + 1)
     palette = label_palette(artifact['labels'])
     for label in sorted(set(artifact['labels'])):
+        if _is_background_outlier_label(label):
+            continue
         idx = [i for i, value in enumerate(artifact['labels']) if value == label]
         marker = _label_marker(label)
         scatter_kwargs: dict[str, Any] = {
@@ -498,6 +540,19 @@ def _plot_query_rank_ax(
             ranks[idx],
             artifact['sim_to_query'][idx],
             **scatter_kwargs,
+        )
+    background_idx = _background_outlier_indices(artifact)
+    if background_idx:
+        _scatter_circled_x(
+            ax,
+            ranks[background_idx],
+            artifact['sim_to_query'][background_idx],
+            color=_BACKGROUND_OUTLIER_COLOR,
+            s=50,
+            alpha=0.94,
+            label=_BACKGROUND_OUTLIER_LABEL,
+            linewidth=0.75,
+            zorder=5,
         )
     ax.axvline(artifact['k'], color='black', lw=1.0, ls='--', alpha=0.7, label=f'k={artifact["k"]}')
     ax.set_xlabel('rank by query cosine')
@@ -533,6 +588,12 @@ def _plot_discovered_clusters_ax(
             label=label,
             edgecolors='none',
         )
+    _plot_background_outliers(
+        ax,
+        artifact,
+        color='#333333',
+        label=_BACKGROUND_OUTLIER_LABEL,
+    )
     draw_query_marker(ax, artifact)
     ax.set_title(
         _axis_title(artifact, 'HDBSCAN clusters', include_title_prefix=include_title_prefix)
@@ -549,14 +610,153 @@ def label_palette(labels: list[str]) -> dict[str, Any]:
     unique = [label for label in sorted(set(labels)) if label not in _FIXED_LABEL_COLORS]
     cmap = plt.get_cmap('tab20')  # type: ignore
     palette = {label: cmap(i % 20) for i, label in enumerate(unique)}
-    palette.update(
-        {label: color for label, color in _FIXED_LABEL_COLORS.items() if label in labels}
-    )
+    palette.update({
+        label: color for label, color in _FIXED_LABEL_COLORS.items() if label in labels
+    })
     return palette
 
 
 def _label_marker(label: str) -> str:
+    if _is_background_outlier_label(label):
+        return 'x'
     return 'x' if label in _DISTRACTOR_LABELS else 'o'
+
+
+def _is_background_outlier_label(label: str) -> bool:
+    return label == _BACKGROUND_OUTLIER_LABEL
+
+
+def _is_background_outlier_point(artifact: dict[str, Any], idx: int) -> bool:
+    label = artifact['labels'][idx]
+    label_id = artifact['label_ids'][idx]
+    role = artifact['roles'][idx]
+    return (
+        label == _BACKGROUND_OUTLIER_LABEL
+        or label_id == _BACKGROUND_OUTLIER_LABEL_ID
+        or role == _BACKGROUND_OUTLIER_ROLE
+    )
+
+
+def _background_outlier_indices(artifact: dict[str, Any]) -> list[int]:
+    return [
+        idx
+        for idx in range(len(artifact['candidate_chunk_ids']))
+        if _is_background_outlier_point(artifact, idx)
+    ]
+
+
+def _plot_background_outliers(
+    ax: Any,
+    artifact: dict[str, Any],
+    *,
+    color: str,
+    label: str | None = None,
+) -> None:
+    idx = _background_outlier_indices(artifact)
+    if not idx:
+        return
+    coords = artifact['coords']
+    _scatter_circled_x(
+        ax,
+        coords[idx, 0],
+        coords[idx, 1],
+        color=color,
+        s=54,
+        alpha=0.95,
+        label=label,
+        linewidth=0.75,
+        zorder=5,
+    )
+
+
+def _plot_background_outliers_for_selection(
+    ax: Any,
+    artifact: dict[str, Any],
+    *,
+    selected: set[int],
+    label: str | None = None,
+) -> None:
+    idx = _background_outlier_indices(artifact)
+    if not idx:
+        return
+    selected_idx = [point_idx for point_idx in idx if point_idx in selected]
+    unselected_idx = [point_idx for point_idx in idx if point_idx not in selected]
+    coords = artifact['coords']
+    if unselected_idx:
+        _scatter_circled_x(
+            ax,
+            coords[unselected_idx, 0],
+            coords[unselected_idx, 1],
+            color=_UNSELECTED_BACKGROUND_COLOR,
+            s=42,
+            alpha=0.58,
+            linewidth=0.55,
+            zorder=3,
+        )
+    if selected_idx:
+        _scatter_circled_x(
+            ax,
+            coords[selected_idx, 0],
+            coords[selected_idx, 1],
+            color=_BACKGROUND_OUTLIER_COLOR,
+            s=58,
+            alpha=0.95,
+            label=label,
+            linewidth=0.75,
+            zorder=5,
+        )
+
+
+def _scatter_circled_x(
+    ax: Any,
+    x: Any,
+    y: Any,
+    *,
+    color: str | None = None,
+    color_values: Any = None,
+    cmap: str | None = None,
+    vmin: float | None = None,
+    vmax: float | None = None,
+    s: Any = 54,
+    alpha: float = 0.95,
+    label: str | None = None,
+    linewidth: float = 0.75,
+    zorder: int = 5,
+) -> Any:
+    if color_values is not None:
+        import matplotlib.pyplot as plt
+        from matplotlib.colors import Normalize
+
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        cmap_obj = plt.get_cmap(cmap or 'viridis')  # type: ignore
+        circle_kwargs = {'edgecolors': cmap_obj(norm(color_values))}
+        x_kwargs = {'c': color_values, 'cmap': cmap, 'vmin': vmin, 'vmax': vmax}
+    else:
+        circle_kwargs = {'edgecolors': color}
+        x_kwargs = {'color': color}
+    circle = ax.scatter(
+        x,
+        y,
+        s=s,
+        alpha=alpha,
+        marker='o',
+        facecolors='none',
+        linewidths=linewidth,
+        label=label,
+        zorder=zorder,
+        **circle_kwargs,
+    )
+    x_points = ax.scatter(
+        x,
+        y,
+        s=np.asarray(s) * 0.46,
+        alpha=alpha,
+        marker='x',
+        linewidths=linewidth,
+        zorder=zorder + 0.1,
+        **x_kwargs,
+    )
+    return x_points if color_values is not None else circle
 
 
 def draw_query_marker(ax: Any, artifact: dict[str, Any]) -> None:
