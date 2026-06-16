@@ -366,8 +366,9 @@ If you only keep one mental model from this document, it should be this:
 1. The ontology defines the legal medical vocabulary and the allowed bins.
 2. The query plan fixes the hidden facets before any text exists.
 3. The fact generator creates redundant golds and close negatives from that plan.
-4. The chunk renderer turns those facts into realistic note text with seeded templates.
-5. The query renderer turns the same hidden plan into a natural-language question.
-6. The qrels are then a direct projection of the hidden labels.
+4. The chunk renderer turns reusable facts into canonical note documents with seeded templates.
+5. Query memberships link those documents back to facets, roles, and gold/distractor labels.
+6. The query renderer turns the same hidden plan into a natural-language question.
+7. The qrels are then a direct projection of the membership labels.
 
 That is how the dataset stays deterministic while still producing a nontrivial retrieval benchmark.

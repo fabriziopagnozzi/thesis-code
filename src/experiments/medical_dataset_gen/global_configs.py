@@ -19,7 +19,8 @@ from helpers.dir_paths import ROOT_DIR
 type TableName = Literal[
     'query_plans',
     'clinical_facts',
-    'chunks',
+    'chunk_documents',
+    'chunk_memberships',
     'queries',
     'gold_answers',
     'qrels',

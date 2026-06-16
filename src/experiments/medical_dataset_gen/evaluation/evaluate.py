@@ -35,15 +35,17 @@ ALPHA_NDCG_REDUNDANCY = 0.5
 
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    chunks = read_parquet(paths, 'chunks')
+    chunk_documents = read_parquet(paths, 'chunk_documents')
+    chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     qrels = read_parquet(paths, 'qrels')
     geometry = read_parquet(paths, 'geometry_stats')
     _assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunks, queries, chunk_ids, query_ids)
+    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
     facet_gold = _facet_gold_map(qrels)
+    qrels_by_query_chunk = _qrels_by_query_chunk(qrels)
     gold_by_query = {
         qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
         for qid, facet_map in facet_gold.items()
@@ -125,6 +127,7 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
                         **_retrieval_metrics(
                             selected_chunk_ids=selected_chunk_ids,
                             chunk_by_id=maps['chunk_by_id'],
+                            query_qrels=qrels_by_query_chunk.get(qid, {}),
                             facet_to_gold=query_facet_gold,
                             all_gold_ids=query_all_gold,
                             dominant_facet_id=query['dominant_facet_id'],
@@ -217,9 +220,17 @@ def _facet_gold_map(qrels: pl.DataFrame) -> dict[str, dict[str, list[str]]]:
     return result
 
 
+def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, dict[str, Any]]]:
+    result: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in qrels.iter_rows(named=True):
+        result[str(row['query_id'])][str(row['chunk_id'])] = row
+    return result
+
+
 def _retrieval_metrics(
     selected_chunk_ids: list[str],
     chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     facet_to_gold: dict[str, list[str]],
     all_gold_ids: set[str],
     dominant_facet_id: str,
@@ -234,13 +245,13 @@ def _retrieval_metrics(
     )
     diversified_ranking = _diversified_ranking_metrics(
         selected_chunk_ids=selected_chunk_ids,
-        chunk_by_id=chunk_by_id,
+        query_qrels=query_qrels,
         facet_to_gold=facet_to_gold,
         all_gold_ids=all_gold_ids,
     )
     redundancy = _redundancy_metrics(
         selected_chunk_ids=selected_chunk_ids,
-        chunk_by_id=chunk_by_id,
+        query_qrels=query_qrels,
         all_gold_ids=all_gold_ids,
         dominant_facet_id=dominant_facet_id,
         n_selected_gold=int(relevance['n_selected_gold']),
@@ -322,20 +333,20 @@ def _facet_coverage_metrics(
 
 def _diversified_ranking_metrics(
     selected_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     facet_to_gold: dict[str, list[str]],
     all_gold_ids: set[str],
 ) -> dict[str, float]:
     facet_mrr_at_k = _facet_mrr(
         selected_chunk_ids=selected_chunk_ids,
-        chunk_by_id=chunk_by_id,
+        query_qrels=query_qrels,
         facet_ids=list(facet_to_gold),
         all_gold_ids=all_gold_ids,
     )
     return {
         'alpha_ndcg': _alpha_ndcg(
             selected_chunk_ids=selected_chunk_ids,
-            chunk_by_id=chunk_by_id,
+            query_qrels=query_qrels,
             facet_to_gold=facet_to_gold,
             all_gold_ids=all_gold_ids,
             alpha=ALPHA_NDCG_REDUNDANCY,
@@ -347,7 +358,7 @@ def _diversified_ranking_metrics(
 
 def _redundancy_metrics(
     selected_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     all_gold_ids: set[str],
     dominant_facet_id: str,
     n_selected_gold: int,
@@ -358,12 +369,12 @@ def _redundancy_metrics(
     dominant_count = sum(
         1
         for chunk_id in selected_chunk_ids
-        if chunk_by_id[chunk_id].get('facet_id') == dominant_facet_id
+        if query_qrels.get(chunk_id, {}).get('facet_id') == dominant_facet_id
     )
     selected_facet_counts = Counter(
-        chunk_by_id[chunk_id].get('facet_id')
+        query_qrels.get(chunk_id, {}).get('facet_id')
         for chunk_id in selected_chunk_ids
-        if chunk_id in all_gold_ids and chunk_by_id[chunk_id].get('facet_id')
+        if chunk_id in all_gold_ids and query_qrels.get(chunk_id, {}).get('facet_id')
     )
     max_facet_concentration = (
         selected_facet_counts.most_common(1)[0][1] / n_selected
@@ -411,7 +422,7 @@ def _harmonic_mean(left: float, right: float) -> float:
 
 def _alpha_ndcg(
     selected_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     facet_to_gold: dict[str, list[str]],
     all_gold_ids: set[str],
     alpha: float,
@@ -423,7 +434,7 @@ def _alpha_ndcg(
     """
     selected_dcg = _alpha_dcg(
         selected_chunk_ids=selected_chunk_ids,
-        chunk_by_id=chunk_by_id,
+        query_qrels=query_qrels,
         all_gold_ids=all_gold_ids,
         alpha=alpha,
     )
@@ -434,13 +445,13 @@ def _alpha_ndcg(
 
 def _alpha_dcg(
     selected_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     all_gold_ids: set[str],
     alpha: float,
 ) -> float:
     labels = [
-        str(chunk_by_id[chunk_id].get('facet_id'))
-        if chunk_id in all_gold_ids and chunk_by_id[chunk_id].get('facet_id')
+        str(query_qrels.get(chunk_id, {}).get('facet_id'))
+        if chunk_id in all_gold_ids and query_qrels.get(chunk_id, {}).get('facet_id')
         else None
         for chunk_id in selected_chunk_ids
     ]
@@ -484,7 +495,7 @@ def _ideal_alpha_labels(
 
 def _facet_mrr(
     selected_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     facet_ids: list[str],
     all_gold_ids: set[str],
 ) -> float:
@@ -494,7 +505,7 @@ def _facet_mrr(
     for rank, chunk_id in enumerate(selected_chunk_ids, start=1):
         if chunk_id not in all_gold_ids:
             continue
-        facet_id = chunk_by_id[chunk_id].get('facet_id')
+        facet_id = query_qrels.get(chunk_id, {}).get('facet_id')
         if facet_id:
             first_rank.setdefault(str(facet_id), rank)
     reciprocal_ranks = [

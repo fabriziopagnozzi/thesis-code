@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from pathlib import Path
-from random import Random
 
 from tqdm import tqdm
 
@@ -27,6 +26,7 @@ from experiments.medical_dataset_gen.generation.chunk_rendering import (
     generate_llm_chunk,
     new_chunk_state,
     reject_row,
+    render_canonical_chunk_text,
     rewrite_llm_chunk,
     row_from_state,
 )
@@ -35,10 +35,7 @@ from experiments.medical_dataset_gen.generation.schemas import (
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.generation.text_templates import (
-    render_chunk_text_template,
-    validate_chunk_text,
-)
+from experiments.medical_dataset_gen.generation.text_templates import validate_chunk_text
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 
 
@@ -125,7 +122,6 @@ def render_chunks_grouped_rewrite(
     ontology: MedicalOntology,
     cache: GenerationCache,
     rewrite_cache_path: Path,
-    rng: Random,
     cache_version: int,
 ) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
     rows: list[ChunkRow | None] = [None] * len(facts)
@@ -168,7 +164,6 @@ def render_chunks_grouped_rewrite(
                 rows=rows,
                 rejects=rejects,
                 failed_queries=failed_queries,
-                rng=rng,
                 executor=executor,
                 cache_version=cache_version,
                 pbar=pbar,
@@ -384,22 +379,19 @@ def _render_rewrite_query_group(
     rows: list[ChunkRow | None],
     rejects: list[dict[str, object]],
     failed_queries: set[str],
-    rng: Random,
     executor: ThreadPoolExecutor,
     cache_version: int,
     pbar: tqdm,
 ) -> tuple[int, int, int, int]:
     draft_text_by_index: dict[int, str] = {}
     rewrite_key_by_index: dict[int, str] = {}
-    rng_state_after_index: dict[int, object] = {}
     missing_groups: dict[str, list[tuple[int, ClinicalFact]]] = {}
     exact_cache_hits = 0
     reusable_cache_hits = 0
 
     for idx, fact in query_group:
-        draft_text = render_chunk_text_template(fact, ontology, rng)
+        draft_text = render_canonical_chunk_text(fact, ontology)
         draft_text_by_index[idx] = draft_text
-        rng_state_after_index[idx] = rng.getstate()
         cached = cached_rewrite_chunk_state(cfg, fact, ontology, cache, draft_text)
         if cached is not None:
             state, hit_kind = cached
@@ -470,7 +462,6 @@ def _render_rewrite_query_group(
         except RuntimeError as exc:
             rejects.append(reject_row(fact, str(exc), state.final_text))
             failed_queries.add(fact.query_id)
-            rng.setstate(rng_state_after_index[idx])
             print(
                 f'[chunks] dropping query {fact.query_id} after final validation failure in '
                 f'{fact.fact_id}: {exc}'

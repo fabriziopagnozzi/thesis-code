@@ -283,8 +283,12 @@ def build_query_artifact(
     sim_matrix = candidate_vectors @ candidate_vectors.T
     k = min(cfg.embedding_geometry.plot_k, len(topn_global))
     candidate_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
+    query_qrels = {
+        str(row['chunk_id']): row
+        for row in qrels.filter(pl.col('query_id') == qid).iter_rows(named=True)
+    }
     labels, label_ids, roles, is_gold = candidate_labels(
-        qid, candidate_chunk_ids, maps['chunk_by_id'], query
+        qid, candidate_chunk_ids, maps['chunk_by_id'], query_qrels, query
     )
     selection_variants = strategy_selection_variants(cfg, topn_sims, sim_matrix, k)
     selections = strategy_selections(cfg, eval_stats, eval_results, qid, selection_variants, k)
@@ -319,6 +323,7 @@ def build_query_artifact(
         'k': k,
         'qrels': qrels.filter(pl.col('query_id') == qid),
         'chunk_by_id': maps['chunk_by_id'],
+        'qrel_by_chunk_id': query_qrels,
     }
 
 
@@ -326,6 +331,7 @@ def candidate_labels(
     qid: str,
     candidate_chunk_ids: list[str],
     chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     query: dict[str, Any],
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
     facet_labels = facet_label_map(query)
@@ -335,10 +341,11 @@ def candidate_labels(
     gold_flags: list[bool] = []
     for chunk_id in candidate_chunk_ids:
         row = chunk_by_id[chunk_id]
-        roles.append(str(row.get('cluster_role') or 'unknown'))
-        gold = bool(row.get('is_gold'))
+        qrel = query_qrels.get(chunk_id)
+        roles.append(str((qrel or {}).get('cluster_role') or 'unknown'))
+        gold = bool((qrel or {}).get('is_gold'))
         gold_flags.append(gold)
-        if row.get('source_query_id') != qid:
+        if qrel is None:
             row_condition_id = row.get('condition_id')
             query_condition_id = query.get('condition_id')
             if row_condition_id != query_condition_id:
@@ -347,12 +354,12 @@ def candidate_labels(
                 continue
             label_ids.append('other_same_condition_query')
             labels.append('other same-condition queries')
-        elif gold and row.get('facet_id'):
-            facet_id = str(row['facet_id'])
+        elif gold and qrel.get('facet_id'):
+            facet_id = str(qrel['facet_id'])
             label_ids.append(facet_id)
             labels.append(facet_labels.get(facet_id, facet_id))
         else:
-            dtype = str(row.get('distractor_type') or 'hard_distractor')
+            dtype = str(qrel.get('distractor_type') or 'hard_distractor')
             label_ids.append(dtype)
             labels.append(distractor_label(dtype))
     return labels, label_ids, roles, gold_flags

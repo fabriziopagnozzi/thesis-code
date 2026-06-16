@@ -29,7 +29,8 @@ The relevant config fields are:
 
 The evaluation reads:
 
-- `chunks.parquet`
+- `chunk_documents.parquet`
+- `chunk_memberships.parquet`
 - `queries.parquet`
 - `qrels.parquet`
 - `geometry_stats.parquet`
@@ -42,7 +43,7 @@ It first verifies that the stored `geometry_stats.pool_scope` matches the curren
 For each query row:
 
 1. Skip the query if `retrieval.only_pass_geometry` is true and the query did not pass the geometry filter.
-2. Build a mapping from facet id to gold chunk ids using `qrels.parquet`.
+2. Build a query-local mapping from facet id to gold chunk-document ids using `qrels.parquet`.
 3. Build the candidate pool from `retrieval.pool_scope`.
 4. Keep the top `retrieval.candidate_pool_n` candidates by query similarity.
 5. Compute the candidate-candidate similarity matrix.

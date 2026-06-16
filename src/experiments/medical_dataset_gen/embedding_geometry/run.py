@@ -48,7 +48,8 @@ _WORKER_STATE: dict[str, Any] | None = None
 
 def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     required_paths = [
-        paths.table_path('chunks'),
+        paths.table_path('chunk_documents'),
+        paths.table_path('chunk_memberships'),
         paths.table_path('queries'),
         paths.table_path('qrels'),
     ]
@@ -70,7 +71,8 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
         print(f'[embedding_geometry] skipping; missing required artifacts: {missing}')
         return pl.DataFrame()
 
-    chunks = read_parquet(paths, 'chunks')
+    chunk_documents = read_parquet(paths, 'chunk_documents')
+    chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     geometry = _maybe_read(paths, 'geometry_stats')
     eval_results = _maybe_read(paths, 'evaluation_results')
@@ -80,7 +82,7 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
     )
 
     _chunk_vectors, _query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunks, queries, chunk_ids, query_ids)
+    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
     selected_query_groups = choose_query_groups(cfg, queries, geometry, eval_results)
     selected_query_ids: list[str] = []
     selected_query_group_by_id: dict[str, str] = {}
@@ -181,13 +183,14 @@ def _init_embedding_geometry_worker(
     cfg = ExperimentCfg.model_validate(cfg_dump)
     paths = MedicalDatasetGenPaths(exp_name)
 
-    chunks = read_parquet(paths, 'chunks')
+    chunk_documents = read_parquet(paths, 'chunk_documents')
+    chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     qrels = read_parquet(paths, 'qrels')
     eval_stats = _maybe_read(paths, 'evaluation_stats')
     eval_results = _maybe_read(paths, 'evaluation_results')
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunks, queries, chunk_ids, query_ids)
+    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
     global _WORKER_STATE
     _WORKER_STATE = {

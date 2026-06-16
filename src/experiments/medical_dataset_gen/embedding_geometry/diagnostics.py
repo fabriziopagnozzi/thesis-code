@@ -22,7 +22,9 @@ def point_rows(artifact: dict[str, Any]) -> list[dict[str, Any]]:
     }
     rows = []
     for idx, chunk_id in enumerate(artifact['candidate_chunk_ids']):
-        row = artifact['chunk_by_id'][chunk_id]
+        row = artifact.get('qrel_by_chunk_id', {}).get(
+            chunk_id, artifact['chunk_by_id'][chunk_id]
+        )
         rows.append(
             _point_row(
                 artifact=artifact,

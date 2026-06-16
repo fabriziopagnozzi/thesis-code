@@ -34,13 +34,15 @@ from experiments.medical_dataset_gen.retrieval.utils import (
 
 
 def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    chunks = read_parquet(paths, 'chunks')
+    chunk_documents = read_parquet(paths, 'chunk_documents')
+    chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     qrels = read_parquet(paths, 'qrels')
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunks, queries, chunk_ids, query_ids)
+    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
     facet_gold = _facet_gold_map(qrels)
+    qrels_by_query_chunk = _qrels_by_query_chunk(qrels)
     rows = []
     for query in tqdm(
         queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True
@@ -65,6 +67,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         topn_set = set(topn_chunk_ids)
 
         query_facets = facet_gold.get(qid, {})
+        query_qrels = qrels_by_query_chunk.get(qid, {})
         if not query_facets:
             continue
         facets_present = {
@@ -74,11 +77,11 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
 
         topk_dominant = _topk_dominant_count(
             topn_chunk_ids=topn_chunk_ids,
-            chunk_by_id=maps['chunk_by_id'],
+            query_qrels=query_qrels,
             k=cfg.geometry.topk_dominance_k,
         )
         n_distractors = sum(
-            1 for chunk_id in topn_chunk_ids if not bool(maps['chunk_by_id'][chunk_id]['is_gold'])
+            1 for chunk_id in topn_chunk_ids if not bool(query_qrels.get(chunk_id, {}).get('is_gold'))
         )
         in_sim, cross_sim = _facet_separation(
             qid=qid,
@@ -134,15 +137,22 @@ def _facet_gold_map(qrels: pl.DataFrame) -> dict[str, dict[str, list[str]]]:
     return result
 
 
+def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, dict[str, Any]]]:
+    result: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    for row in qrels.iter_rows(named=True):
+        result[str(row['query_id'])][str(row['chunk_id'])] = row
+    return result
+
+
 def _topk_dominant_count(
     topn_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
+    query_qrels: dict[str, dict[str, Any]],
     k: int,
 ) -> int:
     counts: Counter[str] = Counter()
     for chunk_id in topn_chunk_ids[:k]:
-        row = chunk_by_id[chunk_id]
-        if row['is_gold'] and row['facet_id']:
+        row = query_qrels.get(chunk_id, {})
+        if row.get('is_gold') and row.get('facet_id'):
             counts[row['facet_id']] += 1
     return counts.most_common(1)[0][1] if counts else 0
 

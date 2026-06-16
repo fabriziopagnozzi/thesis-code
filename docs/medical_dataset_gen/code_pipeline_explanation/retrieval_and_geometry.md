@@ -24,7 +24,7 @@ Source files:
 - `embeddings.query_prompt`
 - `embeddings.normalize`
 
-The implementation uses `helpers.embedder.Embedder`, which wraps SentenceTransformers-style document and query embedding calls. Chunk text is read from `chunks.parquet`; query text is read from `queries.parquet`.
+The implementation uses `helpers.embedder.Embedder`, which wraps SentenceTransformers-style document and query embedding calls. Chunk text is read from `chunk_documents.parquet`; query text is read from `queries.parquet`.
 
 The stage streams parquet batches instead of loading all text into one list. It computes:
 
@@ -53,10 +53,11 @@ sim(query, chunk) = e_query dot e_chunk
 
 - `chunk_id_to_idx`: chunk id to embedding row index
 - `query_id_to_idx`: query id to embedding row index
-- `chunk_by_id`: chunk id to metadata row
+- `chunk_by_id`: chunk document id to metadata row
 - `query_by_id`: query id to metadata row
-- `chunks_by_source_query`: source query id to chunk embedding indices
-- `chunks_by_condition`: condition id to chunk embedding indices
+- `membership_by_query_chunk`: `(query_id, chunk_id)` to query-specific membership row
+- `chunks_by_source_query`: source query id to chunk-document embedding indices
+- `chunks_by_condition`: condition id to chunk-document embedding indices
 
 This is the bridge between hidden labels in parquet and vector operations in NumPy.
 
@@ -67,10 +68,10 @@ This is the bridge between hidden labels in parquet and vector operations in Num
 For `query_local`, it returns:
 
 ```text
-{chunk index | chunk.source_query_id == query_id}
+{chunk index | chunk is linked to query_id in chunk_memberships.parquet}
 ```
 
-This is the current experimental focus. The pool contains the generated local gold chunks and generated local distractors for that hidden query plan.
+The pool contains the generated local gold chunk documents and generated local distractors for that hidden query plan. Relevance labels still come from `qrels.parquet`, so the same chunk document can be interpreted relative to each query.
 
 For `same_condition`, it returns:
 
