@@ -62,6 +62,24 @@ _PLAN_COLUMNS = [
     'facets_json',
     'logical_form_json',
 ]
+_CALIBRATION_COLUMNS = [
+    'query_id',
+    'dominance_mode',
+    'previous_dominant_facet_id',
+    'selected_dominant_facet_id',
+    'selected_axis',
+    'selected_subgroup_id',
+    'selected_value_bin',
+    'probe_chunks_per_facet',
+    'selected_mean_query_sim',
+    'selected_p25_query_sim',
+    'selected_p75_query_sim',
+    'best_complement_p75_query_sim',
+    'selected_probe_margin',
+    'calibration_min_probe_margin',
+    'passes_calibration_margin',
+    'facet_stats_json',
+]
 _ANSWER_COLUMNS = [
     'query_id',
     'answer_text',
@@ -224,6 +242,9 @@ def build_text_diagnostics(
         raise ValueError(f'none of the requested query ids exist in {paths.table_path("queries")}')
 
     query_plans = _collect_query_table(paths, 'query_plans', present_query_ids, _PLAN_COLUMNS)
+    calibration = _collect_query_table(
+        paths, 'query_plan_calibration', present_query_ids, _CALIBRATION_COLUMNS
+    )
     gold_answers = _collect_query_table(paths, 'gold_answers', present_query_ids, _ANSWER_COLUMNS)
     geometry = _collect_query_table(paths, 'geometry_stats', present_query_ids)
     plot_stats = _collect_query_table(paths, 'embedding_geometry_query_stats', present_query_ids)
@@ -273,6 +294,7 @@ def build_text_diagnostics(
         missing_query_ids=missing_query_ids,
         queries_by_id=_rows_by_key(queries, 'query_id'),
         plans_by_id=_rows_by_key(query_plans, 'query_id'),
+        calibration_by_id=_rows_by_key(calibration, 'query_id'),
         answers_by_id=_rows_by_key(gold_answers, 'query_id'),
         geometry_by_id=_rows_by_key(geometry, 'query_id'),
         plot_stats_by_id=_rows_by_key(plot_stats, 'query_id'),
@@ -316,6 +338,7 @@ class _RenderContext:
         missing_query_ids: list[str],
         queries_by_id: dict[str, dict[str, Any]],
         plans_by_id: dict[str, dict[str, Any]],
+        calibration_by_id: dict[str, dict[str, Any]],
         answers_by_id: dict[str, dict[str, Any]],
         geometry_by_id: dict[str, dict[str, Any]],
         plot_stats_by_id: dict[str, dict[str, Any]],
@@ -344,6 +367,7 @@ class _RenderContext:
         self.missing_query_ids = missing_query_ids
         self.queries_by_id = queries_by_id
         self.plans_by_id = plans_by_id
+        self.calibration_by_id = calibration_by_id
         self.answers_by_id = answers_by_id
         self.geometry_by_id = geometry_by_id
         self.plot_stats_by_id = plot_stats_by_id
@@ -382,7 +406,9 @@ def _render_diagnostics(
             ('pool_scope', ctx.cfg.retrieval.pool_scope),
             ('candidate_pool_n_used', ctx.pool_n),
             ('embedding_model', ctx.cfg.embeddings.model_name),
+            ('generation.dominance_mode', ctx.cfg.generation.dominance_mode),
             ('geometry.topk_dominance_k', ctx.cfg.geometry.topk_dominance_k),
+            ('geometry.primary_topk_dominance_k', ctx.cfg.geometry.primary_topk_dominance_k),
             ('geometry.max_topk_retrieved_facets', ctx.cfg.geometry.max_topk_retrieved_facets),
             ('geometry.min_topk_dominant_count', ctx.cfg.geometry.min_topk_dominant_count),
             ('retrieval.k_values', ctx.cfg.retrieval.k_values),
@@ -471,6 +497,48 @@ def _render_query(
         ],
         ['facet_id', 'role', 'cluster_id', 'subgroup', 'axis', 'value_bin', 'target_gold_chunks'],
     )
+
+    calibration = ctx.calibration_by_id.get(query_id)
+    if calibration:
+        _h2(lines, 'Dominance Calibration')
+        _kv(
+            lines,
+            [
+                ('dominance_mode', calibration.get('dominance_mode')),
+                ('previous_dominant_facet_id', calibration.get('previous_dominant_facet_id')),
+                ('selected_dominant_facet_id', calibration.get('selected_dominant_facet_id')),
+                ('selected_axis', calibration.get('selected_axis')),
+                ('selected_subgroup_id', calibration.get('selected_subgroup_id')),
+                ('selected_value_bin', calibration.get('selected_value_bin')),
+                ('probe_chunks_per_facet', calibration.get('probe_chunks_per_facet')),
+                ('selected_mean_query_sim', calibration.get('selected_mean_query_sim')),
+                ('selected_p25_query_sim', calibration.get('selected_p25_query_sim')),
+                (
+                    'best_complement_p75_query_sim',
+                    calibration.get('best_complement_p75_query_sim'),
+                ),
+                ('selected_probe_margin', calibration.get('selected_probe_margin')),
+                ('calibration_min_probe_margin', calibration.get('calibration_min_probe_margin')),
+                ('passes_calibration_margin', calibration.get('passes_calibration_margin')),
+            ],
+        )
+        if ctx.detail == 'full':
+            facet_stats = _json_loads(calibration.get('facet_stats_json'), [])
+            if facet_stats:
+                _table(
+                    lines,
+                    facet_stats,
+                    [
+                        'facet_id',
+                        'subgroup_id',
+                        'axis',
+                        'value_bin',
+                        'mean_query_sim',
+                        'p25_query_sim',
+                        'p75_query_sim',
+                        'probe_margin_p25_gt_best_complement_p75',
+                    ],
+                )
 
     logical_form = _json_loads(plan.get('logical_form_json') or query.get('logical_form_json'), {})
     if logical_form and ctx.detail == 'full':
@@ -618,10 +686,16 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         preferred = [
             'passes_filter',
             'pool_size',
+            'primary_topk_dominance_k',
             'n_facets_present',
             'topk_dominant_count',
+            'planned_dominant_facet_id',
+            'planned_topk_dominant_count',
+            'planned_topk_dominant_fraction',
             'n_topk_retrieved_facets',
             'max_topk_retrieved_facets',
+            'rank_where_all_facets_first_covered',
+            'all_facets_covered_before_primary_k',
             'mean_in_facet_similarity',
             'mean_cross_facet_similarity',
             'in_minus_cross_similarity',
@@ -641,12 +715,19 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'passes_filter',
         'pool_scope',
         'pool_size',
+        'topk_dominance_k',
+        'primary_topk_dominance_k',
         'n_facets',
         'n_facets_present',
         'all_facets_present',
         'topk_dominant_count',
+        'planned_dominant_facet_id',
+        'planned_topk_dominant_count',
+        'planned_topk_dominant_fraction',
         'n_topk_retrieved_facets',
         'max_topk_retrieved_facets',
+        'rank_where_all_facets_first_covered',
+        'all_facets_covered_before_primary_k',
         'n_distractors_in_pool',
         'n_near_miss_distractors_in_pool',
         'mean_in_facet_similarity',

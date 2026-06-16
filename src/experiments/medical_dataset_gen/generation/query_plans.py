@@ -103,6 +103,7 @@ def _materialize_plan_row(
 ) -> QueryPlan:
     query_id = f'q{plan_idx:05d}'
     dominant_slot = (plan_idx - 1) % 4
+    value_pattern_idx = (plan_idx - 1) // 4
     facets = _facets_for_plan(
         query_id=query_id,
         condition_id=spec.condition_key,
@@ -112,6 +113,7 @@ def _materialize_plan_row(
         subgroup_b_id=spec.subgroup_b_id,
         subgroup_b=spec.subgroup_b,
         dominant_slot=dominant_slot,
+        value_pattern_idx=value_pattern_idx,
         dominant_size=cfg.generation.gold_chunks_dominant,
         complementary_size=cfg.generation.gold_chunks_complementary,
     )
@@ -156,17 +158,12 @@ def _facets_for_plan(
     subgroup_b_id: str,
     subgroup_b: SubgroupOntology,
     dominant_slot: int,
+    value_pattern_idx: int,
     dominant_size: int,
     complementary_size: int,
 ) -> list[QueryPlanFacet]:
-    subgroup_a_duration, subgroup_b_duration = (
-        ('short', 'prolonged') if dominant_slot in {0, 1} else ('prolonged', 'short')
-    )
-    subgroup_a_rehab, subgroup_b_rehab = (
-        ('home_rehab', 'inpatient_rehab')
-        if dominant_slot in {0, 2}
-        else ('persistent_deficit', 'home_rehab')
-    )
+    subgroup_a_duration, subgroup_b_duration = _duration_value_pattern(value_pattern_idx)
+    subgroup_a_rehab, subgroup_b_rehab = _rehab_value_pattern(value_pattern_idx)
     raw_facets = [
         (subgroup_a_id, subgroup_a, 'treatment_duration', subgroup_a_duration),
         (subgroup_a_id, subgroup_a, 'rehab_outcome', subgroup_a_rehab),
@@ -195,6 +192,28 @@ def _facets_for_plan(
             )
         )
     return facets
+
+
+def _duration_value_pattern(value_pattern_idx: int) -> tuple[str, str]:
+    patterns = [
+        ('short', 'prolonged'),
+        ('prolonged', 'short'),
+        ('standard', 'prolonged'),
+        ('prolonged', 'standard'),
+    ]
+    return patterns[value_pattern_idx % len(patterns)]
+
+
+def _rehab_value_pattern(value_pattern_idx: int) -> tuple[str, str]:
+    patterns = [
+        ('home_rehab', 'inpatient_rehab'),
+        ('inpatient_rehab', 'home_rehab'),
+        ('persistent_deficit', 'home_rehab'),
+        ('home_rehab', 'persistent_deficit'),
+        ('inpatient_rehab', 'persistent_deficit'),
+        ('persistent_deficit', 'inpatient_rehab'),
+    ]
+    return patterns[(value_pattern_idx // 2) % len(patterns)]
 
 
 def _split_for_index(plan_idx: int) -> Split:

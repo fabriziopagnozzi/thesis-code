@@ -97,20 +97,18 @@ Every plan is expanded into exactly four facets:
 - subgroup B + treatment duration
 - subgroup B + rehabilitation outcome
 
-The facet order is fixed. What changes from query to query is which slot is dominant.
+The facet order is fixed. In rotating-dominance mode, what changes from query to query is which slot is dominant.
 
 `dominant_slot = (plan_idx - 1) % 4`
 
-That means the dominant facet position cycles through `f1`, `f2`, `f3`, `f4`, then repeats. This avoids a fixed position bias and makes the benchmark less brittle.
+That means the dominant facet position cycles through `f1`, `f2`, `f3`, `f4`, then repeats. This avoids a fixed position bias and makes the benchmark less brittle. In embedding-calibrated mode, this rotating slot is only the initial placeholder; `calibrate_plans` later selects the dominant facet from neutral probe embeddings.
 
-The facet value bins are assigned by the same dominant-slot logic:
+The facet value bins are assigned by a separate deterministic value-pattern rotation:
 
-- if the dominant slot is `f1` or `f2`, subgroup A gets `short` duration and subgroup B gets `prolonged`
-- otherwise subgroup A gets `prolonged` and subgroup B gets `short`
-- if the dominant slot is `f1` or `f3`, subgroup A gets `home_rehab` and subgroup B gets `inpatient_rehab`
-- otherwise subgroup A gets `persistent_deficit` and subgroup B gets `home_rehab`
+- duration patterns cycle through `short/prolonged`, `prolonged/short`, `standard/prolonged`, and `prolonged/standard`
+- rehabilitation patterns cycle independently through home, inpatient, and persistent-deficit pairings
 
-That design creates a four-facet query geometry with one overrepresented facet and three complementary facets.
+That design keeps clinical values balanced without making value choice depend on the hidden dominant facet.
 
 ### Real Early Query Ordering
 

@@ -18,6 +18,7 @@ from helpers.dir_paths import ROOT_DIR
 
 type TableName = Literal[
     'query_plans',
+    'query_plan_calibration',
     'clinical_facts',
     'chunk_documents',
     'chunk_memberships',
@@ -44,6 +45,9 @@ class GlobalCfg(BaseModel):
 class GenerationCfg(BaseModel):
     ontology_path: str | None = None
     query_types: list[QueryType] = Field(default_factory=lambda: ['subgroup_comparison'])
+    dominance_mode: Literal['rotating', 'embedding_calibrated'] = 'rotating'
+    dominance_probe_chunks_per_facet: PositiveInt = 8
+    calibration_min_probe_margin: float | None = Field(default=None, ge=0.0)
     gold_chunks_dominant: PositiveInt = 25
     gold_chunks_complementary: PositiveInt = 14
     distractors_per_query: PositiveInt = 30
@@ -84,6 +88,7 @@ class RetrievalCfg(BaseModel):
 
 class GeometryCfg(BaseModel):
     topk_dominance_k: PositiveInt = 10
+    primary_topk_dominance_k: PositiveInt = 20
     min_topk_dominant_count: PositiveInt = 5
     max_topk_retrieved_facets: PositiveInt | None = 2
     min_in_minus_cross_similarity: PositiveFloat = 0.03

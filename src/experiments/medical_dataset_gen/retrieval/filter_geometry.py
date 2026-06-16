@@ -44,6 +44,8 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
 
     facet_gold = _facet_gold_map(qrels)
     qrels_by_query_chunk = _qrels_by_query_chunk(qrels)
+    primary_k = int(cfg.geometry.primary_topk_dominance_k)
+    diagnostic_k_values = _diagnostic_k_values(cfg)
     rows = []
     for query in tqdm(
         queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True
@@ -71,22 +73,37 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         query_qrels = qrels_by_query_chunk.get(qid, {})
         if not query_facets:
             continue
+        dominant_facet_id = str(query.get('dominant_facet_id') or '')
         facets_present = {
             facet_id: bool(topn_set & set(gold_ids)) for facet_id, gold_ids in query_facets.items()
         }
         n_facets_present = sum(facets_present.values())
 
+        topk_by_k = _topk_diagnostics_by_k(
+            topn_chunk_ids=topn_chunk_ids,
+            query_qrels=query_qrels,
+            query_facets=query_facets,
+            dominant_facet_id=dominant_facet_id,
+            k_values=diagnostic_k_values,
+        )
+        primary_topk = topk_by_k[primary_k]
         topk_dominant = _topk_dominant_count(
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
-            k=cfg.geometry.topk_dominance_k,
+            k=primary_k,
         )
         topk_retrieved_facets = _topk_retrieved_facets(
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
-            k=cfg.geometry.topk_dominance_k,
+            k=primary_k,
         )
         n_topk_retrieved_facets = len(topk_retrieved_facets)
+        planned_topk_dominant = int(primary_topk['planned_dominant_count'])
+        all_facet_rank = _rank_where_all_facets_first_covered(
+            topn_chunk_ids=topn_chunk_ids,
+            query_qrels=query_qrels,
+            query_facets=query_facets,
+        )
         n_distractors = sum(
             1
             for chunk_id in topn_chunk_ids
@@ -119,11 +136,11 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             topn_global=topn_global,
             topn_sims=topn_sims,
             chunk_vectors=chunk_vectors,
-            k=cfg.geometry.topk_dominance_k,
+            k=primary_k,
         )
 
         missing_facet = n_facets_present != len(query_facets)
-        weak_topk_dominance = topk_dominant < cfg.geometry.min_topk_dominant_count
+        weak_topk_dominance = planned_topk_dominant < cfg.geometry.min_topk_dominant_count
         too_many_topk_facets = (
             cfg.geometry.max_topk_retrieved_facets is not None
             and n_topk_retrieved_facets > cfg.geometry.max_topk_retrieved_facets
@@ -150,12 +167,23 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'query_id': qid,
                 'pool_scope': cfg.retrieval.pool_scope,
                 'pool_size': len(topn_global),
+                'topk_dominance_k': primary_k,
+                'primary_topk_dominance_k': primary_k,
                 'n_facets': len(query_facets),
                 'n_facets_present': n_facets_present,
                 'all_facets_present': n_facets_present == len(query_facets),
                 'topk_dominant_count': topk_dominant,
+                'planned_dominant_facet_id': dominant_facet_id,
+                'planned_topk_dominant_count': planned_topk_dominant,
+                'planned_topk_dominant_fraction': primary_topk[
+                    'planned_dominant_fraction'
+                ],
                 'n_topk_retrieved_facets': n_topk_retrieved_facets,
                 'max_topk_retrieved_facets': cfg.geometry.max_topk_retrieved_facets,
+                'rank_where_all_facets_first_covered': all_facet_rank,
+                'all_facets_covered_before_primary_k': (
+                    all_facet_rank is not None and all_facet_rank <= primary_k
+                ),
                 'n_distractors_in_pool': n_distractors,
                 'n_near_miss_distractors_in_pool': n_near_miss_distractors,
                 'mean_in_facet_similarity': in_sim,
@@ -173,6 +201,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'facets_present_json': _json_bool_map(facets_present),
                 'topk_retrieved_facets_json': _json_str_list(topk_retrieved_facets),
             }
+            | _flatten_topk_diagnostics(topk_by_k)
             | background_diagnostics
             | diagnostics
         )
@@ -198,16 +227,93 @@ def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, dict[str, 
     return result
 
 
+def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
+    return sorted(
+        {
+            int(k)
+            for k in [
+                *cfg.retrieval.k_values,
+                cfg.geometry.topk_dominance_k,
+                cfg.geometry.primary_topk_dominance_k,
+            ]
+        }
+    )
+
+
+def _topk_diagnostics_by_k(
+    *,
+    topn_chunk_ids: list[str],
+    query_qrels: dict[str, dict[str, Any]],
+    query_facets: dict[str, list[str]],
+    dominant_facet_id: str,
+    k_values: list[int],
+) -> dict[int, dict[str, object]]:
+    rows = {}
+    for k in k_values:
+        counts = _topk_facet_counts(
+            topn_chunk_ids=topn_chunk_ids,
+            query_qrels=query_qrels,
+            k=k,
+        )
+        retrieved_facets = sorted(counts)
+        n_selected = min(k, len(topn_chunk_ids))
+        denominator = max(n_selected, 1)
+        most_common_count = counts.most_common(1)[0][1] if counts else 0
+        planned_count = counts.get(dominant_facet_id, 0)
+        n_facets = len(query_facets)
+        rows[k] = {
+            'dominant_count': most_common_count,
+            'dominant_fraction': most_common_count / denominator,
+            'planned_dominant_count': planned_count,
+            'planned_dominant_fraction': planned_count / denominator,
+            'n_retrieved_facets': len(retrieved_facets),
+            'facet_coverage': len(retrieved_facets) / n_facets if n_facets else 0.0,
+            'all_facets_covered': len(retrieved_facets) == n_facets,
+            'retrieved_facets': retrieved_facets,
+        }
+    return rows
+
+
+def _flatten_topk_diagnostics(topk_by_k: dict[int, dict[str, object]]) -> dict[str, object]:
+    flat: dict[str, object] = {}
+    for k, row in topk_by_k.items():
+        prefix = f'topk_{k}'
+        flat[f'{prefix}_dominant_count'] = row['dominant_count']
+        flat[f'{prefix}_dominant_fraction'] = row['dominant_fraction']
+        flat[f'{prefix}_planned_dominant_count'] = row['planned_dominant_count']
+        flat[f'{prefix}_planned_dominant_fraction'] = row['planned_dominant_fraction']
+        flat[f'{prefix}_n_retrieved_facets'] = row['n_retrieved_facets']
+        flat[f'{prefix}_facet_coverage'] = row['facet_coverage']
+        flat[f'{prefix}_all_facets_covered'] = row['all_facets_covered']
+        flat[f'{prefix}_retrieved_facets_json'] = _json_str_list(
+            list(row['retrieved_facets'])
+        )
+    return flat
+
+
+def _topk_facet_counts(
+    topn_chunk_ids: list[str],
+    query_qrels: dict[str, dict[str, Any]],
+    k: int,
+) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for chunk_id in topn_chunk_ids[:k]:
+        row = query_qrels.get(chunk_id, {})
+        if row.get('is_gold') and row.get('facet_id'):
+            counts[str(row['facet_id'])] += 1
+    return counts
+
+
 def _topk_dominant_count(
     topn_chunk_ids: list[str],
     query_qrels: dict[str, dict[str, Any]],
     k: int,
 ) -> int:
-    counts: Counter[str] = Counter()
-    for chunk_id in topn_chunk_ids[:k]:
-        row = query_qrels.get(chunk_id, {})
-        if row.get('is_gold') and row.get('facet_id'):
-            counts[row['facet_id']] += 1
+    counts = _topk_facet_counts(
+        topn_chunk_ids=topn_chunk_ids,
+        query_qrels=query_qrels,
+        k=k,
+    )
     return counts.most_common(1)[0][1] if counts else 0
 
 
@@ -222,6 +328,23 @@ def _topk_retrieved_facets(
         if (row := query_qrels.get(chunk_id, {})).get('is_gold') and row.get('facet_id')
     }
     return sorted(facets)
+
+
+def _rank_where_all_facets_first_covered(
+    *,
+    topn_chunk_ids: list[str],
+    query_qrels: dict[str, dict[str, Any]],
+    query_facets: dict[str, list[str]],
+) -> int | None:
+    expected = set(query_facets)
+    seen: set[str] = set()
+    for rank, chunk_id in enumerate(topn_chunk_ids, start=1):
+        row = query_qrels.get(chunk_id, {})
+        if row.get('is_gold') and row.get('facet_id') in expected:
+            seen.add(str(row['facet_id']))
+            if seen == expected:
+                return rank
+    return None
 
 
 def _facet_separation(

@@ -34,7 +34,7 @@ The supported common CLI overrides are:
 - `--stop-after`
 - `--no-log-tee`
 
-The valid stage names are exactly the names in `STAGES`: `plans`, `facts`, `chunks`, `queries_answers`, `qrels`, `embed`, `geom_filter`, `eval`, `geom_plots`, and `eval_plots`.
+The valid stage names are exactly the names in `STAGES`: `plans`, `calibrate_plans`, `facts`, `chunks`, `queries_answers`, `qrels`, `embed`, `geom_filter`, `eval`, `geom_plots`, and `eval_plots`.
 
 ## `global`
 
@@ -57,6 +57,9 @@ The seed does not make every stage use a single global RNG stream. Query plans g
 | --- | --- | --- |
 | `ontology_path` | `null` | Optional custom YAML path; otherwise [ontology.yaml](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/ontology.yaml). |
 | `query_types` | `['subgroup_comparison']` | Query templates instantiated for every condition/subgroup pair. Current code supports `subgroup_comparison` and `outcome_synthesis`. |
+| `dominance_mode` | `rotating` | `rotating` preserves the old deterministic dominant slot; `embedding_calibrated` selects the naturally closest facet from neutral probe embeddings before facts are generated. |
+| `dominance_probe_chunks_per_facet` | `8` | Number of deterministic role-neutral probe chunks per facet used by `calibrate_plans`. |
+| `calibration_min_probe_margin` | `null` | Optional diagnostic threshold for the selected facet's p25 query similarity over the best complementary p75 query similarity. |
 | `gold_chunks_dominant` | `25` | Target gold fact count for the dominant facet of each query. |
 | `gold_chunks_complementary` | `14` | Target gold fact count for each non-dominant facet. |
 | `distractors_per_query` | `30` | Number of near-miss hard negative facts generated per query. |
@@ -74,7 +77,7 @@ The seed does not make every stage use a single global RNG stream. Query plans g
 | `llm_temperature` | `0.1` | Temperature passed to Ollama. |
 | `llm_num_ctx` | `4096` | Context window passed to Ollama. |
 
-The dominant/complementary counts define the intended top-k failure mode. If the dominant facet has many more gold chunks than the other facets, nearest-neighbor retrieval has a plausible way to over-select repeated evidence.
+The dominant/complementary counts define the intended top-k failure mode. In calibrated mode, count imbalance is applied only after the embedding probe identifies which facet is naturally nearest to the neutral query text.
 
 ## `embeddings`
 
@@ -116,13 +119,14 @@ The three pool scopes are implemented in `candidate_pool_indices()`:
 
 | field | default | meaning |
 | --- | --- | --- |
-| `topk_dominance_k` | `10` | The top-k depth used to test whether one facet dominates nearest-neighbor retrieval. |
-| `min_topk_dominant_count` | `5` | Minimum number of top-k chunks from the most frequent gold facet. |
-| `max_topk_retrieved_facets` | `2` | Maximum number of distinct gold facets that plain top-k may retrieve at `topk_dominance_k`; set to `null` to disable. |
+| `topk_dominance_k` | `10` | Legacy/extra diagnostic top-k depth retained in `geometry_stats.parquet`. |
+| `primary_topk_dominance_k` | `20` | The top-k depth used for the pass/fail dominance checks; keep this aligned with the main evaluation budget. |
+| `min_topk_dominant_count` | `5` | Minimum number of top-k chunks from the planned dominant gold facet. |
+| `max_topk_retrieved_facets` | `2` | Maximum number of distinct gold facets that plain top-k may retrieve at `primary_topk_dominance_k`; set to `null` to disable. |
 | `min_in_minus_cross_similarity` | `0.03` | Required gap between mean same-facet and cross-facet gold similarity. |
 | `min_distractors_in_pool` | `10` | Minimum number of hard distractors that must appear in the semantic candidate pool. |
 
-A query passes the filter only if all planned facets are present in the candidate pool, top-k shows enough dominant-facet concentration without covering too many distinct facets, same-facet gold chunks are more similar than cross-facet gold chunks by the configured margin, and enough distractors are present.
+A query passes the filter only if all planned facets are present in the candidate pool, top-k shows enough planned-dominant-facet concentration at `primary_topk_dominance_k` without covering too many distinct facets, same-facet gold chunks are more similar than cross-facet gold chunks by the configured margin, and enough distractors are present.
 
 ## `embedding_geometry`
 
@@ -171,6 +175,7 @@ The main parquet tables are:
 | table | produced by | purpose |
 | --- | --- | --- |
 | `query_plans.parquet` | `plans` | Hidden query/facet design. |
+| `query_plan_calibration.parquet` | `calibrate_plans` | Probe-embedding statistics and selected dominant facet for each query plan. |
 | `clinical_facts.parquet` | `facts` | Hidden atomic evidence and distractors. |
 | `chunk_documents.parquet` | `chunks` | Unique rendered note chunks keyed by reusable document `chunk_id`. |
 | `chunk_memberships.parquet` | `chunks` | Query-specific membership rows linking queries/facts/facets to chunk documents. |

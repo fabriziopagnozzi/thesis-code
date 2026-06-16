@@ -8,6 +8,7 @@ from helpers.ollama_client import stop_model
 from .embedding_geometry.run import run_embedding_geometry
 from .evaluation.evaluate import run_evaluate
 from .evaluation.plots import store_eval_figures
+from .generation.calibrate_plans import run_calibrate_query_plans
 from .generation.chunks import run_make_chunks
 from .generation.facts import run_make_facts
 from .generation.qrels import run_make_qrels
@@ -29,6 +30,7 @@ type StageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 
 STAGES: list[tuple[str, StageFn]] = [
     ('plans', run_make_query_plans),
+    ('calibrate_plans', run_calibrate_query_plans),
     ('facts', run_make_facts),
     ('chunks', run_make_chunks),
     ('queries_answers', run_make_queries_answers),

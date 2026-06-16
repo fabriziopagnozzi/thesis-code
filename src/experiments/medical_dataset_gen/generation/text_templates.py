@@ -77,8 +77,8 @@ def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
         presentation=presentation,
         response=response,
         response_verb=response_verb,
-        duration_sentence=_sentence_start(duration_phrase),
-        duration_sentence_lower=duration_phrase,
+        duration_sentence=_sentence_start(f'for treatment duration, {duration_phrase}'),
+        duration_sentence_lower=f'for treatment duration, {duration_phrase}',
         close=close,
     )
 
@@ -100,6 +100,7 @@ def render_rehab_chunk(fact: ClinicalFact, rng: Random) -> str:
     else:
         close = rng.choice(getattr(TEMPLATE_UTILS.rehab_closing_sentences, fact.value_bin))
     template = rng.choice(TEMPLATE_UTILS.rehab_chunk_templates)
+    rehab_outcome = f'the rehabilitation outcome as {fact.rehab_outcome}'
 
     return template.format(
         patient=patient,
@@ -108,7 +109,7 @@ def render_rehab_chunk(fact: ClinicalFact, rng: Random) -> str:
         presentation=presentation,
         transition=transition,
         functional_detail=functional_detail,
-        rehab_outcome=fact.rehab_outcome,
+        rehab_outcome=rehab_outcome,
         rehab_outcome_verb=rehab_outcome_verb,
         close=close,
     )
@@ -163,6 +164,10 @@ def patient_descriptor(fact: ClinicalFact) -> str:
     age = int(fact.patient_age)
     noun = 'woman' if fact.patient_sex == 'female' else 'man'
     phrase = fact.clinical_subgroup_phrase
+    if fact.subgroup_id == 'age_over_75':
+        return f'the {age}-year-old {noun} older than 75'
+    if fact.subgroup_id == 'age_under_50':
+        return f'the {age}-year-old {noun} younger than 50'
     if fact.subgroup_axis == 'demographic':
         return f'the {age}-year-old {noun}'
     return f'the {age}-year-old {noun} with {phrase}'

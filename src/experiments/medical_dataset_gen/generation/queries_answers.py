@@ -117,6 +117,7 @@ def _finalize_query(
     query_text = maybe_paraphrase_query(
         query_text=query_text,
         plan=plan,
+        ontology=ontology,
         llm_name=cfg.generation.llm_name,
         use_llm=cfg.generation.use_llm_query_paraphrase,
         temperature=cfg.generation.llm_temperature,
@@ -162,6 +163,7 @@ def render_query(
 def maybe_paraphrase_query(
     query_text: str,
     plan: QueryPlan,
+    ontology: MedicalOntology,
     llm_name: str,
     use_llm: bool,
     temperature: float,
@@ -173,9 +175,20 @@ def maybe_paraphrase_query(
     prompt = MedicalDatasetGenDefaultPrompts.query_paraphrase_prompt(query_text, plan)
     paraphrase = generate(prompt, model=llm_name, temperature=temperature, num_ctx=num_ctx).strip()
     required = [plan.condition_display, plan.subgroup_a_label, plan.subgroup_b_label]
-    if paraphrase and all(label.lower() in paraphrase.lower() for label in required):
+    lower = paraphrase.lower()
+    has_required_entities = all(label.lower() in lower for label in required)
+    has_balanced_axes = all(
+        _contains_axis_language(lower, ontology.clinical_axes[axis_id])
+        for axis_id in ('treatment_duration', 'rehab_outcome')
+    )
+    if paraphrase and has_required_entities and has_balanced_axes:
         return paraphrase
     return query_text
+
+
+def _contains_axis_language(lower_text: str, axis) -> bool:
+    terms = [axis.label, *axis.exact_terms, *axis.synonym_terms]
+    return any(str(term).lower() in lower_text for term in terms)
 
 
 def canonical_answer(

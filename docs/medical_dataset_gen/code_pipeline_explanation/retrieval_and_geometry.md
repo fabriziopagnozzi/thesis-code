@@ -165,6 +165,7 @@ It is useful as a geometry diagnostic, not as the main gold-label metric. A meth
 - `retrieval.pool_scope`
 - `retrieval.candidate_pool_n`
 - `geometry.topk_dominance_k`
+- `geometry.primary_topk_dominance_k`
 - `geometry.min_topk_dominant_count`
 - `geometry.max_topk_retrieved_facets`
 - `geometry.min_in_minus_cross_similarity`
@@ -177,7 +178,7 @@ For each query:
 1. Build the configured candidate pool.
 2. Keep the top `retrieval.candidate_pool_n` candidates by query similarity.
 3. Check whether every hidden gold facet has at least one chunk in the retained candidate pool.
-4. Count how many of the top `geometry.topk_dominance_k` candidates come from the most frequent gold facet.
+4. Count how many of the top `geometry.primary_topk_dominance_k` candidates come from the planned dominant gold facet.
 5. Count how many distinct gold facets are already represented by top-k at that same depth.
 6. Count distractors in the retained candidate pool.
 7. Separately count near-miss hard distractors and background outlier chunks.
@@ -196,7 +197,7 @@ A query passes if:
 
 ```text
 all facets are present in the candidate pool
-topk_dominant_count >= min_topk_dominant_count
+planned_topk_dominant_count >= min_topk_dominant_count
 if max_topk_retrieved_facets is not null:
     n_topk_retrieved_facets <= max_topk_retrieved_facets
 mean_in_facet_similarity - mean_cross_facet_similarity >= min_in_minus_cross_similarity
@@ -204,7 +205,9 @@ n_distractors_in_pool >= min_distractors_in_pool
 background outlier clusters are present and complete when enabled
 ```
 
-The `max_topk_retrieved_facets` cap is meant to reject queries where plain nearest-neighbor top-k already covers too many answer facets. Those queries may still be valid clinical questions, but they are weak tests of coverage-oriented reranking because the baseline is already too representative.
+The `max_topk_retrieved_facets` cap is meant to reject queries where plain nearest-neighbor top-k already covers too many answer facets at the primary evaluation-aligned depth. Those queries may still be valid clinical questions, but they are weak tests of coverage-oriented reranking because the baseline is already too representative.
+
+`geometry_stats.parquet` also stores per-k top-k diagnostics for the configured retrieval `k_values`, the legacy `geometry.topk_dominance_k`, and the primary dominance k. The old `topk_dominant_count` field remains as the most frequent gold-facet count, while `planned_topk_dominant_count` is the pass/fail field tied to the calibrated dominant facet.
 
 `geometry.min_distractors_in_pool` is applied to the near-miss hard negatives, not to background outliers. Background outliers have their own diagnostics because they are meant to test whether a selector wastes budget on an irrelevant but coherent clinical island.
 

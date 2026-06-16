@@ -36,6 +36,15 @@ from experiments.medical_dataset_gen.global_configs import (
 
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
+    if (
+        cfg.generation.dominance_mode == 'embedding_calibrated'
+        and not paths.table_path('query_plan_calibration').exists()
+    ):
+        raise FileNotFoundError(
+            'embedding_calibrated dominance requires query_plan_calibration.parquet. '
+            'Run the calibrate_plans stage before facts.'
+        )
+
     ontology = load_ontology(cfg)
     plans = read_parquet(paths, 'query_plans')
     path = paths.table_path('clinical_facts')

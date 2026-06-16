@@ -23,6 +23,7 @@ The code does not copy or overwrite this file. `load_config()` reads the per-exp
 | stage name | function | main output |
 | --- | --- | --- |
 | `plans` | `run_make_query_plans()` | `query_plans.parquet` |
+| `calibrate_plans` | `run_calibrate_query_plans()` | `query_plans.parquet`, `query_plan_calibration.parquet` |
 | `facts` | `run_make_facts()` | `clinical_facts.parquet` |
 | `chunks` | `run_make_chunks()` | `chunk_documents.parquet`, `chunk_memberships.parquet`, `generation_rejects.parquet` |
 | `queries_answers` | `run_make_queries_answers()` | `queries.parquet`, `gold_answers.parquet` |
@@ -47,7 +48,7 @@ That separation matters because the benchmark is not trying to infer qrels from 
 
 ## Why The Pipeline Is Ordered This Way
 
-The first stages define the answer geometry before any embedding model is involved. A query has exactly four planned facets in the current MVP shape: two subgroups crossed with two clinical axes. One facet is overrepresented, the others are complementary, and each query also receives hard distractors.
+The first stages define the answer geometry before final chunk generation. A query has exactly four planned facets in the current MVP shape: two subgroups crossed with two clinical axes. With `generation.dominance_mode: rotating`, one facet is selected by deterministic rotation. With `generation.dominance_mode: embedding_calibrated`, `calibrate_plans` keeps the natural symmetric query text, embeds neutral probe chunks for all four facets, chooses the facet that is naturally closest to the query, and only then marks that facet as overrepresented. Each query also receives hard distractors.
 
 The later stages ask whether a retrieval method can recover this planned multi-facet evidence. The evaluation does not only ask whether selected chunks are relevant. It asks whether selected chunks cover distinct facets, avoid same-facet redundancy, and avoid hard negatives.
 
@@ -63,7 +64,7 @@ The current experimental focus is `query_local`. In that setting, the candidate 
 
 ## How A Query Moves Through The System
 
-A single query begins as a `QueryPlan` row. That row contains the condition, the two compared subgroups, four hidden facets, a dominant facet id, and a JSON logical form. `run_make_facts()` expands each facet into multiple `ClinicalFact` rows, with more rows for the dominant facet than for the complementary facets. It also adds distractor facts by perturbing condition, subgroup, or both.
+A single query begins as a `QueryPlan` row. That row contains the condition, the two compared subgroups, four hidden facets, a dominant facet id, and a JSON logical form. If calibrated dominance is enabled, `run_calibrate_query_plans()` rewrites the dominant facet id, facet roles, and target gold counts from probe embedding statistics while leaving the query wording neutral. `run_make_facts()` then expands each facet into multiple `ClinicalFact` rows, with more rows for the calibrated dominant facet than for the complementary facets. It also adds distractor facts by perturbing condition, subgroup, or both.
 
 `run_make_chunks()` turns each fact into validated note text. Depending on config, this can be deterministic template text, LLM-generated text, or deterministic text rewritten by an LLM. It then normalizes repeated structural chunks into `chunk_documents.parquet` and stores query/facet links in `chunk_memberships.parquet`.
 

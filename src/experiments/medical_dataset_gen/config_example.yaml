@@ -37,6 +37,9 @@ generation:
     - subgroup_comparison
     - outcome_synthesis
 
+  dominance_mode: embedding_calibrated # "rotating" keeps the old pre-embedding dominant slot.
+  dominance_probe_chunks_per_facet: 8 # Neutral probe chunks per facet used by calibrate_plans.
+  calibration_min_probe_margin: null # Optional p25-vs-best-complement-p75 margin diagnostic.
   gold_chunks_dominant: 18 # Number of gold chunks for the intentionally over-represented facet.
   gold_chunks_complementary: 8 # Number of gold chunks for each complementary facet.
   distractors_per_query: 30 # Number of near-miss hard negatives generated per query.
@@ -80,9 +83,10 @@ retrieval:
   only_pass_geometry: true
 
 geometry:
-  topk_dominance_k: 10 # k used by the geometry prefilter when checking whether top-k is dominated by one facet.
+  topk_dominance_k: 10 # Legacy/extra diagnostic k retained in geometry_stats.
+  primary_topk_dominance_k: 20 # k used by the geometry prefilter; match the main RAG context budget.
   min_topk_dominant_count: 5 # Minimum number of top-k results from the same dominant gold facet.
-  max_topk_retrieved_facets: 2 # Maximum distinct gold facets top-k may retrieve at topk_dominance_k. Use null to disable.
+  max_topk_retrieved_facets: 2 # Maximum distinct gold facets top-k may retrieve at primary_topk_dominance_k.
   min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
   min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
 

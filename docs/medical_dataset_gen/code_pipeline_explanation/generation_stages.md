@@ -5,6 +5,7 @@ This note explains the implemented generation stages in the synthetic medical be
 Source files:
 
 - [query_plans.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/query_plans.py)
+- [calibrate_plans.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/calibrate_plans.py)
 - [facts.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/facts.py)
 - [chunks.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/chunks.py)
 - [chunk_rendering.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/chunk_rendering.py)
@@ -43,13 +44,13 @@ Each plan has four facets:
 3. subgroup B + treatment duration
 4. subgroup B + rehabilitation outcome
 
-The dominant facet is selected by:
+In `generation.dominance_mode: rotating`, the initial dominant facet is selected by:
 
 ```python
 dominant_slot = (plan_idx - 1) % 4
 ```
 
-That rotating dominant slot avoids always making the same subgroup-axis combination dominant.
+That rotating dominant slot avoids always making the same subgroup-axis combination dominant. The clinical value bins are assigned by a separate deterministic value-pattern rotation, so `short/prolonged` and rehabilitation outcome choices no longer depend on which slot is dominant.
 
 The plan row stores both scalar columns and JSON columns. `facets_json` contains serialized `QueryPlanFacet` objects. `logical_form_json` contains a `QueryLogicalForm` with the query type, condition id, subgroup ids, axis ids, facet ids, and dominant facet id. This is intentionally ordinary JSON, not a Prolog or symbolic solver layer.
 
@@ -62,9 +63,26 @@ validation if bucket in {3, 4, 5}
 train      otherwise
 ```
 
-## Stage 2: Clinical Facts
+## Stage 2: Dominance Calibration
 
-`run_make_facts()` creates `clinical_facts.parquet`. It expands every query plan into hidden atomic facts. This is where the planned facet geometry becomes concrete evidence rows.
+`run_calibrate_query_plans()` creates `query_plan_calibration.parquet` and may rewrite `query_plans.parquet`.
+
+If `generation.dominance_mode` is `rotating`, this stage is a no-op apart from writing a calibration table that records the existing dominant facet.
+
+If `generation.dominance_mode` is `embedding_calibrated`, the stage:
+
+- renders the normal neutral query text for each plan,
+- renders `generation.dominance_probe_chunks_per_facet` deterministic probe chunks for each of the four facets,
+- embeds the query and probe chunks with the configured embedding model,
+- selects the facet with the strongest p25-over-best-complement-p75 query-similarity margin,
+- updates `dominant_facet_id`, facet `cluster_role`, and facet `target_gold_chunks`,
+- records all per-facet probe statistics in `query_plan_calibration.parquet`.
+
+This stage does not add query anchor clauses or expose the hidden dominant facet in user-visible query text.
+
+## Stage 3: Clinical Facts
+
+`run_make_facts()` creates `clinical_facts.parquet`. It expands every query plan into hidden atomic facts. This is where the calibrated planned facet geometry becomes concrete evidence rows.
 
 The relevant config fields are:
 
@@ -144,7 +162,7 @@ The fact stage builds `chunk_reuse_key` from:
 
 It does not include `query_id`. This is fundamental for controlled redundancy. Equivalent structural facts across queries can share a generated or rewritten surface form. The surface RNG is seeded from the SHA-256 hash of the reuse key, so patient age, sex, note style, treatment choices, and phrase choices are stable for that structural fact.
 
-## Stage 3: Chunk Rendering
+## Stage 4: Chunk Rendering
 
 `run_make_chunks()` creates `chunk_documents.parquet`, `chunk_memberships.parquet`, and `generation_rejects.parquet`. This stage turns `ClinicalFact` rows into validated note text, then normalizes the result into unique chunk documents and query-specific membership rows.
 
@@ -281,7 +299,7 @@ For rewrite, `render_chunks_grouped_rewrite()` processes one query group at a ti
 
 The grouping matters because the benchmark intentionally reuses structured facts. Without grouping and caching, LLM generation would waste work on duplicated or near-duplicated chunks.
 
-## Stage 4: Queries And Gold Answers
+## Stage 5: Queries And Gold Answers
 
 `run_make_queries_answers()` creates `queries.parquet` and `gold_answers.parquet`.
 
@@ -318,7 +336,7 @@ For `rehab_outcome`, it computes:
 
 `canonical_answer()` then writes a compact four-part answer: subgroup A duration, subgroup A rehab, subgroup B duration, subgroup B rehab. The answer row also stores JSON for facet summaries, answer fact objects, supporting fact ids, and supporting facet ids.
 
-## Stage 5: Qrels
+## Stage 6: Qrels
 
 `run_make_qrels()` creates `qrels.parquet` from `chunk_memberships.parquet`.
 
