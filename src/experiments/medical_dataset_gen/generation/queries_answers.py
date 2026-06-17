@@ -182,7 +182,7 @@ def _contains_axis_language(lower_text: str, axis) -> bool:
 
 def canonical_answer(
     plan: QueryPlan,
-    facet_summaries: dict[str, str],ù
+    facet_summaries: dict[str, str],
 ) -> str:
     subgroup_a_duration = facet_summaries[
         facets_by(plan, plan.subgroup_a_label, 'treatment_duration')

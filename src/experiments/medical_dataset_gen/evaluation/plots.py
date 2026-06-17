@@ -23,11 +23,11 @@ STRATEGY_STYLE: dict[str, dict[str, str]] = {
 
 _METRICS = [
     ('FacetCoverage@k', 'facet_coverage', 'FacetCoverage@k', True),
-    ('Precision@k', 'gold_precision', 'Precision@k', True),
+    ('DistractorRate', 'distractor_rate', 'DistractorRate@k', False),
     ('Recall@k', 'gold_recall', 'Recall@k', True),
     ('FacetMRR@k', 'facet_mrr_at_k', 'FacetMRR@k', True),
     ('alpha-nDCG@k', 'alpha_ndcg', 'alpha-nDCG@k', True),
-    ('DistractorRate', 'distractor_rate', 'DistractorRate', False),
+    ('AnswerROUGE2Recall@k', 'answer_rouge2_recall', 'Answer ROUGE-2 Recall@k', True),
 ]
 
 _DIAGNOSTIC_METRICS = [
@@ -55,10 +55,7 @@ _ANSWER_ROUGE_METRICS = [
 
 _PRIMARY_SORT = ['FacetCoverage@k', 'Precision@k', 'DistractorRate', 'alpha-nDCG@k']
 _PRIMARY_DESC = [True, True, False, True]
-_LAMBDA_POLICY_NOTE = (
-    'lambda*: max mean FacetCoverage@k within strategy x k; ties prefer higher '
-    'Precision@k, then lower DistractorRate'
-)
+_LAMBDA_POLICY_NOTE = 'lambda*: max mean FacetCoverage@k within strategy x k'
 
 
 def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
@@ -381,11 +378,11 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
     strategies = _ordered_strategies(results_df)
     metric_cols = [
         ('facet_coverage', 'FacetCoverage@k'),
-        ('distractor_rate', 'DistractorRate'),
-        ('gold_precision', 'Precision@k'),
+        ('distractor_rate', 'DistractorRate@k'),
         ('gold_recall', 'Recall@k'),
         ('facet_mrr_at_k', 'FacetMRR@k'),
         ('alpha_ndcg', 'alpha-nDCG@k'),
+        ('answer_rouge2_recall', 'Answer ROUGE-2 Recall@k'),
     ]
     metric_cols = [(col, title) for col, title in metric_cols if col in results_df.columns]
 
