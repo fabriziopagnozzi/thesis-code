@@ -191,9 +191,9 @@ def patient_descriptor(fact: ClinicalFact) -> str:
     noun = 'woman' if fact.patient_sex == 'female' else 'man'
     phrase = fact.clinical_subgroup_phrase
     if fact.subgroup_id == 'age_over_75':
-        return f'the {age}-year-old {noun} older than 75'
+        return f'the {age}-year-old {noun}'
     if fact.subgroup_id == 'age_under_50':
-        return f'the {age}-year-old {noun} younger than 50'
+        return f'the {age}-year-old {noun}'
     if fact.subgroup_axis == 'demographic':
         return f'the {age}-year-old {noun}'
     return f'the {age}-year-old {noun} with {phrase}'

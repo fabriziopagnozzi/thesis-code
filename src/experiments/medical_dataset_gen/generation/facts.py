@@ -341,7 +341,14 @@ def make_base_fact(
     patient_sex = surface_rng.choice(['female', 'male'])
     clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, surface_rng)
 
-    must_mention = [condition_display, subgroup_label]
+    must_mention = [
+        condition_display,
+        _subgroup_required_mention(
+            subgroup_id=subgroup_id,
+            subgroup_label=subgroup_label,
+            patient_age=patient_age,
+        ),
+    ]
     if axis == 'treatment_duration':
         must_mention.extend([str(duration_days), 'treatment duration'])
     else:
@@ -553,6 +560,12 @@ def _clinical_subgroup_phrase(subgroup_id: str, rng: Random) -> str:
     if not choices:
         return subgroup_id.replace('_', ' ')
     return rng.choice(choices)
+
+
+def _subgroup_required_mention(subgroup_id: str, subgroup_label: str, patient_age: int) -> str:
+    if subgroup_id in {'age_over_75', 'age_under_50'}:
+        return f'{patient_age}-year-old'
+    return subgroup_label
 
 
 if __name__ == '__main__':
