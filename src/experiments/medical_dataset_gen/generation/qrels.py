@@ -20,7 +20,8 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
     _ = cfg
     qrels_path = paths.table_path('qrels')
     (
-        pl.scan_parquet(paths.table_path('chunk_memberships'))
+        pl
+        .scan_parquet(paths.table_path('chunk_memberships'))
         .select(
             'query_id',
             'chunk_id',
@@ -34,7 +35,8 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
         )
         .with_columns(
             pl.when(pl.col('is_gold')).then(1).otherwise(0).alias('relevance_grade'),
-            pl.when(pl.col('is_gold'))
+            pl
+            .when(pl.col('is_gold'))
             .then(pl.lit('positive'))
             .when(pl.col('cluster_role') == 'background_outlier')
             .then(pl.lit('background_outlier'))

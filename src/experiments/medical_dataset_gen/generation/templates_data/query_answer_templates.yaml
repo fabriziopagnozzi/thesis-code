@@ -1,0 +1,22 @@
+query_templates:
+  subgroup_comparison:
+    - id: subgroup_comparison
+      template: "For patients diagnosed with {condition}, how do {treatment_duration_label} and {rehab_outcome_label} differ between {subgroup_a} and {subgroup_b}?"
+    - id: subgroup_comparison_compare
+      template: "Among patients diagnosed with {condition}, compare {treatment_duration_label} and {rehab_outcome_label} between {subgroup_a} and {subgroup_b}."
+    - id: subgroup_comparison_contrast
+      template: "Among patients with {condition}, how do {subgroup_a} and {subgroup_b} differ in {treatment_duration_label} and {rehab_outcome_label}?"
+
+  outcome_synthesis:
+    - id: outcome_synthesis
+      template: "Among patients diagnosed with {condition}, compare therapy-course length and discharge rehabilitation status for {subgroup_a} versus {subgroup_b}."
+    - id: outcome_synthesis_summary
+      template: "For patients with {condition}, summarize therapy-course length and discharge rehabilitation status for {subgroup_a} compared with {subgroup_b}."
+    - id: outcome_synthesis_contrast
+      template: "Among cases of {condition}, how do therapy-course length and discharge rehabilitation status differ for {subgroup_a} versus {subgroup_b}?"
+
+answer_templates:
+  subgroup_comparison:
+    template: "For {subgroup_a}, {subgroup_a_duration} for treatment duration and {subgroup_a_rehab} for rehabilitation outcome. For {subgroup_b}, {subgroup_b_duration} for treatment duration and {subgroup_b_rehab} for rehabilitation outcome."
+  outcome_synthesis:
+    template: "For {subgroup_a}, {subgroup_a_duration} for treatment duration and {subgroup_a_rehab} for rehabilitation outcome. For {subgroup_b}, {subgroup_b_duration} for treatment duration and {subgroup_b_rehab} for rehabilitation outcome."

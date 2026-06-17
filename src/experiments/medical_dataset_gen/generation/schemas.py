@@ -377,3 +377,17 @@ class ChunkTemplateUtils(BenchmarkModel):
     persistent_deficit_descriptor_terms: list[str]
     persistent_deficit_rehab_terms: list[str]
     meaningful_token_stopwords: list[str]
+
+
+class QueryTemplateSpec(BenchmarkModel):
+    id: str
+    template: str
+
+
+class AnswerTemplateSpec(BenchmarkModel):
+    template: str
+
+
+class QueryTemplateData(BenchmarkModel):
+    query_templates: dict[QueryType, list[QueryTemplateSpec]]
+    answer_templates: dict[QueryType, AnswerTemplateSpec]

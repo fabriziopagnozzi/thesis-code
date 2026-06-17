@@ -9,6 +9,10 @@ from experiments.medical_dataset_gen.generation.ontology import load_ontology
 from experiments.medical_dataset_gen.generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
+from experiments.medical_dataset_gen.generation.query_templates import (
+    render_answer_template,
+    render_query_template,
+)
 from experiments.medical_dataset_gen.generation.schemas import (
     MedicalOntology,
     QueryPlan,
@@ -142,22 +146,7 @@ def render_query(
     plan: QueryPlan,
     ontology: MedicalOntology,
 ) -> str:
-    condition = plan.condition_display
-    a = plan.subgroup_a_label
-    b = plan.subgroup_b_label
-
-    if plan.query_type == 'outcome_synthesis':
-        return (
-            f'Among patients diagnosed with {condition}, compare therapy-course length and '
-            f'discharge rehabilitation status for {a} versus {b}.'
-        )
-
-    duration = ontology.clinical_axes['treatment_duration'].label
-    rehab = ontology.clinical_axes['rehab_outcome'].label
-    return (
-        f'For patients diagnosed with {condition}, how do {duration} and {rehab} differ '
-        f'between {a} and {b}?'
-    )
+    return render_query_template(plan, ontology)
 
 
 def maybe_paraphrase_query(
@@ -193,16 +182,22 @@ def _contains_axis_language(lower_text: str, axis) -> bool:
 
 def canonical_answer(
     plan: QueryPlan,
-    facet_summaries: dict[str, str],
+    facet_summaries: dict[str, str],ù
 ) -> str:
-    a = plan.subgroup_a_label
-    b = plan.subgroup_b_label
-
-    return (
-        f'For {a}, the synthetic corpus shows {facet_summaries[facets_by(plan, a, "treatment_duration")]} '
-        f'for treatment duration and {facet_summaries[facets_by(plan, a, "rehab_outcome")]} for rehabilitation outcome. '
-        f'For {b}, it shows {facet_summaries[facets_by(plan, b, "treatment_duration")]} for treatment duration '
-        f'and {facet_summaries[facets_by(plan, b, "rehab_outcome")]} for rehabilitation outcome.'
+    subgroup_a_duration = facet_summaries[
+        facets_by(plan, plan.subgroup_a_label, 'treatment_duration')
+    ]
+    subgroup_a_rehab = facet_summaries[facets_by(plan, plan.subgroup_a_label, 'rehab_outcome')]
+    subgroup_b_duration = facet_summaries[
+        facets_by(plan, plan.subgroup_b_label, 'treatment_duration')
+    ]
+    subgroup_b_rehab = facet_summaries[facets_by(plan, plan.subgroup_b_label, 'rehab_outcome')]
+    return render_answer_template(
+        plan,
+        subgroup_a_duration=subgroup_a_duration,
+        subgroup_a_rehab=subgroup_a_rehab,
+        subgroup_b_duration=subgroup_b_duration,
+        subgroup_b_rehab=subgroup_b_rehab,
     )
 
 
@@ -240,25 +235,31 @@ def _facet_summaries(
             avg_duration = round(sum(durations) / len(durations), 1)
             treatment = Counter(str(row['treatment']) for row in rows).most_common(1)[0][0]
             text = (
-                f'a {mode_bin.replace("_", " ")} course, averaging {avg_duration} days, '
+                f'{_with_indefinite_article(mode_bin.replace("_", " "))} course, averaging {avg_duration} days, '
                 f'most often with {treatment}'
             )
         else:
             example = Counter(str(row['rehab_outcome']) for row in rows).most_common(1)[0][0]
-            text = f'a {mode_bin.replace("_", " ")} pattern, commonly described as {example}'
+            text = (
+                f'{_with_indefinite_article(mode_bin.replace("_", " "))} pattern, '
+                f'commonly described as {example}'
+            )
 
         summaries[facet_id] = text
-        answer_facts.append(
-            {
-                'facet_id': facet_id,
-                'subgroup_label': facet.subgroup_label,
-                'axis': facet.axis,
-                'summary': text,
-                'supporting_fact_ids': [str(row['fact_id']) for row in rows],
-            }
-        )
+        answer_facts.append({
+            'facet_id': facet_id,
+            'subgroup_label': facet.subgroup_label,
+            'axis': facet.axis,
+            'summary': text,
+            'supporting_fact_ids': [str(row['fact_id']) for row in rows],
+        })
 
     return summaries, answer_facts
+
+
+def _with_indefinite_article(phrase: str) -> str:
+    article = 'an' if phrase[:1].lower() in {'a', 'e', 'i', 'o', 'u'} else 'a'
+    return f'{article} {phrase}'
 
 
 def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:

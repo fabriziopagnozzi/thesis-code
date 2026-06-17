@@ -19,6 +19,7 @@ from experiments.medical_dataset_gen.generation.ontology import (
     load_ontology,
     make_subgroup_pairs,
 )
+from experiments.medical_dataset_gen.generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.generation.schemas import (
     ConditionKey,
     ConditionOntology,
@@ -55,6 +56,9 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     rng = Random(cfg.global_.seed)
     rows: list[dict[str, object]] = []
     plan_idx = 0
+    template_offsets: dict[QueryType, int] = {
+        cast(QueryType, query_type): 0 for query_type in cfg.generation.query_types
+    }
 
     per_condition_specs: dict[ConditionKey, list[QueryPlanSpec]] = {
         condition_key: [
@@ -87,7 +91,8 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
             offsets[condition_key] += 1
             emitted = True
             plan_idx += 1
-            rows.append(_materialize_plan_row(cfg, rng, plan_idx, spec).to_row())
+            template_id = _next_query_template_id(spec.query_type, template_offsets)
+            rows.append(_materialize_plan_row(cfg, rng, plan_idx, spec, template_id).to_row())
             if len(rows) >= cfg.global_.n_queries:
                 break
         if not emitted:
@@ -99,7 +104,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
 
 
 def _materialize_plan_row(
-    cfg: ExperimentCfg, rng: Random, plan_idx: int, spec: QueryPlanSpec
+    cfg: ExperimentCfg, rng: Random, plan_idx: int, spec: QueryPlanSpec, template_id: str
 ) -> QueryPlan:
     query_id = f'q{plan_idx:05d}'
     dominant_slot = (plan_idx - 1) % 4
@@ -131,7 +136,7 @@ def _materialize_plan_row(
         plan_seed=rng.randint(0, 2**31 - 1),
         split=_split_for_index(plan_idx),
         query_type=spec.query_type,
-        template_id=spec.query_type,
+        template_id=template_id,
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
         **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),
@@ -147,6 +152,17 @@ def _materialize_plan_row(
         facets=facets,
         logical_form=logical_form,
     )
+
+
+def _next_query_template_id(
+    query_type: QueryType, template_offsets: dict[QueryType, int]
+) -> str:
+    template_ids = query_template_ids(query_type)
+    if not template_ids:
+        raise ValueError(f'no query templates configured for query type: {query_type}')
+    offset = template_offsets[query_type]
+    template_offsets[query_type] = offset + 1
+    return template_ids[offset % len(template_ids)]
 
 
 def _facets_for_plan(

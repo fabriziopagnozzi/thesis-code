@@ -1,372 +1,486 @@
-# Deterministic Construction of Synthetic Medical Queries and Chunks
+# Deterministic Construction of Synthetic Medical Queries, Chunks, and Answers
 
-This note explains how the synthetic medical benchmark is built from `ontology.yaml` and the template code, with the deterministic path as the main focus. The key idea is simple: the benchmark geometry is decided first, in structured fields, and only then rendered into natural language. That is what makes the dataset reproducible and what gives the retrieval methods a real coverage problem to solve.
+This note explains the deterministic construction path for the curated medical RAG benchmark. The important design choice is that the benchmark geometry is created first in structured fields, and only then rendered into text. That gives the experiment explicit facet membership, cluster roles, qrels, and canonical answers without relying on noisy post-hoc annotation.
 
-Source files used here:
+The concrete examples below come from this experiment directory:
 
-- [ontology.yaml](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/ontology.yaml)
-- [ontology.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/ontology.py)
-- [query_plans.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/query_plans.py)
-- [facts.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/facts.py)
-- [text_templates.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/text_templates.py)
-- [chunks.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/chunks.py)
-- [queries_answers.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/queries_answers.py)
-- [qrels.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/qrels.py)
-- [schemas.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/schemas.py)
+```text
+/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/_results/03_bge_m3_pool_1_with_distractors_and_improved_chunks
+```
 
-The deterministic walkthrough below assumes `use_llm_chunk_generation: false` and `use_llm_query_paraphrase: false`, which is the cleanest way to understand the template-based build.
+For that run, deterministic text rendering was enabled:
 
-## What Part Of The Ontology The MVP Uses
+- `use_llm_chunk_generation: false`
+- `use_llm_chunk_rewriting: false`
+- `use_llm_query_paraphrase: false`
 
-The config file in this repo sets `conditions: 4`, which means `selected_conditions()` takes the first four condition entries from `ontology.yaml` in file order. In the current ontology, those are:
+So the queries, chunks, and answers shown here are all produced by code and YAML templates, not by live LLM calls.
 
-- `encephalitis_myelitis` -> `encephalitis or myelitis`
-- `pneumonia` -> `pneumonia`
-- `ischemic_stroke` -> `ischemic stroke`
-- `heart_failure` -> `acute decompensated heart failure`
+Source files used in this construction:
 
-The benchmark also assumes exactly two clinical axes:
+- [ontology.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/ontology.yaml)
+- [ontology.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/ontology.py)
+- [query_plans.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/query_plans.py)
+- [calibrate_plans.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/calibrate_plans.py)
+- [facts.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/facts.py)
+- [chunk_templates.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/chunk_templates.py)
+- [query_templates.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/query_templates.py)
+- [templates_data](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data)
+- [chunks.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/chunks.py)
+- [queries_answers.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/queries_answers.py)
+- [qrels.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/qrels.py)
+- [schemas.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/schemas.py)
 
-- `treatment_duration`
-- `rehab_outcome`
+## Template Data Boundaries
 
-`run_make_query_plans()` enforces that set and raises if the ontology does not match. That check is important because the rest of the pipeline is written around a four-facet query shape: two subgroups times two axes.
+The deterministic renderers use typed YAML data under [templates_data](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data). Chunk text is loaded into `ChunkTemplateUtils`; query text is loaded into `QueryTemplateData`.
 
-For the examples in this document, the first subgroup pair is enough to show the mechanism:
+| file | responsibility |
+| --- | --- |
+| [condition_context.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/condition_context.yaml) | condition presentation phrases and condition response/status phrases shared by duration and rehab chunks |
+| [duration_templates.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/duration_templates.yaml) | treatment-duration closing sentences, duration phrase templates, response verbs, and full duration chunk templates |
+| [rehab_templates.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/rehab_templates.yaml) | functional-status phrases, rehab closing sentences, rehab transition phrases, rehab outcome verbs, and full rehab chunk templates |
+| [validation_terms.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/validation_terms.yaml) | hidden benchmark terms, subgroup lexical evidence, rehab bin terms, persistent-deficit terms, and token stopwords used during validation |
+| [query_answer_templates.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/query_answer_templates.yaml) | query templates with stable variant ids plus canonical answer templates used by deterministic query and answer rendering |
 
-- `age_over_75` -> `patients older than 75`
-- `age_under_50` -> `patients younger than 50`
-
-The full ontology has many more subgroups, but the first pair is enough to understand the deterministic ordering and the template structure.
-
-## The Build Order
-
-The pipeline stage order is:
-
-1. Build hidden query plans.
-2. Expand each plan into hidden clinical facts.
-3. Render each fact into a chunk of text.
-4. Render the natural-language query and canonical answer.
-5. Derive qrels directly from the hidden gold/distractor labels.
-
-That order matters. The benchmark does not start from free text and then try to infer structure. It starts from structure and uses text as a rendering layer.
-
-## Step 1: Query Plans Are Built First
-
-`run_make_query_plans()` is the first real construction step. It does three deterministic things:
-
-1. It loads the ontology.
-2. It selects the first `n` conditions.
-3. It enumerates every unique subgroup pair and every query type, then emits plans in a round-robin order across conditions.
-
-In pseudocode, the core shape is:
+`chunk_templates.py` loads the chunk-related files in an explicit order:
 
 ```python
-conditions = ontology.conditions[:cfg.global.conditions]
-pairs = all_unique_subgroup_pairs_in_ontology_order()
-for condition in round_robin(conditions):
-    for pair in pairs:
-        for query_type in cfg.generation.query_types:
-            emit_query_plan(condition, pair, query_type)
+_TEMPLATE_DATA_FILES = (
+    'condition_context.yaml',
+    'duration_templates.yaml',
+    'rehab_templates.yaml',
+    'validation_terms.yaml',
+)
 ```
 
-The round-robin emission is important. It prevents the first condition from monopolizing the first block of queries and keeps the dataset balanced across the chosen conditions.
+The chunk loader merges the top-level YAML keys and validates the result with `ChunkTemplateUtils`. It raises if two files define the same top-level key. Query and answer templates are loaded separately by `query_templates.py` from `query_answer_templates.yaml` and validated with `QueryTemplateData`. This keeps chunk wording, query wording, answer wording, and ontology facts separate while preserving strongly typed runtime objects.
 
-### What A Plan Contains
+## Experiment Shape
 
-Each plan stores the following hidden structure:
+The example experiment uses:
 
-- `query_id`
-- `plan_seed`
-- `split`
-- `query_type`
-- `condition_id` and `condition_display`
-- `subgroup_a_*` and `subgroup_b_*`
-- `dominant_facet_id`
-- `facets`
-- `logical_form`
+- `conditions: 17`
+- 14 ontology subgroups
+- 91 unique subgroup pairs
+- two query types: `subgroup_comparison` and `outcome_synthesis`
+- `dominance_mode: embedding_calibrated`
+- `gold_chunks_dominant: 26`
+- `gold_chunks_complementary: 14`
+- `distractors_per_query: 25`
+- one background outlier cluster of size 8 per query
 
-The `logical_form` is stored as JSON in `query_plans.parquet`. That is deliberate: the solver is ordinary structured filtering, not a symbolic reasoner.
+The config cap is `n_queries: 6000`, but the ontology only yields `17 * 91 * 2 = 3094` unique condition/subgroup-pair/query-type plans. The run therefore contains 3094 query plans and 3094 final queries.
 
-### Facets Are Built Before Text
+Each final query has four intended answer facets:
 
-Every plan is expanded into exactly four facets:
+| facet slot | subgroup | axis |
+| --- | --- | --- |
+| `f1` | subgroup A | `treatment_duration` |
+| `f2` | subgroup A | `rehab_outcome` |
+| `f3` | subgroup B | `treatment_duration` |
+| `f4` | subgroup B | `rehab_outcome` |
 
-- subgroup A + treatment duration
-- subgroup A + rehabilitation outcome
-- subgroup B + treatment duration
-- subgroup B + rehabilitation outcome
+For a query with one dominant facet, the planned positive evidence count is:
 
-The facet order is fixed. In rotating-dominance mode, what changes from query to query is which slot is dominant.
+```text
+26 dominant gold chunks + 14 + 14 + 14 complementary gold chunks = 68 gold chunks
+```
 
-`dominant_slot = (plan_idx - 1) % 4`
+The non-gold local pool adds:
 
-That means the dominant facet position cycles through `f1`, `f2`, `f3`, `f4`, then repeats. This avoids a fixed position bias and makes the benchmark less brittle. In embedding-calibrated mode, this rotating slot is only the initial placeholder; `calibrate_plans` later selects the dominant facet from neutral probe embeddings.
+```text
+25 near-miss hard distractors + 8 background outlier chunks = 33 non-gold chunks
+```
 
-The facet value bins are assigned by a separate deterministic value-pattern rotation:
+So a normal query-local pool has 101 memberships: 68 positives and 33 negatives.
 
-- duration patterns cycle through `short/prolonged`, `prolonged/short`, `standard/prolonged`, and `prolonged/standard`
-- rehabilitation patterns cycle independently through home, inpatient, and persistent-deficit pairings
+## Stage 1: Query Plans
 
-That design keeps clinical values balanced without making value choice depend on the hidden dominant facet.
+`run_make_query_plans()` builds hidden plans before any free text exists. It loads the ontology, selects the configured conditions, enumerates subgroup pairs and query types, and emits plans round-robin over conditions.
 
-### Real Early Query Ordering
+The initial plan uses a rotating dominant slot:
 
-The first emitted queries are not random. They follow the round-robin order over conditions, and the dominant facet rotates with the plan index.
+```python
+dominant_slot = (plan_idx - 1) % 4
+```
 
-| emitted plan | query id | condition | query type | dominant facet |
-| --- | --- | --- | --- | --- |
-| 1 | `q00001` | `encephalitis or myelitis` | `subgroup_comparison` | `q00001_f1` |
-| 2 | `q00002` | `pneumonia` | `subgroup_comparison` | `q00002_f2` |
-| 3 | `q00003` | `ischemic stroke` | `subgroup_comparison` | `q00003_f3` |
-| 4 | `q00004` | `acute decompensated heart failure` | `subgroup_comparison` | `q00004_f4` |
-| 5 | `q00005` | `encephalitis or myelitis` | `outcome_synthesis` | `q00005_f1` |
+In this experiment, `dominance_mode: embedding_calibrated` then runs `calibrate_plans.py`. Calibration renders neutral probe chunks for each facet, embeds those probes against the natural query, and selects the facet that is most naturally close to the query in embedding space. The query plan is rewritten with that selected dominant facet before facts are generated.
 
-That table is the clearest proof that the dataset is deterministic. The same config and ontology always produce the same order.
+For `q00001`, calibration changed the dominant facet from the initial `q00001_f1` to `q00001_f4`.
 
-## Step 2: Hidden Facts Are Generated From The Plan
+### Query Template Variants Are Assigned Here
 
-`run_make_facts()` takes each query plan and materializes hidden evidence rows. It does this per facet:
+Query wording diversity is also decided at the plan stage. For each `query_type`, `query_plans.py` reads the available template variant ids from `query_answer_templates.yaml` and assigns them in round-robin order as plans are emitted. The chosen variant is stored in `plan.template_id`.
 
-- gold rows for the facet itself
-- hard distractor rows that are close to the query but wrong in one key way
+That means:
 
-### Gold Rows
+- `query_type` still controls the semantic shape of the benchmark item
+- `template_id` now records the exact surface wording variant used later by the renderer
+- the renderer does not randomly choose a query template at render time
 
-Each facet gets a target number of gold chunks:
+## Stage 2: Hidden Facts
 
-- dominant facet: `gold_chunks_dominant` = 18
-- complementary facets: `gold_chunks_complementary` = 8
+`run_make_facts()` turns each query plan into hidden `ClinicalFact` rows.
 
-So each query gets `18 + 8 + 8 + 8 = 42` gold facts.
+For gold facts, each facet produces its target number of rows:
 
-The facts are still hidden structure at this point. They are not yet natural-language chunks.
+- the dominant facet produces 26 rows
+- each complementary facet produces 14 rows
 
-### Distractor Rows
+For non-gold facts, the generator adds:
 
-Each query also gets `distractors_per_query` hard negatives. The current config uses 30.
+- `same_condition_wrong_subgroup`
+- `same_subgroup_wrong_condition`
+- `same_axis_wrong_condition`
+- `background_clinical_cluster`
 
-The distractor types are:
+These negatives are intentionally close. They often share the condition, subgroup, or axis with the query, but break at least one hidden constraint.
 
-- same condition, wrong subgroup
-- same subgroup, wrong condition
-- same axis, wrong condition
+Every fact stores both the natural clinical fields and the benchmark fields:
 
-These are close enough to look plausible, but they break one of the hidden constraints. That is exactly what makes them useful retrieval negatives.
+- condition, subgroup, axis, and value bin
+- `facet_id` for gold support
+- `target_facet_id` for near-miss negatives
+- `cluster_role`
+- `is_gold`
+- treatment duration or rehab outcome fields, depending on axis
 
-### Why `chunk_reuse_key` Exists
+## Stage 3: Deterministic Chunk Rendering
 
-`chunk_reuse_key` is built from:
+`render_chunk_text_template()` in `chunk_templates.py` has two branches:
 
-- condition
-- subgroup
-- axis
-- value bin
-- local index
+- `render_duration_chunk()`
+- `render_rehab_chunk()`
 
-It intentionally does not include `query_id`.
+Both use seeded randomness. The seed comes from the fact's `chunk_reuse_key`, so structurally equivalent facts can reuse the same rendered chunk across queries. That is why the project has both:
 
-That means structurally equivalent facts can share the same surface realization. This is useful for two reasons:
+- `chunk_documents.parquet`: unique rendered chunk documents
+- `chunk_memberships.parquet`: query-local membership rows that connect chunks to queries, facets, and roles
 
-- it makes the benchmark more redundant, which is what a coverage method should exploit
-- it allows cache reuse when the same structural fact is rendered again
+### Duration Chunks
 
-This redundancy is not a bug. It is part of the benchmark geometry.
-
-## Step 3: The Fact Fields Are Axis-Specific
-
-`ClinicalFact` enforces axis consistency in its validator:
-
-- `treatment_duration` facts must have `duration_days` and `treatment`, and must not have `rehab_outcome`
-- `rehab_outcome` facts must have `rehab_outcome`, and must not have `duration_days` or `treatment`
-
-That axis-specific validation is what keeps the hidden labels clean.
-
-`_axis_values()` then fills in concrete values:
-
-- duration facts sample a duration inside the condition’s allowed range and choose a treatment from the condition’s duration-treatment list
-- rehab facts choose one rehabilitation phrase from the condition’s rehab-outcome list
-
-Because the values are sampled from condition-specific lists, the text still looks medically coherent while staying aligned with the hidden label.
-
-## Step 4: Chunk Text Is Rendered From Templates
-
-When LLM chunk generation is disabled, `render_chunk_text()` is the only renderer. It has two branches:
-
-- `_render_duration_chunk()`
-- `_render_rehab_chunk()`
-
-Both templates use seeded randomness, so the output is deterministic for the same hidden fact.
-
-### Duration Template
-
-The duration template follows this pattern:
+A duration chunk includes:
 
 1. patient descriptor
 2. condition mention
 3. condition presentation phrase
-4. explicit treatment duration sentence
-5. short closing sentence about follow-up or stability
+4. explicit treatment-duration phrase
+5. condition-specific status/closing language
 
-Example from the first query plan:
+The pieces come mainly from:
 
-```text
-The 80-year-old woman was admitted with encephalitis or myelitis, with headache, altered mental status, and lower-extremity weakness. The active treatment course used corticosteroids for 5 days, and the record described resolution of fever and stable neurologic examination before discharge. The discharge medication list matched the completed neurologic treatment plan and outpatient neurology follow-up.
-```
+- `condition_context.yaml`
+- `duration_templates.yaml`
 
-Why this passes validation:
+### Rehab Chunks
 
-- it names the condition
-- it identifies the subgroup through age and patient descriptor
-- it includes the duration and treatment
-- it avoids hidden benchmark terms such as `gold` or `qrel`
-- it does not use a banned note-section header
-
-### Rehab Template
-
-The rehab template follows a different pattern:
+A rehab chunk includes:
 
 1. patient descriptor
 2. condition mention
 3. condition presentation phrase
-4. functional status sentence
-5. explicit rehabilitation outcome
-6. short closing sentence
+4. functional status phrase
+5. explicit rehabilitation outcome phrase
+6. rehab planning/closing language
 
-Example from the same query plan:
+The pieces come mainly from:
 
-```text
-The 90-year-old man was managed for encephalitis or myelitis, with headache, altered mental status, and lower-extremity weakness. At discharge, mental status returned near baseline with residual fatigue; the discharge record described home therapy with improving gait stability. The patient left with clear activity precautions and follow-up for functional recovery.
+- `condition_context.yaml`
+- `rehab_templates.yaml`
+
+### Validation
+
+`validate_chunk_text()` checks the rendered text before accepting it. It verifies condition evidence, subgroup evidence, axis-specific evidence, and banned hidden benchmark terms. Its lexical support lists live in `validation_terms.yaml`.
+
+## Stage 4: Queries and Answers
+
+`render_query()` in `queries_answers.py` delegates to `render_query_template()` in [query_templates.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/query_templates.py). That renderer looks up the exact template variant named by `plan.template_id`, then fills in the query-plan fields and ontology axis labels.
+
+For `subgroup_comparison`, the YAML now stores explicit variant ids:
+
+```yaml
+query_templates:
+  subgroup_comparison:
+    - id: subgroup_comparison
+      template: "For patients diagnosed with {condition}, how do {treatment_duration_label} and {rehab_outcome_label} differ between {subgroup_a} and {subgroup_b}?"
+    - id: subgroup_comparison_compare
+      template: "Among patients diagnosed with {condition}, compare {treatment_duration_label} and {rehab_outcome_label} between {subgroup_a} and {subgroup_b}."
 ```
 
-Why this works:
-
-- the condition is explicit
-- the subgroup is recoverable from the age and the hidden subgroup phrase
-- the rehab-outcome bin is expressed through a phrase such as `home therapy with improving gait stability`
-- the chunk remains short, realistic, and aligned with the hidden axis
-
-### A Hard Negative Example
-
-Here is one distractor fact and the chunk it renders:
-
-```text
-The 74-year-old man with diabetes without documented end-organ complications was admitted with encephalitis or myelitis, with headache, altered mental status, and lower-extremity weakness. The inpatient treatment course used acyclovir for 6 days, and the record described resolution of fever and stable neurologic examination before discharge. Repeat examination was stable, and the team documented no escalation beyond the completed inpatient course.
-```
-
-This is a hard negative because it is:
-
-- the right condition
-- the right axis
-- a plausible treatment-duration note
-- but the wrong subgroup for the query
-
-That is the exact kind of negative that makes coverage-based selection more valuable than plain top-k.
-
-## Step 5: Queries Are Rendered After The Hidden Plan Exists
-
-`render_query()` turns the plan into a natural-language query.
-
-There are two templates:
-
-- `subgroup_comparison`
-- `outcome_synthesis`
-
-The query text is not generated from scratch. It is a direct template over the plan fields.
-
-### Subgroup Comparison
-
-For a `subgroup_comparison` plan, the query is:
+If `plan.template_id == "subgroup_comparison"`, then with the current ontology `treatment_duration_label` becomes `treatment duration` and `rehab_outcome_label` becomes `rehabilitation outcome`, so that renders:
 
 ```text
 For patients diagnosed with <condition>, how do treatment duration and rehabilitation outcome differ between <subgroup A> and <subgroup B>?
 ```
 
-For the first query plan, that becomes:
+For `outcome_synthesis`, alternate surface variants live in the same list:
 
-```text
-For patients diagnosed with encephalitis or myelitis, how do treatment duration and rehabilitation outcome differ between patients older than 75 and patients younger than 50?
+```yaml
+query_templates:
+  outcome_synthesis:
+    - id: outcome_synthesis
+      template: "Among patients diagnosed with {condition}, compare therapy-course length and discharge rehabilitation status for {subgroup_a} versus {subgroup_b}."
+    - id: outcome_synthesis_summary
+      template: "For patients with {condition}, summarize therapy-course length and discharge rehabilitation status for {subgroup_a} compared with {subgroup_b}."
 ```
 
-### Outcome Synthesis
-
-For an `outcome_synthesis` plan, the query is:
+That renders:
 
 ```text
 Among patients diagnosed with <condition>, compare therapy-course length and discharge rehabilitation status for <subgroup A> versus <subgroup B>.
 ```
 
-The first outcome-synthesis plan in the actual emission order is `q00005`, not `q00002`, because the pipeline round-robins across conditions. Its query text is:
+`canonical_answer()` then summarizes the hidden gold facts per facet:
+
+- treatment facets report the modal duration bin, average duration, and most common treatment
+- rehab facets report the modal rehab bin and a representative rehab phrase
+
+The answer is therefore a deterministic summary of the facet evidence.
+
+## Real Example: `q00001`
+
+These rows come from:
+
+- `queries.parquet`
+- `query_plans.parquet`
+- `gold_answers.parquet`
+- `chunk_documents.parquet`
+- `chunk_memberships.parquet`
+
+### Query
+
+```text
+For patients diagnosed with encephalitis or myelitis, how do treatment duration and rehabilitation outcome differ between patients older than 75 and patients younger than 50?
+```
+
+### Hidden Facets
+
+| facet | role | subgroup | axis | value bin | target gold chunks |
+| --- | --- | --- | --- | --- | --- |
+| `q00001_f1` | complementary | patients older than 75 | `treatment_duration` | `short` | 14 |
+| `q00001_f2` | complementary | patients older than 75 | `rehab_outcome` | `home_rehab` | 14 |
+| `q00001_f3` | complementary | patients younger than 50 | `treatment_duration` | `prolonged` | 14 |
+| `q00001_f4` | dominant | patients younger than 50 | `rehab_outcome` | `inpatient_rehab` | 26 |
+
+### Canonical Answer
+
+```text
+For patients older than 75, a short course, averaging 6.0 days, most often with corticosteroids for treatment duration and a home rehab pattern, commonly described as home therapy with improving gait stability for rehabilitation outcome. For patients younger than 50, a prolonged course, averaging 24.4 days, most often with corticosteroids for treatment duration and an inpatient rehab pattern, commonly described as required acute rehabilitation for mobility and cognitive deficits for rehabilitation outcome.
+```
+
+### Gold Chunk From `q00001_f1`
+
+This chunk supports the older-than-75 treatment-duration facet.
+
+```text
+The 83-year-old woman older than 75 required hospitalization for encephalitis or myelitis after developing new neurologic deficits and inflammatory cerebrospinal fluid findings. For treatment duration, the team documented a 7-day course of acyclovir, and by discharge clinicians documented improving mentation and reduced headache. Neurology follow-up was arranged to monitor recovery after completion of the anti-inflammatory or antiviral course.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000001` |
+| `facet_id` | `q00001_f1` |
+| `cluster_role` | `complementary_gold` |
+| `axis` | `treatment_duration` |
+| `subgroup_label` | `patients older than 75` |
+| `value_bin` | `short` |
+| `duration_days` | `7` |
+| `treatment` | `acyclovir` |
+
+### Gold Chunk From `q00001_f2`
+
+This chunk supports the older-than-75 rehabilitation-outcome facet.
+
+```text
+The 86-year-old man older than 75 received inpatient care for encephalitis or myelitis after headache, altered mental status, and lower-extremity weakness. Before leaving the hospital, orientation improved and gait was safe with supervised exercises, and the discharge summary described the rehabilitation outcome as home therapy with improving gait stability. The patient left with clear activity precautions and follow-up for functional recovery.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000015` |
+| `facet_id` | `q00001_f2` |
+| `cluster_role` | `complementary_gold` |
+| `axis` | `rehab_outcome` |
+| `subgroup_label` | `patients older than 75` |
+| `value_bin` | `home_rehab` |
+| `rehab_outcome` | `home therapy with improving gait stability` |
+
+### Gold Chunk From `q00001_f3`
+
+This chunk supports the younger-than-50 treatment-duration facet.
+
+```text
+The 28-year-old man younger than 50 required hospitalization for encephalitis or myelitis after developing fever, confusion, and gait change. For treatment duration, the team documented a 21-day course of corticosteroids, and by discharge clinicians documented resolution of fever and stable neurologic examination. Repeat examination was stable, and the team documented no escalation beyond the completed inpatient course.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000029` |
+| `facet_id` | `q00001_f3` |
+| `cluster_role` | `complementary_gold` |
+| `axis` | `treatment_duration` |
+| `subgroup_label` | `patients younger than 50` |
+| `value_bin` | `prolonged` |
+| `duration_days` | `21` |
+| `treatment` | `corticosteroids` |
+
+### Gold Chunk From `q00001_f4`
+
+This chunk supports the younger-than-50 rehabilitation-outcome facet. This is also the dominant facet for `q00001`.
+
+```text
+The 26-year-old man younger than 50 was managed for encephalitis or myelitis, with new neurologic deficits and inflammatory cerebrospinal fluid findings. On the day of discharge, cognitive slowing and balance deficits still limited safe transfers; the discharge record described the rehabilitation outcome as transferred to inpatient rehabilitation for persistent weakness. The plan emphasized supervised strengthening, mobility training, and reassessment before return home.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000043` |
+| `facet_id` | `q00001_f4` |
+| `cluster_role` | `dominant_gold` |
+| `axis` | `rehab_outcome` |
+| `subgroup_label` | `patients younger than 50` |
+| `value_bin` | `inpatient_rehab` |
+| `rehab_outcome` | `transferred to inpatient rehabilitation for persistent weakness` |
+
+## Real Near-Miss Chunks For `q00001`
+
+Near-miss chunks are not random junk. They are clinically plausible, close to the query, and wrong in a controlled way.
+
+### Same Condition, Wrong Subgroup
+
+This chunk has the right condition and the right axis, but it is about uncomplicated diabetes rather than either queried age subgroup.
+
+```text
+The 74-year-old woman with diabetes without documented end-organ complications was treated inpatient for encephalitis or myelitis, with new neurologic deficits and inflammatory cerebrospinal fluid findings on presentation. For treatment duration, corticosteroids remained in place across a 7-day course; clinicians documented improved strength and stable neurologic checks before transition out of the hospital. Repeat examination was stable, and the team documented no escalation beyond the completed inpatient course.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000069` |
+| `cluster_role` | `hard_distractor` |
+| `target_facet_id` | `q00001_f1` |
+| `distractor_type` | `same_condition_wrong_subgroup` |
+| `condition_display` | `encephalitis or myelitis` |
+| `subgroup_label` | `patients with uncomplicated diabetes` |
+| `axis` | `treatment_duration` |
+| `relevance_grade` | `0` |
+
+### Same Subgroup, Wrong Condition
+
+This chunk has the queried older-than-75 subgroup and a rehab outcome, but the condition is ischemic stroke rather than encephalitis or myelitis.
+
+```text
+The 78-year-old woman older than 75 remained hospitalized for ischemic stroke with acute dysarthria and unilateral weakness. At discharge, mild dysarthria persisted but transfers were independent; the discharge record described the rehabilitation outcome as discharged home with outpatient stroke therapy. The plan emphasized caregiver teaching, home safety, and close outpatient reassessment.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000070` |
+| `cluster_role` | `hard_distractor` |
+| `target_facet_id` | `q00001_f2` |
+| `distractor_type` | `same_subgroup_wrong_condition` |
+| `condition_display` | `ischemic stroke` |
+| `subgroup_label` | `patients older than 75` |
+| `axis` | `rehab_outcome` |
+| `relevance_grade` | `0` |
+
+### Background Clinical Cluster
+
+This chunk belongs to a coherent background cluster. It is medically fluent, but outside the query's condition/subgroup/facet structure.
+
+```text
+The 66-year-old woman with chronic inflammatory autoimmune disease was treated inpatient for ulcerative colitis flare, with frequent stools, cramping, and worsening inflammatory bowel disease activity on presentation. For treatment duration, the hospital treatment interval used infliximab for 7 days; the team documented reduced stool frequency and improved abdominal pain before transition out of the hospital. The plan emphasized gastroenterology follow-up after flare-directed therapy.
+```
+
+Structured fields:
+
+| field | value |
+| --- | --- |
+| `chunk_id` | `chunk_0000094` |
+| `cluster_role` | `background_outlier` |
+| `distractor_type` | `background_clinical_cluster` |
+| `condition_display` | `ulcerative colitis flare` |
+| `subgroup_label` | `patients with autoimmune disease` |
+| `axis` | `treatment_duration` |
+| `relevance_grade` | `0` |
+
+## Second Real Query: `q01548`
+
+The first `outcome_synthesis` query in this run is `q01548`.
 
 ```text
 Among patients diagnosed with encephalitis or myelitis, compare therapy-course length and discharge rehabilitation status for patients older than 75 versus patients younger than 50.
 ```
 
-### Why The Query Template Works
+Its canonical answer is:
 
-The query template is stable because it names:
+```text
+For patients older than 75, a standard course, averaging 11.3 days, most often with acyclovir for treatment duration and an inpatient rehab pattern, commonly described as transferred to inpatient rehabilitation for persistent weakness for rehabilitation outcome. For patients younger than 50, a prolonged course, averaging 24.4 days, most often with corticosteroids for treatment duration and a home rehab pattern, commonly described as discharged home with outpatient neurorehabilitation for rehabilitation outcome.
+```
 
-- the condition
-- the two subgroup labels
-- the two axis labels or their paraphrased equivalents
+Two real gold chunks for that query:
 
-That makes the hidden structure recoverable from the query text while still leaving retrieval work to do.
+```text
+The 84-year-old woman older than 75 was treated inpatient for encephalitis or myelitis, with new neurologic deficits and inflammatory cerebrospinal fluid findings on presentation. For treatment duration, corticosteroids remained in place across a 11-day course; the chart reflected improving mentation and reduced headache before transition out of the hospital. Neurology follow-up was arranged to monitor recovery after completion of the anti-inflammatory or antiviral course.
+```
 
-## Step 6: Canonical Answers Are Built From The Hidden Facets
+```text
+The 89-year-old man older than 75 received inpatient care for encephalitis or myelitis after headache, altered mental status, and lower-extremity weakness. In the final therapy assessment, orientation improved but gait instability still made independent mobility unsafe, and the final rehabilitation assessment documented the rehabilitation outcome as required acute rehabilitation for mobility and cognitive deficits. The plan emphasized supervised strengthening, mobility training, and reassessment before return home.
+```
 
-`run_make_queries_answers()` reads the gold facts back, groups them by facet, and summarizes them into a canonical answer.
+## Qrels Are A Projection Of Memberships
 
-The summarization rule is simple:
+`run_make_qrels()` does not infer relevance from text. It projects the hidden membership labels:
 
-- for `treatment_duration`, it reports the modal duration bin, the average duration, and the most common treatment
-- for `rehab_outcome`, it reports the modal bin and a representative rehab phrase
+| hidden membership | qrel output |
+| --- | --- |
+| `is_gold = true` | `relevance_grade = 1`, `support_type = positive` |
+| `is_gold = false` and `cluster_role = background_outlier` | `relevance_grade = 0`, `support_type = background_outlier` |
+| any other `is_gold = false` row | `relevance_grade = 0`, `support_type = hard_negative` |
 
-So the answer is a structured summary of the facet evidence, not a free-form opinion.
+For `q00001`, that means:
 
-The code then stores:
+- `chunk_0000001`, `chunk_0000015`, `chunk_0000029`, and `chunk_0000043` are positive support chunks
+- `chunk_0000069` and `chunk_0000070` are hard negatives
+- `chunk_0000094` is a background outlier
 
-- `queries.parquet` with the rendered query text
-- `gold_answers.parquet` with the canonical answer plus the supporting fact IDs and facet summaries
+The qrels remain deterministic because they come from structured fact generation, not from a model judging the rendered text.
 
-That separation is useful. It keeps the query text and the answer text consistent without requiring a human annotation step.
+## Why This Creates A Coverage Problem
 
-## Step 7: Qrels Are Derived, Not Manually Written
+The query is not answered by one relevant chunk. It needs evidence for all four facets:
 
-`run_make_qrels()` projects the hidden chunk metadata into relevance labels.
+- subgroup A treatment duration
+- subgroup A rehabilitation outcome
+- subgroup B treatment duration
+- subgroup B rehabilitation outcome
 
-The rule is:
+The dominant facet is intentionally overrepresented, so similarity-only top-k can spend too many slots on redundant evidence from one cluster. The complementary facets are still present, so a coverage-oriented selector can improve facet coverage by choosing across clusters. The near-miss negatives keep the problem nontrivial because many non-gold chunks are clinically similar to the query.
 
-- `is_gold = true` -> `relevance_grade = 1`, `support_type = positive`
-- `is_gold = false` -> `relevance_grade = 0`, `support_type = hard_negative`
-
-That is all qrels need here, because the facet geometry is already encoded in the hidden facts.
-
-The important point is that the benchmark does not rely on manual relevance annotation. Relevance is a direct consequence of the ontology, the plan, and the hidden fact construction.
-
-## Why This Construction Creates A Real Coverage Problem
-
-This is the thesis-relevant part.
-
-The benchmark is designed so that a query is not satisfied by finding one relevant chunk. It is satisfied by covering several distinct answer facets.
-
-The setup creates that pressure in three ways:
-
-- one facet is intentionally overrepresented, so top-k can drift into redundancy
-- complementary facets are still present, so a diversity-aware selector can do better
-- hard negatives are semantically close, so the task is not trivial lexical matching
-
-That is why facility-location style coverage is the method the benchmark is meant to reward. It can select a smaller but more facet-complete set of chunks than a selection rule that mainly chases similarity or local dispersion.
+That is the intended benchmark geometry: enough redundancy for top-k to become wasteful, enough explicit facet structure for facility-location coverage to help, and enough controlled negatives to prevent the task from collapsing into simple lexical matching.
 
 ## Minimal Mental Model
 
-If you only keep one mental model from this document, it should be this:
+1. The ontology defines legal conditions, subgroups, axes, bins, treatments, and rehab outcomes.
+2. Query plans define the four hidden facets before any text exists.
+3. Calibration can choose the dominant facet from embedding-space probe evidence.
+4. Fact generation creates redundant gold clusters and close non-gold clusters.
+5. Template data renders those facts into deterministic clinical text.
+6. Query rendering turns the same plan into a natural-language question.
+7. Canonical answers summarize hidden gold facts per facet.
+8. Qrels project membership labels directly into retrieval relevance.
 
-1. The ontology defines the legal medical vocabulary and the allowed bins.
-2. The query plan fixes the hidden facets before any text exists.
-3. The fact generator creates redundant golds and close negatives from that plan.
-4. The chunk renderer turns reusable facts into canonical note documents with seeded templates.
-5. Query memberships link those documents back to facets, roles, and gold/distractor labels.
-6. The query renderer turns the same hidden plan into a natural-language question.
-7. The qrels are then a direct projection of the membership labels.
-
-That is how the dataset stays deterministic while still producing a nontrivial retrieval benchmark.
+This is why the dataset remains reproducible while still exposing a real multi-aspect retrieval problem.

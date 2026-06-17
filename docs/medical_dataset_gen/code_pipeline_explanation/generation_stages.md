@@ -11,7 +11,8 @@ Source files:
 - [chunk_rendering.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/chunk_rendering.py)
 - [chunk_grouped_llm.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/chunk_grouped_llm.py)
 - [chunk_cache.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/chunk_cache.py)
-- [text_templates.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/text_templates.py)
+- [chunk_templates.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/chunk_templates.py)
+- [query_templates.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/query_templates.py)
 - [queries_answers.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/queries_answers.py)
 - [qrels.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/qrels.py)
 - [schemas.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/schemas.py)
@@ -36,6 +37,8 @@ The relevant config fields are:
 The stage loads the ontology, takes the first `global.conditions` condition entries in YAML order, builds every unique unordered subgroup pair, and validates that the clinical axes are exactly `treatment_duration` and `rehab_outcome`.
 
 The query scheduler is condition-balanced. For each selected condition, it builds a list of `QueryPlanSpec` objects over every configured `query_type` and every subgroup pair. It then emits plans round-robin over conditions until `global.n_queries` rows have been produced or the spec lists are exhausted. This prevents the first condition from occupying a large prefix of the dataset.
+
+At emission time, the stage also assigns a concrete query-template variant id in round-robin order within each `query_type`. That chosen variant is stored in `template_id`, so the final query wording is balanced and auditable rather than chosen randomly later.
 
 Each plan has four facets:
 
@@ -229,7 +232,7 @@ This is why embedding runs over documents, while relevance remains query-local.
 - bin-specific closing sentence
 - rehab chunk template
 
-The phrase inventories are loaded from [text_templates_utils.yaml](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/generation/text_templates_utils.yaml) into the `ChunkTemplateUtils` schema.
+The phrase inventories are loaded from the split YAML files in [templates_data](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data) and merged into the `ChunkTemplateUtils` schema.
 
 ### Chunk Validation
 
@@ -312,7 +315,9 @@ The relevant config fields are:
 
 Before creating queries, the stage reads `generation_rejects.parquet`. Any query id with a generation reject is skipped. This is why query dropping in the chunk stage propagates cleanly: downstream tables only include queries with complete accepted chunks.
 
-`render_query()` supports two query types:
+`render_query()` delegates to [query_templates.py](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/query_templates.py), which loads [query_answer_templates.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/query_answer_templates.yaml). The YAML file defines the query templates and canonical answer templates together, and the query renderer uses `plan.template_id` to select the exact wording variant before injecting ontology axis labels.
+
+The implemented query types are:
 
 - `subgroup_comparison`: asks how treatment duration and rehabilitation outcome differ between the two subgroups.
 - `outcome_synthesis`: asks to compare therapy-course length and discharge rehabilitation status for subgroup A versus subgroup B.
@@ -334,7 +339,7 @@ For `rehab_outcome`, it computes:
 - modal value bin
 - most common rehab outcome phrase
 
-`canonical_answer()` then writes a compact four-part answer: subgroup A duration, subgroup A rehab, subgroup B duration, subgroup B rehab. The answer row also stores JSON for facet summaries, answer fact objects, supporting fact ids, and supporting facet ids.
+`canonical_answer()` now delegates to the answer-template block in the same YAML file, filling in the four facet summaries for subgroup A duration, subgroup A rehab, subgroup B duration, and subgroup B rehab. The answer row also stores JSON for facet summaries, answer fact objects, supporting fact ids, and supporting facet ids.
 
 ## Stage 6: Qrels
 

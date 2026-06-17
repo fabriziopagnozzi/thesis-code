@@ -35,9 +35,7 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 
 
-def run_calibrate_query_plans(
-    cfg: ExperimentCfg, paths: MedicalDatasetGenPaths
-) -> pl.DataFrame:
+def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     plans_df = read_parquet(paths, 'query_plans')
     if cfg.generation.dominance_mode == 'rotating':
         calibration = _rotating_calibration_frame(plans_df)
@@ -152,22 +150,20 @@ def _select_dominant_facet(
         start, end = probe['facet_offsets'][facet.facet_id]
         facet_sims = np.asarray(sims[start:end], dtype=np.float32)
         p25, p50, p75 = np.percentile(facet_sims, [25, 50, 75])
-        facet_stats.append(
-            {
-                'facet_id': facet.facet_id,
-                'subgroup_id': facet.subgroup_id,
-                'subgroup_label': facet.subgroup_label,
-                'axis': facet.axis,
-                'value_bin': facet.value_bin,
-                'probe_text_count': probe_n,
-                'mean_query_sim': float(facet_sims.mean()),
-                'min_query_sim': float(facet_sims.min()),
-                'p25_query_sim': float(p25),
-                'median_query_sim': float(p50),
-                'p75_query_sim': float(p75),
-                'max_query_sim': float(facet_sims.max()),
-            }
-        )
+        facet_stats.append({
+            'facet_id': facet.facet_id,
+            'subgroup_id': facet.subgroup_id,
+            'subgroup_label': facet.subgroup_label,
+            'axis': facet.axis,
+            'value_bin': facet.value_bin,
+            'probe_text_count': probe_n,
+            'mean_query_sim': float(facet_sims.mean()),
+            'min_query_sim': float(facet_sims.min()),
+            'p25_query_sim': float(p25),
+            'median_query_sim': float(p50),
+            'p75_query_sim': float(p75),
+            'max_query_sim': float(facet_sims.max()),
+        })
 
     for stat in facet_stats:
         complement_p75 = [
@@ -234,9 +230,7 @@ def _with_dominant_facet(
             )
         )
 
-    logical_form = plan.logical_form.model_copy(
-        update={'dominant_facet_id': dominant_facet_id}
-    )
+    logical_form = plan.logical_form.model_copy(update={'dominant_facet_id': dominant_facet_id})
     return plan.model_copy(
         update={
             'dominant_facet_id': dominant_facet_id,
@@ -303,9 +297,8 @@ def _print_calibration_summary(calibration: pl.DataFrame) -> None:
         print('[calibrate_plans] no query plans available')
         return
     selected_slots = (
-        calibration.with_columns(
-            pl.col('selected_dominant_facet_id').str.extract(r'_f(\d)$', 1).alias('slot')
-        )
+        calibration
+        .with_columns(pl.col('selected_dominant_facet_id').str.extract(r'_f(\d)$', 1).alias('slot'))
         .group_by('slot')
         .agg(pl.len().alias('n'))
         .sort('slot')

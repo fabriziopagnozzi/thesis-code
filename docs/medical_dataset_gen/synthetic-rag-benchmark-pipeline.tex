@@ -344,10 +344,10 @@ and {axis_2_label} differ between {subgroup_a_label} and {subgroup_b_label}?
 The answer can also be deterministic at first:
 
 \begin{lstlisting}[style=promptstyle]
-In {subgroup_a_label}, the synthetic corpus shows {facet_F1_summary}
-for treatment duration and {facet_F2_summary} for rehabilitation outcome.
-In {subgroup_b_label}, it shows {facet_F3_summary} for treatment duration
-and {facet_F4_summary} for rehabilitation outcome.
+For {subgroup_a_label}, {facet_F1_summary} for treatment duration and
+{facet_F2_summary} for rehabilitation outcome. For {subgroup_b_label},
+{facet_F3_summary} for treatment duration and {facet_F4_summary} for
+rehabilitation outcome.
 \end{lstlisting}
 
 After retrieval metrics work, ask an LLM to paraphrase only the query text and answer text. Keep \field{query\_plans.parquet}, \field{clinical\_facts.parquet}, and \field{qrels.parquet} unchanged.

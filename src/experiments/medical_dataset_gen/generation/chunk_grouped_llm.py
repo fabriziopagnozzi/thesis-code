@@ -30,12 +30,12 @@ from experiments.medical_dataset_gen.generation.chunk_rendering import (
     rewrite_llm_chunk,
     row_from_state,
 )
+from experiments.medical_dataset_gen.generation.chunk_templates import validate_chunk_text
 from experiments.medical_dataset_gen.generation.schemas import (
     ChunkRow,
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.generation.text_templates import validate_chunk_text
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 
 

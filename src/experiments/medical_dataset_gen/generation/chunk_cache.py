@@ -16,6 +16,7 @@ from experiments.medical_dataset_gen.generation.chunk_rendering import (
     new_chunk_state,
     word_count_errors,
 )
+from experiments.medical_dataset_gen.generation.chunk_templates import validate_chunk_text
 from experiments.medical_dataset_gen.generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
@@ -25,7 +26,6 @@ from experiments.medical_dataset_gen.generation.schemas import (
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.generation.text_templates import validate_chunk_text
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 
 GENERATION_CACHE_VERSION = 9
@@ -109,20 +109,16 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
     }
     if cfg.generation.use_llm_chunk_generation:
-        payload.update(
-            {
-                'llm_name': cfg.generation.llm_name,
-                'llm_temperature': cfg.generation.llm_temperature,
-                'llm_num_ctx': cfg.generation.llm_num_ctx,
-            }
-        )
+        payload.update({
+            'llm_name': cfg.generation.llm_name,
+            'llm_temperature': cfg.generation.llm_temperature,
+            'llm_num_ctx': cfg.generation.llm_num_ctx,
+        })
     if fact.axis == 'treatment_duration':
-        payload.update(
-            {
-                'duration_days': fact.duration_days,
-                'treatment': fact.treatment,
-            }
-        )
+        payload.update({
+            'duration_days': fact.duration_days,
+            'treatment': fact.treatment,
+        })
     else:
         payload['rehab_outcome'] = fact.rehab_outcome
 
@@ -161,12 +157,10 @@ def chunk_rewrite_cache_key(
         'must_not_mention': fact.must_not_mention,
     }
     if fact.axis == 'treatment_duration':
-        payload.update(
-            {
-                'duration_days': fact.duration_days,
-                'treatment': fact.treatment,
-            }
-        )
+        payload.update({
+            'duration_days': fact.duration_days,
+            'treatment': fact.treatment,
+        })
     else:
         payload['rehab_outcome'] = fact.rehab_outcome
 

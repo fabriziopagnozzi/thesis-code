@@ -57,7 +57,7 @@ The seed does not make every stage use a single global RNG stream. Query plans g
 | field | default | implementation role |
 | --- | --- | --- |
 | `ontology_path` | `null` | Optional custom YAML path; otherwise [ontology.yaml](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/ontology.yaml). |
-| `query_types` | `['subgroup_comparison']` | Query templates instantiated for every condition/subgroup pair. Current code supports `subgroup_comparison` and `outcome_synthesis`. |
+| `query_types` | `['subgroup_comparison']` | Query templates instantiated for every condition/subgroup pair. Current code supports the query types defined in [query_answer_templates.yaml](/home/fab/Projects/thesis/src/experiments/medical_dataset_gen/generation/templates_data/query_answer_templates.yaml). |
 | `dominance_mode` | `rotating` | `rotating` preserves the old deterministic dominant slot; `embedding_calibrated` selects the naturally closest facet from neutral probe embeddings before facts are generated. |
 | `dominance_probe_chunks_per_facet` | `8` | Number of deterministic role-neutral probe chunks per facet used by `calibrate_plans`. |
 | `calibration_min_probe_margin` | `null` | Optional diagnostic threshold for the selected facet's p25 query similarity over the best complementary p75 query similarity. |

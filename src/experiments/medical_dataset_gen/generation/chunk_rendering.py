@@ -8,6 +8,14 @@ from typing import Literal
 
 import polars as pl
 
+from experiments.medical_dataset_gen.generation.chunk_templates import (
+    TEMPLATE_DATA,
+    ChunkValidation,
+    patient_descriptor,
+    render_chunk_text_template,
+    squash_whitespaces,
+    validate_chunk_text,
+)
 from experiments.medical_dataset_gen.generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
@@ -17,14 +25,6 @@ from experiments.medical_dataset_gen.generation.schemas import (
     ChunkState,
     ClinicalFact,
     MedicalOntology,
-)
-from experiments.medical_dataset_gen.generation.text_templates import (
-    TEMPLATE_UTILS,
-    ChunkValidation,
-    patient_descriptor,
-    render_chunk_text_template,
-    squash_whitespaces,
-    validate_chunk_text,
 )
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 from helpers.ollama_client import generate
@@ -146,7 +146,7 @@ def generate_chunk_text_with_llm(
         fact=fact,
         ontology=ontology,
         patient_descriptor=patient_descriptor(fact),
-        forbidden_terms=TEMPLATE_UTILS.hidden_benchmark_terms,
+        forbidden_terms=TEMPLATE_DATA.hidden_benchmark_terms,
         min_words=chunk_min_words,
         max_words=chunk_max_words,
         revision_feedback=revision_feedback,

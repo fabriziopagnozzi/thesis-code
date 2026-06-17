@@ -1,0 +1,199 @@
+# Lexical guards and fallback evidence used by validate_chunk_text().
+
+# Extra subgroup evidence used when the exact subgroup label is not present in the rendered text.
+subgroup_terms:
+  uncomplicated_diabetes:
+    - uncomplicated diabetes
+    - type 2 diabetes
+    - diabetes without complications
+  chronic_kidney_disease:
+    - chronic kidney disease
+    - ckd
+  copd:
+    - copd
+    - chronic obstructive pulmonary disease
+  immunosuppression:
+    - immunosuppression
+    - immunosuppressed
+  obesity:
+    - obesity
+    - obese
+    - body mass index
+  malignancy:
+    - malignancy
+    - active cancer
+    - cancer treatment
+  atrial_fibrillation:
+    - atrial fibrillation
+    - af
+  chronic_liver_disease:
+    - chronic liver disease
+    - cirrhosis
+    - hepatic disease
+  dementia:
+    - dementia
+    - cognitive impairment
+    - neurocognitive disorder
+  frailty:
+    - frailty
+    - frail
+  peripheral_vascular_disease:
+    - peripheral vascular disease
+    - peripheral artery disease
+    - pad
+  autoimmune_disease:
+    - autoimmune disease
+    - systemic autoimmune disease
+    - inflammatory autoimmune disease
+
+# Generic rehab vocabulary used to detect duration chunks that drift into rehab language.
+rehab_language_terms:
+  - acute rehabilitation
+  - cleared for home
+  - discharged home
+  - discharged to home
+  - gait training
+  - home health
+  - home nursing
+  - home occupational therapy
+  - home physical therapy
+  - home therapy
+  - home exercise program
+  - home services
+  - home with
+  - inpatient rehabilitation
+  - inpatient rehab placement
+  - outpatient neurorehabilitation
+  - outpatient therapy
+  - physical therapy follow-up
+  - rehab
+  - rehabilitation
+  - rehabilitation assessment
+  - skilled rehabilitation
+  - therapy evaluation
+  - therapy was arranged
+  - transferred to rehabilitation
+  - visiting nursing
+
+# Fallback bin-level rehab evidence used when exact ontology rehab_outcomes phrasing is absent.
+rehab_bin_terms:
+  home_rehab:
+    - breathing exercises
+    - discharged home
+    - home physical therapy
+    - home therapy
+    - home occupational therapy
+    - home exercise program
+    - home services
+    - home with
+    - outpatient
+    - visiting nursing
+  inpatient_rehab:
+    - acute rehabilitation
+    - inpatient rehabilitation
+    - inpatient rehab placement
+    - intensive therapy program
+    - required inpatient therapy
+    - skilled rehabilitation
+    - transferred to rehabilitation
+
+  persistent_deficit:
+    - continued exertional limitation
+    - cognitive slowing
+    - deconditioning
+    - gait instability
+    - impaired balance
+    - ongoing
+    - persistent
+    - remained
+    - reduced exercise tolerance
+    - reduced walking tolerance
+    - transfer difficulty
+    - limited walking tolerance
+    - limited ambulation
+    - mobility
+    - ambulation
+    - endurance
+    - exertional dyspnea
+    - dyspnea
+    - weakness
+    - functional limitation
+    - residual
+
+# Descriptor terms required for persistent_deficit fallback matching.
+persistent_deficit_descriptor_terms:
+  - continued
+  - persistent
+  - ongoing
+  - residual
+  - remained
+  - still
+  - limited
+  - reduced
+  - impaired
+
+# Functional limitation terms paired with descriptor terms for persistent_deficit matching.
+persistent_deficit_rehab_terms:
+  - oxygen requirement
+  - walking tolerance
+  - exercise tolerance
+  - exertional dyspnea
+  - dyspnea
+  - mobility
+  - ambulation
+  - gait instability
+  - transfer difficulty
+  - endurance
+  - functional limitation
+  - weakness
+  - deficit
+
+# Stopwords removed before fuzzy token-overlap matching of rehab evidence phrases.
+meaningful_token_stopwords:
+  - a
+  - an
+  - and
+  - at
+  - by
+  - for
+  - in
+  - into
+  - of
+  - "on"
+  - or
+  - the
+  - to
+  - with
+  - without
+  - was
+  - were
+  - is
+  - are
+  - be
+  - been
+  - being
+  - after
+  - before
+  - during
+  - discharge
+  - discharged
+  - status
+  - outcome
+  - functional
+  - rehabilitation
+
+# Terms that must never appear in final chunk text; these trigger hard validation failures.
+hidden_benchmark_terms:
+  - admission adm_
+  - benchmark
+  - chunk
+  - cohort descriptor
+  - distractor
+  - facet
+  - gold
+  - index terms
+  - qrel
+  - source query
+  - structured cohort
+  - synthetic
+  - target query

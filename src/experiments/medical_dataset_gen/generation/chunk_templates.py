@@ -13,7 +13,13 @@ from experiments.medical_dataset_gen.generation.schemas import (
     MedicalOntology,
 )
 
-_TEMPLATE_PHRASES_PATH = Path(__file__).with_name('text_templates_utils.yaml')
+_TEMPLATE_DATA_DIR = Path(__file__).with_name('templates_data')
+_TEMPLATE_DATA_FILES = (
+    'chunk_condition_context.yaml',
+    'chunk_duration_templates.yaml',
+    'chunk_rehab_templates.yaml',
+    'validation_terms.yaml',
+)
 
 _DURATION_RE = re.compile(r'\b\d+\s*[- ]?(?:day|days)\b', re.IGNORECASE)
 _AGE_RE = re.compile(r'\b(\d{2,3})\s*[- ]year[- ]old\b', re.IGNORECASE)
@@ -31,11 +37,21 @@ class ChunkValidation:
 
 
 def _load_template_utils() -> ChunkTemplateUtils:
-    with open(_TEMPLATE_PHRASES_PATH) as f:
-        return ChunkTemplateUtils.model_validate(yaml.safe_load(f))
+    merged: dict[str, object] = {}
+    for filename in _TEMPLATE_DATA_FILES:
+        path = _TEMPLATE_DATA_DIR / filename
+        with open(path) as f:
+            data = yaml.safe_load(f) or {}
+        duplicate_keys = set(merged).intersection(data)
+        if duplicate_keys:
+            duplicates = ', '.join(sorted(duplicate_keys))
+            raise ValueError(f'duplicate template data keys in {path}: {duplicates}')
+        merged.update(data)
+
+    return ChunkTemplateUtils.model_validate(merged)
 
 
-TEMPLATE_UTILS = _load_template_utils()
+TEMPLATE_DATA = _load_template_utils()
 
 
 def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rng: Random) -> str:
@@ -53,29 +69,25 @@ def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
     patient_lower = patient_descriptor(fact)
     patient = _sentence_start(patient_lower)
     condition = fact.condition_display
-    presentation = rng.choice(TEMPLATE_UTILS.condition_presentations[fact.condition_id])
-    response = rng.choice(TEMPLATE_UTILS.condition_status_phrases[fact.condition_id])
-    course_noun = rng.choice(TEMPLATE_UTILS.duration_course_nouns)
-    duration_phrase = rng.choice(
-        [
-            template.format(
-                treatment=fact.treatment,
-                duration_days=fact.duration_days,
-                course_noun=course_noun,
-            )
-            for template in TEMPLATE_UTILS.duration_phrase_templates
-        ]
-    )
-    duration_focus = rng.choice(
-        [
-            'for treatment duration and therapy-course length',
-            'for total treatment duration',
-            'for the active therapy-course interval',
-        ]
-    )
-    response_verb = rng.choice(TEMPLATE_UTILS.duration_response_verbs)
-    close = rng.choice(TEMPLATE_UTILS.duration_closing_sentences[fact.condition_id])
-    template = rng.choice(TEMPLATE_UTILS.duration_chunk_templates)
+    presentation = rng.choice(TEMPLATE_DATA.condition_presentations[fact.condition_id])
+    response = rng.choice(TEMPLATE_DATA.condition_status_phrases[fact.condition_id])
+    course_noun = rng.choice(TEMPLATE_DATA.duration_course_nouns)
+    duration_phrase = rng.choice([
+        template.format(
+            treatment=fact.treatment,
+            duration_days=fact.duration_days,
+            course_noun=course_noun,
+        )
+        for template in TEMPLATE_DATA.duration_phrase_templates
+    ])
+    duration_focus = rng.choice([
+        'for treatment duration and therapy-course length',
+        'for total treatment duration',
+        'for the active therapy-course interval',
+    ])
+    response_verb = rng.choice(TEMPLATE_DATA.duration_response_verbs)
+    close = rng.choice(TEMPLATE_DATA.duration_closing_sentences[fact.condition_id])
+    template = rng.choice(TEMPLATE_DATA.duration_chunk_templates)
     duration_sentence_lower = f'{duration_focus}, {duration_phrase}'
 
     return template.format(
@@ -95,27 +107,26 @@ def render_rehab_chunk(fact: ClinicalFact, rng: Random) -> str:
     patient_lower = patient_descriptor(fact)
     patient = _sentence_start(patient_lower)
     condition = fact.condition_display
-    presentation = rng.choice(TEMPLATE_UTILS.condition_presentations[fact.condition_id])
+
+    presentation = rng.choice(TEMPLATE_DATA.condition_presentations[fact.condition_id])
     functional_detail = rng.choice(
-        TEMPLATE_UTILS.functional_status_phrases[fact.condition_id][fact.value_bin]
+        TEMPLATE_DATA.functional_status_phrases[fact.condition_id][fact.value_bin]
     )
-    transition = rng.choice(TEMPLATE_UTILS.rehab_transitions)
-    rehab_outcome_verb = rng.choice(TEMPLATE_UTILS.rehab_outcome_verbs)
+    transition = rng.choice(TEMPLATE_DATA.rehab_transitions)
+    rehab_outcome_verb = rng.choice(TEMPLATE_DATA.rehab_outcome_verbs)
     if fact.value_bin == 'persistent_deficit':
         close = rng.choice(
-            TEMPLATE_UTILS.rehab_closing_sentences.persistent_deficit[fact.condition_id]
+            TEMPLATE_DATA.rehab_closing_sentences.persistent_deficit[fact.condition_id]
         )
     else:
-        close = rng.choice(getattr(TEMPLATE_UTILS.rehab_closing_sentences, fact.value_bin))
-    template = rng.choice(TEMPLATE_UTILS.rehab_chunk_templates)
-    rehab_outcome = rng.choice(
-        [
-            f'the rehabilitation outcome as {fact.rehab_outcome}',
-            f'the discharge rehabilitation status as {fact.rehab_outcome}',
-            f'the discharge functional outcome as {fact.rehab_outcome}',
-            f'the functional recovery status as {fact.rehab_outcome}',
-        ]
-    )
+        close = rng.choice(getattr(TEMPLATE_DATA.rehab_closing_sentences, fact.value_bin))
+    template = rng.choice(TEMPLATE_DATA.rehab_chunk_templates)
+    rehab_outcome = rng.choice([
+        f'the rehabilitation outcome as {fact.rehab_outcome}',
+        f'the discharge rehabilitation status as {fact.rehab_outcome}',
+        f'the discharge functional outcome as {fact.rehab_outcome}',
+        f'the functional recovery status as {fact.rehab_outcome}',
+    ])
 
     return template.format(
         patient=patient,
@@ -137,7 +148,7 @@ def validate_chunk_text(
     hard_errors: list[str] = []
     soft_warnings: list[str] = []
 
-    for term in TEMPLATE_UTILS.hidden_benchmark_terms:
+    for term in TEMPLATE_DATA.hidden_benchmark_terms:
         if term in lower:
             hard_errors.append(f'contains hidden benchmark term: {term}')
     if _SECTION_HEADER_RE.match(text):
@@ -222,7 +233,7 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
     if any(alias in lower for alias in aliases):
         return True
 
-    subgroup_terms = TEMPLATE_UTILS.subgroup_terms.get(subgroup_id, [])
+    subgroup_terms = TEMPLATE_DATA.subgroup_terms.get(subgroup_id, [])
     return any(term in lower for term in subgroup_terms)
 
 
@@ -232,7 +243,7 @@ def _has_age_in_range(text: str, low: int, high: int) -> bool:
 
 def _contains_rehab_language(text: str) -> bool:
     lower = text.lower()
-    return any(term in lower for term in TEMPLATE_UTILS.rehab_language_terms)
+    return any(term in lower for term in TEMPLATE_DATA.rehab_language_terms)
 
 
 def _contains_exact_rehab_outcome(
@@ -253,7 +264,7 @@ def _contains_rehab_bin_evidence(text: str, fact: ClinicalFact, ontology: Medica
         if _rehab_phrase_matches(lower, str(phrase)):
             return True
 
-    if any(term in lower for term in TEMPLATE_UTILS.rehab_bin_terms.get(value_bin, [])):
+    if any(term in lower for term in TEMPLATE_DATA.rehab_bin_terms.get(value_bin, [])):
         return True
 
     if value_bin == 'persistent_deficit':
@@ -279,12 +290,12 @@ def _rehab_phrase_matches(lower_text: str, phrase: str) -> bool:
 
 def _contains_persistent_deficit_evidence(lower_text: str) -> bool:
     return any(
-        term in lower_text for term in TEMPLATE_UTILS.persistent_deficit_descriptor_terms
-    ) and any(term in lower_text for term in TEMPLATE_UTILS.persistent_deficit_rehab_terms)
+        term in lower_text for term in TEMPLATE_DATA.persistent_deficit_descriptor_terms
+    ) and any(term in lower_text for term in TEMPLATE_DATA.persistent_deficit_rehab_terms)
 
 
 def _meaningful_tokens(text: str) -> set[str]:
-    stopwords = set(TEMPLATE_UTILS.meaningful_token_stopwords)
+    stopwords = set(TEMPLATE_DATA.meaningful_token_stopwords)
     return {
         token
         for token in re.findall(r'[a-z0-9]+', text.lower())
