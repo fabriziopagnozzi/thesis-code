@@ -69,7 +69,8 @@ class GenerationCfg(BaseModel):
 class EmbeddingCfg(BaseModel):
     model_name: str = 'multi-qa-mpnet-base-cos-v1'
     batch_size: PositiveInt = 64
-    device: Literal['cpu', 'cuda'] = 'cuda'
+    device: str = 'cuda'
+    devices: list[str] = Field(default_factory=list)
     query_prompt: str | None = None
     normalize: bool = True
 
@@ -204,7 +205,13 @@ def load_config_from_cli() -> ExperimentCfg:
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
     parser.add_argument('--max-queries', type=int, default=None)
     parser.add_argument('--embedding-model', type=str, default=None)
-    parser.add_argument('--device', choices=['cpu', 'cuda'], default=None)
+    parser.add_argument('--device', type=str, default=None)
+    parser.add_argument(
+        '--embedding-devices',
+        type=str,
+        default=None,
+        help='Comma-separated SentenceTransformers target devices, e.g. cuda:0,cuda:1',
+    )
     parser.add_argument('--batch-size', type=int, default=None)
     parser.add_argument('--llm-name', type=str, default=None)
     parser.add_argument('--llm-workers', type=int, default=None)
@@ -245,6 +252,10 @@ def load_config_from_cli() -> ExperimentCfg:
         cfg.embeddings.model_name = args.embedding_model
     if args.device is not None:
         cfg.embeddings.device = args.device
+    if args.embedding_devices is not None:
+        cfg.embeddings.devices = [
+            device.strip() for device in args.embedding_devices.split(',') if device.strip()
+        ]
     if args.batch_size is not None:
         cfg.embeddings.batch_size = args.batch_size
     if args.llm_name is not None:

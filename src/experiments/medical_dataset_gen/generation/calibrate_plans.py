@@ -64,6 +64,7 @@ def run_calibrate_query_plans(
         batch_size=cfg.embeddings.batch_size,
         query_prompt=cfg.embeddings.query_prompt,
         device=cfg.embeddings.device,
+        devices=cfg.embeddings.devices,
     )
     try:
         for start in tqdm(

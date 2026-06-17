@@ -18,6 +18,7 @@ The supported common CLI overrides are:
 - `--max-queries`
 - `--embedding-model`
 - `--device`
+- `--embedding-devices`
 - `--batch-size`
 - `--llm-name`
 - `--llm-workers`
@@ -87,7 +88,8 @@ The dominant/complementary counts define the intended top-k failure mode. In cal
 | --- | --- | --- |
 | `model_name` | `multi-qa-mpnet-base-cos-v1` | SentenceTransformers model passed to `helpers.embedder.Embedder`. |
 | `batch_size` | `64` | Embedder batch size; the parquet streaming bucket is `max(batch_size * 32, 32768)`. |
-| `device` | `cuda` | Device passed to the embedder. |
+| `device` | `cuda` | Single-device fallback passed to the embedder. Values like `cuda:0` are allowed. |
+| `devices` | `[]` | Optional data-parallel SentenceTransformers target devices. For two GPUs, use `['cuda:0', 'cuda:1']`. |
 | `query_prompt` | `null` | Optional query prompt for models that need query instructions. |
 | `normalize` | `true` | If true, document and query vectors are normalized before cosine-style dot products. |
 

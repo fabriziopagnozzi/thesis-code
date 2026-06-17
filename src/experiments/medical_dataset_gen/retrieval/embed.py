@@ -66,6 +66,7 @@ def _embed_sentence_transformers_streaming(
         batch_size=cfg.embeddings.batch_size,
         query_prompt=cfg.embeddings.query_prompt,
         device=cfg.embeddings.device,
+        devices=cfg.embeddings.devices,
     )
     try:
         dim = embedder.dim
@@ -127,6 +128,8 @@ def _embed_sentence_transformers_streaming(
             'model_name': cfg.embeddings.model_name,
             'dimension': int(dim),
             'normalized': cfg.embeddings.normalize,
+            'device': cfg.embeddings.device,
+            'devices': list(cfg.embeddings.devices),
             'format': 'npy_memmap',
             'chunk_vectors_file': str(paths.embeddings_chunk_vectors_path),
             'query_vectors_file': str(paths.embeddings_query_vectors_path),

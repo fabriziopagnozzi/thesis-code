@@ -21,10 +21,12 @@ Source files:
 - `embeddings.model_name`
 - `embeddings.batch_size`
 - `embeddings.device`
+- `embeddings.devices`
 - `embeddings.query_prompt`
 - `embeddings.normalize`
 
 The implementation uses `helpers.embedder.Embedder`, which wraps SentenceTransformers-style document and query embedding calls. Chunk text is read from `chunk_documents.parquet`; query text is read from `queries.parquet`.
+If `embeddings.devices` contains more than one device, the embedder uses a SentenceTransformers multi-process pool to data-parallelize encoding across those devices. This affects both the final `embed` stage and the `calibrate_plans` probe embeddings.
 
 The stage streams parquet batches instead of loading all text into one list. It computes:
 
