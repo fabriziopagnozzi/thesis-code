@@ -34,11 +34,8 @@ class ChunkPoolBuilder:
     ):
         self._con = duckdb_con
         self._con.register('admissions_metadata', read_parquet('admissions_metadata'))
-        self._embedder = Embedder(
-            **kwargs,
-            batch_size=1,
-            query_prompt=global_cfg.query_retrieval_instruction,
-        )
+        self._embedder: Embedder | None = None
+        self._embedder_kwargs = dict(kwargs)
         self._table: Table = lancedb_con.open_table(global_cfg.chunks_vec_table)
         self._vec_col_name: str = get_vec_col_name(kwargs['model_name'])
         self._vec_dim: int = self._table.schema.field(self._vec_col_name).type.list_size
@@ -228,7 +225,16 @@ class ChunkPoolBuilder:
         return self.get_icd3_hadm_ids(icd10_3char) & self.get_modifier_hadm_ids(mod)
 
     def embed_query(self, text: str) -> NDArray[np.float32]:
-        return self._embedder.embed_query(text)
+        return self._get_embedder().embed_query(text)
+
+    def _get_embedder(self) -> Embedder:
+        if self._embedder is None:
+            self._embedder = Embedder(
+                **self._embedder_kwargs,
+                batch_size=1,
+                query_prompt=global_cfg.query_retrieval_instruction,
+            )
+        return self._embedder
 
 
 @dataclass

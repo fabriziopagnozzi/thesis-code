@@ -266,96 +266,57 @@ def add_two_col_artifact_slide(slide) -> None:
     set_bg(slide)
     add_title(slide, "Pipeline Overview", y=0.6, rule_y=1.36)
 
-    add_bullet_line(
-        slide,
-        "▸",
-        "The benchmark starts from hidden structure, not raw notes",
-        x=1.02,
-        y=1.85,
-        text_size=24,
-        height=0.55,
-    )
-
-    flow_y = 2.35
-    box_w = 2.55
-    gap = 0.22
-    labels = [
-        ("1. Ontology +\nPlans", "conditions,\nsubgroups,\n4 answer facets"),
-        ("2. Facts +\nChunks", "gold facts,\ndistractors,\nchunk docs"),
-        ("3. Queries +\nQrels", "query + answer\ntemplates,\nqrels"),
-        ("4. Embed +\nEvaluate", "geometry filter,\nretrieval eval"),
+    blocks = [
+        (
+            "1. Ontology + Plans",
+            [
+                "LLM-generated medical ontology: conditions, subgroups, clinical axes, and value bins.",
+                "Plans enumerate 2 subgroups x 2 axes, giving 4 hidden answer facets per query.",
+            ],
+            BLUE,
+        ),
+        (
+            "2. Facts + Chunks",
+            [
+                "LLM-generated templates_data drives deterministic chunk building from structured facts.",
+                "The corpus includes gold facet chunks plus explicit hard distractors and background outliers.",
+            ],
+            BLUE_2,
+        ),
+        (
+            "3. Queries + Qrels",
+            [
+                "LLM-generated query/answer templates render the user question and canonical answer.",
+                "Qrels are projected from chunk memberships, facet IDs, and cluster roles.",
+            ],
+            ORANGE,
+        ),
+        (
+            "4. Embed + Evaluate",
+            [
+                "Embed queries and chunks, then filter for visible facets, dominant clusters, and distractors.",
+                "Compare top-k, MMR, and Facility-location with aspect coverage and retrieval metrics.",
+            ],
+            GREEN,
+        ),
     ]
 
-    for idx, (head, body) in enumerate(labels):
-        x = 0.95 + idx * (box_w + gap)
-        shape = slide.shapes.add_shape(
-            MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
-            Inches(x),
-            Inches(flow_y),
-            Inches(box_w),
-            Inches(1.72),
+    positions = [(0.98, 1.82), (6.48, 1.82), (0.98, 4.35), (6.48, 4.35)]
+    for (title, lines, accent), (x, y) in zip(blocks, positions, strict=True):
+        add_text_panel(
+            slide,
+            x=x,
+            y=y,
+            w=5.15,
+            h=2.05,
+            title=title,
+            lines=lines,
+            accent=accent,
+            title_size=21,
+            body_size=15,
+            body_color=WHITE,
+            bullet_lines=True,
         )
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = PANEL
-        shape.line.color.rgb = BLUE if idx < 3 else GREEN
-        shape.line.width = Pt(1.2)
-
-        tb = slide.shapes.add_textbox(Inches(x + 0.18), Inches(flow_y + 0.14), Inches(box_w - 0.3), Inches(1.35))
-        tf = tb.text_frame
-        tf.word_wrap = True
-        tf.clear()
-        p1 = tf.paragraphs[0]
-        r1 = p1.add_run()
-        r1.text = head
-        r1.font.name = FONT_BODY
-        r1.font.bold = True
-        r1.font.size = Pt(17)
-        r1.font.color.rgb = WHITE
-        p2 = tf.add_paragraph()
-        p2.space_after = Pt(0)
-        r2 = p2.add_run()
-        r2.text = body
-        r2.font.name = FONT_BODY
-        r2.font.size = Pt(13)
-        r2.font.color.rgb = MUTED
-
-        if idx < len(labels) - 1:
-            arrow = slide.shapes.add_shape(
-                MSO_AUTO_SHAPE_TYPE.CHEVRON,
-                Inches(x + box_w + 0.03),
-                Inches(flow_y + 0.48),
-                Inches(0.17),
-                Inches(0.28),
-            )
-            arrow.fill.solid()
-            arrow.fill.fore_color.rgb = BLUE
-            arrow.line.fill.background()
-
-    add_section_label(slide, "Current focus", x=1.85, y=4.65, color=GREEN)
-    add_bullet_line(
-        slide,
-        "▪",
-        "Example path: q00001 -> fact rows -> chunk document -> qrel labels",
-        x=1.45,
-        y=5.15,
-        bullet_color=MUTED,
-        text_color=MUTED,
-        text_size=19,
-        bullet_size=18,
-        height=0.5,
-    )
-    add_bullet_line(
-        slide,
-        "▪",
-        "Coverage is engineered before retrieval, so Facility-location sees a real local coverage problem",
-        x=1.45,
-        y=5.58,
-        bullet_color=MUTED,
-        text_color=MUTED,
-        text_size=19,
-        bullet_size=18,
-        height=0.55,
-    )
 
 
 def add_stage_group_slide(
@@ -523,67 +484,96 @@ def add_concrete_example_slide(slide) -> None:
     add_text_panel(
         slide,
         x=0.98,
-        y=1.8,
-        w=6.2,
-        h=2.1,
+        y=1.72,
+        w=11.2,
+        h=1.05,
         title="Query",
         lines=[
-            "For patients diagnosed with encephalitis or myelitis, how do treatment duration and rehabilitation outcome differ between patients older than 75 and patients with uncomplicated diabetes?"
+            "Among patients with encephalitis or myelitis, how do patients older than 75 and patients with uncomplicated diabetes differ in treatment duration and rehabilitation outcome?"
         ],
         accent=BLUE,
-        title_size=20,
-        body_size=17,
+        title_size=18,
+        body_size=15,
         body_color=WHITE,
     )
-    add_text_panel(
-        slide,
-        x=7.42,
-        y=1.8,
-        w=4.75,
-        h=2.1,
-        title="Hidden plan facets",
-        lines=[
-            "f1: age>75 + duration",
-            "f2: age>75 + rehab",
-            "f3: diabetes + duration",
-            "f4: diabetes + rehab",
-        ],
-        accent=GREEN,
-        title_size=20,
-        body_size=14,
-        body_font="Consolas",
-    )
+
     add_text_panel(
         slide,
         x=0.98,
-        y=4.25,
-        w=5.65,
-        h=1.95,
-        title="Example fact row",
+        y=2.88,
+        w=3.55,
+        h=1.72,
+        title="chunk_0000011 | facet 1",
         lines=[
-            "facet_id: q00001_f3 | axis: treatment_duration",
-            "value_bin: prolonged | duration_days: 24 | treatment: acyclovir",
-        ],
-        accent=ORANGE,
-        title_size=19,
-        body_size=14,
-        body_font="Consolas",
-        body_color=WHITE,
-    )
-    add_text_panel(
-        slide,
-        x=6.88,
-        y=4.25,
-        w=5.3,
-        h=1.95,
-        title="Example rendered chunk",
-        lines=[
-            "The 82-year-old woman older than 75 was admitted with encephalitis or myelitis and new gait instability.",
-            "For total treatment duration, acyclovir was continued for 21 days.",
+            "The 85-year-old man older than 75 presented with encephalitis or myelitis, including fever, confusion, and gait change. For total treatment duration, clinicians completed 5 days of acyclovir, while the care team documented improving mentation and reduced headache after active therapy. The discharge medication list matched the completed neurologic treatment plan and outpatient neurology follow-up."
         ],
         accent=BLUE_2,
-        title_size=19,
-        body_size=14,
+        title_size=12,
+        body_size=7,
+        body_color=WHITE,
+    )
+
+    add_text_panel(
+        slide,
+        x=4.78,
+        y=2.88,
+        w=3.55,
+        h=1.72,
+        title="chunk_0001505 | facet 2",
+        lines=[
+            "The 79-year-old man older than 75 was managed for encephalitis or myelitis, with headache, altered mental status, and lower-extremity weakness. At discharge, focal weakness and impaired balance remained prominent; the discharge summary described the rehabilitation outcome as ongoing weakness and impaired balance at discharge. Neurology follow-up was arranged because recovery remained incomplete."
+        ],
+        accent=GREEN,
+        title_size=12,
+        body_size=7,
+        body_color=WHITE,
+    )
+
+    add_text_panel(
+        slide,
+        x=8.58,
+        y=2.88,
+        w=3.55,
+        h=1.72,
+        title="chunk_0001528 | facet 3",
+        lines=[
+            "The 52-year-old woman with diabetes without documented end-organ complications presented with encephalitis or myelitis, including fever, confusion, and gait change. For the active therapy-course interval, acyclovir was continued for 23 days, while the treatment-duration note described improving mentation and reduced headache after active therapy. The discharge medication list matched the completed neurologic treatment plan and outpatient neurology follow-up."
+        ],
+        accent=BLUE_2,
+        title_size=12,
+        body_size=7,
+        body_color=WHITE,
+    )
+
+    add_text_panel(
+        slide,
+        x=0.98,
+        y=4.9,
+        w=5.45,
+        h=1.72,
+        title="chunk_0001539 | facet 4",
+        lines=[
+            "The 69-year-old woman with uncomplicated type 2 diabetes was managed for encephalitis or myelitis, with fever, confusion, and gait change. On the day of discharge, orientation improved and gait was safe with supervised exercises; the discharge record described the functional recovery status as discharged home with outpatient neurorehabilitation. The plan emphasized caregiver teaching, home safety, and close outpatient reassessment."
+        ],
+        accent=BLUE_2,
+        title_size=12,
+        body_size=8,
+        body_color=WHITE,
+    )
+
+    add_text_panel(
+        slide,
+        x=6.68,
+        y=4.9,
+        w=5.45,
+        h=1.72,
+        title="chunk_0001571 | distractor",
+        lines=[
+            "The 52-year-old man with baseline dementia with memory impairment presented with pneumonia, including dyspnea, leukocytosis, and radiographic consolidation. For the active therapy-course interval, records showed 7 days of treatment with azithromycin, while the treatment-duration note described improving dyspnea and downtrending fever after active therapy. Respiratory status was stable, and no additional inpatient antibiotic escalation was documented."
+        ],
+        accent=ORANGE,
+        title_size=12,
+        body_size=8,
         body_color=WHITE,
     )
 

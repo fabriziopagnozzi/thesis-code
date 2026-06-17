@@ -3,6 +3,9 @@ from pathlib import Path
 import polars as pl
 
 from experiments.mimic.global_configs import MimicPaths, get_table_path, setup_logging
+from experiments.medical_dataset_gen.evaluation import plots as synthetic_eval_plots
+
+from .plot_adapters import adapt_results_for_synthetic_plots, adapt_stats_for_synthetic_plots
 
 from .schemas_evaluation import EvaluateCfg
 
@@ -53,20 +56,7 @@ def get_style(strategy: str) -> dict:
 
 
 def store_eval_figures(cfg: EvaluateCfg) -> None:
-    from .plots import (
-        plot_gain_over_topk,
-        plot_lambda_sensitivity,
-        plot_per_query_distributions,
-        plot_strategy_comparison,
-        plot_stratum_breakdown,
-    )
-
-    out_dir = (
-        MimicPaths.experiment_dir
-        / 'figures'
-        / ('eval_structural' if cfg.gold_mode == 'structural' else 'eval_gold_annotations')
-        / cfg.figures_subdir
-    )
+    out_dir = _resolve_eval_output_dir(cfg)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     stats_path = get_table_path('evaluation_stats')
@@ -78,15 +68,18 @@ def store_eval_figures(cfg: EvaluateCfg) -> None:
     stats_df = pl.read_parquet(stats_path)
     results_df = pl.read_parquet(results_path)
 
-    plot_strategy_comparison(stats_df, results_df, out_dir)
-    plot_lambda_sensitivity(stats_df, out_dir)
-    plot_per_query_distributions(results_df, out_dir)
-    plot_gain_over_topk(stats_df, results_df, out_dir)
+    synth_stats = adapt_stats_for_synthetic_plots(stats_df)
+    synth_results = adapt_results_for_synthetic_plots(results_df)
 
-    if 'ans_rouge1_rec' in stats_df.columns:
-        plot_answer_strategy_comparison(stats_df, results_df, out_dir)
-        plot_answer_gain_over_topk(stats_df, results_df, out_dir)
-        plot_answer_distributions(results_df, out_dir)
+    synthetic_eval_plots.plot_strategy_comparison(synth_stats, synth_results, out_dir)
+    synthetic_eval_plots.plot_strategy_comparison_all_lambdas(synth_stats, synth_results, out_dir)
+    synthetic_eval_plots.plot_lambda_sensitivity(synth_stats, out_dir)
+    synthetic_eval_plots.plot_per_query_distributions(synth_results, out_dir)
+    synthetic_eval_plots.plot_gain_over_topk(synth_stats, synth_results, out_dir)
+    synthetic_eval_plots.plot_gain_over_topk_simple(synth_stats, synth_results, out_dir)
+    synthetic_eval_plots.plot_selection_diagnostics(synth_stats, out_dir)
+    synthetic_eval_plots.plot_answer_rouge_comparison(synth_stats, synth_results, out_dir)
+    synthetic_eval_plots.plot_answer_rouge_lambda_sensitivity(synth_stats, out_dir)
 
     stratum_path = get_table_path('evaluation_stats_by_stratum')
     if stratum_path.exists():
@@ -97,18 +90,39 @@ def store_eval_figures(cfg: EvaluateCfg) -> None:
         for s in strata:
             s_dir = out_dir / f'stratum_{s}'
             s_dir.mkdir(exist_ok=True)
-            s_stats = stratum_df.filter(pl.col('stratum') == s).drop('stratum')
-            s_results = (
+            s_stats = adapt_stats_for_synthetic_plots(
+                stratum_df.filter(pl.col('stratum') == s).drop('stratum')
+            )
+            s_results = adapt_results_for_synthetic_plots(
                 results_df.filter(pl.col('stratum') == s)
                 if 'stratum' in results_df.columns
                 else results_df
             )
-            plot_strategy_comparison(s_stats, s_results, s_dir)
-            plot_lambda_sensitivity(s_stats, s_dir)
-            plot_per_query_distributions(s_results, s_dir)
-            plot_gain_over_topk(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_strategy_comparison(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_strategy_comparison_all_lambdas(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_lambda_sensitivity(s_stats, s_dir)
+            synthetic_eval_plots.plot_per_query_distributions(s_results, s_dir)
+            synthetic_eval_plots.plot_gain_over_topk(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_gain_over_topk_simple(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_selection_diagnostics(s_stats, s_dir)
+            synthetic_eval_plots.plot_answer_rouge_comparison(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_answer_rouge_lambda_sensitivity(s_stats, s_dir)
 
     print(f'Saved eval figures to {out_dir}')
+
+
+def _resolve_eval_output_dir(cfg: EvaluateCfg) -> Path:
+    if cfg.gold_mode == 'llm':
+        return MimicPaths.figures_dir / 'eval_gold_annotations' / cfg.figures_subdir
+
+    candidates = [
+        MimicPaths.figures_dir / 'eval_structural' / cfg.figures_subdir,
+        MimicPaths.figures_dir / 'eval' / cfg.figures_subdir,
+    ]
+    for candidate in candidates:
+        if candidate.parent.exists():
+            return candidate
+    return candidates[0]
 
 
 def plot_strategy_comparison(
@@ -824,7 +838,4 @@ def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -
 
 if __name__ == '__main__':
     setup_logging()
-    from experiments.mimic.global_configs import load_config_from_main
-
-    raw = load_config_from_main(key='queries')
-    store_eval_figures(cfg=EvaluateCfg(**raw['evaluate']))
+    store_eval_figures(cfg=EvaluateCfg.load())

@@ -73,7 +73,12 @@ class MimicPaths:
 
     config_path = experiment_dir / '_config.yaml'
     logs_dir = experiment_dir / '_logs'
-    figures_dir = experiment_dir / '_figures'
+    figures_dir = (
+        experiment_dir / 'figures'
+        if (experiment_dir / 'figures').exists()
+        else experiment_dir / '_figures'
+    )
+    pool_analysis_dir = experiment_dir / 'pool_analysis'
 
     init_sql = mimic_root / '_mimic_init.sql'
     duckdb_concepts_dir = THIRDPARTY_CODE_DIR / 'mimic_code' / 'mimic-iv' / 'concepts_duckdb'
@@ -96,7 +101,14 @@ def load_global_cfg(path: str | Path = MimicPaths.config_path, cfg: GlobalCfg | 
     with open(path) as f:
         _loaded_cfg = yaml.safe_load(f)
 
-    global_cfg = GlobalCfg.model_validate(_loaded_cfg['global'])
+    global_block = dict(_loaded_cfg['global'])
+    if 'embedding_model' not in global_block:
+        global_block['embedding_model'] = (
+            (_loaded_cfg.get('evaluation') or {}).get('embedding_model')
+            or (_loaded_cfg.get('pool_analysis') or {}).get('embedding_model')
+            or (_loaded_cfg.get('embeddings') or {}).get('models', [None])[0]
+        )
+    global_cfg = GlobalCfg.model_validate(global_block)
     return global_cfg
 
 
@@ -139,6 +151,30 @@ def get_table_path(
         return MimicPaths.results_dir / '_shared' / f'{table}.{ext}'
     else:
         return get_result_dir(table) / f'{table}.{ext}'
+
+
+def get_pool_analysis_path(
+    filename: str,
+    *,
+    prefer_existing: bool = True,
+    ensure_parent: bool = False,
+) -> Path:
+    candidates = [
+        MimicPaths.pool_analysis_dir / filename,
+        MimicPaths.experiment_dir / filename,
+    ]
+    if prefer_existing:
+        for candidate in candidates:
+            if candidate.exists():
+                path = candidate
+                break
+        else:
+            path = candidates[0]
+    else:
+        path = candidates[0]
+    if ensure_parent:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def read_parquet(table: MimicTable):

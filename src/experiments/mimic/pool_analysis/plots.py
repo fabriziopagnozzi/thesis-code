@@ -4,7 +4,10 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from experiments.mimic.global_configs import MimicPaths, get_pool_analysis_path
+from experiments.mimic.pool_analysis.embedding_geometry import render_embedding_geometry_figures
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
+from experiments.mimic.utils.chunk_pools import ChunkPoolBuilder
 
 
 def _safe(d: dict[str, Any], k: str, default: Any = float('nan')) -> Any:
@@ -164,12 +167,10 @@ def plot_aggregate(stats_df: pl.DataFrame, out_dir: Path) -> None:
 
 
 if __name__ == '__main__':
-    from experiments.mimic.global_configs import MimicPaths
-
     cfg = PoolAnalysisCfg.load()
 
-    stats_path = MimicPaths.experiment_dir / 'per_query_stats.parquet'
-    points_path = MimicPaths.experiment_dir / 'pool_points.parquet'
+    stats_path = get_pool_analysis_path('per_query_stats.parquet')
+    points_path = get_pool_analysis_path('pool_points.parquet')
     if not stats_path.exists() or not points_path.exists():
         raise FileNotFoundError(
             f'per_query_stats or pool_points not found in {MimicPaths.experiment_dir}'
@@ -202,3 +203,12 @@ if __name__ == '__main__':
 
     plot_aggregate(stats_df, fig_agg)
     print(f'Aggregate figures → {fig_agg}')
+
+    from experiments.mimic.global_configs import global_cfg
+
+    render_embedding_geometry_figures(
+        cfg=cfg,
+        stats_df=stats_df,
+        points_df=points_df,
+        pool_builder=ChunkPoolBuilder(model_name=global_cfg.embedding_model),
+    )
