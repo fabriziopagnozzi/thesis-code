@@ -66,9 +66,17 @@ def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
             for template in TEMPLATE_UTILS.duration_phrase_templates
         ]
     )
+    duration_focus = rng.choice(
+        [
+            'for treatment duration and therapy-course length',
+            'for total treatment duration',
+            'for the active therapy-course interval',
+        ]
+    )
     response_verb = rng.choice(TEMPLATE_UTILS.duration_response_verbs)
     close = rng.choice(TEMPLATE_UTILS.duration_closing_sentences[fact.condition_id])
     template = rng.choice(TEMPLATE_UTILS.duration_chunk_templates)
+    duration_sentence_lower = f'{duration_focus}, {duration_phrase}'
 
     return template.format(
         patient=patient,
@@ -77,8 +85,8 @@ def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
         presentation=presentation,
         response=response,
         response_verb=response_verb,
-        duration_sentence=_sentence_start(f'for treatment duration, {duration_phrase}'),
-        duration_sentence_lower=f'for treatment duration, {duration_phrase}',
+        duration_sentence=_sentence_start(duration_sentence_lower),
+        duration_sentence_lower=duration_sentence_lower,
         close=close,
     )
 
@@ -100,7 +108,14 @@ def render_rehab_chunk(fact: ClinicalFact, rng: Random) -> str:
     else:
         close = rng.choice(getattr(TEMPLATE_UTILS.rehab_closing_sentences, fact.value_bin))
     template = rng.choice(TEMPLATE_UTILS.rehab_chunk_templates)
-    rehab_outcome = f'the rehabilitation outcome as {fact.rehab_outcome}'
+    rehab_outcome = rng.choice(
+        [
+            f'the rehabilitation outcome as {fact.rehab_outcome}',
+            f'the discharge rehabilitation status as {fact.rehab_outcome}',
+            f'the discharge functional outcome as {fact.rehab_outcome}',
+            f'the functional recovery status as {fact.rehab_outcome}',
+        ]
+    )
 
     return template.format(
         patient=patient,

@@ -510,34 +510,39 @@ hidden_benchmark_terms:
 
 duration_course_nouns:
   - active treatment course
+  - active therapy interval
   - inpatient treatment course
   - documented therapy course
   - hospital treatment interval
   - monitored inpatient regimen
   - recorded treatment plan
+  - treatment-duration plan
 
 duration_phrase_templates:
   - "{treatment} was continued for {duration_days} days"
-  - "the {course_noun} used {treatment} for {duration_days} days"
+  - "therapy-course length was {duration_days} days on {treatment}"
+  - "total treatment duration was {duration_days} days with {treatment}"
+  - "the active therapy interval lasted {duration_days} days on {treatment}"
+  - "the {course_noun} included {treatment} for {duration_days} days"
   - "clinicians completed {duration_days} days of {treatment}"
-  - "the team documented a {duration_days}-day course of {treatment}"
+  - "the team documented a {duration_days}-day treatment course of {treatment}"
   - "records showed {duration_days} days of treatment with {treatment}"
   - "{treatment} remained in place across a {duration_days}-day course"
 
 duration_response_verbs:
-  - the record described
+  - the treatment-duration note described
   - clinicians documented
-  - the discharge summary noted
-  - the team documented
-  - the chart reflected
-  - the final inpatient note described
+  - the therapy-course review noted
+  - the care team documented
+  - the medication record reflected
+  - the final inpatient treatment note described
 
 duration_chunk_templates:
-  - "{patient} was admitted with {condition}, with {presentation}. {duration_sentence}, and {response_verb} {response} before discharge. {close}"
-  - "{patient} presented with {condition}, including {presentation}. {duration_sentence}, while {response_verb} {response} near discharge. {close}"
-  - "{patient} required hospitalization for {condition} after developing {presentation}. {duration_sentence}, and by discharge {response_verb} {response}. {close}"
-  - "{patient} was treated inpatient for {condition}, with {presentation} on presentation. {duration_sentence}; {response_verb} {response} before transition out of the hospital. {close}"
-  - "{patient} was hospitalized for {condition} in the setting of {presentation}. {duration_sentence}, and {response_verb} {response} by the end of the stay. {close}"
+  - "{patient} was admitted with {condition}, with {presentation}. {duration_sentence}, and {response_verb} {response} during the treatment course. {close}"
+  - "{patient} presented with {condition}, including {presentation}. {duration_sentence}, while {response_verb} {response} after active therapy. {close}"
+  - "{patient} required hospitalization for {condition} after developing {presentation}. {duration_sentence}, and {response_verb} {response} later in the treatment record. {close}"
+  - "{patient} was treated inpatient for {condition}, with {presentation} on presentation. {duration_sentence}; {response_verb} {response} as the medication course ended. {close}"
+  - "{patient} was hospitalized for {condition} in the setting of {presentation}. {duration_sentence}, and {response_verb} {response} at completion of therapy. {close}"
 
 rehab_transitions:
   - By discharge
@@ -550,7 +555,7 @@ rehab_transitions:
 rehab_outcome_verbs:
   - the discharge record described
   - therapy documentation noted
-  - the final rehabilitation assessment documented
+  - the functional assessment documented
   - the discharge summary described
   - the care team documented
   - the therapy plan noted
@@ -558,9 +563,9 @@ rehab_outcome_verbs:
 rehab_chunk_templates:
   - "{patient} was managed for {condition}, with {presentation}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
   - "{patient} received inpatient care for {condition} after {presentation}. {transition}, {functional_detail}, and {rehab_outcome_verb} {rehab_outcome}. {close}"
-  - "Hospitalization for {condition} included {presentation} in {patient_lower}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
-  - "{patient} was treated for {condition}, with the early course notable for {presentation}. {transition}, {functional_detail}. {rehab_outcome_verb} {rehab_outcome}. {close}"
-  - "{patient} remained hospitalized for {condition} with {presentation}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "Hospitalization for {condition} included {presentation} in {patient_lower}. {transition}, the functional exam showed {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "{patient} was treated for {condition}, with the early course notable for {presentation}. {transition}, functional recovery was described as {functional_detail}. {rehab_outcome_verb} {rehab_outcome}. {close}"
+  - "{patient} remained hospitalized for {condition} with {presentation}. {transition}, functional planning reflected that {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
 
 subgroup_terms:
   uncomplicated_diabetes:
