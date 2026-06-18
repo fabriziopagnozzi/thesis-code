@@ -70,6 +70,105 @@ def mmr(
     return np.array(selected, dtype=np.intp)
 
 
+def fac_loc_greedy(
+    sim_to_query: NDArray[np.float32],
+    k: int,
+    sim_matrix: NDArray[np.float32],
+    lam: float = 0.5,
+    **_kwargs: object,
+) -> NDArray[np.intp]:
+    n = len(sim_to_query)
+    k = min(k, n)
+
+    selected: list[int] = []
+    mask = np.ones(n, dtype=bool)
+    m = np.zeros(n, dtype=np.float64)
+
+    for _ in range(k):
+        # Marginal coverage gain for each candidate j:
+        # new_cov[j] = (1/n) * sum_i max(0, sim_matrix[i,j] - m[i])
+        gains = np.maximum(0, sim_matrix - m[:, None])  # (n, n)
+        marginal_cov = gains.sum(axis=0) / n  # (n,)
+
+        scores = lam * sim_to_query + (1 - lam) * marginal_cov
+        scores[~mask] = -np.inf
+        best = int(np.argmax(scores))
+
+        selected.append(best)
+        mask[best] = False
+        m = np.maximum(m, sim_matrix[:, best])
+
+    return np.array(selected, dtype=np.intp)
+
+
+def fac_loc_lazy_greedy(
+    sim_to_query: NDArray[np.float32],
+    k: int,
+    sim_matrix: NDArray[np.float32],
+    lam: float = 0.5,
+    **_kwargs: object,
+) -> NDArray[np.intp]:
+    n = len(sim_to_query)
+    if n == 0:
+        return np.array([], dtype=np.intp)
+    k = min(k, n)
+
+    selected: list[int] = []
+    m = np.zeros(n, dtype=np.float64)
+
+    initial_coverage = np.maximum(0, sim_matrix).sum(axis=0) / n
+    initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
+
+    max_heap = [(-initial_gains[i], i, 0) for i in range(n)]
+    heapq.heapify(max_heap)
+
+    # Lazy Greedy Selection
+    for step in range(k):
+        while True:
+            # item with the highest historical gain
+            _, node_idx, last_update = heapq.heappop(max_heap)
+
+            if last_update == step:
+                selected.append(node_idx)
+                m = np.maximum(m, sim_matrix[:, node_idx])
+                break
+
+            marginal_cov = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
+            new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov
+            heapq.heappush(max_heap, (-new_gain, node_idx, step))
+
+    return np.array(selected, dtype=np.intp)
+
+
+def fps(
+    embeddings: NDArray[np.float32],
+    k: int,
+    sim_to_query: NDArray[np.float32] | None = None,
+    **_kwargs: object,
+) -> NDArray[np.intp]:
+    """
+    Farthest Point Sampling (pure dispersion, no relevance).
+    """
+    n = len(embeddings)
+    k = min(k, n)
+
+    seed = int(np.argmax(sim_to_query)) if sim_to_query is not None else 0
+
+    selected = [seed]
+    min_dists = np.full(n, np.inf)
+
+    for _ in range(k - 1):
+        last = selected[-1]
+        diff = embeddings - embeddings[last]
+        dists = np.sum(diff * diff, axis=1)
+        min_dists = np.minimum(min_dists, dists)
+        min_dists[selected] = -1.0  # exclude already selected
+        best = int(np.argmax(min_dists))
+        selected.append(best)
+
+    return np.array(selected, dtype=np.intp)
+
+
 def gmmr(
     sim_to_query: NDArray[np.float32],
     k: int,
@@ -111,111 +210,12 @@ def gmmr(
     return np.array(selected, dtype=np.intp)
 
 
-def fps(
-    embeddings: NDArray[np.float32],
-    k: int,
-    sim_to_query: NDArray[np.float32] | None = None,
-    **_kwargs: object,
-) -> NDArray[np.intp]:
-    """
-    Farthest Point Sampling (pure dispersion, no relevance).
-    """
-    n = len(embeddings)
-    k = min(k, n)
-
-    seed = int(np.argmax(sim_to_query)) if sim_to_query is not None else 0
-
-    selected = [seed]
-    min_dists = np.full(n, np.inf)
-
-    for _ in range(k - 1):
-        last = selected[-1]
-        diff = embeddings - embeddings[last]
-        dists = np.sum(diff * diff, axis=1)
-        min_dists = np.minimum(min_dists, dists)
-        min_dists[selected] = -1.0  # exclude already selected
-        best = int(np.argmax(min_dists))
-        selected.append(best)
-
-    return np.array(selected, dtype=np.intp)
-
-
-# def fac_loc(
-#     sim_to_query: NDArray[np.float32],
-#     k: int,
-#     sim_matrix: NDArray[np.float32],
-#     lam: float = 0.5,
-#     **_kwargs: object,
-# ) -> NDArray[np.intp]:
-#     n = len(sim_to_query)
-#     k = min(k, n)
-
-#     selected: list[int] = []
-#     mask = np.ones(n, dtype=bool)
-#     m = np.zeros(n, dtype=np.float64)
-
-#     for _ in range(k):
-#         # Marginal coverage gain for each candidate j:
-#         # new_cov[j] = (1/n) * sum_i max(0, sim_matrix[i,j] - m[i])
-#         gains = np.maximum(0, sim_matrix - m[:, None])  # (n, n)
-#         marginal_cov = gains.sum(axis=0) / n  # (n,)
-
-#         scores = lam * sim_to_query + (1 - lam) * marginal_cov
-#         scores[~mask] = -np.inf
-#         best = int(np.argmax(scores))
-
-#         selected.append(best)
-#         mask[best] = False
-#         m = np.maximum(m, sim_matrix[:, best])
-
-#     return np.array(selected, dtype=np.intp)
-
-
-def fac_loc(
-    sim_to_query: NDArray[np.float32],
-    k: int,
-    sim_matrix: NDArray[np.float32],
-    lam: float = 0.5,
-    **_kwargs: object,
-) -> NDArray[np.intp]:
-    n = len(sim_to_query)
-    if n == 0:
-        return np.array([], dtype=np.intp)
-    k = min(k, n)
-
-    selected: list[int] = []
-    m = np.zeros(n, dtype=np.float64)
-
-    initial_coverage = np.maximum(0, sim_matrix).sum(axis=0) / n
-    initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
-
-    max_heap = [(-initial_gains[i], i, 0) for i in range(n)]
-    heapq.heapify(max_heap)
-
-    # Lazy Greedy Selection
-    for step in range(k):
-        while True:
-            # item with the highest historical gain
-            _, node_idx, last_update = heapq.heappop(max_heap)
-
-            if last_update == step:
-                selected.append(node_idx)
-                m = np.maximum(m, sim_matrix[:, node_idx])
-                break
-
-            marginal_cov = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
-            new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov
-            heapq.heappush(max_heap, (-new_gain, node_idx, step))
-
-    return np.array(selected, dtype=np.intp)
-
-
 STRATEGIES: dict[ScoringFunction, Callable[..., NDArray[np.intp]]] = {
     'top_k': top_k,
     'mmr': mmr,
     'gmmr': gmmr,
     'fps': fps,
-    'fac_loc': fac_loc,
+    'fac_loc': fac_loc_lazy_greedy,
 }
 
 

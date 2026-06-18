@@ -29,6 +29,7 @@ from experiments.medical_dataset_gen.retrieval.utils import (
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [
+    'MeanFacetHitRate@k',
     'FacetCoverage@k',
     'Precision@k',
     'DistractorRate',
@@ -40,7 +41,7 @@ _STATS_BEST_SORT = [
     'WFC',
     'alpha_nDCG',
 ]
-_STATS_BEST_DESC = [True, True, False, True, True, True, True, False, True, True]
+_STATS_BEST_DESC = [True, True, True, False, True, True, True, False, True, True, True]
 _QUERY_BEST_SORT = [
     'facet_coverage',
     'gold_precision',

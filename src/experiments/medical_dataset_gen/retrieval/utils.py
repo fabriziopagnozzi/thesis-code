@@ -17,7 +17,7 @@ import polars as pl
 from numpy.typing import NDArray
 
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
-from helpers.query_algorithms import fac_loc, mmr, top_k
+from helpers.query_algorithms import fac_loc_lazy_greedy, mmr, top_k
 
 type Strategy = Literal['top_k', 'mmr', 'fac_loc']
 
@@ -122,7 +122,7 @@ def select_indices(
             window=mmr_window,
         )
     if strategy == 'fac_loc':
-        return fac_loc(
+        return fac_loc_lazy_greedy(
             sim_to_query=sim_to_query,
             sim_matrix=sim_matrix,
             k=k,

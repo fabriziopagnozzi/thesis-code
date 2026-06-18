@@ -94,7 +94,7 @@ def plot_full_strategy_selection_overlay(
     render_k = int(artifact['k'] if k is None else k)
     effective_k = min(render_k, len(artifact['sim_to_query']))
     selection_variants = _selection_variants_for_k(artifact, effective_k)
-    n_cols = max(2, len(lambda_values))
+    n_cols = max(3, len(lambda_values))
     rows = ['mmr', 'fac_loc']
     fig, axes = plt.subplots(
         3,
@@ -130,7 +130,7 @@ def plot_full_strategy_selection_overlay(
         label='query cosine similarity',
     )
 
-    for col_idx in range(2, n_cols):
+    for col_idx in range(3, n_cols):
         axes[0, col_idx].axis('off')
 
     lambda_columns = sorted(lambda_values, reverse=True)
@@ -163,20 +163,14 @@ def plot_full_strategy_selection_overlay(
             axes[row_idx, col_idx].axis('off')
 
     legend_handles = _selection_legend_handles([ax for ax in axes.ravel() if ax.get_visible()])
-    fig.legend(
-        legend_handles.values(),
-        legend_handles.keys(),
-        fontsize=7,
-        frameon=False,
-        loc='center left',
-        bbox_to_anchor=(0.985, 0.5),
-    )
+    _draw_selection_legend_panel(axes[0, 2], legend_handles)
+
     fig.suptitle(
         f'{artifact_title_prefix(artifact)}: top-k, query cosine map, and lambda sweeps '
         f'at k={effective_k}' + (f' (requested {render_k})' if render_k != effective_k else ''),
         fontsize=12,
     )
-    fig.tight_layout(rect=(0, 0, 0.92, 0.95))
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(
         out_dir / f'full_strategy_selection_overlay_k{render_k}.png',
         dpi=150,
@@ -398,6 +392,19 @@ def _selection_legend_handles(axes: list[Any]) -> dict[str, Any]:
         ),
     )
     return legend_handles
+
+
+def _draw_selection_legend_panel(ax: Any, legend_handles: dict[str, Any]) -> None:
+    ax.axis('off')
+    ax.set_title('Legend')
+    ax.legend(
+        legend_handles.values(),
+        legend_handles.keys(),
+        fontsize=7,
+        frameon=False,
+        loc='center left',
+        bbox_to_anchor=(0.0, 0.5),
+    )
 
 
 def _plot_query_map_ax(

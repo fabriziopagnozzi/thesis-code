@@ -1,4 +1,3 @@
-# Full outer sentence frames; one is chosen per rendered duration chunk.
 duration_chunk_templates:
   - "{patient} was admitted with {condition}, with {presentation}. {duration_sentence}, and {response_verb} {response} during the treatment course. {close}"
   - "{patient} presented with {condition}, including {presentation}. {duration_sentence}, while {response_verb} {response} after active therapy. {close}"

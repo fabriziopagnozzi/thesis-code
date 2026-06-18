@@ -21,11 +21,14 @@ STRATEGY_STYLE: dict[str, dict[str, str]] = {
     'fac_loc': {'color': '#d62728', 'ls': '-', 'label': 'FacLoc'},
 }
 
+_MEAN_FACET_HIT_RATE = 'MeanFacetHitRate@k'
+_LEGACY_FACET_COVERAGE = 'FacetCoverage@k'
+
 _METRICS = [
-    ('FacetCoverage@k', 'facet_coverage', 'FacetCoverage@k', True),
+    (_MEAN_FACET_HIT_RATE, 'facet_coverage', 'MeanFacetHitRate@k', True),
+    ('MeanFacetRecall@k', 'weighted_facet_coverage', 'MeanFacetRecall@k', True),
     ('DistractorRate', 'distractor_rate', 'DistractorRate@k', False),
     ('Recall@k', 'gold_recall', 'Recall@k', True),
-    ('FacetMRR@k', 'facet_mrr_at_k', 'FacetMRR@k', True),
     ('alpha-nDCG@k', 'alpha_ndcg', 'alpha-nDCG@k', True),
     ('AnswerROUGE2Recall@k', 'answer_rouge2_recall', 'Answer ROUGE-2 Recall@k', True),
 ]
@@ -53,20 +56,25 @@ _ANSWER_ROUGE_METRICS = [
     ),
 ]
 
-_PRIMARY_SORT = ['FacetCoverage@k', 'Precision@k', 'DistractorRate', 'alpha-nDCG@k']
-_PRIMARY_DESC = [True, True, False, True]
-_LAMBDA_POLICY_NOTE = 'lambda*: max mean FacetCoverage@k within strategy x k'
+_PRIMARY_SORT = [
+    _MEAN_FACET_HIT_RATE,
+    _LEGACY_FACET_COVERAGE,
+    'Precision@k',
+    'DistractorRate',
+    'alpha-nDCG@k',
+]
+_PRIMARY_DESC = [True, True, True, False, True]
+_LAMBDA_POLICY_NOTE = 'lambda*: max mean MeanFacetHitRate@k within strategy x k'
 
 
 def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
-    _ = cfg
     stats_path = paths.table_path('evaluation_stats')
     results_path = paths.table_path('evaluation_results')
     if not stats_path.exists() or not results_path.exists():
         print('Skipping eval figures: evaluation_stats or evaluation_results not found')
         return
 
-    stats_df = read_parquet(paths, 'evaluation_stats')
+    stats_df = _normalize_stats_df(read_parquet(paths, 'evaluation_stats'))
     results_df = read_parquet(paths, 'evaluation_results')
     if stats_df.is_empty() or results_df.is_empty():
         print('Skipping eval figures: evaluation tables are empty')
@@ -82,8 +90,9 @@ def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> Non
     plot_gain_over_topk(stats_df, results_df, out_dir)
     plot_gain_over_topk_simple(stats_df, results_df, out_dir)
     plot_selection_diagnostics(stats_df, out_dir)
-    plot_answer_rouge_comparison(stats_df, results_df, out_dir)
-    plot_answer_rouge_lambda_sensitivity(stats_df, out_dir)
+    if cfg.retrieval.compute_answer_rouge:
+        plot_answer_rouge_comparison(stats_df, results_df, out_dir)
+        plot_answer_rouge_lambda_sensitivity(stats_df, out_dir)
 
     print(f'[plots] saved evaluation figures to {out_dir}')
 
@@ -100,6 +109,7 @@ def plot_strategy_comparison(
     """
     import matplotlib.pyplot as plt
 
+    stats_df = _normalize_stats_df(stats_df)
     k_values = sorted(stats_df['k'].unique().to_list())
     strategies = _ordered_strategies(stats_df)
     metrics = _available_metrics(stats_df, results_df)
@@ -198,6 +208,7 @@ def plot_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """All strategy metrics as lambda changes."""
     import matplotlib.pyplot as plt
 
+    stats_df = _normalize_stats_df(stats_df)
     diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
     if not diversity_strategies:
         return
@@ -283,6 +294,7 @@ def plot_strategy_comparison_all_lambdas(
     """Metric-vs-k lines, fac-loc vs MMR, split into one column per lambda."""
     import matplotlib.pyplot as plt
 
+    stats_df = _normalize_stats_df(stats_df)
     lambda_values = _lambda_values(stats_df)
     if not lambda_values:
         return
@@ -377,10 +389,10 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
     best_k = _best_topk_k(results_df)
     strategies = _ordered_strategies(results_df)
     metric_cols = [
-        ('facet_coverage', 'FacetCoverage@k'),
+        ('facet_coverage', 'MeanFacetHitRate@k'),
+        ('weighted_facet_coverage', 'MeanFacetRecall@k'),
         ('distractor_rate', 'DistractorRate@k'),
         ('gold_recall', 'Recall@k'),
-        ('facet_mrr_at_k', 'FacetMRR@k'),
         ('alpha_ndcg', 'alpha-nDCG@k'),
         ('answer_rouge2_recall', 'Answer ROUGE-2 Recall@k'),
     ]
@@ -441,6 +453,7 @@ def plot_gain_over_topk(
     import matplotlib.pyplot as plt
     import numpy as np
 
+    stats_df = _normalize_stats_df(stats_df)
     diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
     if not diversity_strategies:
         return
@@ -542,6 +555,7 @@ def plot_gain_over_topk_simple(
     import matplotlib.pyplot as plt
     import numpy as np
 
+    stats_df = _normalize_stats_df(stats_df)
     diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
     if not diversity_strategies:
         return
@@ -630,6 +644,7 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Diagnostic metrics that explain why a strategy wins or fails."""
     import matplotlib.pyplot as plt
 
+    stats_df = _normalize_stats_df(stats_df)
     k_values = sorted(stats_df['k'].unique().to_list())
     strategies = _ordered_strategies(stats_df)
     metric_cols = [
@@ -702,6 +717,7 @@ def plot_answer_rouge_comparison(
     """Auxiliary answer-token overlap diagnostics."""
     import matplotlib.pyplot as plt
 
+    stats_df = _normalize_stats_df(stats_df)
     metrics = _available_answer_rouge_metrics(stats_df, results_df)
     if not metrics:
         return
@@ -806,6 +822,7 @@ def plot_answer_rouge_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) 
     """Auxiliary ROUGE metrics as lambda changes."""
     import matplotlib.pyplot as plt
 
+    stats_df = _normalize_stats_df(stats_df)
     metric_cols = [
         (stats_col, title)
         for stats_col, _, title, _ in _ANSWER_ROUGE_METRICS
@@ -905,6 +922,16 @@ def _ordered_strategies(df: pl.DataFrame) -> list[str]:
     ordered = [s for s in preferred if s in present]
     ordered.extend(sorted(present - set(ordered)))
     return ordered
+
+
+def _normalize_stats_df(stats_df: pl.DataFrame) -> pl.DataFrame:
+    exprs: list[pl.Expr] = []
+    columns = set(stats_df.columns)
+    if _MEAN_FACET_HIT_RATE not in columns and _LEGACY_FACET_COVERAGE in columns:
+        exprs.append(pl.col(_LEGACY_FACET_COVERAGE).alias(_MEAN_FACET_HIT_RATE))
+    if _LEGACY_FACET_COVERAGE not in columns and _MEAN_FACET_HIT_RATE in columns:
+        exprs.append(pl.col(_MEAN_FACET_HIT_RATE).alias(_LEGACY_FACET_COVERAGE))
+    return stats_df.with_columns(exprs) if exprs else stats_df
 
 
 def _available_metrics(
@@ -1164,19 +1191,20 @@ def _best_result_slice(results_df: pl.DataFrame, strategy: str, k: int) -> pl.Da
     strat_df = results_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
     if strategy == 'top_k' or strat_df.height == 0:
         return strat_df
-    ranked = (
+    ranked = _normalize_stats_df(
         strat_df
         .group_by('lam')
         .agg(
-            pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
+            pl.col('facet_coverage').mean().alias(_MEAN_FACET_HIT_RATE),
             pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k')
             if 'alpha_ndcg' in strat_df.columns
             else pl.col('facet_coverage').mean().alias('alpha-nDCG@k'),
             pl.col('gold_precision').mean().alias('Precision@k'),
             pl.col('distractor_rate').mean().alias('DistractorRate'),
         )
-        .sort(_PRIMARY_SORT, descending=_PRIMARY_DESC)
     )
+    sort_cols, desc = _available_sort(ranked)
+    ranked = ranked.sort(sort_cols, descending=desc)
     return strat_df.filter(pl.col('lam') == ranked['lam'][0]) if ranked.height > 0 else strat_df
 
 

@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import polars as pl
 import yaml
-from pydantic import BaseModel, Field, PositiveFloat, PositiveInt
+from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
 from experiments.medical_dataset_gen.generation.schemas import QueryType
 from helpers.dir_paths import ROOT_DIR
@@ -79,12 +79,13 @@ class RetrievalCfg(BaseModel):
     pool_scope: Literal['query_local', 'same_condition', 'full_corpus'] = 'query_local'
     candidate_pool_n: PositiveInt = 300
     k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
-    lambda_values: list[PositiveFloat] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
+    lambda_values: list[NonNegativeFloat] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
     strategies: list[Literal['top_k', 'mmr', 'fac_loc']] = Field(
         default_factory=lambda: ['top_k', 'mmr', 'fac_loc']
     )
     mmr_window: int | None = None
     only_pass_geometry: bool = True
+    compute_answer_rouge: bool = True
 
 
 class GeometryCfg(BaseModel):
@@ -204,40 +205,12 @@ def load_config_from_cli() -> ExperimentCfg:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
     parser.add_argument('--max-queries', type=int, default=None)
-    parser.add_argument('--embedding-model', type=str, default=None)
-    parser.add_argument('--device', type=str, default=None)
     parser.add_argument(
         '--embedding-devices',
         type=str,
         default=None,
         help='Comma-separated SentenceTransformers target devices, e.g. cuda:0,cuda:1',
     )
-    parser.add_argument('--batch-size', type=int, default=None)
-    parser.add_argument('--llm-name', type=str, default=None)
-    parser.add_argument('--llm-workers', type=int, default=None)
-    parser.add_argument(
-        '--pool-scope',
-        choices=['query_local', 'same_condition', 'full_corpus'],
-        default=None,
-    )
-    parser.add_argument('--embedding-geometry-queries', type=int, default=None)
-    parser.add_argument('--embedding-geometry-k', type=int, default=None)
-    parser.add_argument('--embedding-geometry-reduction', choices=['umap', 'pca'], default=None)
-    parser.add_argument(
-        '--embedding-geometry-query-selection', choices=['mixed', 'best'], default=None
-    )
-    llm_chunk_group = parser.add_mutually_exclusive_group()
-    llm_chunk_group.add_argument('--llm-chunks', dest='llm_chunks', action='store_true')
-    llm_chunk_group.add_argument('--no-llm-chunks', dest='llm_chunks', action='store_false')
-    parser.set_defaults(llm_chunks=None)
-    llm_chunk_rewrite_group = parser.add_mutually_exclusive_group()
-    llm_chunk_rewrite_group.add_argument(
-        '--llm-chunk-rewrite', dest='llm_chunk_rewrite', action='store_true'
-    )
-    llm_chunk_rewrite_group.add_argument(
-        '--no-llm-chunk-rewrite', dest='llm_chunk_rewrite', action='store_false'
-    )
-    parser.set_defaults(llm_chunk_rewrite=None)
     args, unknown = parser.parse_known_args()
     if any(token == '--config' or token.startswith('--config=') for token in unknown):
         raise ValueError(
@@ -245,37 +218,13 @@ def load_config_from_cli() -> ExperimentCfg:
             'place _config.yaml in the target experiment directory instead'
         )
 
-    cfg = load_config(exp=args.exp)
+    cfg: ExperimentCfg = load_config(exp=args.exp)  # a pydantic validated model
     if args.max_queries is not None:
         cfg.global_.n_queries = args.max_queries
-    if args.embedding_model is not None:
-        cfg.embeddings.model_name = args.embedding_model
-    if args.device is not None:
-        cfg.embeddings.device = args.device
     if args.embedding_devices is not None:
         cfg.embeddings.devices = [
             device.strip() for device in args.embedding_devices.split(',') if device.strip()
         ]
-    if args.batch_size is not None:
-        cfg.embeddings.batch_size = args.batch_size
-    if args.llm_name is not None:
-        cfg.generation.llm_name = args.llm_name
-    if args.llm_workers is not None:
-        cfg.generation.llm_workers = args.llm_workers
-    if args.pool_scope is not None:
-        cfg.retrieval.pool_scope = args.pool_scope
-    if args.embedding_geometry_queries is not None:
-        cfg.embedding_geometry.n_queries = args.embedding_geometry_queries
-    if args.embedding_geometry_k is not None:
-        cfg.embedding_geometry.plot_k = args.embedding_geometry_k
-    if args.embedding_geometry_reduction is not None:
-        cfg.embedding_geometry.reduction = args.embedding_geometry_reduction
-    if args.embedding_geometry_query_selection is not None:
-        cfg.embedding_geometry.query_selection = args.embedding_geometry_query_selection
-    if args.llm_chunks is not None:
-        cfg.generation.use_llm_chunk_generation = args.llm_chunks
-    if args.llm_chunk_rewrite is not None:
-        cfg.generation.use_llm_chunk_rewriting = args.llm_chunk_rewrite
     return cfg
 
 

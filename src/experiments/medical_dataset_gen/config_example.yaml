@@ -79,6 +79,7 @@ retrieval:
   k_values: [5, 10, 20]
   lambda_values: [0.3, 0.5, 0.7] # Low lambda favors diversity/coverage; high lambda favors query similarity.
   mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
+  compute_answer_rouge: true # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
 
   # If true, evaluation skips queries that fail the geometric prefilter.
   # Set false only when diagnosing failed query/corpus generation.

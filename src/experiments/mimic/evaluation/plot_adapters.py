@@ -27,6 +27,8 @@ def adapt_stats_for_synthetic_plots(stats_df: pl.DataFrame) -> pl.DataFrame:
         return stats_df
 
     exprs: list[pl.Expr] = []
+    if 'AR' in stats_df.columns and 'MeanFacetHitRate@k' not in stats_df.columns:
+        exprs.append(pl.col('AR').alias('MeanFacetHitRate@k'))
     if 'AR' in stats_df.columns and 'FacetCoverage@k' not in stats_df.columns:
         exprs.append(pl.col('AR').alias('FacetCoverage@k'))
     if 'GP' in stats_df.columns and 'Precision@k' not in stats_df.columns:

@@ -262,6 +262,145 @@ def add_text_panel(
         r.font.color.rgb = body_color
 
 
+def add_table_panel(
+    slide,
+    *,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    title: str,
+    columns: list[str],
+    rows: list[tuple[str, ...]],
+    accent: RGBColor = BLUE,
+    title_size: int = 18,
+    header_size: int = 12,
+    body_size: int = 12,
+    note: str | None = None,
+    col_widths: list[float] | None = None,
+) -> None:
+    panel = slide.shapes.add_shape(
+        MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE,
+        Inches(x),
+        Inches(y),
+        Inches(w),
+        Inches(h),
+    )
+    panel.fill.solid()
+    panel.fill.fore_color.rgb = PANEL
+    panel.line.fill.background()
+
+    bar = slide.shapes.add_shape(
+        MSO_AUTO_SHAPE_TYPE.RECTANGLE, Inches(x), Inches(y), Inches(0.1), Inches(h)
+    )
+    bar.fill.solid()
+    bar.fill.fore_color.rgb = accent
+    bar.line.fill.background()
+
+    title_box = slide.shapes.add_textbox(
+        Inches(x + 0.18), Inches(y + 0.12), Inches(w - 0.32), Inches(0.3)
+    )
+    tf_title = title_box.text_frame
+    tf_title.clear()
+    p_title = tf_title.paragraphs[0]
+    r_title = p_title.add_run()
+    r_title.text = title
+    r_title.font.name = FONT_BODY
+    r_title.font.bold = True
+    r_title.font.size = Pt(title_size)
+    r_title.font.color.rgb = WHITE
+
+    note_h = 0.42 if note else 0.0
+    table_x = x + 0.18
+    table_y = y + 0.5
+    table_w = w - 0.34
+    table_h = h - 0.66 - note_h
+    shape = slide.shapes.add_table(
+        len(rows) + 1,
+        len(columns),
+        Inches(table_x),
+        Inches(table_y),
+        Inches(table_w),
+        Inches(table_h),
+    )
+    table = shape.table
+
+    if col_widths is None:
+        col_widths = [table_w / len(columns)] * len(columns)
+    for idx, width in enumerate(col_widths):
+        table.columns[idx].width = Inches(width)
+
+    header_fill = accent
+    row_fill = RGBColor(39, 46, 63)
+    alt_fill = RGBColor(34, 41, 57)
+    def style_cell(
+        cell,
+        text: str,
+        *,
+        fill: RGBColor,
+        color: RGBColor,
+        size: int,
+        bold: bool = False,
+        align: PP_ALIGN = PP_ALIGN.LEFT,
+    ) -> None:
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = fill
+        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+        cell.margin_left = Inches(0.06)
+        cell.margin_right = Inches(0.05)
+        cell.margin_top = Inches(0.03)
+        cell.margin_bottom = Inches(0.03)
+
+        tf = cell.text_frame
+        tf.clear()
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.alignment = align
+        p.space_after = Pt(0)
+        r = p.add_run()
+        r.text = text
+        r.font.name = FONT_BODY
+        r.font.size = Pt(size)
+        r.font.bold = bold
+        r.font.color.rgb = color
+
+    for col_idx, head in enumerate(columns):
+        style_cell(
+            table.cell(0, col_idx),
+            head,
+            fill=header_fill,
+            color=WHITE,
+            size=header_size,
+            bold=True,
+            align=PP_ALIGN.CENTER,
+        )
+
+    for row_idx, row in enumerate(rows, start=1):
+        fill = row_fill if row_idx % 2 else alt_fill
+        for col_idx, value in enumerate(row):
+            style_cell(
+                table.cell(row_idx, col_idx),
+                value,
+                fill=fill,
+                color=WHITE if col_idx == 0 else MUTED,
+                size=body_size,
+                bold=col_idx == 0,
+            )
+
+    if note:
+        note_box = slide.shapes.add_textbox(
+            Inches(x + 0.18), Inches(y + h - 0.3), Inches(w - 0.34), Inches(0.18)
+        )
+        tf_note = note_box.text_frame
+        tf_note.clear()
+        p_note = tf_note.paragraphs[0]
+        r_note = p_note.add_run()
+        r_note.text = note
+        r_note.font.name = FONT_BODY
+        r_note.font.size = Pt(10)
+        r_note.font.color.rgb = MUTED
+
+
 def add_two_col_artifact_slide(slide) -> None:
     set_bg(slide)
     add_title(slide, "Pipeline Overview", y=0.6, rule_y=1.36)
@@ -652,6 +791,164 @@ def add_expected_behavior_slide(slide) -> None:
     )
 
 
+def add_metrics_table_slide(slide) -> None:
+    set_bg(slide)
+    add_title(slide, "Metric Cheat Sheet", y=0.62, rule_y=1.37)
+
+    add_text_panel(
+        slide,
+        x=0.98,
+        y=1.72,
+        w=11.2,
+        h=0.84,
+        title="What the main scores are trying to separate",
+        lines=[
+            "The benchmark is not only about retrieving gold chunks. It is about covering distinct answer facets while avoiding redundancy and distractor drift."
+        ],
+        accent=BLUE,
+        title_size=18,
+        body_size=15,
+        body_color=WHITE,
+    )
+    add_table_panel(
+        slide,
+        x=0.98,
+        y=2.8,
+        w=11.2,
+        h=4.15,
+        title="Headline and auxiliary metrics",
+        columns=["Metric", "What it measures", "How to read it"],
+        rows=[
+            (
+                "MeanFacetHitRate@k",
+                "Fraction of planned answer facets hit at least once.",
+                "Higher is better; this is the main binary coverage signal.",
+            ),
+            (
+                "MeanFacetRecall@k",
+                "Mean per-facet recall over selected_facet_chunks / total_facet_chunks.",
+                "Higher is better; rewards deeper recovery inside each facet.",
+            ),
+            (
+                "Recall@k",
+                "Fraction of all gold chunks retrieved, regardless of facet balance.",
+                "Higher is better, but it can still reward redundant same-facet picks.",
+            ),
+            (
+                "Precision@k",
+                "Fraction of selected chunks that are gold for any facet.",
+                "Higher is better; useful, but not enough on its own for multi-facet QA.",
+            ),
+            (
+                "alpha-nDCG@k",
+                "Ranking gain with diminishing reward for repeated same-facet evidence.",
+                "Higher is better; rewards early relevance plus early diversity.",
+            ),
+            (
+                "AnswerROUGE2Recall@k",
+                "ROUGE-2 recall between the answer synthesized from selected chunks and the canonical answer.",
+                "Higher is better; useful answer-overlap evidence, but still auxiliary to facet coverage.",
+            ),
+            (
+                "DistractorRate",
+                "Fraction of selected chunks that are non-gold.",
+                "Lower is better; diversity that drifts into negatives is not a win.",
+            ),
+        ],
+        accent=GREEN,
+        title_size=19,
+        header_size=12,
+        body_size=11,
+        note="`FacetCoverage@k` is kept in the stats table as a compatibility alias for `MeanFacetHitRate@k`.",
+        col_widths=[2.25, 5.0, 3.61],
+    )
+
+
+def add_diagnostics_table_slide(slide) -> None:
+    set_bg(slide)
+    add_title(slide, "Diagnostic Cheat Sheet", y=0.62, rule_y=1.37)
+
+    add_text_panel(
+        slide,
+        x=0.98,
+        y=1.72,
+        w=11.2,
+        h=0.84,
+        title="Why diagnostics matter",
+        lines=[
+            "Diagnostics explain why a strategy won or failed. They are support signals for interpretation, not the primary gold-label success criteria."
+        ],
+        accent=ORANGE,
+        title_size=18,
+        body_size=15,
+        body_color=WHITE,
+    )
+    add_table_panel(
+        slide,
+        x=0.98,
+        y=2.78,
+        w=5.45,
+        h=3.95,
+        title="Redundancy and distractors",
+        columns=["Diagnostic", "Interpretation"],
+        rows=[
+            (
+                "DominantFacetRate",
+                "How much of the context budget collapses into the planned dominant facet.",
+            ),
+            (
+                "RedundantGoldRate",
+                "Gold chunks that add no new facet beyond what was already covered.",
+            ),
+            (
+                "NearMissDistractorRate",
+                "Facet-like hard negatives that a selector mistakenly pulls in.",
+            ),
+            (
+                "BackgroundOutlierRate",
+                "Selections from the coherent but irrelevant clinical island.",
+            ),
+        ],
+        accent=BLUE_2,
+        title_size=18,
+        header_size=12,
+        body_size=11,
+        col_widths=[1.95, 3.14],
+    )
+    add_table_panel(
+        slide,
+        x=6.73,
+        y=2.78,
+        w=5.45,
+        h=3.95,
+        title="Embedding and selector behavior",
+        columns=["Diagnostic", "Interpretation"],
+        rows=[
+            (
+                "fac",
+                "Facility-location objective value on the selected set inside the candidate pool.",
+            ),
+            (
+                "avg_cos",
+                "Average query cosine of selected chunks; can drop if coverage improves.",
+            ),
+            (
+                "jac",
+                "Jaccard overlap with top-k; shows whether a method truly changed the set.",
+            ),
+            (
+                "AnyDistractorRate",
+                "Explicit alias for the total non-gold selection rate in newer runs.",
+            ),
+        ],
+        accent=GREEN,
+        title_size=18,
+        header_size=12,
+        body_size=11,
+        col_widths=[1.65, 3.44],
+    )
+
+
 def build_deck() -> Presentation:
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -785,6 +1082,14 @@ def build_deck() -> Presentation:
     slide = prs.slides.add_slide(blank)
     add_expected_behavior_slide(slide)
     add_slide_num(slide, 9)
+
+    slide = prs.slides.add_slide(blank)
+    add_metrics_table_slide(slide)
+    add_slide_num(slide, 10)
+
+    slide = prs.slides.add_slide(blank)
+    add_diagnostics_table_slide(slide)
+    add_slide_num(slide, 11)
 
     return prs
 

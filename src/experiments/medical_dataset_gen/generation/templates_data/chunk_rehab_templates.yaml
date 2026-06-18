@@ -1,6 +1,3 @@
-# Surface forms used when render_rehab_chunk() turns a rehab-outcome fact into text.
-
-# Full outer sentence frames; one is chosen per rendered rehab chunk.
 rehab_chunk_templates:
   - "{patient} was managed for {condition}, with {presentation}. {transition}, {functional_detail}; {rehab_outcome_verb} {rehab_outcome}. {close}"
   - "{patient} received inpatient care for {condition} after {presentation}. {transition}, {functional_detail}, and {rehab_outcome_verb} {rehab_outcome}. {close}"

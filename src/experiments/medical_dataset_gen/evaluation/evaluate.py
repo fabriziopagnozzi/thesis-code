@@ -137,6 +137,7 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
     )
 
     rows: list[dict[str, Any]] = []
+    compute_answer_rouge = cfg.retrieval.compute_answer_rouge
     for query in tqdm(
         queries.iter_rows(named=True), total=len(queries), desc='Evaluating', dynamic_ncols=True
     ):
@@ -149,10 +150,18 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
         answer_refs = answer_refs_by_query.get(qid, {})
         if not query_facet_gold or not query_all_gold:
             continue
-        query_terms = _answer_metric_query_terms(str(query.get('query_text') or ''))
-        answer_rouge_refs = _prepare_answer_rouge_refs(
-            answer_refs=answer_refs,
-            query_terms=query_terms,
+        query_terms = (
+            _answer_metric_query_terms(str(query.get('query_text') or ''))
+            if compute_answer_rouge
+            else set()
+        )
+        answer_rouge_refs = (
+            _prepare_answer_rouge_refs(
+                answer_refs=answer_refs,
+                query_terms=query_terms,
+            )
+            if compute_answer_rouge
+            else None
         )
 
         qidx = maps['query_id_to_idx'][qid]
@@ -177,10 +186,14 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
         sim_matrix = candidate_vectors @ candidate_vectors.T
         sim_to_query = topn_sims.astype(np.float32)
         candidate_chunk_ids = [chunk_ids[i] for i in topn_global]
-        candidate_rouge_text_by_id = _preprocess_candidate_chunk_texts(
-            candidate_chunk_ids=candidate_chunk_ids,
-            chunk_by_id=maps['chunk_by_id'],
-            query_terms=query_terms,
+        candidate_rouge_text_by_id = (
+            _preprocess_candidate_chunk_texts(
+                candidate_chunk_ids=candidate_chunk_ids,
+                chunk_by_id=maps['chunk_by_id'],
+                query_terms=query_terms,
+            )
+            if compute_answer_rouge
+            else None
         )
         answer_rouge_cache: dict[tuple[str, ...], dict[str, float]] = {}
         topk_by_k: dict[int, np.ndarray] = {}
@@ -208,18 +221,22 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
                     )
                     selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
                     topk_ref = topk_by_k[k]
-                    answer_rouge_key = tuple(str(chunk_id) for chunk_id in selected_chunk_ids)
-                    answer_rouge = answer_rouge_cache.get(answer_rouge_key)
-                    if answer_rouge is None:
-                        answer_rouge = _answer_rouge_metrics(
-                            selected_chunk_ids=selected_chunk_ids,
-                            candidate_rouge_text_by_id=candidate_rouge_text_by_id,
-                            reference_ngrams=dict(answer_rouge_refs['answer_ngrams']),
-                            facet_reference_rouge1_ngrams=list(
-                                answer_rouge_refs['facet_rouge1_ngrams']
-                            ),
-                        )
-                        answer_rouge_cache[answer_rouge_key] = answer_rouge
+                    answer_rouge: dict[str, float] = {}
+                    if compute_answer_rouge:
+                        assert answer_rouge_refs is not None
+                        answer_rouge_key = tuple(str(chunk_id) for chunk_id in selected_chunk_ids)
+                        cached_answer_rouge = answer_rouge_cache.get(answer_rouge_key)
+                        if cached_answer_rouge is None:
+                            cached_answer_rouge = _answer_rouge_metrics(
+                                selected_chunk_ids=selected_chunk_ids,
+                                candidate_rouge_text_by_id=candidate_rouge_text_by_id or {},
+                                reference_ngrams=dict(answer_rouge_refs['answer_ngrams']),
+                                facet_reference_rouge1_ngrams=list(
+                                    answer_rouge_refs['facet_rouge1_ngrams']
+                                ),
+                            )
+                            answer_rouge_cache[answer_rouge_key] = cached_answer_rouge
+                        answer_rouge = cached_answer_rouge
                     row = {
                         'query_id': qid,
                         'query_type': query['query_type'],
@@ -277,37 +294,44 @@ def _assert_pool_scope_match(
 def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
     if len(results) == 0:
         return pl.DataFrame()
+    agg_exprs: list[pl.Expr] = [
+        pl.col('query_id').n_unique().alias('n_queries'),
+        pl.col('gold_precision').mean().alias('Precision@k'),
+        pl.col('gold_recall').mean().alias('Recall@k'),
+        pl.col('gold_f1').mean().alias('F1@k'),
+        pl.col('average_precision_at_k').mean().alias('MAP@k'),
+        pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
+        pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
+        pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
+        pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
+        pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
+        pl.col('distractor_rate').mean().alias('DistractorRate'),
+        pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
+        pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
+        pl.col('any_distractor_rate').mean().alias('AnyDistractorRate'),
+        pl.col('dominant_facet_rate').mean().alias('DominantFacetRate'),
+        pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
+        pl.col('fac_cov_score').mean().alias('fac'),
+        pl.col('avg_cos').mean().alias('avg_cos'),
+        pl.col('jaccard_vs_topk').mean().alias('jac'),
+    ]
+    optional_rouge_exprs = [
+        ('answer_rouge1_recall', 'AnswerROUGE1Recall@k'),
+        ('answer_rouge1_precision', 'AnswerROUGE1Precision@k'),
+        ('answer_rouge2_recall', 'AnswerROUGE2Recall@k'),
+        ('macro_facet_answer_rouge1_recall', 'MacroFacetAnswerROUGE1Recall@k'),
+    ]
+    agg_exprs.extend(
+        pl.col(source_col).mean().alias(target_col)
+        for source_col, target_col in optional_rouge_exprs
+        if source_col in results.columns
+    )
     stats = (
         results.group_by('strategy', 'lam', 'k')
-        .agg(
-            pl.col('query_id').n_unique().alias('n_queries'),
-            pl.col('gold_precision').mean().alias('Precision@k'),
-            pl.col('gold_recall').mean().alias('Recall@k'),
-            pl.col('gold_f1').mean().alias('F1@k'),
-            pl.col('average_precision_at_k').mean().alias('MAP@k'),
-            pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
-            pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
-            pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
-            pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
-            pl.col('answer_rouge1_recall').mean().alias('AnswerROUGE1Recall@k'),
-            pl.col('answer_rouge1_precision').mean().alias('AnswerROUGE1Precision@k'),
-            pl.col('answer_rouge2_recall').mean().alias('AnswerROUGE2Recall@k'),
-            pl.col('macro_facet_answer_rouge1_recall').mean().alias(
-                'MacroFacetAnswerROUGE1Recall@k'
-            ),
-            pl.col('distractor_rate').mean().alias('DistractorRate'),
-            pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
-            pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
-            pl.col('any_distractor_rate').mean().alias('AnyDistractorRate'),
-            pl.col('dominant_facet_rate').mean().alias('DominantFacetRate'),
-            pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
-            pl.col('fac_cov_score').mean().alias('fac'),
-            pl.col('avg_cos').mean().alias('avg_cos'),
-            pl.col('jaccard_vs_topk').mean().alias('jac'),
-        )
+        .agg(agg_exprs)
         .sort('k', 'strategy', 'lam')
     )
-    return stats.select(
+    ordered_cols = [
         'strategy',
         'lam',
         'k',
@@ -316,6 +340,7 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
         'Recall@k',
         'F1@k',
         'MAP@k',
+        'MeanFacetHitRate@k',
         'FacetCoverage@k',
         'MeanFacetRecall@k',
         'FacetMRR@k',
@@ -333,7 +358,8 @@ def summarize_results(results: pl.DataFrame) -> pl.DataFrame:
         'fac',
         'avg_cos',
         'jac',
-    )
+    ]
+    return stats.select([col for col in ordered_cols if col in stats.columns])
 
 
 def _facet_gold_map(qrels: pl.DataFrame) -> dict[str, dict[str, list[str]]]:

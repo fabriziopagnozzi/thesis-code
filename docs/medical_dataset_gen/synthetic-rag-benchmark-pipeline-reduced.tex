@@ -40,137 +40,108 @@
 
 \section{Pipeline Core Design}
 
-The current implementation builds the benchmark from hidden structure before any retrieval text exists. This is the important reversal from the old MIMIC-IV-only workflow: the code first creates a controlled multi-facet retrieval problem, then renders it into clinical prose, embeds it, filters by geometry, and finally evaluates retrieval.
+The benchmark is built from hidden structure before any retrieval text exists. This is the important reversal from the old MIMIC-IV-only workflow: instead of starting from raw clinical notes and hoping a clean coverage problem appears, the pipeline first defines the multi-facet evidence structure, then renders it into clinical prose, embeds it, filters it by geometry, and finally evaluates retrieval.
 
 \begin{enumerate}[noitemsep, topsep=0pt]
-	\item load a controlled ontology of conditions, subgroup labels, and two clinical axes;
+	\item define a controlled ontology of conditions, subgroup labels, and two clinical axes;
 	\item enumerate hidden query plans with four required answer facets;
 	\item optionally calibrate which facet should be overrepresented using probe embeddings;
-	\item generate structured clinical fact rows for gold facets, near-miss distractors, and background outlier clusters;
-	\item render fact rows into validated clinical-style chunk documents;
-	\item render deterministic natural-language queries and canonical gold answers;
-	\item derive qrels directly from the hidden chunk--facet membership table;
+	\item generate structured clinical facts for gold facets, near-miss distractors, and background outlier clusters;
+	\item render those facts into validated clinical-style chunks;
+	\item render natural-language queries and canonical gold answers;
+	\item derive qrels directly from the hidden chunk--facet mapping;
 	\item embed queries and chunks, filter queries by coverage-sensitive embedding geometry, and evaluate top-$k$, MMR, and facility-location.
 \end{enumerate}
 
-The implementation lives under:
+\subsection{Current Benchmark Shape}
 
-\begin{lstlisting}[style=promptstyle]
-src/experiments/medical_dataset_gen
-\end{lstlisting}
-
-The pipeline entry point is:
-
-\begin{lstlisting}[style=promptstyle]
-uv run python -m experiments.medical_dataset_gen.run_pipeline --exp <experiment>
-\end{lstlisting}
-
-The experiment configuration must already exist at:
-
-\begin{lstlisting}[style=promptstyle]
-src/experiments/medical_dataset_gen/_results/<experiment>/_config.yaml
-\end{lstlisting}
-
-The code intentionally no longer reads a source-level \field{\_config.yaml} or copies a default config. CLI flags only override selected fields of the per-experiment config. The default ontology is \field{ontology.yaml}, unless \field{generation.ontology\_path} points to a different YAML file.
-
-\subsection{Current MVP}
-
-The current MVP is small but no longer just a sketch. The executable pipeline is defined by \field{run\_pipeline.py}:
+The reduced benchmark is still deliberately small, but it already has the full design pattern needed for the thesis:
 
 \begingroup
 \renewcommand{\arraystretch}{1.15}
 \begin{center}
-	\begin{tabular}{@{}p{2.7cm}p{5.2cm}p{6.4cm}@{}}
+	\begin{tabular}{@{}p{3.1cm}p{5.4cm}p{5.8cm}@{}}
 		\toprule
-		\textbf{Stage name} & \textbf{Function} & \textbf{Main output} \\
+		\textbf{Stage} & \textbf{Design role} & \textbf{Result} \\
 		\midrule
-		\field{plans} & \field{run\_make\_query\_plans()} & \field{query\_plans.parquet} \\
-		\field{calibrate\_plans} & \field{run\_calibrate\_query\_plans()} & \field{query\_plans.parquet}, \field{query\_plan\_calibration.parquet} \\
-		\field{facts} & \field{run\_make\_facts()} & \field{clinical\_facts.parquet} \\
-		\field{chunks} & \field{run\_make\_chunks()} & \field{chunk\_documents.parquet}, \field{chunk\_memberships.parquet}, \field{generation\_rejects.parquet} \\
-		\field{queries\_answers} & \field{run\_make\_queries\_answers()} & \field{queries.parquet}, \field{gold\_answers.parquet} \\
-		\field{qrels} & \field{run\_make\_qrels()} & \field{qrels.parquet} \\
-		\field{embed} & \field{run\_embed()} & embedding memmaps and \field{embeddings\_metadata.json} \\
-		\field{geom\_filter} & \field{run\_filter\_geometry()} & \field{geometry\_stats.parquet} \\
-		\field{eval} & \field{run\_evaluate()} & \field{evaluation\_results.parquet}, \field{evaluation\_stats.parquet} \\
-		\field{geom\_plots} & \field{run\_embedding\_geometry()} & embedding-geometry parquet diagnostics and figures \\
-		\field{eval\_plots} & \field{store\_eval\_figures()} & evaluation figures \\
+		Query planning & Define the hidden retrieval problem & Condition, subgroup pair, facet plan, and dominant facet choice \\
+		Fact generation & Expand each facet into evidence and distractors & Hidden structured clinical facts with gold and non-gold roles \\
+		Chunk rendering & Turn facts into retrievable text & Clinical-style evidence chunks plus query-specific memberships \\
+		Query and answer generation & Expose the user-facing task & Natural-language queries and canonical answers \\
+		Qrel projection & Fix relevance before retrieval & Query--chunk labels derived from the hidden construction \\
+		Embedding and filtering & Check whether the benchmark geometry is usable & Candidate pools where top-$k$ is likely to collapse and coverage can matter \\
+		Retrieval evaluation & Compare ranking strategies & Top-$k$, MMR, and facility-location under the same candidate pool \\
+		Diagnostics & Make the benchmark behavior inspectable & Geometry plots and retrieval comparison plots \\
 		\bottomrule
 	\end{tabular}
 \end{center}
 \endgroup
 
-Stages can be sliced with the implemented CLI flags:
+The cleanest setting for understanding the benchmark is a \emph{query-local} candidate pool. In that setting, each query retrieves from its own controlled local universe: gold chunks, hard near-miss distractors, and optional background outlier clusters. Broader candidate pools can also be studied, but the query-local setting makes the intended mechanism easiest to diagnose.
 
-\begin{lstlisting}[style=promptstyle]
-uv run python -m experiments.medical_dataset_gen.run_pipeline --exp mvp --only chunks
-uv run python -m experiments.medical_dataset_gen.run_pipeline --exp mvp --from embed
-uv run python -m experiments.medical_dataset_gen.run_pipeline --exp mvp --from geom_filter --to eval_plots
-\end{lstlisting}
-
-The default benchmark focus is \field{retrieval.pool\_scope=query\_local}. In this setting the candidate pool for a query is the controlled local universe generated for that query: gold chunks, hard near-miss distractors, and any configured background outlier clusters. The code also supports \field{same\_condition} and \field{full\_corpus}, but the current thesis mechanism is easiest to diagnose in the query-local pool.
-
-The implemented MVP has these constraints:
+The current reduced design has these constraints:
 
 \begin{itemize}[noitemsep, topsep=0pt]
 	\item each query has exactly four answer facets: two compared subgroups crossed with \field{treatment\_duration} and \field{rehab\_outcome};
-	\item supported query types are \field{subgroup\_comparison} and \field{outcome\_synthesis};
-	\item the ontology may contain many conditions and subgroups, but each run selects the first \field{global.conditions} conditions in ontology order;
-	\item one facet is intentionally dominant, receiving \field{generation.gold\_chunks\_dominant} fact rows, while the other facets receive \field{generation.gold\_chunks\_complementary};
+	\item the main query families are subgroup comparison and outcome synthesis;
+	\item one facet is intentionally dominant, receiving more evidence than the other three facets;
 	\item hard distractors cycle through same-condition wrong-subgroup, same-subgroup wrong-condition, and same-axis wrong-condition patterns;
 	\item optional background outlier clusters create compact but irrelevant clinical islands inside the query-local pool;
-	\item chunk text can be LLM-generated, deterministic template text, or deterministic text rewritten by an LLM;
-	\item queries are deterministic template renderings, with optional LLM paraphrasing guarded by entity and axis checks;
+	\item chunk text can be directly LLM-generated, deterministically templated, or templated and then lightly rewritten;
+	\item queries come from fixed templates, with optional paraphrasing guarded by entity and axis checks;
 	\item gold answers are deterministic summaries of the hidden fact rows, not LLM-authored answers.
 \end{itemize}
 
-No Prolog solver, agentic retrieval, information-not-found cases, conflicting-note resolution, or LLM-as-judge qrel creation is part of the current reduced implementation. Those remain possible extensions, but they should not be described as current pipeline stages.
+The reduced design does not rely on a Prolog solver, agentic retrieval, information-not-found cases, conflicting-note resolution, or LLM-as-judge qrel creation. Those remain possible extensions, but they are not part of the present benchmark story.
 
 \subsection{Literature overview}
 
-\subsubsection{Generic papers}
-The papers start from an already existing data source and build a QA benchmark on top of it. The main ideas in the papers are: breaking down the data source into structured data supporting knowledge discovery and query generation, allowing control of query difficulty, explicit validation of synthetic data, explicit evidence provenance, and diversity checks.\\
-This pipeline borrows their construction methods, but changes the starting point: MIMIC-IV is only historical context and a possible reference for terminology, condition families, comorbidity co-occurrences, demographic bins, and note style. The actual benchmark starts from a hidden schema, so that the retrieval problem has the multi-cluster structure that the raw discharge-note corpus did not reliably expose.
+The literature does not contain one paper that already solves this exact thesis problem. The useful part is more practical: several papers show how to build synthetic or semi-synthetic RAG benchmarks where questions, evidence, answers, and labels are controlled instead of guessed after retrieval. The current pipeline takes that construction discipline and applies it to a narrower question: can a coverage method retrieve more complete multi-facet clinical evidence than top-$k$ or MMR?
 
-Useful ideas from the literature:
+Most RAG benchmark-generation papers start from an existing corpus and then generate questions or labels on top of it. This pipeline deliberately reverses that order. It first creates the hidden retrieval problem, then renders clinical-style text. This is the main lesson from the failed MIMIC-IV-only attempt: real discharge chunks are clinically rich, but they did not reliably contain the clean facet clusters needed to test facility-location coverage.
 
-\begin{itemize}[noitemsep, topsep=0pt]
-	\item \textbf{Evidence-first construction.} MHTS builds questions from claims, clusters, evidence mappings, and difficulty signals \citep{lee2025mhts}. DRAGON stores explicit links among documents, queries, clues, answers, and citations \citep{shen2026dragon}. In this pipeline, those ideas become \field{query\_plans.parquet}, \field{clinical\_facts.parquet}, \field{chunk\_documents.parquet}, \field{chunk\_memberships.parquet}, and \field{qrels.parquet}. Text generation can use an LLM, but gold labels come from the hidden mapping.
-	\item \textbf{Multi-aspect query structure.} ClaimSpect and MQ4CS are useful because they treat a broad user query as a set of separable aspects \citep{kargupta2025claimspect,abbasiantaeb2026multiaspect}. Here that decomposition is used before generation: a query plan explicitly chooses facets such as subgroup, treatment duration, and rehabilitation outcome.
-	\item \textbf{Question-aware corpus construction.} EnterpriseRAG-Bench generates documents around planned question structures, cross-document coherence, realistic noise, completeness clusters, conflicting near-duplicates, answer facts, and conformance checks \citep{sun2026enterpriseragbench}. The current reduced implementation uses the relevant core: planned query-local clusters, intentionally redundant gold evidence, hard distractors, and embedding-geometry filtering.
-	\item \textbf{On-demand hidden worlds.} PhantomWiki generates a fresh fictional universe from hidden symbolic facts, then derives templated questions and exhaustive answers with a solver \citep{gong2025phantomwiki}. Here the equivalent is a deterministic clinical world with fixed seeds, hidden fact tables, JSON logical forms, template-rendered queries, canonical answers, and qrels derived before retrieval.
-	\item \textbf{Difficulty control.} MHTS motivates storing difficulty as number of facets, number of evidence pieces, and query--evidence similarity \citep{lee2025mhts}. In this benchmark, difficulty is controlled by \field{n\_facets}, dominant and complementary gold counts, distractor counts, background outlier clusters, and whether top-$k$ collapses onto the planned dominant facet.
-	\item \textbf{Validation and provenance.} Rahmani et al. and RAGVAL support automatic test-collection construction but also show why validation matters \citep{rahmani2024synthetic,kenneweg2024ragval}. This pipeline therefore stores fact IDs, facet IDs, cluster IDs, membership rows, reject rows, and geometry-filter diagnostics.
-	\item \textbf{Diversity.} DATAGEN uses attribute-guided generation, diversity-oriented example selection, and group checking to avoid duplicate synthetic examples \citep{huang2025datagen}. Driouich et al. use a diversity agent that clusters and samples source documents for broader RAG coverage \citep{driouich2025diverseprivate}. Those methods cannot be copied literally, because this benchmark needs both diversity and planned redundancy. The goal here is to preserve redundancy inside a dominant gold facet, enforce separation among gold facets, and create distractors that are close enough to challenge MMR.
-	\item \textbf{Downstream filtering.} Kim et al. argue that synthetic generators should be judged by the downstream behavior their data induces \citep{kim2025agorabench}. For the thesis, a generated item is useful only if the candidate pool actually exposes a coverage-sensitive retrieval problem.
-	\item \textbf{Optional prompt optimization.} If prompts are unstable, prompt selection can be treated as a multi-objective optimization problem. Pastri{\'a}n et al. provide one example of automatic prompt evolution through evolutionary multi-objective prompt learning \citep{pastrian2026evolutionary}. This is optional and not part of the current executable stage graph.
-\end{itemize}
-
-\subsubsection{Clinical papers and MIMIC-IV role}
-
-MIMIC-IV can still be used as a reference for terminology, frequent conditions, comorbidity distributions, age groups, and discharge-note style, but it should not drive the current qrels. The qrels are generated from the hidden structured construction.
-
-This can be strengthened with ideas from the medical papers for synthetic data construction:
+\subsubsection{Ideas used directly in the implemented pipeline}
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item simple care-path templates that say, for a given condition and subgroup, which treatments and outcomes are plausible. This follows the same general idea as HealthBranches \citep{cosentino2025healthbranches};
-	\item a small controlled vocabulary of medical terms, so the generator does not randomly alternate between inconsistent names for the same condition, treatment, or outcome. This is the practical part of knowledge-infused medical QA systems such as KI-MAG \citep{zafar2024kimag};
-	\item explicit patient-group rules, such as ``encephalitis + age over 75 + rehabilitation outcome'' or ``pneumonia + diabetes + treatment duration''. This borrows the idea of decomposing clinical questions into condition, subgroup, treatment, and outcome constraints \citep{ziletti2025cohorts}.
+	\item \textbf{Build the evidence plan before the prose.} MHTS constructs multi-hop questions from planned claims, evidence clusters, and difficulty signals \citep{lee2025mhts}. DRAGON keeps explicit links between documents, queries, clues, answers, and citations \citep{shen2026dragon}. In this pipeline, the same idea becomes a simple hidden artifact chain: a query plan defines the four facets, a fact table expands them into evidence rows, a membership mapping records which chunk supports which facet, and qrels are projected from that mapping. The LLM may write chunk text, but it does not decide the gold labels.
+	\item \textbf{Treat a broad query as several answer facets.} ClaimSpect and MQ4CS are useful because they make the sub-aspects of a broad information need explicit \citep{kargupta2025claimspect,abbasiantaeb2026multiaspect}. The implemented version is intentionally concrete: every query compares two subgroups across two axes, \field{treatment\_duration} and \field{rehab\_outcome}. This gives exactly four required facets, so retrieval can be evaluated on whether it covers all four, not only whether it retrieves any relevant chunk.
+	\item \textbf{Generate the corpus around the question, not independently from it.} EnterpriseRAG-Bench is important because it treats synthetic RAG data as question-aware: documents are generated so that the benchmark has planned evidence, noise, answer facts, and conformance checks \citep{sun2026enterpriseragbench}. The current reduced implementation uses the part that matters for the thesis: for each query, it creates a local universe with redundant gold chunks, complementary gold facets, near-miss distractors, optional background outlier clusters, and later geometry checks.
+	\item \textbf{Use a hidden world, but keep the machinery simple.} PhantomWiki generates a fresh hidden symbolic world and derives questions and answers from it \citep{gong2025phantomwiki}. This pipeline copies the separation between hidden truth and surface text, not the full solver setup. The hidden world here is a set of simple structured tables and logical forms: condition, subgroup, axis, value bin, facet ID, cluster role, and gold/distractor role. This is enough to regenerate qrels and answers deterministically.
+	\item \textbf{Control difficulty through retrieval structure.} MHTS argues that difficulty is not only the number of hops; it also depends on how evidence is distributed \citep{lee2025mhts}. Here difficulty is controlled by the number of facets, the number of dominant and complementary gold chunks, the number and type of distractors, the candidate-pool scope, and whether nearest-neighbor top-$k$ collapses onto the dominant facet. That is why \field{calibrate\_plans} and \field{geom\_filter} are part of the benchmark construction rather than optional plotting code.
+	\item \textbf{Validate the generated benchmark by its retrieval behavior.} Synthetic test-collection work and RAGVAL show that automatic benchmark construction needs validation, not just fluent generated questions \citep{rahmani2024synthetic,kenneweg2024ragval}. AGORABench makes the same practical point from another angle: a model's usefulness as a data generator has to be measured downstream \citep{kim2025agorabench}. In this pipeline, a generated query is kept only if the candidate pool has the intended geometry: all facets are visible, top-$k$ is overly concentrated, gold facets are more internally similar than cross-facet pairs, and hard distractors are present.
+	\item \textbf{Use diversity carefully.} DATAGEN and the diverse private RAG dataset framework motivate attribute-guided generation, diversity checks, and cluster-aware sampling \citep{huang2025datagen,driouich2025diverseprivate}. For this thesis, diversity is not just ``make examples different''. The benchmark needs planned redundancy inside one dominant facet, separation between required facets, and distractors that are similar enough to be tempting. Removing all near-duplicates would remove the top-$k$ failure case that the experiment is meant to test.
 \end{itemize}
+
+\subsubsection{Clinical grounding used in the current pipeline}
+
+The medical papers are used for scaffolding, not to claim that the generated chunks are faithful synthetic EHR records. The benchmark is a clinical-style retrieval stress test.
+
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item \textbf{Care-path structure.} HealthBranches motivates generating clinical QA data from explicit decision pathways \citep{cosentino2025healthbranches}. The current ontology uses a smaller version of that idea: each condition has plausible treatments, treatment-duration bins, and rehabilitation-outcome bins.
+	\item \textbf{Cohort-like constraints.} Work on generating patient cohorts from EHRs decomposes clinical criteria into condition, demographic, comorbidity, intervention, and outcome constraints \citep{ziletti2025cohorts}. The implemented query plans use the same style of decomposition: condition plus two subgroup labels plus two clinical axes.
+	\item \textbf{Controlled terminology.} Knowledge-infused medical QA systems such as KI-MAG motivate using normalized medical terms and relations to reduce drift in generated QA data \citep{zafar2024kimag}. In this pipeline, that becomes a small controlled vocabulary for conditions, subgroup labels, treatments, and outcomes, so chunks do not randomly rename the same clinical concept.
+	\item \textbf{Quality reporting for synthetic medical data.} Biomedical synthetic-data reviews emphasize utility, consistency, subgroup balance, and transparent validation \citep{rao2026scoping,montenegro2025medicalsynthetic}. The current pipeline reflects this through deterministic seeds, artifact tables, generation rejects, qrel provenance, split fields, and geometry diagnostics.
+\end{itemize}
+
+MIMIC-IV remains useful as a reference source for condition families, common comorbidities, demographic bins, and discharge-note style. It should not be described as the source of gold evidence in the current pipeline. Gold relevance comes from the hidden construction, not from post-hoc annotation of MIMIC-IV notes.
+
+\subsubsection{What is deliberately not part of the reduced implementation}
+
+Some ideas in the broader literature are useful later but are not part of the reduced design. The benchmark does not rely on a Prolog solver, an agentic multi-step data-generation system, LLM-as-judge qrel creation, information-not-found questions, conflicting-note resolution, or automatic prompt evolution. Those additions may be interesting, but they would make the advisor story harder to evaluate right now. The present claim is narrower and cleaner: construct a controlled multi-facet clinical retrieval problem, verify that its embedding geometry exposes a coverage failure for top-$k$, and compare top-$k$, MMR, and facility-location on facet-level retrieval metrics.
 
 \section{Pipeline}
 
-\stage{Stage 1}{Ontology and Configuration}
+\stage{Stage 1}{Ontology and Design Parameters}
 
-The pipeline starts from \field{ontology.yaml} and the experiment config stored in \field{\_results/<experiment>/\_config.yaml}. The ontology has three top-level blocks:
+The pipeline starts from a controlled clinical ontology and a small set of benchmark design parameters. The ontology has three blocks:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{conditions}: display names, search terms, treatments, treatment-duration bins, and rehabilitation-outcome bins;
-	\item \field{subgroups}: demographic and comorbidity labels, fields, values, and aliases;
-	\item \field{clinical\_axes}: currently exactly \field{treatment\_duration} and \field{rehab\_outcome}.
+	\item \field{conditions}: display names, related terms, plausible treatments, treatment-duration bins, and rehabilitation-outcome bins;
+	\item \field{subgroups}: demographic or comorbidity groups, with canonical labels and aliases;
+	\item \field{clinical\_axes}: exactly \field{treatment\_duration} and \field{rehab\_outcome}.
 \end{itemize}
 
-The code validates the ontology with Pydantic models in \field{generation/schemas.py}. The MVP explicitly requires the two clinical axes to be exactly \field{treatment\_duration} and \field{rehab\_outcome}. A representative condition entry is:
+A representative condition sketch is:
 
 \begin{lstlisting}[style=promptstyle]
 encephalitis_myelitis:
@@ -191,22 +162,24 @@ encephalitis_myelitis:
       - persistent focal deficits requiring close neurologic follow-up
 \end{lstlisting}
 
-Important config fields include:
+The main design parameters control:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{global.n\_queries}, \field{global.conditions}, and \field{global.seed};
-	\item \field{generation.query\_types}, \field{generation.dominance\_mode}, gold chunk counts, distractor counts, and background outlier settings;
-	\item \field{generation.use\_llm\_chunk\_generation}, \field{generation.use\_llm\_chunk\_rewriting}, and \field{generation.use\_llm\_query\_paraphrase};
-	\item embedding model and device settings under \field{embeddings};
-	\item candidate-pool scope, $k$ values, $\lambda$ values, and MMR window under \field{retrieval};
-	\item pass/fail thresholds under \field{geometry}.
+	\item how many conditions and subgroup pairs are instantiated;
+	\item which query families are used;
+	\item how much evidence is allocated to the dominant facet versus the complementary facets;
+	\item how many hard distractors and background outliers are added;
+	\item whether chunk text is directly generated, templated, or templated and then rewritten;
+	\item which embedding model is used;
+	\item which candidate-pool scope and retrieval hyperparameters are evaluated;
+	\item which thresholds define a geometry pass.
 \end{itemize}
 
 \stage{Stage 2}{Hidden Query Plans}
 
-\field{generation/query\_plans.py} creates \field{query\_plans.parquet}. It loads the ontology, selects the first \field{global.conditions} condition entries, enumerates every unordered subgroup pair, and emits plans round-robin over conditions so that the dataset is not filled by one condition prefix.
+Before any prose is generated, the benchmark creates hidden query plans. Each plan chooses one condition, one unordered subgroup pair, and one query family.
 
-Each plan has two subgroups and two axes. This produces four required facets:
+Because there are two subgroups and two axes, every plan expands into four required facets:
 
 \begin{enumerate}[noitemsep, topsep=0pt]
 	\item subgroup A + \field{treatment\_duration};
@@ -215,131 +188,82 @@ Each plan has two subgroups and two axes. This produces four required facets:
 	\item subgroup B + \field{rehab\_outcome}.
 \end{enumerate}
 
-The plan stores both scalar columns and JSON columns. \field{facets\_json} contains serialized \field{QueryPlanFacet} objects. \field{logical\_form\_json} contains condition, subgroup IDs, axis IDs, facet IDs, and the dominant facet ID. This is ordinary JSON, not a Prolog layer.
+Each plan records the condition, subgroup pair, query family, dominant facet, target evidence counts, and split assignment. It also stores a lightweight logical form that makes the hidden structure mechanically checkable.
 
-Example plan shape:
+Example plan sketch:
 
 \begin{lstlisting}[style=promptstyle]
-query_id: q00001
-query_type: subgroup_comparison
-template_id: subgroup_comparison
-condition_id: encephalitis_myelitis
-subgroup_a_id: age_over_75
-subgroup_b_id: uncomplicated_diabetes
-dominant_facet_id: q00001_f1
-n_facets: 4
+query family: subgroup comparison
+condition: encephalitis or myelitis
+subgroup A: older than 75
+subgroup B: uncomplicated diabetes
+dominant facet: subgroup A + treatment_duration
+number of facets: 4
 facets:
-  - facet_id: q00001_f1
-    subgroup_id: age_over_75
+  - subgroup: older than 75
     axis: treatment_duration
     value_bin: short
-    cluster_id: q00001_c1
     cluster_role: dominant_gold
     target_gold_chunks: 18
-  - facet_id: q00001_f2
-    subgroup_id: age_over_75
+  - subgroup: older than 75
     axis: rehab_outcome
     cluster_role: complementary_gold
     target_gold_chunks: 8
 \end{lstlisting}
 
-The split assignment is deterministic from the plan index: three buckets out of twenty go to test, three to validation, and the rest to train. Query-template variants are also assigned deterministically in round-robin order within each query type.
+The split assignment is deterministic from the plan index, and surface wording variants are assigned in a stable round-robin way. This keeps the train/validation/test boundary independent from later text generation.
 
 \stage{Stage 3}{Dominance Calibration}
 
-\field{generation/calibrate\_plans.py} creates \field{query\_plan\_calibration.parquet}. It may also rewrite \field{query\_plans.parquet}.
-
-There are two modes:
+To make the retrieval problem coverage-sensitive, one facet is intentionally overrepresented. Two modes are useful:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{dominance\_mode=rotating}: keep the dominant facet assigned during plan generation and write a calibration audit table;
-	\item \field{dominance\_mode=embedding\_calibrated}: render neutral query text and neutral deterministic probe chunks for each facet, embed them, and choose the facet that is naturally closest to the query.
+	\item \textbf{Rotating dominance}: alternate the dominant facet by design;
+	\item \textbf{Embedding-calibrated dominance}: keep the query wording neutral, render neutral probe texts for each facet, and choose the facet that is naturally closest to the query in embedding space.
 \end{itemize}
 
-The calibrated mode uses \field{generation.dominance\_probe\_chunks\_per\_facet} deterministic probe chunks per facet. For each facet it computes query-similarity statistics such as mean, p25, p50, and p75. The selected facet maximizes the p25-over-best-complement-p75 margin, with mean query similarity as a tie-breaker. The stage then updates:
-
-\begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{dominant\_facet\_id};
-	\item each facet's \field{cluster\_role};
-	\item each facet's \field{target\_gold\_chunks};
-	\item the logical form's dominant facet field.
-\end{itemize}
-
-This stage is important because it keeps the natural query wording neutral. The dominant facet is not exposed through an artificial anchor phrase; it is chosen from the embedding geometry that the normal query already induces.
+This stage matters because it keeps the natural query wording neutral. The dominant facet is not exposed through an obvious lexical anchor; it is chosen so that ordinary nearest-neighbor retrieval is likely to collapse onto one facet even when the query itself looks balanced.
 
 \stage{Stage 4}{Structured Clinical Facts}
 
-\field{generation/facts.py} creates \field{clinical\_facts.parquet}. For every query plan, it expands each facet into hidden fact rows. These rows are the source of truth for later chunks, qrels, and answers.
+Each query plan expands into hidden clinical facts. These facts are the source of truth for chunks, qrels, and canonical answers.
 
-Gold fact rows have:
-
-\begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{is\_gold=true};
-	\item \field{facet\_id} equal to the facet they support;
-	\item \field{target\_facet\_id} equal to the same facet;
-	\item \field{cluster\_role} equal to \field{dominant\_gold} or \field{complementary\_gold}.
-\end{itemize}
-
-Hard distractor rows have:
+Gold facts:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{is\_gold=false};
-	\item \field{facet\_id=null};
-	\item \field{target\_facet\_id} set to the facet they are meant to confuse;
-	\item \field{cluster\_role=hard\_distractor};
-	\item \field{distractor\_type} in \field{same\_condition\_wrong\_subgroup}, \field{same\_subgroup\_wrong\_condition}, or \field{same\_axis\_wrong\_condition}.
+	\item support exactly one facet;
+	\item belong either to the dominant gold cluster or to one of the complementary gold clusters;
+	\item carry the clinical fields needed to render valid evidence later.
 \end{itemize}
 
-Background outlier rows have:
+Hard distractors:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{is\_gold=false};
-	\item no facet or target facet;
-	\item \field{cluster\_role=background\_outlier};
-	\item \field{distractor\_type=background\_clinical\_cluster}.
+	\item are non-gold by construction;
+	\item are designed to confuse a particular facet;
+	\item mainly follow same-condition wrong-subgroup, same-subgroup wrong-condition, and same-axis wrong-condition patterns.
 \end{itemize}
 
-Example fact:
+Background outliers:
 
-\begin{lstlisting}[style=promptstyle]
-fact_id: q00001_g_9_000_1234
-query_id: q00001
-chunk_reuse_key: <sha256>
-facet_id: q00001_f3
-target_facet_id: q00001_f3
-cluster_id: q00001_c3
-cluster_role: complementary_gold
-condition_id: encephalitis_myelitis
-subgroup_id: uncomplicated_diabetes
-axis: treatment_duration
-value_bin: prolonged
-duration_days: 24
-treatment: acyclovir
-is_gold: true
-must_mention:
-  - encephalitis or myelitis
-  - patients with uncomplicated diabetes
-  - "24"
-  - treatment duration
-\end{lstlisting}
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item are non-gold and not attached to any answer facet;
+	\item form compact but irrelevant clinical islands in the candidate pool.
+\end{itemize}
 
-The code validates axis-specific fields. Duration facts must have \field{duration\_days} and \field{treatment}, and must not have \field{rehab\_outcome}. Rehabilitation facts must have \field{rehab\_outcome}, and must not have \field{duration\_days} or \field{treatment}.
-
-A key implementation detail is \field{chunk\_reuse\_key}. It is derived from condition, subgroup, axis, value bin, local index, and reuse scope, but not from \field{query\_id}. Equivalent structural facts can therefore reuse the same surface chunk across queries. This is the current mechanism for controlled redundancy and generation-cache reuse.
+Axis-specific constraints keep duration evidence and rehabilitation evidence cleanly separable. Structurally equivalent facts can also reuse the same surface chunk across different queries. This is useful because the benchmark needs controlled redundancy, not accidental one-off paraphrases everywhere.
 
 \stage{Stage 5}{Chunk Rendering and Normalization}
-
-\field{generation/chunks.py} creates \field{chunk\_documents.parquet}, \field{chunk\_memberships.parquet}, and \field{generation\_rejects.parquet}. The old denormalized \field{chunks.parquet} is no longer the current artifact; if it exists, the chunk stage removes it.
 
 There are three rendering modes:
 
 \begin{enumerate}[noitemsep, topsep=0pt]
-	\item \textbf{Direct LLM generation}: \field{use\_llm\_chunk\_generation=true}. The LLM writes each chunk under strict constraints, with validation and retry feedback.
-	\item \textbf{Deterministic templates}: both LLM chunk flags are false. The code renders chunk text from YAML template inventories under \field{generation/templates\_data}.
-	\item \textbf{Template rewrite}: \field{use\_llm\_chunk\_generation=false} and \field{use\_llm\_chunk\_rewriting=true}. The deterministic draft is rewritten by the LLM; if rewriting fails validation, the deterministic draft is kept.
+	\item \textbf{Direct LLM generation}: the chunk is written under strict evidence constraints;
+	\item \textbf{Deterministic templates}: the chunk is rendered from fixed clinical templates;
+	\item \textbf{Template rewrite}: a deterministic draft is rewritten more naturally, but only kept if it still preserves the required evidence.
 \end{enumerate}
 
-Validation is implemented in \field{generation/chunk\_templates.py}. Hard errors reject the chunk and drop the whole query, because a kept query must have complete local evidence. Hard checks include hidden benchmark terms, leading note-section headers, missing condition evidence, missing subgroup evidence, missing treatment duration days, missing treatment name, and missing rehabilitation-outcome evidence. Soft warnings, such as a duration chunk containing rehabilitation language, are stored but do not necessarily reject the chunk.
+Every chunk is validated against required evidence constraints. A kept chunk must mention the condition, the relevant subgroup, and the axis-specific evidence that makes it useful. If a chunk fails those checks, the whole query is rejected, because partial local evidence would weaken the benchmark.
 
 Example rendered chunk:
 
@@ -350,20 +274,18 @@ was continued for 21 days. Neurologic symptoms improved slowly, and the
 longer course was documented because deficits persisted near discharge.
 \end{lstlisting}
 
-The stage normalizes rows into two tables:
+The rendered corpus is separated into two conceptual layers:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{chunk\_documents.parquet}: one retrievable document per \field{chunk\_reuse\_key}, with \field{chunk\_id}, text, generation metadata, and clinical surface fields;
-	\item \field{chunk\_memberships.parquet}: query-specific links from \field{query\_id}, \field{fact\_id}, \field{facet\_id}, \field{target\_facet\_id}, \field{cluster\_id}, \field{cluster\_role}, and \field{is\_gold} to a document \field{chunk\_id}.
+	\item a \textbf{document layer}, which is the actual retrieval corpus;
+	\item a \textbf{membership layer}, which preserves the query-specific link from each chunk to facts, facets, and cluster roles.
 \end{itemize}
 
 This split matters. Retrieval embeds unique chunk documents, while qrels and facet coverage are query-local through the membership table.
 
 \stage{Stage 6}{Queries and Canonical Answers}
 
-\field{generation/queries\_answers.py} creates \field{queries.parquet} and \field{gold\_answers.parquet}. It first reads \field{generation\_rejects.parquet}; any query dropped during chunk rendering is skipped.
-
-Query text is rendered by \field{generation/query\_templates.py} from \field{generation/templates\_data/query\_answer\_templates.yaml}. That YAML file now stores both query templates and canonical answer templates. The currently implemented query types are:
+Queries are rendered from fixed families rather than written freely from scratch. The main query families are:
 
 \begin{itemize}[noitemsep, topsep=0pt]
 	\item \field{subgroup\_comparison}: asks how treatment duration and rehabilitation outcome differ between two subgroups;
@@ -378,116 +300,57 @@ duration and rehabilitation outcome differ between patients older than 75
 and patients with uncomplicated diabetes?
 \end{lstlisting}
 
-If \field{generation.use\_llm\_query\_paraphrase=true}, an LLM may paraphrase the deterministic query. The paraphrase is accepted only if it still contains the condition display, both subgroup labels, and language for both axes. Otherwise the deterministic query is kept.
+Optional paraphrasing is allowed only if the condition, both subgroup labels, and both axes remain present. Otherwise the original phrasing is kept.
 
-The canonical answer is deterministic. The code groups gold fact rows by facet, computes facet summaries, and renders the final answer through the answer-template block in the same YAML file. Duration summaries include modal value bin, average duration in days, and common treatment. Rehabilitation summaries include modal value bin and common outcome phrase.
-
-Example answer object:
-
-\begin{lstlisting}[style=promptstyle]
-query_id: q00001
-answer_text: >
-  For patients older than 75, a short course, averaging 6.1 days, most
-  often with acyclovir for treatment duration and an inpatient rehab
-  pattern, commonly described as transferred to inpatient rehabilitation
-  for persistent weakness for rehabilitation outcome. For patients with
-  uncomplicated diabetes, a prolonged course, averaging 24.0 days, most
-  often with acyclovir for treatment duration and a home rehab pattern,
-  commonly described as discharged home with outpatient neurorehabilitation
-  for rehabilitation outcome.
-facet_summaries_json: {"q00001_f1": "...", "q00001_f2": "..."}
-answer_facts_json: [{"facet_id": "q00001_f1", "supporting_fact_ids": [...]}]
-\end{lstlisting}
+The canonical answer is deterministic. Duration summaries report the dominant duration pattern and common treatment; rehabilitation summaries report the dominant rehab pattern. Every answer is tied back to facet-level supporting evidence.
 
 \stage{Stage 7}{Qrels from Hidden Memberships}
 
-\field{generation/qrels.py} creates \field{qrels.parquet} from \field{chunk\_memberships.parquet}. The rule is intentionally simple:
-
-\begin{lstlisting}[style=promptstyle]
-is_gold = true  -> relevance_grade = 1, support_type = positive
-is_gold = false -> relevance_grade = 0
-\end{lstlisting}
-
-Non-gold chunks are further labeled as \field{hard\_negative} or \field{background\_outlier}. The qrels preserve:
-
-\begin{lstlisting}[style=promptstyle]
-query_id, chunk_id, fact_id, facet_id, target_facet_id, cluster_id,
-cluster_role, is_gold, distractor_type, relevance_grade, support_type
-\end{lstlisting}
+Relevance is projected directly from the hidden construction. If a chunk belongs to a gold facet for the query, it is relevant; otherwise it is non-relevant. Hard negatives and background outliers remain distinguishable inside the non-gold set.
 
 This stage is fundamental to the benchmark design. Relevance is not inferred from generated prose, lexical overlap, embedding similarity, LLM judgement, or human annotation. It is projected from the hidden construction.
 
 \stage{Stage 8}{Embeddings}
 
-\field{retrieval/embed.py} creates embedding memmaps for unique chunk documents and queries. Chunk text is read from \field{chunk\_documents.parquet}; query text is read from \field{queries.parquet}. The implementation uses \field{helpers.embedder.Embedder}, which wraps SentenceTransformers-style document and query embedding calls.
+Queries and chunk documents are embedded with the same model family. Retrieval uses cosine similarity between the query vector and chunk vectors, \field{sim(query, chunk) = e\_query dot e\_chunk}.
 
-The output files are:
-
-\begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{embeddings\_chunk\_vectors.npy};
-	\item \field{embeddings\_query\_vectors.npy};
-	\item \field{embeddings\_chunk\_ids.npy};
-	\item \field{embeddings\_query\_ids.npy};
-	\item \field{embeddings\_metadata.json}.
-\end{itemize}
-
-With \field{embeddings.normalize=true}, the dot product used by later stages is cosine similarity:
-
-\begin{lstlisting}[style=promptstyle]
-sim(query, chunk) = e_query dot e_chunk
-\end{lstlisting}
-
-If multiple devices are provided under \field{embeddings.devices}, the embedder uses SentenceTransformers multi-process encoding. The same embedding configuration is also used by dominance calibration.
+The same embedding space is also used by dominance calibration and geometry filtering. This keeps the retrieval problem honest: the failure mode is created in the same space where retrieval will later be measured.
 
 \stage{Stage 9}{Geometry Filtering}
 
-\field{retrieval/filter\_geometry.py} creates \field{geometry\_stats.parquet}. This stage asks whether a generated query actually exposes the intended retrieval geometry. It uses hidden labels for dataset validation, not as features exposed to retrieval methods.
+A generated query is useful only if its candidate pool actually expresses the intended retrieval geometry. The benchmark therefore filters queries before reporting retrieval results.
 
-For each query, the stage:
+Three candidate-pool settings are meaningful:
 
-\begin{enumerate}[noitemsep, topsep=0pt]
-	\item builds the configured candidate pool: \field{query\_local}, \field{same\_condition}, or \field{full\_corpus};
-	\item keeps the top \field{retrieval.candidate\_pool\_n} candidates by query similarity;
-	\item checks whether every hidden gold facet appears in that top-$N$ pool;
-	\item checks whether nearest-neighbor top-$k$ over-selects the planned dominant facet;
-	\item checks whether top-$k$ already retrieves too many distinct facets;
-	\item checks whether in-facet similarity exceeds cross-facet similarity by the configured margin;
-	\item checks whether enough near-miss distractors appear in the candidate pool;
-	\item checks whether configured background outlier clusters are present and complete.
-\end{enumerate}
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item \textbf{Query-local}: retrieve only from the local evidence universe designed for that query;
+	\item \textbf{Same-condition}: retrieve from all chunks associated with the same condition family;
+	\item \textbf{Full-corpus}: retrieve from the entire generated corpus.
+\end{itemize}
 
-The current pass condition is:
+A query passes when:
 
-\begin{lstlisting}[style=promptstyle]
-all facets present in top-N
-planned_topk_dominant_count >= geometry.min_topk_dominant_count
-n_topk_retrieved_facets <= geometry.max_topk_retrieved_facets
-mean_in_facet_similarity - mean_cross_facet_similarity
-  >= geometry.min_in_minus_cross_similarity
-n_near_miss_distractors_in_pool >= geometry.min_distractors_in_pool
-background outliers complete when enabled
-\end{lstlisting}
+\begin{itemize}[noitemsep, topsep=0pt]
+	\item all four gold facets are visible in the candidate pool;
+	\item plain nearest-neighbor top-$k$ over-selects the planned dominant facet;
+	\item within-facet similarity exceeds cross-facet similarity by a sufficient margin;
+	\item enough near-miss distractors are present;
+	\item background outlier clusters are present and complete when they are part of the design.
+\end{itemize}
 
-The field \field{retrieval.only\_pass\_geometry} controls whether evaluation skips failed queries. The evaluation stage also checks that \field{geometry\_stats.pool\_scope} matches the current retrieval config, because changing pool scope changes the meaning of the geometry filter.
+This stage is what turns synthetic generation into a controlled retrieval benchmark rather than just a synthetic text corpus.
 
 \stage{Stage 10}{Retrieval Evaluation}
 
-\field{evaluation/evaluate.py} creates \field{evaluation\_results.parquet} and \field{evaluation\_stats.parquet}. It compares:
+The benchmark compares:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{top\_k}: nearest-neighbor baseline;
-	\item \field{mmr}: maximal marginal relevance, a dispersion method;
-	\item \field{fac\_loc}: greedy facility-location selection, the coverage method of interest.
+	\item \textbf{top-$k$}: the nearest-neighbor baseline;
+	\item \textbf{MMR}: a dispersion method that rewards novelty relative to already selected chunks;
+	\item \textbf{facility-location}: the coverage method of interest.
 \end{itemize}
 
-All methods operate inside the same semantic top-$N$ candidate pool. Top-$k$ is evaluated once per configured $k$. MMR and facility-location are evaluated for each configured $\lambda$ value.
-
-The facility-location selector uses:
-
-\begin{lstlisting}[style=promptstyle]
-score(j) = lambda * sim(q, j)
-         + (1 - lambda) * marginal_coverage_gain(j)
-\end{lstlisting}
+All methods operate inside the same semantic top-$N$ candidate pool. The facility-location selector combines direct query relevance with marginal coverage gain, \field{score(j) = lambda * sim(q, j) + (1 - lambda) * marginal\_coverage\_gain(j)}.
 
 The expected thesis behavior is:
 
@@ -497,18 +360,16 @@ The expected thesis behavior is:
 	\item facility-location should prefer representatives of uncovered local clusters when the generated geometry is successful.
 \end{itemize}
 
-\stage{Stage 11}{Diagnostics and Plots}
+\stage{Stage 11}{Diagnostics and Visualization}
 
-The final two executable stages are diagnostic:
+The benchmark produces two kinds of diagnostics:
 
 \begin{itemize}[noitemsep, topsep=0pt]
-	\item \field{embedding\_geometry/run.py} creates \field{embedding\_geometry\_points.parquet}, \field{embedding\_geometry\_query\_stats.parquet}, and per-query UMAP/PCA/HDBSCAN figures under \field{\_figures/embedding\_geometry};
-	\item \field{evaluation/plots.py} creates evaluation figures under \field{\_figures/evaluation}.
+	\item \textbf{Geometry diagnostics}: visualize candidate pools, hidden facet structure, distractor clusters, and the selections made by top-$k$, MMR, and facility-location;
+	\item \textbf{Evaluation diagnostics}: summarize metric trade-offs across $k$ and $\lambda$ values.
 \end{itemize}
 
-Embedding-geometry diagnostics rebuild the candidate pool for representative queries, label candidates by hidden facet or distractor type, overlay top-$k$/MMR/facility-location selections, and compute cluster diagnostics. The automatic query selection can use a mixed set of good, mid, and bad cases, or explicit query IDs from the config.
-
-Evaluation plots treat top-$k$ as the baseline. For MMR and facility-location, many comparison plots choose a coverage-first $\lambda^\ast$ path: maximize mean \field{FacetCoverage@k}; break ties by higher precision, lower distractor rate, and then higher \field{alpha-nDCG@k}.
+These diagnostics matter because the thesis claim is geometric. They make it possible to show not only that one method scores higher, but why it scores higher.
 
 \section{Data splits}
 
@@ -520,7 +381,7 @@ Splits are assigned deterministically from the plan index:
 	\item \textbf{test}: final held-out evaluation.
 \end{itemize}
 
-The current evaluation code reports over whatever queries are present after generation rejects and geometry filtering. Split-specific reporting can be added downstream if needed, because each query row keeps its \field{split}.
+All benchmark objects inherit the split assigned at planning time, and final reporting should be done on the subset of queries that survive generation and geometry filtering.
 
 \section{Prompt and Template Families}
 
@@ -531,12 +392,12 @@ The current evaluation code reports over whatever queries are present after gene
 		\toprule
 		\textbf{Stage} & \textbf{Prompt/template family} & \textbf{Current role} \\
 		\midrule
-		Query plans & Query template IDs & No LLM. \field{query\_plans.py} assigns stable template IDs in round-robin order. \\
-		Clinical facts & Structured ontology sampling & No LLM. Facts are generated by seeded sampling over condition bins, subgroup labels, and axis-specific values. \\
-		Chunks & Chunk templates or LLM chunk prompt & Direct LLM generation is the default in example configs; deterministic templates are used for fast smoke tests; rewrite mode keeps deterministic fallback on failure. \\
-		Queries & Query templates with optional paraphrase prompt & Deterministic YAML templates are primary. LLM paraphrases are accepted only if required entities and axes remain present. \\
-		Gold answers & Deterministic aggregation & No LLM. Answers are synthesized from grouped gold facts and stored with facet summaries and supporting fact IDs. \\
-		Qrels & Hidden membership projection & No LLM. Relevance labels are derived from \field{is\_gold} in \field{chunk\_memberships.parquet}. \\
+		Query plans & Query template families & No LLM. Template variants are assigned in a stable way so surface wording does not drift randomly across the benchmark. \\
+		Clinical facts & Structured ontology sampling & No LLM. Facts are generated from conditions, subgroup labels, and axis-specific values under controlled sampling rules. \\
+		Chunks & Clinical templates or constrained LLM prompting & Direct generation, deterministic rendering, and rewrite modes are all allowed, but every chunk must preserve the required evidence. \\
+		Queries & Query templates with optional paraphrase & Deterministic templates are primary. Paraphrases are accepted only if the condition, both subgroups, and both axes remain explicit. \\
+		Gold answers & Deterministic aggregation & No LLM. Answers are synthesized from grouped gold facts and tied back to facet-level supporting evidence. \\
+		Qrels & Hidden membership projection & No LLM. Relevance labels come directly from the hidden construction rather than post-hoc annotation. \\
 		\bottomrule
 	\end{tabular}
 \end{center}
@@ -552,22 +413,21 @@ The current evaluation code reports over whatever queries are present after gene
 		\textbf{Metric} & \textbf{Purpose} \\
 		\midrule
 		\field{FacetCoverage@k} & Fraction of hidden answer facets represented by at least one selected gold chunk. This is the main thesis metric. \\
-		\field{MeanFacetRecall@k} & Mean per-facet recall. This is the current summary label for the raw \field{weighted\_facet\_coverage} field. \\
+		\field{MeanFacetRecall@k} & Mean per-facet recall. This is the main depth-of-coverage summary. \\
 		\field{Precision@k} & Fraction of selected chunks that are gold for any answer facet. \\
 		\field{Recall@k} & Fraction of all gold chunks retrieved, regardless of facet. Useful but secondary because the dataset intentionally contains many redundant gold chunks. \\
 		\field{MAP@k} & Conventional average precision over binary gold labels. Secondary for the same reason as recall. \\
 		\field{FacetMRR@k} & Mean reciprocal rank of the first selected evidence chunk for each facet. \\
-		\field{alpha-nDCG@k} & Diversified ranking score using \field{facet\_id} as the subtopic label and diminishing gain for repeated facets. \\
-		\field{AnswerROUGE1Recall@k} & Lexical recall between selected chunk text and the canonical answer after query-term filtering. \\
-		\field{MacroFacetAnswerROUGE1Recall@k} & Average answer-overlap recall over facet-level reference summaries. \\
+		\field{alpha-nDCG@k} & Diversified ranking score that treats facets as subtopics and reduces gain for repeated evidence from the same facet. \\
+		\field{AnswerROUGE2Recall@k} & Lexical recall between selected chunk text and the canonical answer after query-term filtering. \\
 		\field{DistractorRate} & Fraction of selected chunks that are non-gold. Lower is better. \\
 		\field{NearMissDistractorRate} & Fraction of selected chunks from facet-like hard negatives. \\
 		\field{BackgroundOutlierRate} & Fraction of selected chunks from coherent non-gold background islands. \\
 		\field{DominantFacetRate} & Fraction of selected chunks whose facet equals the planned dominant facet. High values indicate collapse onto the overrepresented facet. \\
 		\field{RedundantGoldRate} & Fraction of selected chunks that are gold but do not add a new facet. \\
-		\field{fac} & Facility-location objective score of the selected set in embedding space. Diagnostic, not a qrel metric. \\
-		\field{avg\_cos} & Average query cosine similarity of selected chunks. \\
-		\field{jac} & Jaccard overlap between a method's selected set and the top-$k$ selected set. \\
+		Facility-location score & Coverage score of the selected set in embedding space. Diagnostic, not a qrel metric. \\
+		Average cosine similarity & Mean query similarity of the selected chunks. \\
+		Jaccard overlap with top-$k$ & Set overlap between a method's selection and the top-$k$ selection. \\
 		\bottomrule
 	\end{tabular}
 \end{center}
@@ -580,23 +440,22 @@ The current evaluation code reports over whatever queries are present after gene
 \begin{center}
 	\begin{tabular}{@{}p{4.8cm}p{9.8cm}@{}}
 		\toprule
-		\textbf{Artifact} & \textbf{Purpose} \\
+		\textbf{Object} & \textbf{Purpose} \\
 		\midrule
-		\field{query\_plans.parquet} & Hidden plan for each query: condition, compared subgroups, query type, template ID, facets, dominant facet, logical form, split, and target gold counts. \\
-		\field{query\_plan\_calibration.parquet} & Audit table for rotating or embedding-calibrated dominant-facet selection. \\
-		\field{clinical\_facts.parquet} & Hidden structured source of truth: fact IDs, chunk reuse keys, condition/subgroup/axis fields, concrete duration or rehab values, gold/distractor labels, and validation constraints. \\
-		\field{chunk\_documents.parquet} & Retrieval corpus of unique chunk documents: \field{chunk\_id}, text, clinical surface fields, generation source, and validation-warning metadata. \\
-		\field{chunk\_memberships.parquet} & Query-specific mapping from facts and facets to chunk documents: \field{query\_id}, \field{chunk\_id}, \field{fact\_id}, \field{facet\_id}, \field{cluster\_role}, \field{is\_gold}, and \field{distractor\_type}. \\
-		\field{generation\_rejects.parquet} & Chunk-generation failures; any query with a reject is skipped by the query/answer stage. \\
-		\field{queries.parquet} & User-facing query text plus condition, query type, template ID, split, facets JSON, and logical form JSON. \\
-		\field{gold\_answers.parquet} & Canonical deterministic answer text, facet summaries, answer fact objects, supporting fact IDs, and supporting facet IDs. \\
-		\field{qrels.parquet} & Query--chunk relevance labels projected from hidden memberships, including facet IDs, cluster roles, distractor types, and support type. \\
-		\field{embeddings\_*.npy} and \field{embeddings\_metadata.json} & Chunk/query embedding arrays, IDs, model name, vector dimension, normalization flag, and device metadata. \\
-		\field{geometry\_stats.parquet} & Per-query candidate-pool and geometry diagnostics, including \field{passes\_filter}. \\
-		\field{evaluation\_results.parquet} & Per-query, per-strategy, per-$k$, per-$\lambda$ retrieval metrics. \\
-		\field{evaluation\_stats.parquet} & Summary metrics grouped by strategy, $k$, and $\lambda$. \\
-		\field{embedding\_geometry\_points.parquet} & Per-candidate coordinates, hidden labels, ranks, similarities, and strategy-selection flags for visualization. \\
-		\field{embedding\_geometry\_query\_stats.parquet} & Per-query embedding-geometry diagnostics for plotted cases. \\
+		Hidden query plans & One record per benchmark question, containing the condition, subgroup pair, query family, four facets, dominant facet, split, and target evidence counts. \\
+		Dominance calibration audit & Optional record of why a particular facet was chosen as dominant. \\
+		Structured fact table & Hidden source of truth for the benchmark: clinical values, facet support, distractor roles, and validation constraints. \\
+		Retrieval corpus & The set of unique chunk documents seen by the retriever. \\
+		Membership mapping & Query-specific links from chunks to facts, facets, and cluster roles. \\
+		Rejection log & A record of generated items that failed evidence validation and were excluded. \\
+		Query set & The natural-language benchmark questions exposed to retrieval. \\
+		Canonical answer set & Deterministic answers with facet-level summaries and supporting evidence links. \\
+		Qrels & Query--chunk relevance labels projected from the hidden construction. \\
+		Embedding store & Vector representations for queries and chunks, plus the metadata needed to reproduce retrieval scores. \\
+		Geometry diagnostics & Per-query evidence that the candidate pool has the intended coverage-sensitive structure. \\
+		Evaluation results & Per-query retrieval metrics for each method and hyperparameter setting. \\
+		Evaluation summaries & Aggregated metrics used for method comparison. \\
+		Visualization diagnostics & Plot-oriented records for geometry and selection analysis. \\
 		\bottomrule
 	\end{tabular}
 \end{center}

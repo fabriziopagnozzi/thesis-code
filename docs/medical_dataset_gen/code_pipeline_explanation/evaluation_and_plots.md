@@ -227,6 +227,7 @@ It computes means over queries and writes `evaluation_stats.parquet` with displa
 - `Recall@k`
 - `F1@k`
 - `MAP@k`
+- `MeanFacetHitRate@k`
 - `FacetCoverage@k`
 - `MeanFacetRecall@k`
 - `FacetMRR@k`
@@ -237,6 +238,11 @@ It computes means over queries and writes `evaluation_stats.parquet` with displa
 - `fac`
 - `avg_cos`
 - `jac`
+
+`MeanFacetHitRate@k` is the preferred summary label for the binary facet-hit metric.
+`FacetCoverage@k` is retained as a compatibility alias in the stats table.
+
+If `retrieval.compute_answer_rouge` is set to `false` in the experiment config, the evaluator skips all answer-ROUGE computation and the ROUGE-specific columns and figures are omitted.
 
 For top-k, `lam` is null. For MMR and facility-location, every configured lambda has its own summary row.
 
@@ -256,7 +262,7 @@ The plotting code has two important policies:
 The lambda selection policy is:
 
 ```text
-choose max mean FacetCoverage@k within strategy x k;
+choose max mean MeanFacetHitRate@k within strategy x k;
 ties prefer higher Precision@k;
 then lower DistractorRate;
 then higher alpha-nDCG@k when available.
@@ -272,12 +278,14 @@ This is a metric-vs-k grid. Top-k is plotted directly. MMR and facility-location
 
 The included primary metrics are:
 
-- `FacetCoverage@k`
-- `Precision@k`
-- `Recall@k`
-- `FacetMRR@k`
+- `MeanFacetHitRate@k`
+- `MeanFacetRecall@k`
 - `alpha-nDCG@k`
 - `DistractorRate`
+- `Recall@k`
+- `AnswerROUGE2Recall@k`
+
+That last metric appears only when `retrieval.compute_answer_rouge: true`.
 
 ### `strategy_comparison_all_lambdas.png`
 
@@ -320,12 +328,12 @@ The primary thesis question is not whether a method retrieves more positive chun
 
 A strong facility-location result should therefore look like this:
 
-- higher `FacetCoverage@k`
-- higher `FacetMRR@k`
+- higher `MeanFacetHitRate@k`
+- higher `MeanFacetRecall@k`
 - higher `alpha-nDCG@k`
 - lower `RedundantGoldRate`
 - lower or comparable `DistractorRate`
 - lower `DominantFacetRate`
 - some drop in `avg_cos` relative to top-k, because pure query similarity is no longer the only objective
 
-An MMR result needs extra care. If MMR improves `FacetCoverage@k` but also sharply increases `DistractorRate`, it may be dispersing into wrong clusters rather than covering the hidden answer facets.
+An MMR result needs extra care. If MMR improves `MeanFacetHitRate@k` but also sharply increases `DistractorRate`, it may be dispersing into wrong clusters rather than covering the hidden answer facets.
