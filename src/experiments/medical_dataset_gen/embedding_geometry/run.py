@@ -10,7 +10,6 @@ import multiprocessing as mp
 import os
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
 
 import polars as pl
 from tqdm import tqdm
@@ -28,6 +27,12 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
 from experiments.medical_dataset_gen.retrieval.utils import build_index_maps
+from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
+    EmbeddingGeometryPointRow,
+    EmbeddingGeometryQueryStats,
+    EmbeddingGeometryWorkerState,
+    RenderedGeometryResult,
+)
 
 from .artifacts import (
     build_query_artifact,
@@ -41,7 +46,7 @@ from .plots import (
     plot_strategy_overlay,
 )
 
-_WORKER_STATE: dict[str, Any] | None = None
+_WORKER_STATE: EmbeddingGeometryWorkerState | None = None
 
 
 def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -95,8 +100,8 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
     out_dir = paths.figures_dir / 'embedding_geometry'
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    all_point_rows: list[dict[str, Any]] = []
-    all_stat_rows: list[dict[str, Any]] = []
+    all_point_rows: list[EmbeddingGeometryPointRow] = []
+    all_stat_rows: list[EmbeddingGeometryQueryStats] = []
 
     worker_count = _embedding_geometry_worker_count(len(selected_query_ids))
     if worker_count == 1:
@@ -170,7 +175,7 @@ def _embedding_geometry_worker_count(n_queries: int) -> int:
 
 
 def _init_embedding_geometry_worker(
-    cfg_dump: dict[str, Any],
+    cfg_dump: dict[str, object],
     exp_name: str,
     out_dir: str,
     query_group_by_id: dict[str, str],
@@ -205,11 +210,12 @@ def _init_embedding_geometry_worker(
     }
 
 
-def _render_embedding_geometry_query(qid: str) -> dict[str, Any] | None:
+def _render_embedding_geometry_query(qid: str) -> RenderedGeometryResult | None:
     if _WORKER_STATE is None:
         raise RuntimeError('embedding geometry worker was not initialized')
     state = _WORKER_STATE
-    if qid not in state['maps']['query_id_to_idx']:
+    maps = state['maps']
+    if qid not in maps['query_id_to_idx']:
         return None
 
     artifact = build_query_artifact(
@@ -228,7 +234,7 @@ def _render_embedding_geometry_query(qid: str) -> dict[str, Any] | None:
         return None
 
     query_group = state['query_group_by_id'].get(qid, 'manual')
-    artifact['selection_group'] = query_group
+    artifact.selection_group = query_group
     query_dir = state['out_dir'] / query_group / qid
     query_dir.mkdir(parents=True, exist_ok=True)
     plot_query_overview_4panel(artifact, query_dir)

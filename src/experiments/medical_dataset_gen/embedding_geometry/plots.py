@@ -7,6 +7,10 @@ import numpy as np
 import polars as pl
 
 from experiments.medical_dataset_gen.retrieval.utils import select_indices
+from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
+    GeometryArtifact,
+    GeometrySelection,
+)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
 
 _FIXED_LABEL_COLORS = {
@@ -26,41 +30,31 @@ _BACKGROUND_OUTLIER_COLOR = '#d62728'
 _UNSELECTED_BACKGROUND_COLOR = '#b8b8b8'
 
 
-def plot_query_map(artifact: dict[str, Any], out_dir: Path) -> None:
+def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(9, 7))
-    _plot_query_map_ax(ax, artifact)
-    ax.legend(fontsize=7, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
-    fig.tight_layout()
-    fig.savefig(out_dir / 'candidate_pool_map.png', dpi=150, bbox_inches='tight')
-    plt.close(fig)
-
-
-def plot_strategy_overlay(artifact: dict[str, Any], out_dir: Path) -> None:
-    import matplotlib.pyplot as plt
-
-    strategies = [s for s in ['top_k', 'mmr', 'fac_loc'] if s in artifact['selections']]
+    strategies = artifact.selections.keys()
     if not strategies:
         return
+
     fig, axes = plt.subplots(
         1, len(strategies), figsize=(5.3 * len(strategies), 5.2), sharex=True, sharey=True
     )
-    palette = label_palette(artifact['labels'])
+    palette = label_palette(artifact.labels)
     axes_list = [axes] if len(strategies) == 1 else list(axes)
     for ax, strategy in zip(axes_list, strategies, strict=True):
-        payload = artifact['selections'][strategy]
+        payload = artifact.selections[strategy]
         title = _selection_panel_title(
             artifact=artifact,
             strategy=strategy,
-            lam=payload['lam'],
-            local_indices=payload['local_indices'],
+            lam=payload.lam,
+            local_indices=payload.local_indices,
         )
         _plot_selection_panel(
             ax=ax,
             artifact=artifact,
             palette=palette,
-            local_indices=payload['local_indices'],
+            local_indices=payload.local_indices,
             title=title,
         )
     legend_handles = _selection_legend_handles(axes_list)
@@ -82,18 +76,15 @@ def plot_strategy_overlay(artifact: dict[str, Any], out_dir: Path) -> None:
 
 
 def plot_full_strategy_selection_overlay(
-    artifact: dict[str, Any],
-    out_dir: Path,
-    *,
-    k: int | None = None,
+    artifact: GeometryArtifact, out_dir: Path, *, k: int | None = None
 ) -> None:
     import matplotlib.pyplot as plt
 
-    lambda_values = [float(lam) for lam in artifact.get('lambda_values', [])]
+    lambda_values = [float(lam) for lam in artifact.lambda_values]
     if not lambda_values:
         return
-    render_k = int(artifact['k'] if k is None else k)
-    effective_k = min(render_k, len(artifact['sim_to_query']))
+    render_k = int(artifact.k if k is None else k)
+    effective_k = min(render_k, len(artifact.sim_to_query))
     selection_variants = _selection_variants_for_k(artifact, effective_k)
     rows = ['mmr', 'fac_loc']
     row_variants = {
@@ -113,19 +104,19 @@ def plot_full_strategy_selection_overlay(
         squeeze=False,
     )
 
-    palette = label_palette(artifact['labels'])
+    palette = label_palette(artifact.labels)
     topk_variants = selection_variants.get('top_k', [])
     if topk_variants:
         _plot_selection_panel(
             ax=axes[0, 0],
             artifact=artifact,
             palette=palette,
-            local_indices=topk_variants[0]['local_indices'],
+            local_indices=topk_variants[0].local_indices,
             title=_selection_panel_title(
                 artifact=artifact,
                 strategy='top_k',
                 lam=None,
-                local_indices=topk_variants[0]['local_indices'],
+                local_indices=topk_variants[0].local_indices,
             ),
         )
 
@@ -143,17 +134,18 @@ def plot_full_strategy_selection_overlay(
 
     for row_idx, strategy in enumerate(rows, start=1):
         variants = row_variants[strategy]
+
         for col_idx, payload in enumerate(variants):
             _plot_selection_panel(
                 ax=axes[row_idx, col_idx],
                 artifact=artifact,
                 palette=palette,
-                local_indices=payload['local_indices'],
+                local_indices=payload.local_indices,
                 title=_selection_panel_title(
                     artifact=artifact,
                     strategy=strategy,
-                    lam=float(payload['lam']),
-                    local_indices=payload['local_indices'],
+                    lam=float(payload.lam) if payload.lam else None,
+                    local_indices=payload.local_indices,
                 ),
             )
         for col_idx in range(len(variants), n_cols):
@@ -176,40 +168,7 @@ def plot_full_strategy_selection_overlay(
     plt.close(fig)
 
 
-def plot_query_similarity_map(artifact: dict[str, Any], out_dir: Path) -> None:
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(9, 7))
-    points = _plot_query_similarity_map_ax(ax, artifact)
-    fig.colorbar(points, ax=ax, fraction=0.046, pad=0.04, label='query cosine similarity')
-    fig.tight_layout()
-    fig.savefig(out_dir / 'query_cosine_similarity_map.png', dpi=150, bbox_inches='tight')
-    plt.close(fig)
-
-
-def plot_query_rank(artifact: dict[str, Any], out_dir: Path) -> None:
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(10, 5.8))
-    _plot_query_rank_ax(ax, artifact)
-    ax.legend(fontsize=7, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
-    fig.tight_layout()
-    fig.savefig(out_dir / 'query_similarity_rank.png', dpi=150, bbox_inches='tight')
-    plt.close(fig)
-
-
-def plot_discovered_clusters(artifact: dict[str, Any], out_dir: Path) -> None:
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(8.5, 6.5))
-    _plot_discovered_clusters_ax(ax, artifact)
-    ax.legend(fontsize=7, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
-    fig.tight_layout()
-    fig.savefig(out_dir / 'hdbscan_cluster_map.png', dpi=150, bbox_inches='tight')
-    plt.close(fig)
-
-
-def plot_query_overview_4panel(artifact: dict[str, Any], out_dir: Path) -> None:
+def plot_query_overview_4panel(artifact: GeometryArtifact, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 11))
@@ -260,19 +219,19 @@ def plot_cluster_quality_overview(stats: pl.DataFrame, out_dir: Path) -> None:
 
 def _plot_selection_panel(
     ax: Any,
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     *,
     palette: dict[str, Any],
     local_indices: Any,
     title: str,
 ) -> None:
-    coords = artifact['coords']
+    coords = artifact.coords
     ax.scatter(coords[:, 0], coords[:, 1], color='#dddddd', s=24, alpha=0.55, edgecolors='none')
     selected = {int(i) for i in local_indices}
-    for label in sorted(set(artifact['labels'])):
+    for label in sorted(set(artifact.labels)):
         if _is_background_outlier_label(label):
             continue
-        idx = [i for i, value in enumerate(artifact['labels']) if value == label and i in selected]
+        idx = [i for i, value in enumerate(artifact.labels) if value == label and i in selected]
         if not idx:
             continue
         marker = _label_marker(label)
@@ -306,18 +265,18 @@ def _plot_selection_panel(
 
 
 def _selection_variants_for_k(
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     k: int,
-) -> dict[str, list[dict[str, Any]]]:
-    sim_to_query = np.asarray(artifact['sim_to_query'])
-    sim_matrix = np.asarray(artifact['sim_matrix'])
-    mmr_window = artifact.get('mmr_window')
-    lambda_values = [float(lam) for lam in artifact.get('lambda_values', [])]
+) -> dict[str, list[GeometrySelection]]:
+    sim_to_query = np.asarray(artifact.sim_to_query)
+    sim_matrix = np.asarray(artifact.sim_matrix)
+    mmr_window = artifact.mmr_window
+    lambda_values = [float(lam) for lam in artifact.lambda_values]
 
-    variants: dict[str, list[dict[str, Any]]] = {
+    variants: dict[str, list[GeometrySelection]] = {
         'top_k': [
-            {
-                'local_indices': select_indices(
+            GeometrySelection(
+                local_indices=select_indices(
                     strategy='top_k',
                     sim_to_query=sim_to_query,
                     sim_matrix=sim_matrix,
@@ -325,14 +284,14 @@ def _selection_variants_for_k(
                     lam=None,
                     mmr_window=mmr_window,
                 ),
-                'lam': None,
-            }
+                lam=None,
+            )
         ]
     }
     for strategy in cast(list[RetrievalStrategy], ['mmr', 'fac_loc']):
         variants[strategy] = [
-            {
-                'local_indices': select_indices(
+            GeometrySelection(
+                local_indices=select_indices(
                     strategy=strategy,
                     sim_to_query=sim_to_query,
                     sim_matrix=sim_matrix,
@@ -340,35 +299,35 @@ def _selection_variants_for_k(
                     lam=float(lam),
                     mmr_window=mmr_window,
                 ),
-                'lam': float(lam),
-            }
+                lam=float(lam),
+            )
             for lam in lambda_values
         ]
     return variants
 
 
 def _meaningful_lambda_selection_variants(
-    variants: list[dict[str, Any]],
+    variants: list[GeometrySelection],
     *,
     lambda_values: list[float],
-) -> list[dict[str, Any]]:
-    ordered_variants: list[dict[str, Any]] = []
+) -> list[GeometrySelection]:
+    ordered_variants: list[GeometrySelection] = []
     for lam in sorted(lambda_values, reverse=True):
         payload = next(
             (
                 variant
                 for variant in variants
-                if variant.get('lam') is not None and abs(float(variant['lam']) - lam) < 1e-12
+                if variant.lam is not None and abs(float(variant.lam) - lam) < 1e-12
             ),
             None,
         )
         if payload is not None:
             ordered_variants.append(payload)
 
-    meaningful: list[dict[str, Any]] = []
+    meaningful: list[GeometrySelection] = []
     previous_signature: frozenset[int] | None = None
     for payload in ordered_variants:
-        signature = frozenset(int(index) for index in payload['local_indices'])
+        signature = frozenset(int(index) for index in payload.local_indices)
         if previous_signature is None or signature != previous_signature:
             meaningful.append(payload)
         previous_signature = signature
@@ -376,7 +335,7 @@ def _meaningful_lambda_selection_variants(
 
 
 def _selection_panel_title(
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     strategy: str,
     lam: float | None,
     local_indices: Any,
@@ -384,9 +343,9 @@ def _selection_panel_title(
     lambda_label: float | None = None,
 ) -> str:
     selected = {int(i) for i in local_indices}
-    selected_labels = [artifact['label_ids'][i] for i in selected]
-    selected_gold = sum(1 for i in selected if artifact['is_gold'][i])
-    selected_facets = len({x for x in selected_labels if x.startswith(artifact['query_id'])})
+    selected_labels = [artifact.label_ids[i] for i in selected]
+    selected_gold = sum(1 for i in selected if artifact.is_gold[i])
+    selected_facets = len({x for x in selected_labels if x.startswith(artifact.query_id)})
     parts = []
     if strategy == 'top_k' and lambda_label is not None:
         parts.append(f'lambda={lambda_label:.2f}')
@@ -433,13 +392,13 @@ def _draw_selection_legend_panel(ax: Any, legend_handles: dict[str, Any]) -> Non
 
 
 def _plot_query_map_ax(
-    ax: Any, artifact: dict[str, Any], *, include_title_prefix: bool = True
+    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
 ) -> None:
-    palette = label_palette(artifact['labels'])
-    for label in sorted(set(artifact['labels'])):
+    palette = label_palette(artifact.labels)
+    for label in sorted(set(artifact.labels)):
         if _is_background_outlier_label(label):
             continue
-        idx = [i for i, value in enumerate(artifact['labels']) if value == label]
+        idx = [i for i, value in enumerate(artifact.labels) if value == label]
         marker = _label_marker(label)
         scatter_kwargs: dict[str, Any] = {
             's': 34,
@@ -453,8 +412,8 @@ def _plot_query_map_ax(
         else:
             scatter_kwargs['edgecolors'] = 'none'
         ax.scatter(
-            artifact['coords'][idx, 0],
-            artifact['coords'][idx, 1],
+            artifact.coords[idx, 0],
+            artifact.coords[idx, 1],
             **scatter_kwargs,
         )
     _plot_background_outliers(
@@ -464,7 +423,9 @@ def _plot_query_map_ax(
         label=_BACKGROUND_OUTLIER_LABEL,
     )
     draw_query_marker(ax, artifact)
-    title = f'Candidate-pool map ({artifact["reduction_method"]}, n={len(artifact["candidate_chunk_ids"])})'
+    title = (
+        f'Candidate-pool map ({artifact.reduction_method}, n={len(artifact.candidate_chunk_ids)})'
+    )
     ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
     ax.set_xlabel('dim 1')
     ax.set_ylabel('dim 2')
@@ -473,15 +434,12 @@ def _plot_query_map_ax(
 
 
 def _plot_query_similarity_map_ax(
-    ax: Any,
-    artifact: dict[str, Any],
-    *,
-    include_title_prefix: bool = True,
+    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
 ) -> Any:
-    order = np.arange(len(artifact['candidate_chunk_ids']))
-    coords = artifact['coords'][order]
-    sim_to_query = artifact['sim_to_query'][order]
-    is_gold = np.array([artifact['is_gold'][i] for i in order], dtype=bool)
+    order = np.arange(len(artifact.candidate_chunk_ids))
+    coords = artifact.coords[order]
+    sim_to_query = artifact.sim_to_query[order]
+    is_gold = np.array([artifact.is_gold[i] for i in order], dtype=bool)
     is_background = np.array(
         [_is_background_outlier_point(artifact, int(i)) for i in order], dtype=bool
     )
@@ -548,14 +506,14 @@ def _plot_query_similarity_map_ax(
 
 
 def _plot_query_rank_ax(
-    ax: Any, artifact: dict[str, Any], *, include_title_prefix: bool = True
+    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
 ) -> None:
-    ranks = np.arange(1, len(artifact['sim_to_query']) + 1)
-    palette = label_palette(artifact['labels'])
-    for label in sorted(set(artifact['labels'])):
+    ranks = np.arange(1, len(artifact.sim_to_query) + 1)
+    palette = label_palette(artifact.labels)
+    for label in sorted(set(artifact.labels)):
         if _is_background_outlier_label(label):
             continue
-        idx = [i for i, value in enumerate(artifact['labels']) if value == label]
+        idx = [i for i, value in enumerate(artifact.labels) if value == label]
         marker = _label_marker(label)
         scatter_kwargs: dict[str, Any] = {
             'color': palette[label],
@@ -570,7 +528,7 @@ def _plot_query_rank_ax(
             scatter_kwargs['edgecolors'] = 'none'
         ax.scatter(
             ranks[idx],
-            artifact['sim_to_query'][idx],
+            artifact.sim_to_query[idx],
             **scatter_kwargs,
         )
     background_idx = _background_outlier_indices(artifact)
@@ -578,7 +536,7 @@ def _plot_query_rank_ax(
         _scatter_circled_x(
             ax,
             ranks[background_idx],
-            artifact['sim_to_query'][background_idx],
+            artifact.sim_to_query[background_idx],
             color=_BACKGROUND_OUTLIER_COLOR,
             s=50,
             alpha=0.94,
@@ -586,7 +544,7 @@ def _plot_query_rank_ax(
             linewidth=0.75,
             zorder=5,
         )
-    ax.axvline(artifact['k'], color='black', lw=1.0, ls='--', alpha=0.7, label=f'k={artifact["k"]}')
+    ax.axvline(artifact.k, color='black', lw=1.0, ls='--', alpha=0.7, label=f'k={artifact.k}')
     ax.set_xlabel('rank by query cosine')
     ax.set_ylabel('query cosine similarity')
     ax.set_title(
@@ -597,14 +555,14 @@ def _plot_query_rank_ax(
 
 def _plot_discovered_clusters_ax(
     ax: Any,
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     *,
     include_title_prefix: bool = True,
 ) -> None:
     import matplotlib.pyplot as plt
 
-    coords = artifact['coords']
-    cluster_labels = artifact['cluster_labels']
+    coords = artifact.coords
+    cluster_labels = artifact.cluster_labels
     unique = sorted(set(int(x) for x in cluster_labels))
     cmap = plt.get_cmap('tab20')  # type: ignore
     for idx, cluster_id in enumerate(unique):
@@ -658,10 +616,10 @@ def _is_background_outlier_label(label: str) -> bool:
     return label == _BACKGROUND_OUTLIER_LABEL
 
 
-def _is_background_outlier_point(artifact: dict[str, Any], idx: int) -> bool:
-    label = artifact['labels'][idx]
-    label_id = artifact['label_ids'][idx]
-    role = artifact['roles'][idx]
+def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
+    label = artifact.labels[idx]
+    label_id = artifact.label_ids[idx]
+    role = artifact.roles[idx]
     return (
         label == _BACKGROUND_OUTLIER_LABEL
         or label_id == _BACKGROUND_OUTLIER_LABEL_ID
@@ -669,17 +627,17 @@ def _is_background_outlier_point(artifact: dict[str, Any], idx: int) -> bool:
     )
 
 
-def _background_outlier_indices(artifact: dict[str, Any]) -> list[int]:
+def _background_outlier_indices(artifact: GeometryArtifact) -> list[int]:
     return [
         idx
-        for idx in range(len(artifact['candidate_chunk_ids']))
+        for idx in range(len(artifact.candidate_chunk_ids))
         if _is_background_outlier_point(artifact, idx)
     ]
 
 
 def _plot_background_outliers(
     ax: Any,
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     *,
     color: str,
     label: str | None = None,
@@ -687,7 +645,7 @@ def _plot_background_outliers(
     idx = _background_outlier_indices(artifact)
     if not idx:
         return
-    coords = artifact['coords']
+    coords = artifact.coords
     _scatter_circled_x(
         ax,
         coords[idx, 0],
@@ -703,7 +661,7 @@ def _plot_background_outliers(
 
 def _plot_background_outliers_for_selection(
     ax: Any,
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     *,
     selected: set[int],
     label: str | None = None,
@@ -713,7 +671,7 @@ def _plot_background_outliers_for_selection(
         return
     selected_idx = [point_idx for point_idx in idx if point_idx in selected]
     unselected_idx = [point_idx for point_idx in idx if point_idx not in selected]
-    coords = artifact['coords']
+    coords = artifact.coords
     if unselected_idx:
         _scatter_circled_x(
             ax,
@@ -791,10 +749,10 @@ def _scatter_circled_x(
     return x_points if color_values is not None else circle
 
 
-def draw_query_marker(ax: Any, artifact: dict[str, Any]) -> None:
+def draw_query_marker(ax: Any, artifact: GeometryArtifact) -> None:
     ax.scatter(
-        [artifact['query_coord'][0]],
-        [artifact['query_coord'][1]],
+        [artifact.query_coord[0]],
+        [artifact.query_coord[1]],
         marker='*',
         s=220,
         color='black',
@@ -805,19 +763,19 @@ def draw_query_marker(ax: Any, artifact: dict[str, Any]) -> None:
     )
 
 
-def artifact_title_prefix(artifact: dict[str, Any]) -> str:
-    condition = artifact['query'].get('condition_display') or artifact['query'].get('condition_id')
-    return f'{artifact["query_id"]} - {condition}'
+def artifact_title_prefix(artifact: GeometryArtifact) -> str:
+    condition = artifact.query.condition_display or artifact.query.condition_id
+    return f'{artifact.query_id} - {condition}'
 
 
-def _axis_title(artifact: dict[str, Any], title: str, *, include_title_prefix: bool) -> str:
+def _axis_title(artifact: GeometryArtifact, title: str, *, include_title_prefix: bool) -> str:
     if include_title_prefix:
         return f'{artifact_title_prefix(artifact)}\n{title}'
     return title
 
 
-def _apply_embedding_limits(ax: Any, artifact: dict[str, Any]) -> None:
-    coords = np.vstack([artifact['coords'], artifact['query_coord'][None, :]])
+def _apply_embedding_limits(ax: Any, artifact: GeometryArtifact) -> None:
+    coords = np.vstack([artifact.coords, artifact.query_coord[None, :]])
     x_min, y_min = coords.min(axis=0)
     x_max, y_max = coords.max(axis=0)
     x_pad = max(float(x_max - x_min) * 0.05, 0.5)

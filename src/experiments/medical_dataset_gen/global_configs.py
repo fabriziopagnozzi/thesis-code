@@ -81,8 +81,8 @@ class RetrievalCfg(BaseModel):
     candidate_pool_n: PositiveInt = 300
     k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
     lambda_values: list[NonNegativeFloat] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
-    strategies: list[Literal['top_k', 'mmr', 'fac_loc']] = Field(
-        default_factory=lambda: ['top_k', 'mmr', 'fac_loc']
+    strategies: set[Literal['top_k', 'mmr', 'fac_loc']] = Field(
+        default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
     )
     mmr_window: int | None = None
     only_pass_geometry: bool = True

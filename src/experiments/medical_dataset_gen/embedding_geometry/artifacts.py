@@ -9,7 +9,6 @@ consistent with the rest of the pipeline.
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import numpy as np
 import polars as pl
@@ -21,10 +20,16 @@ from experiments.medical_dataset_gen.retrieval.utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
+    GeometryArtifact,
+    GeometrySelection,
+)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
+    QueryRecord,
     RetrievalIndexMaps,
+    RetrievalStrategy,
 )
 
 from .reduction import (
@@ -267,18 +272,19 @@ def build_query_artifact(
     maps: RetrievalIndexMaps,
     eval_stats: pl.DataFrame,
     eval_results: pl.DataFrame,
-) -> dict[str, Any] | None:
-    query = queries.filter(pl.col('query_id') == qid).row(0, named=True)
+) -> GeometryArtifact | None:
+    query = QueryRecord.model_validate(queries.filter(pl.col('query_id') == qid).row(0, named=True))
     qidx = maps['query_id_to_idx'][qid]
+    pool_n = cfg.embedding_geometry.candidate_pool_n or cfg.retrieval.candidate_pool_n
+
     candidate_idx = get_candidate_pool_indices(
         query_id=qid,
         pool_scope=cfg.retrieval.pool_scope,
         n_chunks=len(chunk_ids),
         chunks_by_source_query=maps['chunks_by_source_query'],
         chunks_by_condition=maps['chunks_by_condition'],
-        query_condition_id=query.get('condition_id'),
+        query_condition_id=query.condition_id,
     )
-    pool_n = cfg.embedding_geometry.candidate_pool_n or cfg.retrieval.candidate_pool_n
     topn_global, topn_sims = run_topn_cosine_retrieval(
         candidate_indices=candidate_idx,
         chunk_vectors=chunk_vectors,
@@ -309,38 +315,32 @@ def build_query_artifact(
     )
     cluster_labels = hdbscan_labels(cfg, cluster_features(cfg, candidate_vectors))
 
-    return {
-        'query_id': qid,
-        'query': query,
-        'pool_scope': cfg.retrieval.pool_scope,
-        'candidate_chunk_ids': candidate_chunk_ids,
-        'candidate_vectors': candidate_vectors,
-        'query_vector': query_vector,
-        'sim_to_query': topn_sims.astype(np.float32),
-        'sim_matrix': sim_matrix,
-        'coords': coords[:-1],
-        'query_coord': coords[-1],
-        'reduction_method': reduction_method,
-        'labels': labels,
-        'label_ids': label_ids,
-        'roles': roles,
-        'is_gold': is_gold,
-        'facets_by_id': facet_label_map(query),
-        'cluster_labels': cluster_labels,
-        'selections': selections,
-        'selection_variants': selection_variants,
-        'lambda_values': [float(lam) for lam in cfg.retrieval.lambda_values],
-        'mmr_window': cfg.retrieval.mmr_window,
-        'k': k,
-        'qrels': qrels.filter(pl.col('query_id') == qid),
-        'chunk_by_id': {
-            chunk_id: chunk.model_dump(mode='json')
-            for chunk_id, chunk in maps['chunk_by_id'].items()
-        },
-        'qrel_by_chunk_id': {
-            chunk_id: qrel.model_dump(mode='json') for chunk_id, qrel in query_qrels.items()
-        },
-    }
+    return GeometryArtifact(
+        query_id=qid,
+        query=query,
+        pool_scope=cfg.retrieval.pool_scope,
+        candidate_chunk_ids=candidate_chunk_ids,
+        candidate_vectors=candidate_vectors,
+        query_vector=query_vector,
+        sim_to_query=topn_sims.astype(np.float32),
+        sim_matrix=sim_matrix,
+        coords=coords[:-1],
+        query_coord=coords[-1],
+        reduction_method=reduction_method,
+        labels=labels,
+        label_ids=label_ids,
+        roles=roles,
+        is_gold=is_gold,
+        facets_by_id=facet_label_map(query),
+        cluster_labels=cluster_labels,
+        selections=selections,
+        selection_variants=selection_variants,
+        lambda_values=[float(lam) for lam in cfg.retrieval.lambda_values],
+        mmr_window=cfg.retrieval.mmr_window,
+        k=k,
+        chunk_by_id=maps['chunk_by_id'],
+        qrel_by_chunk_id=query_qrels,
+    )
 
 
 def candidate_labels(
@@ -348,7 +348,7 @@ def candidate_labels(
     candidate_chunk_ids: list[str],
     chunk_by_id: dict[str, ChunkDocumentRecord],
     query_qrels: dict[str, QrelRecord],
-    query: dict[str, Any],
+    query: QueryRecord,
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
     facet_labels = facet_label_map(query)
     labels: list[str] = []
@@ -363,7 +363,7 @@ def candidate_labels(
         gold_flags.append(gold)
         if qrel is None:
             row_condition_id = row.condition_id
-            query_condition_id = query.get('condition_id')
+            query_condition_id = query.condition_id
             if row_condition_id != query_condition_id:
                 label_ids.append('other_condition')
                 labels.append('off-query wrong-condition chunks')
@@ -385,8 +385,10 @@ def distractor_label(distractor_type: str) -> str:
     return _DISTRACTOR_LABELS.get(distractor_type, distractor_type.replace('_', ' '))
 
 
-def facet_label_map(query: dict[str, Any]) -> dict[str, str]:
-    facets = json.loads(query['facets_json'])
+def facet_label_map(query: QueryRecord) -> dict[str, str]:
+    if query.facets_json is None:
+        return {}
+    facets = json.loads(query.facets_json)
     result = {}
     for facet in facets:
         subgroup = str(facet['subgroup_label']).replace('patients ', '')
@@ -400,15 +402,15 @@ def strategy_selections(
     eval_stats: pl.DataFrame,
     eval_results: pl.DataFrame,
     qid: str,
-    selection_variants: dict[str, list[dict[str, Any]]],
+    selection_variants: dict[RetrievalStrategy, list[GeometrySelection]],
     k: int,
-) -> dict[str, dict[str, Any]]:
-    selections = {}
+) -> dict[RetrievalStrategy, GeometrySelection]:
+    selections: dict[RetrievalStrategy, GeometrySelection] = {}
     if 'top_k' in cfg.retrieval.strategies and 'top_k' in selection_variants:
-        selections['top_k'] = selection_variants['top_k'][0]
-    for strategy in ['mmr', 'fac_loc']:
-        if strategy not in cfg.retrieval.strategies:
-            continue
+        topk = selection_variants['top_k'][0]
+        selections['top_k'] = GeometrySelection(local_indices=topk.local_indices, lam=topk.lam)
+
+    for strategy in cfg.retrieval.strategies.difference({'top_k'}):
         variants = selection_variants.get(strategy, [])
         if not variants:
             continue
@@ -422,21 +424,18 @@ def strategy_selections(
         )
         local = _selection_for_lambda(variants, lam)
         if local is None:
-            local = variants[0]['local_indices']
-        selections[strategy] = {'local_indices': local, 'lam': lam}
+            local = variants[0].local_indices
+        selections[strategy] = GeometrySelection(local_indices=local, lam=lam)
     return selections
 
 
 def strategy_selection_variants(
-    cfg: ExperimentCfg,
-    sim_to_query: NDArray[np.float32],
-    sim_matrix: NDArray[np.float32],
-    k: int,
-) -> dict[str, list[dict[str, Any]]]:
-    variants: dict[str, list[dict[str, Any]]] = {
+    cfg: ExperimentCfg, sim_to_query: NDArray[np.float32], sim_matrix: NDArray[np.float32], k: int
+) -> dict[RetrievalStrategy, list[GeometrySelection]]:
+    variants: dict[RetrievalStrategy, list[GeometrySelection]] = {
         'top_k': [
-            {
-                'local_indices': select_indices(
+            GeometrySelection(
+                local_indices=select_indices(
                     strategy='top_k',
                     sim_to_query=sim_to_query,
                     sim_matrix=sim_matrix,
@@ -444,16 +443,18 @@ def strategy_selection_variants(
                     lam=None,
                     mmr_window=cfg.retrieval.mmr_window,
                 ),
-                'lam': None,
-            }
+                lam=None,
+            )
         ]
     }
+
     for strategy in ['mmr', 'fac_loc']:
         if strategy not in cfg.retrieval.strategies:
             continue
+
         variants[strategy] = [
-            {
-                'local_indices': select_indices(
+            GeometrySelection(
+                local_indices=select_indices(
                     strategy=strategy,
                     sim_to_query=sim_to_query,
                     sim_matrix=sim_matrix,
@@ -461,23 +462,24 @@ def strategy_selection_variants(
                     lam=float(lam),
                     mmr_window=cfg.retrieval.mmr_window,
                 ),
-                'lam': float(lam),
-            }
+                lam=float(lam),
+            )
             for lam in cfg.retrieval.lambda_values
         ]
+
     return variants
 
 
 def _selection_for_lambda(
-    variants: list[dict[str, Any]],
+    variants: list[GeometrySelection],
     lam: float,
 ) -> NDArray[np.intp] | None:
     for variant in variants:
-        variant_lam = variant.get('lam')
+        variant_lam = variant.lam
         if variant_lam is None:
             continue
         if abs(float(variant_lam) - lam) < 1e-12:
-            return variant['local_indices']
+            return variant.local_indices
     return None
 
 

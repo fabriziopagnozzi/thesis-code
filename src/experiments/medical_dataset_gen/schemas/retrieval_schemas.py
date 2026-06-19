@@ -44,8 +44,10 @@ class QueryRecord(BenchmarkModel):
     query_id: str
     query_type: QueryType
     condition_id: str | None
+    condition_display: str | None = None
     split: Split
     dominant_facet_id: str
+    facets_json: str | None = None
     query_text: str = ''
 
 

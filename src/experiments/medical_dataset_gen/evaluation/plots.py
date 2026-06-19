@@ -965,11 +965,6 @@ def plot_lambda_agreement_facloc_mmr(agreement_df: pl.DataFrame, out_dir: Path) 
     plt.close(fig)
 
 
-def plot_gain_over_topk_similar_lambda(agreement_df: pl.DataFrame, out_dir: Path) -> None:
-    """Backward-compatible alias for plot_lambda_agreement_facloc_mmr."""
-    plot_lambda_agreement_facloc_mmr(agreement_df, out_dir)
-
-
 def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Diagnostic metrics that explain why a strategy wins or fails."""
     import matplotlib.pyplot as plt

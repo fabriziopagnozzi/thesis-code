@@ -9,20 +9,28 @@ synthetic design.
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
+from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
+    EmbeddingGeometryPointRow,
+    EmbeddingGeometryQueryStats,
+    GeometryArtifact,
+)
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    ChunkDocumentRecord,
+    QrelRecord,
+)
 
-def point_rows(artifact: dict[str, Any]) -> list[dict[str, Any]]:
+
+def point_rows(artifact: GeometryArtifact) -> list[EmbeddingGeometryPointRow]:
     selected_sets = {
-        strategy: {int(i) for i in payload['local_indices']}
-        for strategy, payload in artifact['selections'].items()
+        strategy: {int(i) for i in payload.local_indices} for strategy, payload in artifact.selections.items()
     }
-    rows = []
-    for idx, chunk_id in enumerate(artifact['candidate_chunk_ids']):
-        row = artifact.get('qrel_by_chunk_id', {}).get(chunk_id, artifact['chunk_by_id'][chunk_id])
+    rows: list[EmbeddingGeometryPointRow] = []
+    for idx, chunk_id in enumerate(artifact.candidate_chunk_ids):
+        row = artifact.qrel_by_chunk_id.get(chunk_id, artifact.chunk_by_id[chunk_id])
         rows.append(
             _point_row(
                 artifact=artifact,
@@ -31,14 +39,14 @@ def point_rows(artifact: dict[str, Any]) -> list[dict[str, Any]]:
                 idx=idx,
                 point_kind='chunk',
                 rank=idx + 1,
-                x=float(artifact['coords'][idx, 0]),
-                y=float(artifact['coords'][idx, 1]),
-                sim_to_query=float(artifact['sim_to_query'][idx]),
-                plot_label=artifact['labels'][idx],
-                label_id=artifact['label_ids'][idx],
-                cluster_role=artifact['roles'][idx],
-                is_gold=bool(artifact['is_gold'][idx]),
-                hdbscan_label=int(artifact['cluster_labels'][idx]),
+                x=float(artifact.coords[idx, 0]),
+                y=float(artifact.coords[idx, 1]),
+                sim_to_query=float(artifact.sim_to_query[idx]),
+                plot_label=artifact.labels[idx],
+                label_id=artifact.label_ids[idx],
+                cluster_role=artifact.roles[idx],
+                is_gold=bool(artifact.is_gold[idx]),
+                hdbscan_label=int(artifact.cluster_labels[idx]),
                 selected_top_k=idx in selected_sets.get('top_k', set()),
                 selected_mmr=idx in selected_sets.get('mmr', set()),
                 selected_fac_loc=idx in selected_sets.get('fac_loc', set()),
@@ -52,8 +60,8 @@ def point_rows(artifact: dict[str, Any]) -> list[dict[str, Any]]:
             idx=None,
             point_kind='query',
             rank=0,
-            x=float(artifact['query_coord'][0]),
-            y=float(artifact['query_coord'][1]),
+            x=float(artifact.query_coord[0]),
+            y=float(artifact.query_coord[1]),
             sim_to_query=1.0,
             plot_label='query',
             label_id='query',
@@ -68,40 +76,40 @@ def point_rows(artifact: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def query_stats(artifact: dict[str, Any]) -> dict[str, Any]:
+def query_stats(artifact: GeometryArtifact) -> EmbeddingGeometryQueryStats:
     selected_summaries = {
-        strategy: selection_summary(artifact, payload['local_indices'])
-        for strategy, payload in artifact['selections'].items()
+        strategy: selection_summary(artifact, payload.local_indices)
+        for strategy, payload in artifact.selections.items()
     }
     gold_silhouette = gold_silhouette_cosine(artifact)
     in_sim, cross_sim = in_cross_similarity(artifact)
-    cluster_labels = artifact['cluster_labels']
-    hidden_label_codes = string_codes(artifact['label_ids'])
+    cluster_labels = artifact.cluster_labels
+    hidden_label_codes = string_codes(artifact.label_ids)
     ari, nmi = cluster_agreement(hidden_label_codes, cluster_labels)
     non_noise = [int(x) for x in cluster_labels if int(x) != -1]
     n_clusters = len(set(non_noise))
     noise_rate = float(np.mean(cluster_labels == -1)) if len(cluster_labels) else 0.0
-    gold_mask = np.array(artifact['is_gold'], dtype=bool)
+    gold_mask = np.array(artifact.is_gold, dtype=bool)
     distractor_mask = ~gold_mask
 
-    row: dict[str, Any] = {
-        'query_id': artifact['query_id'],
-        'selection_group': artifact.get('selection_group'),
-        'query_type': artifact['query']['query_type'],
-        'condition_id': artifact['query']['condition_id'],
-        'pool_scope': artifact['pool_scope'],
-        'pool_size': len(artifact['candidate_chunk_ids']),
-        'plot_k': artifact['k'],
-        'reduction_method': artifact['reduction_method'],
-        'n_hidden_labels': len(set(artifact['label_ids'])),
+    row: EmbeddingGeometryQueryStats = {
+        'query_id': artifact.query_id,
+        'selection_group': artifact.selection_group,
+        'query_type': artifact.query.query_type,
+        'condition_id': artifact.query.condition_id,
+        'pool_scope': artifact.pool_scope,
+        'pool_size': len(artifact.candidate_chunk_ids),
+        'plot_k': artifact.k,
+        'reduction_method': artifact.reduction_method,
+        'n_hidden_labels': len(set(artifact.label_ids)),
         'n_gold_points': int(gold_mask.sum()),
         'n_distractor_points': int(distractor_mask.sum()),
         'gold_silhouette_cosine': gold_silhouette,
         'mean_in_facet_similarity': in_sim,
         'mean_cross_facet_similarity': cross_sim,
         'in_minus_cross_similarity': in_sim - cross_sim,
-        'query_to_gold_mean': masked_mean(artifact['sim_to_query'], gold_mask),
-        'query_to_distractor_mean': masked_mean(artifact['sim_to_query'], distractor_mask),
+        'query_to_gold_mean': masked_mean(artifact.sim_to_query, gold_mask),
+        'query_to_distractor_mean': masked_mean(artifact.sim_to_query, distractor_mask),
         'hdbscan_n_clusters': n_clusters,
         'hdbscan_noise_rate': noise_rate,
         'hdbscan_ari_hidden': ari,
@@ -116,12 +124,12 @@ def query_stats(artifact: dict[str, Any]) -> dict[str, Any]:
 
 
 def selection_summary(
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     local_indices: NDArray[np.intp],
 ) -> dict[str, float | int]:
     indices = [int(i) for i in local_indices]
-    labels = [artifact['label_ids'][i] for i in indices]
-    gold = [bool(artifact['is_gold'][i]) for i in indices]
+    labels = [artifact.label_ids[i] for i in indices]
+    gold = [bool(artifact.is_gold[i]) for i in indices]
     facet_labels = [label for label, is_gold in zip(labels, gold, strict=True) if is_gold]
     counts = Counter(facet_labels)
     dominant = counts.most_common(1)[0][1] if counts else 0
@@ -133,26 +141,26 @@ def selection_summary(
     }
 
 
-def gold_silhouette_cosine(artifact: dict[str, Any]) -> float | None:
+def gold_silhouette_cosine(artifact: GeometryArtifact) -> float | None:
     from sklearn.metrics import silhouette_score
 
-    gold_idx = [i for i, flag in enumerate(artifact['is_gold']) if flag]
-    labels = [artifact['label_ids'][i] for i in gold_idx]
+    gold_idx = [i for i, flag in enumerate(artifact.is_gold) if flag]
+    labels = [artifact.label_ids[i] for i in gold_idx]
     if len(set(labels)) < 2 or len(gold_idx) <= len(set(labels)):
         return None
-    vectors = artifact['candidate_vectors'][gold_idx]
+    vectors = artifact.candidate_vectors[gold_idx]
     try:
         return float(silhouette_score(vectors, labels, metric='cosine'))
     except Exception:
         return None
 
 
-def in_cross_similarity(artifact: dict[str, Any]) -> tuple[float, float]:
-    gold_idx = [i for i, flag in enumerate(artifact['is_gold']) if flag]
-    labels = np.array([artifact['label_ids'][i] for i in gold_idx])
+def in_cross_similarity(artifact: GeometryArtifact) -> tuple[float, float]:
+    gold_idx = [i for i, flag in enumerate(artifact.is_gold) if flag]
+    labels = np.array([artifact.label_ids[i] for i in gold_idx])
     if len(gold_idx) < 2 or len(set(labels.tolist())) < 2:
         return 0.0, 0.0
-    sim = artifact['sim_matrix'][np.ix_(gold_idx, gold_idx)]
+    sim = artifact.sim_matrix[np.ix_(gold_idx, gold_idx)]
     same = labels[:, None] == labels[None, :]
     not_self = ~np.eye(len(gold_idx), dtype=bool)
     in_vals = sim[same & not_self]
@@ -192,9 +200,9 @@ def string_codes(labels: list[str]) -> NDArray[np.int32]:
 
 
 def _point_row(
-    artifact: dict[str, Any],
+    artifact: GeometryArtifact,
     chunk_id: str | None,
-    row: dict[str, Any],
+    row: QrelRecord | ChunkDocumentRecord | dict[object, object],
     idx: int | None,
     point_kind: str,
     rank: int,
@@ -209,25 +217,28 @@ def _point_row(
     selected_top_k: bool,
     selected_mmr: bool,
     selected_fac_loc: bool,
-) -> dict[str, Any]:
+) -> EmbeddingGeometryPointRow:
     _ = idx
+    facet_id = row.facet_id if isinstance(row, QrelRecord) else None
+    target_facet_id = row.target_facet_id if isinstance(row, QrelRecord) else None
+    distractor_type = row.distractor_type if isinstance(row, QrelRecord) else None
     return {
-        'query_id': artifact['query_id'],
-        'selection_group': artifact.get('selection_group'),
+        'query_id': artifact.query_id,
+        'selection_group': artifact.selection_group,
         'point_kind': point_kind,
         'chunk_id': chunk_id,
         'rank': rank,
         'x': x,
         'y': y,
-        'reduction_method': artifact['reduction_method'],
+        'reduction_method': artifact.reduction_method,
         'sim_to_query': sim_to_query,
         'plot_label': plot_label,
         'label_id': label_id,
         'cluster_role': cluster_role,
         'is_gold': is_gold,
-        'facet_id': row.get('facet_id'),
-        'target_facet_id': row.get('target_facet_id'),
-        'distractor_type': row.get('distractor_type'),
+        'facet_id': facet_id,
+        'target_facet_id': target_facet_id,
+        'distractor_type': distractor_type,
         'hdbscan_label': hdbscan_label,
         'selected_top_k': selected_top_k,
         'selected_mmr': selected_mmr,

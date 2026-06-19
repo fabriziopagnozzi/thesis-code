@@ -886,19 +886,17 @@ def _render_composition(lines: list[str], composition_df: pl.DataFrame, *, detai
         ('By label id', ['label_id']),
     ]
     if detail == 'full':
-        groups.extend(
-            [
-                ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
-                (
-                    'By condition/subgroup/axis/value',
-                    ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
-                ),
-                (
-                    'By text generation and soft warnings',
-                    ['text_generation_source', 'validation_soft_warning_count'],
-                ),
-            ]
-        )
+        groups.extend([
+            ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
+            (
+                'By condition/subgroup/axis/value',
+                ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
+            ),
+            (
+                'By text generation and soft warnings',
+                ['text_generation_source', 'validation_soft_warning_count'],
+            ),
+        ])
 
     for title, keys in groups:
         lines.append('')
@@ -1038,9 +1036,8 @@ def _render_selection_snapshot(
     for k in snapshot_ks:
         topk = select_indices('top_k', sim_to_query, sim_matrix, k=k, lam=None)
         rows.append(_selection_summary_row('top_k', None, k, topk, topk, ranked_rows, sim_to_query))
-        for strategy in ['mmr', 'fac_loc']:
-            if strategy not in ctx.cfg.retrieval.strategies:
-                continue
+
+        for strategy in ctx.cfg.retrieval.strategies.difference({'top_k'}):
             for lam in lambdas:
                 selected = select_indices(
                     strategy,
@@ -1174,7 +1171,9 @@ def _render_chunk_text(
         ]
         lines.append(
             'meta: '
-            + '; '.join(f'{key}={_fmt(value)}' for key, value in meta_parts if value not in [None, ''])
+            + '; '.join(
+                f'{key}={_fmt(value)}' for key, value in meta_parts if value not in [None, '']
+            )
         )
         text = str(row.get('text') or '').strip()
         if chunk_text_chars > 0 and len(text) > chunk_text_chars:
@@ -1197,22 +1196,20 @@ def _render_chunk_text(
         ('validation_soft_warning_count', row.get('validation_soft_warning_count')),
     ]
     if not compact:
-        metadata.extend(
-            [
-                ('facet_id', row.get('facet_id')),
-                ('target_facet_id', row.get('target_facet_id')),
-                ('cluster_id', row.get('cluster_id')),
-                ('patient_age', row.get('patient_age')),
-                ('patient_sex', row.get('patient_sex')),
-                ('note_style', row.get('note_style')),
-                ('approx_words', row.get('approx_words')),
-                ('text_generation_source', row.get('text_generation_source')),
-                ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
-                ('fact_id', row.get('fact_id')),
-                ('must_mention', row.get('must_mention')),
-                ('must_not_mention', row.get('must_not_mention')),
-            ]
-        )
+        metadata.extend([
+            ('facet_id', row.get('facet_id')),
+            ('target_facet_id', row.get('target_facet_id')),
+            ('cluster_id', row.get('cluster_id')),
+            ('patient_age', row.get('patient_age')),
+            ('patient_sex', row.get('patient_sex')),
+            ('note_style', row.get('note_style')),
+            ('approx_words', row.get('approx_words')),
+            ('text_generation_source', row.get('text_generation_source')),
+            ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
+            ('fact_id', row.get('fact_id')),
+            ('must_mention', row.get('must_mention')),
+            ('must_not_mention', row.get('must_not_mention')),
+        ])
     _kv(lines, metadata)
     text = str(row.get('text') or '').strip()
     if chunk_text_chars > 0 and len(text) > chunk_text_chars:
