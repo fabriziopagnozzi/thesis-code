@@ -33,10 +33,7 @@ from .artifacts import (
     build_query_artifact,
     choose_query_groups,
 )
-from .diagnostics import (
-    point_rows,
-    query_stats,
-)
+from .diagnostics import point_rows, query_stats
 from .plots import (
     plot_cluster_quality_overview,
     plot_full_strategy_selection_overlay,

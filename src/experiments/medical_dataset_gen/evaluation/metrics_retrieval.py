@@ -40,9 +40,7 @@ def retrieval_metrics(
         **facet_coverage,
         **diversified_ranking,
         **redundancy,
-        'n_unique_hadms': len({
-            row.get('admission_id') for row in selected_rows if row.get('admission_id')
-        }),
+        'n_unique_hadms': len({row.admission_id for row in selected_rows if row.admission_id}),
     }
 
 
@@ -81,7 +79,8 @@ def _redundancy_metrics(
     background_outlier_count = sum(
         1
         for chunk_id in non_gold_ids
-        if query_qrels.get(chunk_id, {}).get('cluster_role') == 'background_outlier'
+        if (qrel := query_qrels.get(chunk_id)) is not None
+        and qrel.cluster_role == 'background_outlier'
     )
     near_miss_distractor_count = sum(
         1 for chunk_id in non_gold_ids if _is_query_near_miss_distractor(query_qrels, chunk_id)
@@ -89,12 +88,15 @@ def _redundancy_metrics(
     dominant_count = sum(
         1
         for chunk_id in selected_chunk_ids
-        if query_qrels.get(chunk_id, {}).get('facet_id') == dominant_facet_id
+        if (qrel := query_qrels.get(chunk_id)) is not None
+        and qrel.facet_id == dominant_facet_id
     )
     selected_facet_counts = Counter(
-        query_qrels.get(chunk_id, {}).get('facet_id')
+        qrel.facet_id
         for chunk_id in selected_chunk_ids
-        if chunk_id in all_gold_ids and query_qrels.get(chunk_id, {}).get('facet_id')
+        if chunk_id in all_gold_ids
+        and (qrel := query_qrels.get(chunk_id)) is not None
+        and qrel.facet_id is not None
     )
     max_facet_concentration = (
         selected_facet_counts.most_common(1)[0][1] / n_selected
@@ -213,7 +215,8 @@ class DiversifiedRankingIndexMetrics:
         for rank, chunk_id in enumerate(selected_chunk_ids, start=1):
             if chunk_id not in all_gold_ids:
                 continue
-            facet_id = query_qrels.get(chunk_id, {}).get('facet_id')
+            qrel = query_qrels.get(chunk_id)
+            facet_id = qrel.facet_id if qrel is not None else None
             if facet_id:
                 first_rank.setdefault(str(facet_id), rank)
         reciprocal_ranks = [
@@ -268,12 +271,14 @@ class DiversifiedRankingIndexMetrics:
         all_gold_ids: set[str],
         alpha: float,
     ) -> float:
-        labels = [
-            str(query_qrels.get(chunk_id, {}).get('facet_id'))
-            if chunk_id in all_gold_ids and query_qrels.get(chunk_id, {}).get('facet_id')
-            else None
-            for chunk_id in selected_chunk_ids
-        ]
+        labels: list[str | None] = []
+        for chunk_id in selected_chunk_ids:
+            qrel = query_qrels.get(chunk_id)
+            labels.append(
+                qrel.facet_id
+                if chunk_id in all_gold_ids and qrel is not None and qrel.facet_id
+                else None
+            )
         return cls._alpha_dcg_from_labels(labels, alpha=alpha)
 
     @classmethod
@@ -303,8 +308,4 @@ class DiversifiedRankingIndexMetrics:
 
 def _is_query_near_miss_distractor(query_qrels: dict[str, QrelRecord], chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
-    return (
-        bool(row)
-        and not bool(row.get('is_gold'))
-        and row.get('cluster_role') != 'background_outlier'
-    )
+    return row is not None and not row.is_gold and row.cluster_role != 'background_outlier'

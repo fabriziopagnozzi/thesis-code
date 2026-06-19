@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict
-from typing import Any
 
 import numpy as np
 import polars as pl
@@ -23,6 +22,16 @@ from experiments.medical_dataset_gen.global_configs import (
     MedicalDatasetGenPaths,
     read_parquet,
     write_parquet,
+)
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    BackgroundOutlierDiagnostics,
+    FacetGoldByQuery,
+    FacetGoldChunks,
+    QrelRecord,
+    QrelsByQueryChunk,
+    QueryQrels,
+    QueryRecord,
+    TopKDiagnosticsByK,
 )
 
 from .embed import load_embedding_arrays
@@ -48,10 +57,11 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
     primary_k = int(cfg.geometry.primary_topk_dominance_k)
     diagnostic_k_values = _diagnostic_k_values(cfg)
     rows = []
-    for query in tqdm(
+    for query_row in tqdm(
         queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True
     ):
-        qid = query['query_id']
+        query = QueryRecord.model_validate(query_row)
+        qid = query.query_id
         qidx = maps['query_id_to_idx'][qid]
         candidate_idx = get_candidate_pool_indices(
             query_id=qid,
@@ -59,7 +69,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             n_chunks=len(chunk_ids),
             chunks_by_source_query=maps['chunks_by_source_query'],
             chunks_by_condition=maps['chunks_by_condition'],
-            query_condition_id=query.get('condition_id'),
+            query_condition_id=query.condition_id,
         )
         topn_global, topn_sims = run_topn_cosine_retrieval(
             candidate_indices=candidate_idx,
@@ -74,7 +84,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         query_qrels = qrels_by_query_chunk.get(qid, {})
         if not query_facets:
             continue
-        dominant_facet_id = str(query.get('dominant_facet_id') or '')
+        dominant_facet_id = query.dominant_facet_id
         facets_present = {
             facet_id: bool(topn_set & set(gold_ids)) for facet_id, gold_ids in query_facets.items()
         }
@@ -108,7 +118,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
         n_distractors = sum(
             1
             for chunk_id in topn_chunk_ids
-            if not bool(query_qrels.get(chunk_id, {}).get('is_gold'))
+            if not ((qrel := query_qrels.get(chunk_id)) and qrel.is_gold)
         )
         n_near_miss_distractors = sum(
             1
@@ -212,17 +222,21 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
     return df
 
 
-def _facet_gold_map(qrels: pl.DataFrame) -> dict[str, dict[str, list[str]]]:
-    result: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+def _facet_gold_map(qrels: pl.DataFrame) -> FacetGoldByQuery:
+    result: FacetGoldByQuery = defaultdict(lambda: defaultdict(list))
     for row in qrels.filter(pl.col('is_gold')).iter_rows(named=True):
-        result[row['query_id']][row['facet_id']].append(row['chunk_id'])
+        qrel = QrelRecord.model_validate(row)
+        if qrel.facet_id is None:
+            raise ValueError(f'gold qrel {qrel.chunk_id!r} has no facet_id')
+        result[qrel.query_id][qrel.facet_id].append(qrel.chunk_id)
     return result
 
 
-def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, dict[str, Any]]]:
-    result: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+def _qrels_by_query_chunk(qrels: pl.DataFrame) -> QrelsByQueryChunk:
+    result: QrelsByQueryChunk = defaultdict(dict)
     for row in qrels.iter_rows(named=True):
-        result[str(row['query_id'])][str(row['chunk_id'])] = row
+        record = QrelRecord.model_validate(row)
+        result[record.query_id][record.chunk_id] = record
     return result
 
 
@@ -240,12 +254,12 @@ def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
 def _topk_diagnostics_by_k(
     *,
     topn_chunk_ids: list[str],
-    query_qrels: dict[str, dict[str, Any]],
-    query_facets: dict[str, list[str]],
+    query_qrels: QueryQrels,
+    query_facets: FacetGoldChunks,
     dominant_facet_id: str,
     k_values: list[int],
-) -> dict[int, dict[str, int | float | list[str]]]:
-    rows = {}
+) -> TopKDiagnosticsByK:
+    rows: TopKDiagnosticsByK = {}
     for k in k_values:
         counts = _topk_facet_counts(
             topn_chunk_ids=topn_chunk_ids,
@@ -271,7 +285,7 @@ def _topk_diagnostics_by_k(
     return rows
 
 
-def _flatten_topk_diagnostics(topk_by_k: dict[int, dict[str, object]]) -> dict[str, object]:
+def _flatten_topk_diagnostics(topk_by_k: TopKDiagnosticsByK) -> dict[str, object]:
     flat: dict[str, object] = {}
     for k, row in topk_by_k.items():
         prefix = f'topk_{k}'
@@ -282,26 +296,26 @@ def _flatten_topk_diagnostics(topk_by_k: dict[int, dict[str, object]]) -> dict[s
         flat[f'{prefix}_n_retrieved_facets'] = row['n_retrieved_facets']
         flat[f'{prefix}_facet_coverage'] = row['facet_coverage']
         flat[f'{prefix}_all_facets_covered'] = row['all_facets_covered']
-        flat[f'{prefix}_retrieved_facets_json'] = _json_str_list(list(row['retrieved_facets']))
+        flat[f'{prefix}_retrieved_facets_json'] = _json_str_list(row['retrieved_facets'])
     return flat
 
 
 def _topk_facet_counts(
     topn_chunk_ids: list[str],
-    query_qrels: dict[str, dict[str, Any]],
+    query_qrels: QueryQrels,
     k: int,
 ) -> Counter[str]:
     counts: Counter[str] = Counter()
     for chunk_id in topn_chunk_ids[:k]:
-        row = query_qrels.get(chunk_id, {})
-        if row.get('is_gold') and row.get('facet_id'):
-            counts[str(row['facet_id'])] += 1
+        row = query_qrels.get(chunk_id)
+        if row is not None and row.is_gold and (facet_id := row.facet_id):
+            counts[facet_id] += 1
     return counts
 
 
 def _topk_dominant_count(
     topn_chunk_ids: list[str],
-    query_qrels: dict[str, dict[str, Any]],
+    query_qrels: QueryQrels,
     k: int,
 ) -> int:
     counts = _topk_facet_counts(
@@ -314,29 +328,30 @@ def _topk_dominant_count(
 
 def _topk_retrieved_facets(
     topn_chunk_ids: list[str],
-    query_qrels: dict[str, dict[str, Any]],
+    query_qrels: QueryQrels,
     k: int,
 ) -> list[str]:
-    facets = {
-        str(row['facet_id'])
-        for chunk_id in topn_chunk_ids[:k]
-        if (row := query_qrels.get(chunk_id, {})).get('is_gold') and row.get('facet_id')
-    }
+    facets: set[str] = set()
+    for chunk_id in topn_chunk_ids[:k]:
+        row = query_qrels.get(chunk_id)
+        if row is not None and row.is_gold and (facet_id := row.facet_id):
+            facets.add(facet_id)
     return sorted(facets)
 
 
 def _rank_where_all_facets_first_covered(
     *,
     topn_chunk_ids: list[str],
-    query_qrels: dict[str, dict[str, Any]],
-    query_facets: dict[str, list[str]],
+    query_qrels: QueryQrels,
+    query_facets: FacetGoldChunks,
 ) -> int | None:
     expected = set(query_facets)
     seen: set[str] = set()
     for rank, chunk_id in enumerate(topn_chunk_ids, start=1):
-        row = query_qrels.get(chunk_id, {})
-        if row.get('is_gold') and row.get('facet_id') in expected:
-            seen.add(str(row['facet_id']))
+        row = query_qrels.get(chunk_id)
+        facet_id = row.facet_id if row is not None else None
+        if row is not None and row.is_gold and facet_id in expected:
+            seen.add(facet_id)
             if seen == expected:
                 return rank
     return None
@@ -344,7 +359,7 @@ def _rank_where_all_facets_first_covered(
 
 def _facet_separation(
     qid: str,
-    query_facets: dict[str, list[str]],
+    query_facets: FacetGoldChunks,
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
 ) -> tuple[float, float]:
@@ -374,11 +389,11 @@ def _facet_separation(
 def _background_outlier_diagnostics(
     topn_chunk_ids: list[str],
     topn_sims: NDArray[np.float32],
-    query_qrels: dict[str, dict[str, Any]],
+    query_qrels: QueryQrels,
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
     expected_background_chunks: int,
-) -> dict[str, float | int | bool | None]:
+) -> BackgroundOutlierDiagnostics:
     background_positions = [
         idx
         for idx, chunk_id in enumerate(topn_chunk_ids)
@@ -386,7 +401,7 @@ def _background_outlier_diagnostics(
     ]
     background_ids = [topn_chunk_ids[idx] for idx in background_positions]
     background_clusters = {
-        str(query_qrels[chunk_id].get('cluster_id')) for chunk_id in background_ids
+        str(query_qrels[chunk_id].cluster_id) for chunk_id in background_ids
     }
     gold_positions = [
         idx for idx, chunk_id in enumerate(topn_chunk_ids) if _is_query_gold(query_qrels, chunk_id)
@@ -425,33 +440,31 @@ def _background_outlier_diagnostics(
     }
 
 
-def _is_query_gold(query_qrels: dict[str, dict[str, Any]], chunk_id: str) -> bool:
-    return bool(query_qrels.get(chunk_id, {}).get('is_gold'))
-
-
-def _is_background_outlier(query_qrels: dict[str, dict[str, Any]], chunk_id: str) -> bool:
-    return query_qrels.get(chunk_id, {}).get('cluster_role') == 'background_outlier'
-
-
-def _is_query_near_miss_distractor(query_qrels: dict[str, dict[str, Any]], chunk_id: str) -> bool:
+def _is_query_gold(query_qrels: QueryQrels, chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
-    return (
-        bool(row)
-        and not bool(row.get('is_gold'))
-        and row.get('cluster_role') != 'background_outlier'
-    )
+    return row is not None and row.is_gold
+
+
+def _is_background_outlier(query_qrels: QueryQrels, chunk_id: str) -> bool:
+    row = query_qrels.get(chunk_id)
+    return row is not None and row.cluster_role == 'background_outlier'
+
+
+def _is_query_near_miss_distractor(query_qrels: QueryQrels, chunk_id: str) -> bool:
+    row = query_qrels.get(chunk_id)
+    return row is not None and not row.is_gold and row.cluster_role != 'background_outlier'
 
 
 def _mean_same_cluster_similarity(
     chunk_ids: list[str],
-    query_qrels: dict[str, dict[str, Any]],
+    query_qrels: QueryQrels,
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
 ) -> float | None:
     ids_by_cluster: dict[str, list[str]] = defaultdict(list)
     for chunk_id in chunk_ids:
         if chunk_id in chunk_id_to_idx:
-            ids_by_cluster[str(query_qrels[chunk_id].get('cluster_id'))].append(chunk_id)
+            ids_by_cluster[str(query_qrels[chunk_id].cluster_id)].append(chunk_id)
 
     values = []
     for cluster_ids in ids_by_cluster.values():

@@ -6,7 +6,8 @@ from typing import Any, cast
 import numpy as np
 import polars as pl
 
-from experiments.medical_dataset_gen.retrieval.utils import Strategy, select_indices
+from experiments.medical_dataset_gen.retrieval.utils import select_indices
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
 
 _FIXED_LABEL_COLORS = {
     'soft distractor: same condition, wrong subgroup': '#f3a6a6',
@@ -328,7 +329,7 @@ def _selection_variants_for_k(
             }
         ]
     }
-    for strategy in cast(list[Strategy], ['mmr', 'fac_loc']):
+    for strategy in cast(list[RetrievalStrategy], ['mmr', 'fac_loc']):
         variants[strategy] = [
             {
                 'local_indices': select_indices(

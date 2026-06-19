@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 
 from experiments.medical_dataset_gen.global_configs import FacLocMmrComparisonKernelsCfg
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import QrelRecord
 
 
 # Useful mathematical functions
@@ -59,6 +60,9 @@ def build_query_to_facet_to_gold_chunks_map(qrels: pl.DataFrame) -> dict[str, di
     result: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
 
     for row in qrels.filter(pl.col('is_gold')).iter_rows(named=True):
-        result[row['query_id']][row['facet_id']].append(row['chunk_id'])
+        qrel = QrelRecord.model_validate(row)
+        if qrel.facet_id is None:
+            raise ValueError(f'gold qrel {qrel.chunk_id!r} has no facet_id')
+        result[qrel.query_id][qrel.facet_id].append(qrel.chunk_id)
 
     return result

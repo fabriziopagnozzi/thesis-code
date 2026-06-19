@@ -31,7 +31,6 @@ from experiments.medical_dataset_gen.retrieval.utils import (
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     EvaluationResultRow,
     QueryRecord,
-    coerce_query_record,
 )
 
 from .evaluation_workers import (
@@ -96,9 +95,7 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
 
 
 def _evaluate_queries(
-    cfg: ExperimentCfg,
-    paths: MedicalDatasetGenPaths,
-    query_ids: list[str],
+    cfg: ExperimentCfg, paths: MedicalDatasetGenPaths, query_ids: list[str]
 ) -> list[EvaluationResultRow]:
     if not query_ids:
         return []
@@ -155,17 +152,17 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
     if qidx is None:
         return []
 
-    compute_answer_rouge = cfg.retrieval.compute_answer_rouge
     chunk_ids = worker_state['chunk_ids']
     chunk_vectors = worker_state['chunk_vectors']
     query_vectors = worker_state['query_vectors']
+
     candidate_idx = get_candidate_pool_indices(
         query_id=qid,
         pool_scope=cfg.retrieval.pool_scope,
         n_chunks=len(chunk_ids),
         chunks_by_source_query=maps['chunks_by_source_query'],
         chunks_by_condition=maps['chunks_by_condition'],
-        query_condition_id=query.get('condition_id'),
+        query_condition_id=query.condition_id,
     )
     topn_global, topn_sims = run_topn_cosine_retrieval(
         candidate_indices=candidate_idx,
@@ -180,16 +177,21 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
     sim_matrix = candidate_vectors @ candidate_vectors.T
     sim_to_query = topn_sims.astype(np.float32)
     candidate_chunk_ids = [str(chunk_ids[int(i)]) for i in topn_global]
+
+    # Validate k values and select max_k to run the algorithms only once and re-use
+    # results for lower values of k, saving some compute
     valid_k_values = [k for k in worker_state['k_values'] if k <= len(candidate_chunk_ids)]
     if not valid_k_values:
         return []
     max_k = valid_k_values[-1]
     topk_full = np.arange(max_k, dtype=np.intp)
 
+    # Optionally prepare the ROUGE scorer
+    compute_answer_rouge = cfg.retrieval.compute_answer_rouge
     answer_rouge_scorer = None
     if compute_answer_rouge:
         answer_rouge_scorer = prepare_answer_rouge_scorer(
-            query_text=query['query_text'],
+            query_text=query.query_text,
             candidate_chunk_ids=candidate_chunk_ids,
             chunk_by_id=maps['chunk_by_id'],
             answer_refs=worker_state['answer_refs_by_query'].get(
@@ -222,9 +224,9 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
 
                 eval_result_rows.append({
                     'query_id': qid,
-                    'query_type': query['query_type'],
-                    'condition_id': query['condition_id'],
-                    'split': query['split'],
+                    'query_type': query.query_type,
+                    'condition_id': query.condition_id,
+                    'split': query.split,
                     'strategy': strategy,
                     'k': k,
                     'lam': lam,
@@ -236,7 +238,7 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                         query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
                         facet_to_gold=query_facet_gold,
                         all_gold_ids=query_all_gold,
-                        dominant_facet_id=query['dominant_facet_id'],
+                        dominant_facet_id=query.dominant_facet_id,
                     ),
                     **(
                         answer_rouge_scorer.score(selected_chunk_ids)
@@ -268,8 +270,8 @@ def _get_query_ids_to_evaluate(
     query_ids: list[str] = []
 
     for query in queries.iter_rows(named=True):
-        query_row = coerce_query_record(query)
-        qid = query_row['query_id']
+        query_row = QueryRecord.model_validate(query)
+        qid = query_row.query_id
 
         if only_pass_geometry and not bool(pass_map.get(qid, False)):
             continue

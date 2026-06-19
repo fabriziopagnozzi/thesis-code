@@ -192,13 +192,14 @@ def _preprocess_candidate_chunk_texts(
     chunk_by_id: dict[str, ChunkDocumentRecord],
     query_terms: set[str],
 ) -> dict[str, str]:
-    return {
-        str(chunk_id): _preprocess_answer_metric_text(
-            str(chunk_by_id.get(chunk_id, {}).get('text') or ''),
+    result: dict[str, str] = {}
+    for chunk_id in candidate_chunk_ids:
+        chunk = chunk_by_id.get(chunk_id)
+        result[str(chunk_id)] = _preprocess_answer_metric_text(
+            chunk.text if chunk is not None else '',
             query_terms=query_terms,
         )
-        for chunk_id in candidate_chunk_ids
-    }
+    return result
 
 
 def _preprocess_answer_metric_text(text: str, query_terms: set[str]) -> str:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, TypedDict, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -11,6 +11,7 @@ type FacetAxis = Literal['treatment_duration', 'rehab_outcome']
 type ClusterRole = Literal[
     'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
 ]
+CLUSTER_ROLE_LIST: list[ClusterRole] = list(get_args(ClusterRole.__value__))
 type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
 type Split = Literal['train', 'validation', 'test']
 type PatientSex = Literal['female', 'male']
@@ -20,14 +21,70 @@ type ConditionKey = str
 type ClinicalAxisKey = str
 
 
+class QueryOutputRow(TypedDict):
+    query_id: str
+    query_type: QueryType
+    template_id: str
+    condition_id: str
+    condition_display: str
+    subgroup_a_id: str
+    subgroup_a_label: str
+    subgroup_b_id: str
+    subgroup_b_label: str
+    dominant_facet_id: str
+    split: Split
+    n_facets: int
+    facets_json: str
+    logical_form_json: str
+    query_text: str
+
+
+class GoldAnswerOutputRow(TypedDict):
+    query_id: str
+    answer_text: str
+    facet_summaries_json: str
+    answer_facts_json: str
+    supporting_fact_ids_json: str
+    supporting_facet_ids_json: str
+
+
 class BenchmarkModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    def __getitem__(self, key: str) -> object:
-        return getattr(self, key)
 
-    def get(self, key: str, default: object = None) -> object:
-        return getattr(self, key, default)
+class AnswerSourceFact(BenchmarkModel):
+    model_config = ConfigDict(extra='ignore')
+
+    query_id: str
+    facet_id: str
+    axis: FacetAxis
+    value_bin: str
+    duration_days: int | None
+    treatment: str | None
+    rehab_outcome: str | None
+    fact_id: str
+
+    @model_validator(mode='after')
+    def _validate_axis_fields(self) -> AnswerSourceFact:
+        if self.axis == 'treatment_duration':
+            if self.duration_days is None or self.treatment is None:
+                raise ValueError('treatment duration facts require duration_days and treatment')
+            if self.rehab_outcome is not None:
+                raise ValueError('treatment duration facts cannot include rehab_outcome')
+        else:
+            if self.rehab_outcome is None:
+                raise ValueError('rehab outcome facts require rehab_outcome')
+            if self.duration_days is not None or self.treatment is not None:
+                raise ValueError('rehab outcome facts cannot include treatment duration fields')
+        return self
+
+
+class AnswerFact(BenchmarkModel):
+    facet_id: str
+    subgroup_label: str
+    axis: FacetAxis
+    summary: str
+    supporting_fact_ids: list[str]
 
 
 class ConditionOntology(BenchmarkModel):
@@ -161,7 +218,7 @@ class QueryPlan(BenchmarkModel):
         row['facets_json'], row['logical_form_json'] = self._json_columns()
         return row
 
-    def to_query_row(self, query_text: str) -> dict[str, object]:
+    def to_query_row(self, query_text: str) -> QueryOutputRow:
         facets_json, logical_form_json = self._json_columns()
         return {
             'query_id': self.query_id,
@@ -186,14 +243,16 @@ class QueryPlan(BenchmarkModel):
         *,
         answer_text: str,
         facet_summaries: dict[str, str],
-        facet_answer_objects: list[dict[str, object]],
+        facet_answer_objects: list[AnswerFact],
         supporting_fact_ids: list[str],
-    ) -> dict[str, object]:
+    ) -> GoldAnswerOutputRow:
         return {
             'query_id': self.query_id,
             'answer_text': answer_text,
             'facet_summaries_json': json.dumps(facet_summaries, sort_keys=True),
-            'answer_facts_json': json.dumps(facet_answer_objects, sort_keys=True),
+            'answer_facts_json': json.dumps(
+                [fact.model_dump(mode='json') for fact in facet_answer_objects], sort_keys=True
+            ),
             'supporting_fact_ids_json': json.dumps(supporting_fact_ids, sort_keys=True),
             'supporting_facet_ids_json': json.dumps(
                 [facet.facet_id for facet in self.facets], sort_keys=True

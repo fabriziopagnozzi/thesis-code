@@ -16,7 +16,13 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalIndexMaps, Strategy
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    ChunkDocumentRecord,
+    ChunkMembershipRecord,
+    QueryRecord,
+    RetrievalIndexMaps,
+    RetrievalStrategy,
+)
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import fac_loc_lazy_greedy, mmr, top_k
 
@@ -31,30 +37,32 @@ def build_index_maps(
     chunk_id_to_idx = {chunk_id: idx for idx, chunk_id in enumerate(chunk_ids)}
     query_id_to_idx = {query_id: idx for idx, query_id in enumerate(query_ids)}
 
-    chunk_rows = chunk_documents.to_dicts()
-    membership_rows = chunk_memberships.to_dicts()
-    query_rows = queries.to_dicts()
-    chunk_by_id = {row['chunk_id']: row for row in chunk_rows}
-    query_by_id = {row['query_id']: row for row in query_rows}
+    chunk_rows = [ChunkDocumentRecord.model_validate(row) for row in chunk_documents.to_dicts()]
+    membership_rows = [
+        ChunkMembershipRecord.model_validate(row) for row in chunk_memberships.to_dicts()
+    ]
+    query_rows = [QueryRecord.model_validate(row) for row in queries.to_dicts()]
+    chunk_by_id = {row.chunk_id: row for row in chunk_rows}
+    query_by_id = {row.query_id: row for row in query_rows}
 
     chunks_by_source_query: dict[str, list[int]] = defaultdict(list)
     chunks_by_condition: dict[str, list[int]] = defaultdict(list)
     for row in chunk_rows:
-        chunk_id = row['chunk_id']
+        chunk_id = row.chunk_id
         if chunk_id not in chunk_id_to_idx:
             continue
         chunk_idx = chunk_id_to_idx[chunk_id]
-        condition_id = row.get('condition_id')
+        condition_id = row.condition_id
         if condition_id:
             chunks_by_condition[str(condition_id)].append(chunk_idx)
 
-    membership_by_query_chunk: dict[tuple[str, str], dict[str, object]] = {}
+    membership_by_query_chunk: dict[tuple[str, str], ChunkMembershipRecord] = {}
     seen_by_query: dict[str, set[int]] = defaultdict(set)
     for row in membership_rows:
-        chunk_id = row['chunk_id']
+        chunk_id = row.chunk_id
         if chunk_id not in chunk_id_to_idx:
             continue
-        query_id = str(row['source_query_id'])
+        query_id = row.source_query_id
         chunk_idx = chunk_id_to_idx[chunk_id]
         if chunk_idx not in seen_by_query[query_id]:
             chunks_by_source_query[query_id].append(chunk_idx)
@@ -108,7 +116,7 @@ def run_topn_cosine_retrieval(
 
 
 def select_indices(
-    strategy: Strategy,
+    strategy: RetrievalStrategy,
     sim_to_query: NDArray[np.float32],
     sim_matrix: NDArray[np.float32],
     k: int,

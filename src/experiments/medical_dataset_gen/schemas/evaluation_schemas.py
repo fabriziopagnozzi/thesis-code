@@ -1,41 +1,35 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from numbers import Integral
+from collections.abc import Sequence
 from typing import TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import ConfigDict, Json
 
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    AnswerFact,
+    BenchmarkModel,
+)
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    ChunkDocumentRecord,
+    QrelRecord,
+    QueryRecord,
+)
 
 type EvaluationResultScalar = str | int | float | None
 type EvaluationResultRow = dict[str, EvaluationResultScalar]
 type ChunkEmbeddingMatrix = NDArray[np.float32]
 
 
-class QueryRecord(TypedDict):
+class GoldAnswerRecord(BenchmarkModel):
+    model_config = ConfigDict(extra='ignore')
+
     query_id: str
-    query_type: str
-    condition_id: str | None
-    split: str
-    dominant_facet_id: str
-    query_text: str
-
-
-class ChunkDocumentRecord(TypedDict, total=False):
-    chunk_id: str
-    text: str
-    condition_id: str | None
-    admission_id: str | int | None
-
-
-class QrelRecord(TypedDict, total=False):
-    query_id: str
-    chunk_id: str
-    facet_id: str
-    cluster_role: str
-    is_gold: bool
+    answer_text: str = ''
+    facet_summaries_json: Json[dict[str, str]] | None = None
+    answer_facts_json: Json[list[AnswerFact]] | None = None
 
 
 class EvaluationIndexMaps(TypedDict):
@@ -63,46 +57,3 @@ class EvaluationWorkerState(TypedDict):
     answer_refs_by_query: dict[str, AnswerReferenceTexts]
     pass_map: dict[str, bool]
     k_values: list[int]
-
-
-def coerce_query_record(row: Mapping[str, object]) -> QueryRecord:
-    return {
-        'query_id': str(row['query_id']),
-        'query_type': str(row['query_type']),
-        'condition_id': str(row['condition_id']) if row.get('condition_id') is not None else None,
-        'split': str(row['split']),
-        'dominant_facet_id': str(row['dominant_facet_id']),
-        'query_text': str(row.get('query_text') or ''),
-    }
-
-
-def coerce_chunk_document_record(row: Mapping[str, object]) -> ChunkDocumentRecord:
-    return {
-        'chunk_id': str(row['chunk_id']),
-        'text': str(row.get('text') or ''),
-        'condition_id': str(row['condition_id']) if row.get('condition_id') is not None else None,
-        'admission_id': _coerce_admission_id(row.get('admission_id')),
-    }
-
-
-def coerce_qrel_record(row: Mapping[str, object]) -> QrelRecord:
-    record: QrelRecord = {
-        'query_id': str(row['query_id']),
-        'chunk_id': str(row['chunk_id']),
-        'is_gold': bool(row.get('is_gold', False)),
-    }
-    if row.get('facet_id') is not None:
-        record['facet_id'] = str(row['facet_id'])
-    if row.get('cluster_role') is not None:
-        record['cluster_role'] = str(row['cluster_role'])
-    return record
-
-
-def _coerce_admission_id(value: object) -> str | int | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    if isinstance(value, Integral) and not isinstance(value, bool):
-        return int(value)
-    return str(value)

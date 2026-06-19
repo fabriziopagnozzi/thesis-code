@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 
 import polars as pl
 import pyarrow.parquet as pq
@@ -12,7 +13,13 @@ from experiments.medical_dataset_gen.global_configs import (
     write_parquet,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    AnswerFact,
+    AnswerSourceFact,
+    ClinicalAxisOntology,
+    FacetAxis,
+    GoldAnswerOutputRow,
     MedicalOntology,
+    QueryOutputRow,
     QueryPlan,
     QueryPlanFacet,
 )
@@ -42,11 +49,11 @@ def run_make_queries_answers(
         if plan.query_id not in failed_query_ids:
             plans_by_query[plan.query_id] = plan
 
-    query_rows: list[dict[str, object]] = []
-    answer_rows: list[dict[str, object]] = []
+    query_rows: list[QueryOutputRow] = []
+    answer_rows: list[GoldAnswerOutputRow] = []
 
     current_query_id: str | None = None
-    current_fact_rows: list[dict[str, object]] = []
+    current_fact_rows: list[AnswerSourceFact] = []
     facts_file = pq.ParquetFile(paths.table_path('clinical_facts'))
     for batch in facts_file.iter_batches(
         columns=[
@@ -62,10 +69,11 @@ def run_make_queries_answers(
         ],
         batch_size=65536,
     ):
-        for fact_row in batch.to_pylist():
-            if not fact_row['is_gold']:
+        for raw_fact_row in batch.to_pylist():
+            if not raw_fact_row['is_gold']:
                 continue
-            query_id = str(fact_row['query_id'])
+            fact_row = AnswerSourceFact.model_validate(raw_fact_row)
+            query_id = fact_row.query_id
             if current_query_id is None:
                 current_query_id = query_id
             elif query_id != current_query_id:
@@ -107,12 +115,12 @@ def run_make_queries_answers(
 def _finalize_query(
     *,
     query_id: str,
-    fact_rows: list[dict[str, object]],
+    fact_rows: list[AnswerSourceFact],
     plans_by_query: dict[str, QueryPlan],
     ontology: MedicalOntology,
     cfg: ExperimentCfg,
-    query_rows: list[dict[str, object]],
-    answer_rows: list[dict[str, object]],
+    query_rows: list[QueryOutputRow],
+    answer_rows: list[GoldAnswerOutputRow],
 ) -> None:
     plan = plans_by_query.get(query_id)
     if plan is None or not fact_rows:
@@ -138,7 +146,7 @@ def _finalize_query(
             answer_text=answer_text,
             facet_summaries=facet_summaries,
             facet_answer_objects=facet_answer_objects,
-            supporting_fact_ids=[str(fact['fact_id']) for fact in fact_rows],
+            supporting_fact_ids=[fact.fact_id for fact in fact_rows],
         )
     )
 
@@ -176,7 +184,7 @@ def maybe_paraphrase_query(
     return query_text
 
 
-def _contains_axis_language(lower_text: str, axis) -> bool:
+def _contains_axis_language(lower_text: str, axis: ClinicalAxisOntology) -> bool:
     terms = [axis.label, *axis.exact_terms, *axis.synonym_terms]
     return any(str(term).lower() in lower_text for term in terms)
 
@@ -199,7 +207,7 @@ def canonical_answer(plan: QueryPlan, facet_summaries: dict[str, str]) -> str:
     )
 
 
-def facets_by(plan: QueryPlan, subgroup_label: str, axis: str) -> str:
+def facets_by(plan: QueryPlan, subgroup_label: str, axis: FacetAxis) -> str:
     for facet in plan.facets:
         if facet.subgroup_label == subgroup_label and facet.axis == axis:
             return facet.facet_id
@@ -208,15 +216,14 @@ def facets_by(plan: QueryPlan, subgroup_label: str, axis: str) -> str:
 
 def _facet_summaries(
     facets: list[QueryPlanFacet],
-    facts: list[dict[str, object]],
-) -> tuple[dict[str, str], list[dict[str, object]]]:
-    by_facet: dict[str, list[dict[str, object]]] = defaultdict(list)
+    facts: Sequence[AnswerSourceFact],
+) -> tuple[dict[str, str], list[AnswerFact]]:
+    by_facet: dict[str, list[AnswerSourceFact]] = defaultdict(list)
     for fact in facts:
-        facet_id = str(fact['facet_id'])
-        by_facet[facet_id].append(fact)
+        by_facet[fact.facet_id].append(fact)
 
     summaries: dict[str, str] = {}
-    answer_facts: list[dict[str, object]] = []
+    answer_facts: list[AnswerFact] = []
     for facet in facets:
         facet_id = facet.facet_id
         rows = by_facet[facet_id]
@@ -224,33 +231,43 @@ def _facet_summaries(
             summaries[facet_id] = 'no generated evidence'
             continue
 
-        bins = Counter(str(row['value_bin']) for row in rows)
+        bins = Counter(row.value_bin for row in rows)
         mode_bin = bins.most_common(1)[0][0]
         if facet.axis == 'treatment_duration':
-            durations = [
-                int(row['duration_days']) for row in rows if row['duration_days'] is not None
-            ]
+            duration_rows = [row for row in rows if row.axis == 'treatment_duration']
+            if len(duration_rows) != len(rows):
+                raise ValueError(f'facet {facet_id!r} mixes treatment and rehabilitation facts')
+            durations = [row.duration_days for row in duration_rows if row.duration_days is not None]
             avg_duration = round(sum(durations) / len(durations), 1)
-            treatment = Counter(str(row['treatment']) for row in rows).most_common(1)[0][0]
+            treatment = Counter(
+                row.treatment for row in duration_rows if row.treatment is not None
+            ).most_common(1)[0][0]
             text = (
                 f'{_with_indefinite_article(mode_bin.replace("_", " "))} course, averaging {avg_duration} days, '
                 f'most often with {treatment}'
             )
         else:
-            example = Counter(str(row['rehab_outcome']) for row in rows).most_common(1)[0][0]
+            rehab_rows = [row for row in rows if row.axis == 'rehab_outcome']
+            if len(rehab_rows) != len(rows):
+                raise ValueError(f'facet {facet_id!r} mixes treatment and rehabilitation facts')
+            example = Counter(
+                row.rehab_outcome for row in rehab_rows if row.rehab_outcome is not None
+            ).most_common(1)[0][0]
             text = (
                 f'{_with_indefinite_article(mode_bin.replace("_", " "))} pattern, '
                 f'commonly described as {example}'
             )
 
         summaries[facet_id] = text
-        answer_facts.append({
-            'facet_id': facet_id,
-            'subgroup_label': facet.subgroup_label,
-            'axis': facet.axis,
-            'summary': text,
-            'supporting_fact_ids': [str(row['fact_id']) for row in rows],
-        })
+        answer_facts.append(
+            AnswerFact(
+                facet_id=facet_id,
+                subgroup_label=facet.subgroup_label,
+                axis=facet.axis,
+                summary=text,
+                supporting_fact_ids=[row.fact_id for row in rows],
+            )
+        )
 
     return summaries, answer_facts
 

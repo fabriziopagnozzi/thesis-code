@@ -21,6 +21,11 @@ from experiments.medical_dataset_gen.retrieval.utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    ChunkDocumentRecord,
+    QrelRecord,
+    RetrievalIndexMaps,
+)
 
 from .reduction import (
     cluster_features,
@@ -259,7 +264,7 @@ def build_query_artifact(
     chunk_vectors: NDArray[np.float32],
     query_vectors: NDArray[np.float32],
     chunk_ids: list[str],
-    maps: dict[str, Any],
+    maps: RetrievalIndexMaps,
     eval_stats: pl.DataFrame,
     eval_results: pl.DataFrame,
 ) -> dict[str, Any] | None:
@@ -289,8 +294,9 @@ def build_query_artifact(
     k = min(cfg.embedding_geometry.plot_k, len(topn_global))
     candidate_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
     query_qrels = {
-        str(row['chunk_id']): row
+        qrel.chunk_id: qrel
         for row in qrels.filter(pl.col('query_id') == qid).iter_rows(named=True)
+        for qrel in [QrelRecord.model_validate(row)]
     }
     labels, label_ids, roles, is_gold = candidate_labels(
         qid, candidate_chunk_ids, maps['chunk_by_id'], query_qrels, query
@@ -327,16 +333,21 @@ def build_query_artifact(
         'mmr_window': cfg.retrieval.mmr_window,
         'k': k,
         'qrels': qrels.filter(pl.col('query_id') == qid),
-        'chunk_by_id': maps['chunk_by_id'],
-        'qrel_by_chunk_id': query_qrels,
+        'chunk_by_id': {
+            chunk_id: chunk.model_dump(mode='json')
+            for chunk_id, chunk in maps['chunk_by_id'].items()
+        },
+        'qrel_by_chunk_id': {
+            chunk_id: qrel.model_dump(mode='json') for chunk_id, qrel in query_qrels.items()
+        },
     }
 
 
 def candidate_labels(
     qid: str,
     candidate_chunk_ids: list[str],
-    chunk_by_id: dict[str, dict[str, Any]],
-    query_qrels: dict[str, dict[str, Any]],
+    chunk_by_id: dict[str, ChunkDocumentRecord],
+    query_qrels: dict[str, QrelRecord],
     query: dict[str, Any],
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
     facet_labels = facet_label_map(query)
@@ -347,11 +358,11 @@ def candidate_labels(
     for chunk_id in candidate_chunk_ids:
         row = chunk_by_id[chunk_id]
         qrel = query_qrels.get(chunk_id)
-        roles.append(str((qrel or {}).get('cluster_role') or 'unknown'))
-        gold = bool((qrel or {}).get('is_gold'))
+        roles.append(str(qrel.cluster_role or 'unknown') if qrel is not None else 'unknown')
+        gold = qrel.is_gold if qrel is not None else False
         gold_flags.append(gold)
         if qrel is None:
-            row_condition_id = row.get('condition_id')
+            row_condition_id = row.condition_id
             query_condition_id = query.get('condition_id')
             if row_condition_id != query_condition_id:
                 label_ids.append('other_condition')
@@ -359,12 +370,12 @@ def candidate_labels(
                 continue
             label_ids.append('other_same_condition_query')
             labels.append('other same-condition queries')
-        elif gold and qrel.get('facet_id'):
-            facet_id = str(qrel['facet_id'])
+        elif gold and qrel.facet_id:
+            facet_id = qrel.facet_id
             label_ids.append(facet_id)
             labels.append(facet_labels.get(facet_id, facet_id))
         else:
-            dtype = str(qrel.get('distractor_type') or 'hard_distractor')
+            dtype = qrel.distractor_type or 'hard_distractor'
             label_ids.append(dtype)
             labels.append(distractor_label(dtype))
     return labels, label_ids, roles, gold_flags
