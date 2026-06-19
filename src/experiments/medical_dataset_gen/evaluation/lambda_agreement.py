@@ -4,10 +4,8 @@ from experiments.medical_dataset_gen.global_configs import (
     FacLocMmrComparisonKernelMetricCfg,
     FacLocMmrComparisonKernelsCfg,
 )
+from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
-from .schemas import (
-    METRIC_NAME_TO_FIELD,
-)
 from .utils import (
     pair_kernel_polars_expr,
     sigmoid_polars_expr,

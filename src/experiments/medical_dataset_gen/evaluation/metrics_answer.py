@@ -6,9 +6,11 @@ from dataclasses import dataclass, field
 import numpy as np
 from rouge_score import rouge_scorer
 
-from .schemas import (
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     ChunkDocumentRecord,
+)
+from experiments.medical_dataset_gen.schemas.metrics_schemas import (
     NgramCounter,
     PreparedAnswerRougeRefs,
     RougeNgramBundle,

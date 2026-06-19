@@ -10,16 +10,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalIndexMaps, Strategy
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import fac_loc_lazy_greedy, mmr, top_k
-
-type Strategy = Literal['top_k', 'mmr', 'fac_loc']
 
 
 def build_index_maps(
@@ -28,7 +27,7 @@ def build_index_maps(
     queries: pl.DataFrame,
     chunk_ids: Sequence[str],
     query_ids: Sequence[str],
-) -> dict[str, Any]:
+) -> RetrievalIndexMaps:
     chunk_id_to_idx = {chunk_id: idx for idx, chunk_id in enumerate(chunk_ids)}
     query_id_to_idx = {query_id: idx for idx, query_id in enumerate(query_ids)}
 
@@ -49,7 +48,7 @@ def build_index_maps(
         if condition_id:
             chunks_by_condition[str(condition_id)].append(chunk_idx)
 
-    membership_by_query_chunk: dict[tuple[str, str], dict[str, Any]] = {}
+    membership_by_query_chunk: dict[tuple[str, str], dict[str, object]] = {}
     seen_by_query: dict[str, set[int]] = defaultdict(set)
     for row in membership_rows:
         chunk_id = row['chunk_id']

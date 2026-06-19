@@ -13,6 +13,11 @@ from experiments.medical_dataset_gen.global_configs import (
     read_parquet,
     write_parquet,
 )
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkRow,
+    ClinicalFact,
+    MedicalOntology,
+)
 
 from .chunk_cache import (
     GENERATION_CACHE_VERSION,
@@ -40,11 +45,6 @@ from .chunk_rendering import (
 )
 from .chunk_templates import validate_chunk_text
 from .ontology import load_ontology
-from .schemas import (
-    ChunkRow,
-    ClinicalFact,
-    MedicalOntology,
-)
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:

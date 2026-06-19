@@ -15,16 +15,17 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.embedding_geometry.reduction import (
-    cluster_features,
-    hdbscan_labels,
-    reduce_for_plot,
-)
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 from experiments.medical_dataset_gen.retrieval.utils import (
     get_candidate_pool_indices,
     run_topn_cosine_retrieval,
     select_indices,
+)
+
+from .reduction import (
+    cluster_features,
+    hdbscan_labels,
+    reduce_for_plot,
 )
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']

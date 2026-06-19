@@ -16,22 +16,23 @@ from typing import Literal, cast
 import polars as pl
 import pyarrow.parquet as pq
 
-from experiments.medical_dataset_gen.generation.ontology import (
-    load_ontology,
-    other_conditions,
-    other_subgroups,
+from experiments.medical_dataset_gen.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    read_parquet,
 )
-from experiments.medical_dataset_gen.generation.schemas import (
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
     QueryPlan,
     QueryPlanFacet,
     SubgroupAxis,
 )
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
+
+from .ontology import (
+    load_ontology,
+    other_conditions,
+    other_subgroups,
 )
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from experiments.medical_dataset_gen.generation.schemas import (
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerTemplateSpec,
     MedicalOntology,
     QueryPlan,

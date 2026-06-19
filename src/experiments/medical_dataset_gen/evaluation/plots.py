@@ -15,9 +15,9 @@ from experiments.medical_dataset_gen.global_configs import (
     paths_for,
     read_parquet,
 )
+from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
 from .lambda_agreement import build_lambda_pair_agreement
-from .schemas import METRIC_NAME_TO_FIELD
 from .utils import ci_half_width
 
 STRATEGY_STYLE: dict[str, dict[str, str]] = {
@@ -462,7 +462,9 @@ def plot_strategy_comparison_heatmap_html(
             float(matrices['fac_loc'].max()),
             float(matrices['mmr'].max()),
         )
-        advantage_abs_max = max(abs(float(matrices['advantage'].min())), abs(float(matrices['advantage'].max())))
+        advantage_abs_max = max(
+            abs(float(matrices['advantage'].min())), abs(float(matrices['advantage'].max()))
+        )
         for col_idx, key in enumerate(['fac_loc', 'mmr', 'advantage'], start=1):
             matrix = matrices[key]
             hovertemplate = _plotly_heatmap_hovertemplate(
@@ -500,21 +502,18 @@ def plot_strategy_comparison_heatmap_html(
         visibility = [False] * total_traces
         base_idx = metric_idx * 3
         visibility[base_idx : base_idx + 3] = [True, True, True]
-        button_defs.append(
-            {
-                'label': title,
-                'method': 'update',
-                'args': [
-                    {'visible': visibility},
-                    {
-                        'title': (
-                            'Strategy comparison heatmap - '
-                            f'{_panel_title(title, higher_is_better)}'
-                        )
-                    },
-                ],
-            }
-        )
+        button_defs.append({
+            'label': title,
+            'method': 'update',
+            'args': [
+                {'visible': visibility},
+                {
+                    'title': (
+                        f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
+                    )
+                },
+            ],
+        })
 
     fig.update_layout(
         title=f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)}',
@@ -1491,7 +1490,12 @@ def _annotate_heatmap_cells(ax: Any, matrix: NDArray[Any], *, diverging: bool) -
             if np.isnan(value):
                 continue
             if diverging:
-                text_color = 'white' if abs(value) > max(abs(float(finite_values.min())), abs(float(finite_values.max()))) * 0.45 else '#222222'
+                text_color = (
+                    'white'
+                    if abs(value)
+                    > max(abs(float(finite_values.min())), abs(float(finite_values.max()))) * 0.45
+                    else '#222222'
+                )
             else:
                 text_color = 'white' if value >= threshold else '#222222'
             ax.text(
@@ -1539,10 +1543,7 @@ def _sample_tick_values(values: list[float], max_ticks: int = 6) -> list[float]:
     if max_ticks <= 1:
         return [values[0]]
 
-    indices = {
-        round(idx * (len(values) - 1) / (max_ticks - 1))
-        for idx in range(max_ticks)
-    }
+    indices = {round(idx * (len(values) - 1) / (max_ticks - 1)) for idx in range(max_ticks)}
     return [values[idx] for idx in sorted(indices)]
 
 
@@ -1552,12 +1553,7 @@ def _sample_tick_indices(n_values: int, max_ticks: int = 6) -> list[int]:
     if max_ticks <= 1:
         return [0]
 
-    return sorted(
-        {
-            round(idx * (n_values - 1) / (max_ticks - 1))
-            for idx in range(max_ticks)
-        }
-    )
+    return sorted({round(idx * (n_values - 1) / (max_ticks - 1)) for idx in range(max_ticks)})
 
 
 def _set_lambda_tick_labels(

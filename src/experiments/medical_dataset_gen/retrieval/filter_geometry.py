@@ -24,8 +24,9 @@ from experiments.medical_dataset_gen.global_configs import (
     read_parquet,
     write_parquet,
 )
-from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
-from experiments.medical_dataset_gen.retrieval.utils import (
+
+from .embed import load_embedding_arrays
+from .utils import (
     build_index_maps,
     compute_retrieval_diagnostics,
     get_candidate_pool_indices,
@@ -243,7 +244,7 @@ def _topk_diagnostics_by_k(
     query_facets: dict[str, list[str]],
     dominant_facet_id: str,
     k_values: list[int],
-) -> dict[int, dict[str, object]]:
+) -> dict[int, dict[str, int | float | list[str]]]:
     rows = {}
     for k in k_values:
         counts = _topk_facet_counts(

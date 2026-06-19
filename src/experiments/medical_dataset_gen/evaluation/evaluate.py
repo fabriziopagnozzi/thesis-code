@@ -28,6 +28,11 @@ from experiments.medical_dataset_gen.retrieval.utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
+    EvaluationResultRow,
+    QueryRecord,
+    coerce_query_record,
+)
 
 from .evaluation_workers import (
     get_evaluation_chunksize,
@@ -38,11 +43,6 @@ from .evaluation_workers import (
 from .lambda_agreement import build_lambda_pair_agreement
 from .metrics_answer import empty_answer_reference_texts, prepare_answer_rouge_scorer
 from .metrics_retrieval import retrieval_metrics
-from .schemas import (
-    EvaluationResultRow,
-    QueryRecord,
-    coerce_query_record,
-)
 from .utils import assert_pool_scope_match, build_query_to_facet_to_gold_chunks_map
 
 

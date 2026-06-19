@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 
-from experiments.medical_dataset_gen.generation.schemas import (
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
     QueryPlan,

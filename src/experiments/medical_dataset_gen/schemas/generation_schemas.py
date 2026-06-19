@@ -15,7 +15,7 @@ type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
 type Split = Literal['train', 'validation', 'test']
 type PatientSex = Literal['female', 'male']
 type SubgroupAxis = Literal['demographic', 'comorbidity']
-type SubgroupKey = str  # todo: enforce literals maybe
+type SubgroupKey = str
 type ConditionKey = str
 type ClinicalAxisKey = str
 

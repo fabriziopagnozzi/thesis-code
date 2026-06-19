@@ -13,14 +13,12 @@ from typing import cast
 
 import polars as pl
 
-from experiments.medical_dataset_gen.generation.ontology import (
-    get_axes_keys,
-    get_selected_conditions,
-    load_ontology,
-    make_subgroup_pairs,
+from experiments.medical_dataset_gen.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    write_parquet,
 )
-from experiments.medical_dataset_gen.generation.query_templates import query_template_ids
-from experiments.medical_dataset_gen.generation.schemas import (
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ConditionKey,
     ConditionOntology,
     FacetAxis,
@@ -34,11 +32,14 @@ from experiments.medical_dataset_gen.generation.schemas import (
     SubgroupKey,
     SubgroupOntology,
 )
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    write_parquet,
+
+from .ontology import (
+    get_axes_keys,
+    get_selected_conditions,
+    load_ontology,
+    make_subgroup_pairs,
 )
+from .query_templates import query_template_ids
 
 
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -154,9 +155,7 @@ def _materialize_plan_row(
     )
 
 
-def _next_query_template_id(
-    query_type: QueryType, template_offsets: dict[QueryType, int]
-) -> str:
+def _next_query_template_id(query_type: QueryType, template_offsets: dict[QueryType, int]) -> str:
     template_ids = query_template_ids(query_type)
     if not template_ids:
         raise ValueError(f'no query templates configured for query type: {query_type}')

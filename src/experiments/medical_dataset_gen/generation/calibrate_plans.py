@@ -16,23 +16,24 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.generation.chunk_rendering import (
-    render_canonical_chunk_text,
-)
-from experiments.medical_dataset_gen.generation.facts import make_gold_fact
-from experiments.medical_dataset_gen.generation.ontology import load_ontology
-from experiments.medical_dataset_gen.generation.queries_answers import render_query
-from experiments.medical_dataset_gen.generation.schemas import (
-    MedicalOntology,
-    QueryPlan,
-    QueryPlanFacet,
-)
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     read_parquet,
     write_parquet,
 )
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    MedicalOntology,
+    QueryPlan,
+    QueryPlanFacet,
+)
+
+from .chunk_rendering import (
+    render_canonical_chunk_text,
+)
+from .facts import make_gold_fact
+from .ontology import load_ontology
+from .queries_answers import render_query
 
 
 def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -144,7 +145,7 @@ def _select_dominant_facet(
     probe_n: int,
 ) -> tuple[str, dict[str, object]]:
     sims = probe_vectors @ query_vector
-    facet_stats: list[dict[str, object]] = []
+    facet_stats: list[dict[str, int | float | str]] = []
 
     for facet in plan.facets:
         start, end = probe['facet_offsets'][facet.facet_id]

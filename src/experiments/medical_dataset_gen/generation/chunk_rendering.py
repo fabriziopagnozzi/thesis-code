@@ -8,7 +8,17 @@ from typing import Literal
 
 import polars as pl
 
-from experiments.medical_dataset_gen.generation.chunk_templates import (
+from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkGenerationCacheEntry,
+    ChunkRow,
+    ChunkState,
+    ClinicalFact,
+    MedicalOntology,
+)
+from helpers.ollama_client import generate
+
+from .chunk_templates import (
     TEMPLATE_DATA,
     ChunkValidation,
     patient_descriptor,
@@ -16,18 +26,9 @@ from experiments.medical_dataset_gen.generation.chunk_templates import (
     squash_whitespaces,
     validate_chunk_text,
 )
-from experiments.medical_dataset_gen.generation.prompts_default import (
+from .prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
-from experiments.medical_dataset_gen.generation.schemas import (
-    ChunkGenerationCacheEntry,
-    ChunkRow,
-    ChunkState,
-    ClinicalFact,
-    MedicalOntology,
-)
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
-from helpers.ollama_client import generate
 
 _SECTION_HEADER_RE = re.compile(
     r'^\s*(?:brief hospital course|hospital course|discharge summary|'

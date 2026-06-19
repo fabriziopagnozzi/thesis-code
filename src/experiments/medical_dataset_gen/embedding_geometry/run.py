@@ -15,20 +15,6 @@ from typing import Any
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.embedding_geometry.artifacts import (
-    build_query_artifact,
-    choose_query_groups,
-)
-from experiments.medical_dataset_gen.embedding_geometry.diagnostics import (
-    point_rows,
-    query_stats,
-)
-from experiments.medical_dataset_gen.embedding_geometry.plots import (
-    plot_cluster_quality_overview,
-    plot_full_strategy_selection_overlay,
-    plot_query_overview_4panel,
-    plot_strategy_overlay,
-)
 from experiments.medical_dataset_gen.evaluation.utils import assert_pool_scope_match
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
@@ -42,6 +28,21 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
 from experiments.medical_dataset_gen.retrieval.utils import build_index_maps
+
+from .artifacts import (
+    build_query_artifact,
+    choose_query_groups,
+)
+from .diagnostics import (
+    point_rows,
+    query_stats,
+)
+from .plots import (
+    plot_cluster_quality_overview,
+    plot_full_strategy_selection_overlay,
+    plot_query_overview_4panel,
+    plot_strategy_overlay,
+)
 
 _WORKER_STATE: dict[str, Any] | None = None
 

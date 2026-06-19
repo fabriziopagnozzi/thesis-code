@@ -12,7 +12,14 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.generation.chunk_cache import (
+from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkRow,
+    ClinicalFact,
+    MedicalOntology,
+)
+
+from .chunk_cache import (
     GenerationCache,
     append_generation_cache,
     cached_chunk_state,
@@ -21,7 +28,7 @@ from experiments.medical_dataset_gen.generation.chunk_cache import (
     chunk_rewrite_cache_key,
     remember_cache_entry,
 )
-from experiments.medical_dataset_gen.generation.chunk_rendering import (
+from .chunk_rendering import (
     finalize_chunk_row,
     generate_llm_chunk,
     new_chunk_state,
@@ -30,13 +37,7 @@ from experiments.medical_dataset_gen.generation.chunk_rendering import (
     rewrite_llm_chunk,
     row_from_state,
 )
-from experiments.medical_dataset_gen.generation.chunk_templates import validate_chunk_text
-from experiments.medical_dataset_gen.generation.schemas import (
-    ChunkRow,
-    ClinicalFact,
-    MedicalOntology,
-)
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from .chunk_templates import validate_chunk_text
 
 
 def render_chunks_grouped_llm(

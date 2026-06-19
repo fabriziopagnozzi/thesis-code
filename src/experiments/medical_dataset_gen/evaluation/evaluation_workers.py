@@ -13,8 +13,7 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
 from experiments.medical_dataset_gen.retrieval.utils import build_index_maps
-
-from .schemas import (
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     EvaluationIndexMaps,
     EvaluationWorkerState,
@@ -23,6 +22,7 @@ from .schemas import (
     coerce_qrel_record,
     coerce_query_record,
 )
+
 from .utils import (
     assert_pool_scope_match,
     build_query_to_facet_to_gold_chunks_map,

@@ -12,21 +12,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from experiments.medical_dataset_gen.generation.chunk_rendering import (
-    new_chunk_state,
-    word_count_errors,
-)
-from experiments.medical_dataset_gen.generation.chunk_templates import validate_chunk_text
-from experiments.medical_dataset_gen.generation.prompts_default import (
-    MedicalDatasetGenDefaultPrompts,
-)
-from experiments.medical_dataset_gen.generation.schemas import (
+from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkState,
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+
+from .chunk_rendering import (
+    new_chunk_state,
+    word_count_errors,
+)
+from .chunk_templates import validate_chunk_text
+from .prompts_default import (
+    MedicalDatasetGenDefaultPrompts,
+)
 
 GENERATION_CACHE_VERSION = 9
 REWRITE_CACHE_VERSION = 1

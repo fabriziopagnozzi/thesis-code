@@ -13,7 +13,7 @@ import polars as pl
 import yaml
 from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
-from experiments.medical_dataset_gen.generation.schemas import QueryType
+from experiments.medical_dataset_gen.schemas.generation_schemas import QueryType
 from helpers.dir_paths import ROOT_DIR
 
 type TableName = Literal[

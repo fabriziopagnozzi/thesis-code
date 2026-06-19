@@ -5,26 +5,27 @@ from collections import Counter, defaultdict
 import polars as pl
 import pyarrow.parquet as pq
 
-from experiments.medical_dataset_gen.generation.ontology import load_ontology
-from experiments.medical_dataset_gen.generation.prompts_default import (
-    MedicalDatasetGenDefaultPrompts,
-)
-from experiments.medical_dataset_gen.generation.query_templates import (
-    render_answer_template,
-    render_query_template,
-)
-from experiments.medical_dataset_gen.generation.schemas import (
-    MedicalOntology,
-    QueryPlan,
-    QueryPlanFacet,
-)
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     read_parquet,
     write_parquet,
 )
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    MedicalOntology,
+    QueryPlan,
+    QueryPlanFacet,
+)
 from helpers.ollama_client import generate
+
+from .ontology import load_ontology
+from .prompts_default import (
+    MedicalDatasetGenDefaultPrompts,
+)
+from .query_templates import (
+    render_answer_template,
+    render_query_template,
+)
 
 
 def run_make_queries_answers(
@@ -180,10 +181,7 @@ def _contains_axis_language(lower_text: str, axis) -> bool:
     return any(str(term).lower() in lower_text for term in terms)
 
 
-def canonical_answer(
-    plan: QueryPlan,
-    facet_summaries: dict[str, str],
-) -> str:
+def canonical_answer(plan: QueryPlan, facet_summaries: dict[str, str]) -> str:
     subgroup_a_duration = facet_summaries[
         facets_by(plan, plan.subgroup_a_label, 'treatment_duration')
     ]

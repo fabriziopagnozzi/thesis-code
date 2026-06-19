@@ -2,7 +2,11 @@ from collections import Counter
 
 import numpy as np
 
-from .schemas import ChunkDocumentRecord, QrelRecord
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
+    ChunkDocumentRecord,
+    QrelRecord,
+)
+
 from .utils import harmonic_mean
 
 ALPHA_NDCG_REDUNDANCY = 0.5

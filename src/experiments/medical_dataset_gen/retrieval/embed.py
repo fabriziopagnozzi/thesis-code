@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
 
 import numpy as np
 import pyarrow.parquet as pq
@@ -27,7 +26,7 @@ def run_embed(
 
 def load_embedding_arrays(
     paths: MedicalDatasetGenPaths,
-) -> tuple[NDArray[np.float32], NDArray[np.float32], Sequence[str], Sequence[str]]:
+) -> tuple[NDArray[np.float32], NDArray[np.float32], list[str], list[str]]:
     if (
         paths.embeddings_meta_path.exists()
         and paths.embeddings_chunk_vectors_path.exists()
