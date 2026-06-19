@@ -30,6 +30,7 @@ type TableName = Literal[
     'geometry_stats',
     'evaluation_results',
     'evaluation_stats',
+    'lambda_pair_agreement',
     'embedding_geometry_points',
     'embedding_geometry_query_stats',
 ]
@@ -97,6 +98,33 @@ class GeometryCfg(BaseModel):
     min_distractors_in_pool: PositiveInt = 10
 
 
+class FacLocMmrComparisonKernelMetricCfg(BaseModel):
+    summary_metric: str = 'MeanFacetHitRate@k'
+    enabled: bool = True
+    weight: PositiveFloat = 1.0
+    target_gain_vs_topk: float = 0.08
+    gain_bandwidth: PositiveFloat = 0.01
+    target_lower_bound_vs_topk: float = 0.03
+    lower_bound_bandwidth: PositiveFloat = 0.0075
+
+
+class FacLocMmrComparisonKernelsCfg(BaseModel):
+    lambda_max: NonNegativeFloat = 0.80
+    agreement_alpha: PositiveFloat = 3.0
+    kernel_floor: float = Field(default=0.05, gt=0, le=1)
+    pair_aggregation: Literal['geometric_mean', 'arithmetic_mean', 'minimum'] = 'geometric_mean'
+    metrics: list[FacLocMmrComparisonKernelMetricCfg] = Field(
+        default_factory=lambda: [FacLocMmrComparisonKernelMetricCfg()]
+    )
+
+
+class EvaluationCfg(BaseModel):
+    workers: PositiveInt | None = None
+    fac_loc_mmr_comparison_kernels: FacLocMmrComparisonKernelsCfg = Field(
+        default_factory=FacLocMmrComparisonKernelsCfg
+    )
+
+
 class EmbeddingGeometryCfg(BaseModel):
     n_queries: PositiveInt = 6
     query_ids: list[str] = Field(default_factory=list)
@@ -120,6 +148,7 @@ class ExperimentCfg(BaseModel):
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
     retrieval: RetrievalCfg = Field(default_factory=RetrievalCfg)
     geometry: GeometryCfg = Field(default_factory=GeometryCfg)
+    evaluation: EvaluationCfg = Field(default_factory=EvaluationCfg)
     embedding_geometry: EmbeddingGeometryCfg = Field(default_factory=EmbeddingGeometryCfg)
 
     model_config = {'populate_by_name': True, 'extra': 'ignore'}
@@ -128,7 +157,7 @@ class ExperimentCfg(BaseModel):
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
     results_dir = root / '_results'
-    default_ontology_path = root / 'ontology.yaml'
+    default_ontology_path = root / 'generation' / 'templates_data' / 'medical_ontology.yaml'
 
     def __init__(self, exp_name: str):
         self.exp_name = exp_name

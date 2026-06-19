@@ -58,9 +58,17 @@ Outputs are written under `_results/<exp>/`.
 5. `generation/qrels.py`: creates `qrels.parquet` from query/chunk memberships.
 6. `retrieval/embed.py`: creates the embedding memmaps and metadata files.
 7. `retrieval/filter_geometry.py`: creates `geometry_stats.parquet`.
-8. `evaluation/evaluate.py`: creates `evaluation_results.parquet` and `evaluation_stats.parquet`.
+8. `evaluation/evaluate.py`: creates `evaluation_results.parquet`, `evaluation_stats.parquet`, and `lambda_pair_agreement.parquet`.
 9. `embedding_geometry/run.py`: creates embedding geometry figures and diagnostics for the configured candidate-pool scope.
 10. `evaluation/plots.py`: creates evaluation figures under `_results/<exp>/_figures/evaluation/`.
+
+The optional `evaluation.fac_loc_mmr_comparison_kernels` config block controls
+how `lambda_pair_agreement.parquet` downweights uninteresting FacLoc/MMR lambda pairs.
+By default it:
+
+- excludes lambda pairs above `0.80`
+- applies sharp gain and paired-confidence-bound gates to `MeanFacetHitRate@k`
+- penalizes weak pairs with an inverse-power kernel and plots the weighted score on a log scale
 
 Each stage can run as a module with the same flags as the full pipeline.
 
@@ -114,12 +122,15 @@ The embedding-geometry stage writes:
 
 `selection_group` is `good`, `mid`, or `bad` for automatic mixed query selection, `good` for best-only selection, and `manual` when `embedding_geometry.query_ids` is set.
 
+`full_strategy_selection_overlay_k<K>.png` collapses consecutive MMR and facility-location lambda panels when the retrieved candidate set is unchanged. Different rank orders of the same set are treated as the same panel.
+
 The plotting stage writes:
 
 - `strategy_comparison.png`
 - `lambda_sensitivity.png`
 - `per_query_distributions.png`
 - `gain_over_topk.png`
+- `gain_over_topk_similar_lambda.png`
 - `coverage_precision_tradeoff.png`
 - `selection_diagnostics.png`
 

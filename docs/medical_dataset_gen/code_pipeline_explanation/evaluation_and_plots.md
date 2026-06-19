@@ -1,14 +1,32 @@
 # Evaluation And Plotting
 
-This note explains how retrieval results are scored and plotted in the implemented synthetic medical benchmark.
+This note explains how retrieval results are scored and plotted in the implemented synthetic medical benchmark, and how the current `evaluation/` code is modularized by responsibility.
 
 Source files:
 
 - [evaluation/evaluate.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/evaluate.py)
+- [evaluation/evaluation_workers.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/evaluation_workers.py)
+- [evaluation/metrics_retrieval.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/metrics_retrieval.py)
+- [evaluation/metrics_answer.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/metrics_answer.py)
+- [evaluation/lambda_agreement.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/lambda_agreement.py)
 - [evaluation/plots.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/plots.py)
-- [evaluation/metrics.md](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/metrics.md)
+- [evaluation/types.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/types.py)
+- [evaluation/utils.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/utils.py)
 - [retrieval/utils.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/retrieval/utils.py)
 - [helpers/query_algorithms.py](/home/pagnozzi/thesis/src/helpers/query_algorithms.py)
+
+## Evaluation Module Structure
+
+The evaluation code is now split into focused modules:
+
+- `evaluate.py`: the main stage entrypoint, query-level evaluation loop, summary-table aggregation, and the canonical `METRIC_NAME_TO_FIELD` registry that maps summary metric names to raw per-query result columns.
+- `evaluation_workers.py`: worker initialization for multiprocessing evaluation, artifact loading, and construction of the typed worker-state object shared by `_evaluate_query()`.
+- `metrics_retrieval.py`: retrieval-side scoring, including binary gold metrics, facet coverage metrics, diversified ranking metrics, and redundancy/distractor diagnostics.
+- `metrics_answer.py`: answer-side ROUGE preprocessing, typed answer-reference containers, and a query-scoped cached `AnswerRougeScorer`.
+- `lambda_agreement.py`: comparison of FacLoc/MMR lambda pairs across the aggregated metric space.
+- `plots.py`: figure generation, with plotted metric groups selected by summary-metric name and resolved through `METRIC_NAME_TO_FIELD` rather than duplicating raw-column mappings.
+- `types.py`: typed row shapes and worker-state definitions used across the evaluation code.
+- `utils.py`: small shared helpers such as harmonic means, confidence intervals, and qrel-to-facet mapping helpers.
 
 ## Stage 8: Retrieval Evaluation
 
@@ -16,6 +34,7 @@ Source files:
 
 - `evaluation_results.parquet`
 - `evaluation_stats.parquet`
+- `lambda_pair_agreement.parquet`
 
 The relevant config fields are:
 
@@ -27,27 +46,42 @@ The relevant config fields are:
 - `retrieval.mmr_window`
 - `retrieval.only_pass_geometry`
 
-The evaluation reads:
+The stage-level entrypoint reads:
+
+- `queries.parquet`
+- `qrels.parquet`
+- `geometry_stats.parquet`
+
+The worker initializer then loads the full evaluation artifacts:
 
 - `chunk_documents.parquet`
 - `chunk_memberships.parquet`
 - `queries.parquet`
+- `gold_answers.parquet`
 - `qrels.parquet`
 - `geometry_stats.parquet`
 - embedding arrays
 
 It first verifies that the stored `geometry_stats.pool_scope` matches the current `retrieval.pool_scope`. This matters because candidate-pool scope changes the meaning of all retrieval metrics.
 
+`run_evaluate()` orchestrates three outputs:
+
+- `evaluation_results.parquet`: one row per `query_id x strategy x k x lam`
+- `evaluation_stats.parquet`: aggregated means over queries
+- `lambda_pair_agreement.parquet`: FacLoc/MMR lambda-pair similarity table
+
+The current implementation evaluates queries through `_evaluate_queries()`, which can execute either in-process or through a multiprocessing worker pool. The worker state is initialized once in `evaluation_workers.py` and then reused across `_evaluate_query()` calls.
+
 ## Per-Query Evaluation Loop
 
-For each query row:
+For each query:
 
 1. Skip the query if `retrieval.only_pass_geometry` is true and the query did not pass the geometry filter.
-2. Build a query-local mapping from facet id to gold chunk-document ids using `qrels.parquet`.
+2. Read the typed query row, qrels, answer references, and retrieval index maps from the preloaded worker state.
 3. Build the candidate pool from `retrieval.pool_scope`.
 4. Keep the top `retrieval.candidate_pool_n` candidates by query similarity.
 5. Compute the candidate-candidate similarity matrix.
-6. Precompute the top-k selection for every configured `k`.
+6. Build a query-scoped answer-ROUGE scorer if `retrieval.compute_answer_rouge` is enabled.
 7. Evaluate every configured strategy, k, and lambda combination.
 
 Top-k is evaluated once per k with `lam = null`. MMR and facility-location are evaluated for every value in `retrieval.lambda_values`.
@@ -62,7 +96,7 @@ Each row also stores query type, condition id, split, pool size, gold/facet metr
 
 ## Binary Gold Metrics
 
-`_relevance_metrics()` treats every gold chunk as relevant, regardless of which facet it supports.
+`metrics_retrieval.py` contains the retrieval-side scoring code. `_relevance_metrics()` treats every gold chunk as relevant, regardless of which facet it supports.
 
 ### `gold_precision`
 
@@ -108,7 +142,7 @@ This is the main coverage metric. A query has four planned facets, so `facet_cov
 
 ### `weighted_facet_coverage`
 
-Despite the historical name, this is mean per-facet recall:
+This is mean per-facet recall:
 
 ```text
 mean over facets of selected_gold_for_facet / total_gold_for_facet
@@ -127,8 +161,6 @@ This measures how efficiently the selected set spends retrieval budget on new fa
 ### `facet_f1`
 
 The harmonic mean of `facet_hit_density` and `facet_coverage`.
-
-The raw aliases `aspect_precision`, `aspect_f1`, and `unique_facet_rate` remain in the output for compatibility, but the current docs and plots should use the facet names.
 
 ## Diversified Ranking Metrics
 
@@ -173,11 +205,10 @@ distractor_rate = selected_non_gold / selected_total
 
 Lower is better. This is critical for interpreting MMR: a method can be diverse by selecting irrelevant distractors.
 
-The raw `distractor_rate` remains the total non-gold rate for compatibility. Newer runs also split it into:
+The current code also exposes:
 
 - `near_miss_distractor_rate`: selected non-gold chunks from facet-like hard negatives.
 - `background_outlier_rate`: selected non-gold chunks from the coherent background clinical island.
-- `any_distractor_rate`: explicit alias for total selected non-gold chunks.
 
 ### `dominant_facet_rate`
 
@@ -215,7 +246,7 @@ These are not qrel metrics. They explain the behavior of the selection rule in e
 
 ## Summary Table
 
-`summarize_results()` groups `evaluation_results.parquet` by:
+`stats_aggregated_results_df()` groups `evaluation_results.parquet` by:
 
 ```text
 strategy, lam, k
@@ -228,23 +259,51 @@ It computes means over queries and writes `evaluation_stats.parquet` with displa
 - `F1@k`
 - `MAP@k`
 - `MeanFacetHitRate@k`
-- `FacetCoverage@k`
 - `MeanFacetRecall@k`
 - `FacetMRR@k`
 - `alpha-nDCG@k`
 - `DistractorRate`
+- `NearMissDistractorRate`
+- `BackgroundOutlierRate`
 - `DominantFacetRate`
 - `RedundantGoldRate`
 - `fac`
 - `avg_cos`
 - `jac`
-
-`MeanFacetHitRate@k` is the preferred summary label for the binary facet-hit metric.
-`FacetCoverage@k` is retained as a compatibility alias in the stats table.
+- optional answer-ROUGE summary metrics when enabled
 
 If `retrieval.compute_answer_rouge` is set to `false` in the experiment config, the evaluator skips all answer-ROUGE computation and the ROUGE-specific columns and figures are omitted.
 
 For top-k, `lam` is null. For MMR and facility-location, every configured lambda has its own summary row.
+
+## Lambda-Pair Agreement Table
+
+`lambda_pair_agreement.parquet` compares `fac_loc` and `mmr` over the full cartesian
+product of lambda pairs within each `k`.
+
+The row key is:
+
+```text
+k, fac_loc_lam, mmr_lam
+```
+
+Each row stores:
+
+- one `abs_diff__...` column per included summary metric
+- `mean_abs_diff`, the arithmetic mean across all included absolute-difference columns
+- `weighted_mean_abs_diff`, the kernel-weighted agreement score used by the current heatmap
+- `rank_within_k`, where rank 1 is the closest overall FacLoc/MMR lambda pair at that `k`
+- `weighted_rank_within_k`, where rank 1 is the closest pair after benchmark-interest weighting
+
+The agreement metric set includes the current summary metrics except identifiers and `n_queries`. When answer-ROUGE metrics are present in `evaluation_stats.parquet`, their absolute differences are included too.
+
+The optional `evaluation.fac_loc_mmr_comparison_kernels` config block further annotates
+each lambda pair with benchmark-interest signals such as gain vs top-k and paired 95%
+lower-bound gain. The current default applies this only to `MeanFacetHitRate@k` and
+excludes lambda pairs above `0.80` from the FacLoc/MMR cartesian product. The weighted
+score divides raw disagreement by the pair-quality kernel raised to `agreement_alpha`,
+with `kernel_floor` bounding the maximum penalty. The heatmap uses a logarithmic color
+scale so these deliberately aggressive multiplicative penalties remain visible.
 
 ## Stage 10: Evaluation Plots
 
@@ -270,6 +329,8 @@ then higher alpha-nDCG@k when available.
 
 This policy is encoded through `_PRIMARY_SORT` and `_PRIMARY_DESC` in [evaluation/plots.py](/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/evaluation/plots.py).
 
+The plotted metric groups in `plots.py` are now specified as lists of summary metric names, such as `PLOTTED_MAIN_METRIC_NAMES` and `PLOTTED_DIAGNOSTIC_METRIC_NAMES`. The file resolves each summary name to its raw per-query column and optimization direction through `METRIC_NAME_TO_FIELD` imported from `evaluate.py`. This keeps the summary-metric registry centralized and avoids repeating raw-column mappings across the plotting layer.
+
 ## Figure Types
 
 ### `strategy_comparison.png`
@@ -287,7 +348,7 @@ The included primary metrics are:
 
 That last metric appears only when `retrieval.compute_answer_rouge: true`.
 
-### `strategy_comparison_all_lambdas.png`
+### `strategy_comparison_heatmap.png`
 
 This compares MMR and facility-location at every lambda, split into one column per lambda. It is useful for checking whether a result is robust or only appears after picking the best lambda.
 
@@ -308,6 +369,15 @@ For higher-is-better metrics, positive bars are favorable. For lower-is-better m
 ### `gain_over_topk_simple.png`
 
 This is the simpler paired-delta view using only the coverage-first lambda path for each strategy and k. It is usually easier to read than the full lambda-sweep delta plot.
+
+### `gain_over_topk_similar_lambda.png`
+
+This plots one heatmap per `k` over the full `fac_loc lambda x mmr lambda` grid.
+Each cell is the `weighted_mean_abs_diff` from `lambda_pair_agreement.parquet` when the
+kernel columns are available, otherwise it falls back to `mean_abs_diff`. Lower values
+mean the two strategies behave more similarly across the full summary metric set, with
+extra emphasis on lambda pairs that improve the configured kernel metrics over top-k.
+The best lambda pair in each panel is highlighted directly.
 
 ### `selection_diagnostics.png`
 

@@ -2,11 +2,10 @@ from pathlib import Path
 
 import polars as pl
 
-from experiments.mimic.global_configs import MimicPaths, get_table_path, setup_logging
 from experiments.medical_dataset_gen.evaluation import plots as synthetic_eval_plots
+from experiments.mimic.global_configs import MimicPaths, get_table_path, setup_logging
 
 from .plot_adapters import adapt_results_for_synthetic_plots, adapt_stats_for_synthetic_plots
-
 from .schemas_evaluation import EvaluateCfg
 
 STRATEGY_STYLE: dict[str, dict] = {
@@ -72,7 +71,7 @@ def store_eval_figures(cfg: EvaluateCfg) -> None:
     synth_results = adapt_results_for_synthetic_plots(results_df)
 
     synthetic_eval_plots.plot_strategy_comparison(synth_stats, synth_results, out_dir)
-    synthetic_eval_plots.plot_strategy_comparison_all_lambdas(synth_stats, synth_results, out_dir)
+    synthetic_eval_plots.plot_strategy_comparison_heatmap(synth_stats, synth_results, out_dir)
     synthetic_eval_plots.plot_lambda_sensitivity(synth_stats, out_dir)
     synthetic_eval_plots.plot_per_query_distributions(synth_results, out_dir)
     synthetic_eval_plots.plot_gain_over_topk(synth_stats, synth_results, out_dir)
@@ -99,7 +98,7 @@ def store_eval_figures(cfg: EvaluateCfg) -> None:
                 else results_df
             )
             synthetic_eval_plots.plot_strategy_comparison(s_stats, s_results, s_dir)
-            synthetic_eval_plots.plot_strategy_comparison_all_lambdas(s_stats, s_results, s_dir)
+            synthetic_eval_plots.plot_strategy_comparison_heatmap(s_stats, s_results, s_dir)
             synthetic_eval_plots.plot_lambda_sensitivity(s_stats, s_dir)
             synthetic_eval_plots.plot_per_query_distributions(s_results, s_dir)
             synthetic_eval_plots.plot_gain_over_topk(s_stats, s_results, s_dir)
@@ -406,8 +405,15 @@ def plot_gain_over_topk(stats_df: pl.DataFrame, results_df: pl.DataFrame, out_di
     x = np.arange(len(k_values))
     width = 0.8 / max(len(diversity_strategies), 1)
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-    for ax, (col, _) in zip(axes.flatten(), _METRICS, strict=True):
+    fig, axes = plt.subplots(
+        len(_METRICS),
+        1,
+        figsize=(7.4, 2.7 * len(_METRICS) + 1.6),
+        sharex=True,
+        squeeze=False,
+    )
+    flat_axes = axes.flatten()
+    for row_idx, (ax, (col, _)) in enumerate(zip(flat_axes, _METRICS, strict=True)):
         res_col = _STATS_TO_RESULTS_COL.get(col, col)
         for i, strat in enumerate(diversity_strategies):
             s = get_style(strat)
@@ -446,13 +452,17 @@ def plot_gain_over_topk(stats_df: pl.DataFrame, results_df: pl.DataFrame, out_di
 
         ax.axhline(0, color='black', lw=0.8)
         ax.set_xticks(x)
-        ax.set_xticklabels([f'k={k}' for k in k_values], fontsize=9)
         ax.set_title(f'Δ{col} vs top-k (best AR-λ)', fontsize=11)
         ax.set_ylabel(f'Δ{col}', fontsize=9)
         ax.grid(axis='y', alpha=0.3)
+        if row_idx == len(_METRICS) - 1:
+            ax.set_xticklabels([f'k={k}' for k in k_values], fontsize=9)
+            ax.set_xlabel('k', fontsize=9)
+        else:
+            ax.tick_params(labelbottom=False)
 
     handles, labels, seen = [], [], set()
-    for ax in axes.flatten():
+    for ax in flat_axes:
         for h, lbl in zip(*ax.get_legend_handles_labels(), strict=True):
             if lbl not in seen:
                 handles.append(h)
@@ -474,33 +484,59 @@ def plot_gain_over_topk(stats_df: pl.DataFrame, results_df: pl.DataFrame, out_di
 
 
 def plot_stratum_breakdown(stratum_df: pl.DataFrame, out_dir: Path) -> None:
-    """Grouped bar chart: best WAR per strategy for each query stratum."""
+    """Grouped bar chart: best mean facet recall per strategy for each query stratum."""
     import matplotlib.pyplot as plt
     import numpy as np
+
+    stratum_df = adapt_stats_for_synthetic_plots(stratum_df)
 
     strata = sorted(stratum_df['stratum'].drop_nulls().unique().to_list())
     strategies = sorted(stratum_df['strategy'].unique().to_list())
     if not strata or not strategies:
         return
 
+    metric_col = 'MeanFacetRecall@k' if 'MeanFacetRecall@k' in stratum_df.columns else 'WAR'
     x = np.arange(len(strata))
     width = 0.8 / max(len(strategies), 1)
 
     fig, ax = plt.subplots(figsize=(max(8, len(strata) * 2), 5))
     for i, strat in enumerate(strategies):
         s = get_style(strat)
-        wars = []
+        metric_vals = []
         for stratum in strata:
             sub = stratum_df.filter((pl.col('strategy') == strat) & (pl.col('stratum') == stratum))
-            wars.append(float(sub['WAR'].max()) if sub.height > 0 else 0.0)  # type: ignore
+            if sub.height == 0:
+                metric_vals.append(0.0)
+                continue
+
+            sort_cols, descending = _stratum_best_sort(sub)
+            best_row = sub.sort(sort_cols, descending=descending).head(1)
+            metric_vals.append(float(best_row[metric_col][0]))
         offset = (i - len(strategies) / 2 + 0.5) * width
-        ax.bar(x + offset, wars, width=width * 0.9, color=s['color'], label=s['label'], alpha=0.85)
+        ax.bar(
+            x + offset,
+            metric_vals,
+            width=width * 0.9,
+            color=s['color'],
+            label=s['label'],
+            alpha=0.85,
+        )
 
     ax.set_xticks(x)
     ax.set_xticklabels([f'stratum {s}' for s in strata], fontsize=9)
-    ax.set_ylabel('WAR (best AR-λ, k)', fontsize=9)
+    ylabel = (
+        'MeanFacetRecall@k (coverage-first best row)'
+        if metric_col == 'MeanFacetRecall@k'
+        else 'WAR (best row)'
+    )
+    title = (
+        'MeanFacetRecall@k by stratum'
+        if metric_col == 'MeanFacetRecall@k'
+        else 'Weighted AR by stratum'
+    )
+    ax.set_ylabel(ylabel, fontsize=9)
     ax.set_title(
-        'Weighted AR by stratum',
+        title,
         fontsize=11,
     )
     ax.legend(fontsize=9, frameon=False)
@@ -834,6 +870,23 @@ def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -
         if ksub.height > 0:
             rows.append(ksub.head(1))
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
+
+
+def _stratum_best_sort(df: pl.DataFrame) -> tuple[list[str], list[bool]]:
+    candidates = [
+        ('MeanFacetHitRate@k', True),
+        ('FacetCoverage@k', True),
+        ('Precision@k', True),
+        ('DistractorRate', False),
+        ('alpha-nDCG@k', True),
+        ('MeanFacetRecall@k', True),
+        ('WAR', True),
+    ]
+    pairs = [(col, desc) for col, desc in candidates if col in df.columns]
+    if not pairs:
+        return ['strategy'], [False]
+    cols, desc = zip(*pairs, strict=True)
+    return list(cols), list(desc)
 
 
 if __name__ == '__main__':

@@ -22,15 +22,14 @@ from experiments.medical_dataset_gen.embedding_geometry.reduction import (
 )
 from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 from experiments.medical_dataset_gen.retrieval.utils import (
-    candidate_pool_indices,
+    get_candidate_pool_indices,
+    run_topn_cosine_retrieval,
     select_indices,
-    topn_by_query,
 )
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [
     'MeanFacetHitRate@k',
-    'FacetCoverage@k',
     'Precision@k',
     'DistractorRate',
     'MeanFacetRecall@k',
@@ -41,7 +40,7 @@ _STATS_BEST_SORT = [
     'WFC',
     'alpha_nDCG',
 ]
-_STATS_BEST_DESC = [True, True, True, False, True, True, True, False, True, True, True]
+_STATS_BEST_DESC = [True, True, False, True, True, True, False, True, True, True]
 _QUERY_BEST_SORT = [
     'facet_coverage',
     'gold_precision',
@@ -140,7 +139,8 @@ def ranked_queries_for_embedding_geometry(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base.with_columns(
+        base
+        .with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -171,7 +171,8 @@ def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[s
     n_good, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
     good_ids = ranked['query_id'].head(n_good).to_list()
     bad_ids = (
-        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
+        ranked
+        .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
         .head(n_bad)
         .to_list()
     )
@@ -224,7 +225,8 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
             sort_cols.append('alpha_ndcg')
             descending.append(True)
         best = (
-            sub.group_by('query_id', 'lam')
+            sub
+            .group_by('query_id', 'lam')
             .agg(agg_exprs)
             .sort(sort_cols, descending=descending)
             .group_by('query_id')
@@ -262,7 +264,7 @@ def build_query_artifact(
 ) -> dict[str, Any] | None:
     query = queries.filter(pl.col('query_id') == qid).row(0, named=True)
     qidx = maps['query_id_to_idx'][qid]
-    candidate_idx = candidate_pool_indices(
+    candidate_idx = get_candidate_pool_indices(
         query_id=qid,
         pool_scope=cfg.retrieval.pool_scope,
         n_chunks=len(chunk_ids),
@@ -271,7 +273,7 @@ def build_query_artifact(
         query_condition_id=query.get('condition_id'),
     )
     pool_n = cfg.embedding_geometry.candidate_pool_n or cfg.retrieval.candidate_pool_n
-    topn_global, topn_sims = topn_by_query(
+    topn_global, topn_sims = run_topn_cosine_retrieval(
         candidate_indices=candidate_idx,
         chunk_vectors=chunk_vectors,
         query_vector=query_vectors[qidx],

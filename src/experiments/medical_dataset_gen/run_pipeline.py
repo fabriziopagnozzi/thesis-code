@@ -37,8 +37,8 @@ STAGES: list[tuple[str, StageFn]] = [
     ('qrels', run_make_qrels),
     ('embed', run_embed),
     ('geom_filter', run_filter_geometry),
-    ('eval', run_evaluate),
     ('geom_plots', run_embedding_geometry),
+    ('eval', run_evaluate),
     ('eval_plots', store_eval_figures),
 ]
 

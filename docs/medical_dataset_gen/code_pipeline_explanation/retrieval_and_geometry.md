@@ -253,6 +253,8 @@ With `embedding_geometry.query_selection: mixed`, the visualization budget is sp
 
 The artifact contains both original high-dimensional vectors and 2D coordinates. Metrics are computed from the high-dimensional similarities; the 2D map is only a visualization.
 
+In `full_strategy_selection_overlay_k<K>.png`, the MMR and facility-location rows always include the first plotted lambda and then collapse consecutive lambda values whose selected candidate membership is unchanged. Rank-only reorderings do not create an extra subplot; a new subplot appears only when the retrieved set itself changes.
+
 ### Reduction And Clustering
 
 `reduce_for_plot()` supports:

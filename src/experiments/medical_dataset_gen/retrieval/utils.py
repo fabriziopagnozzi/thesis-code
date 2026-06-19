@@ -73,7 +73,7 @@ def build_index_maps(
     }
 
 
-def candidate_pool_indices(
+def get_candidate_pool_indices(
     query_id: str,
     pool_scope: Literal['query_local', 'same_condition', 'full_corpus'],
     n_chunks: int,
@@ -86,11 +86,15 @@ def candidate_pool_indices(
     if pool_scope == 'same_condition':
         if not query_condition_id:
             return np.array([], dtype=np.intp)
+
         return np.array(chunks_by_condition.get(query_condition_id, []), dtype=np.intp)
-    return np.array(chunks_by_source_query.get(query_id, []), dtype=np.intp)
+    if pool_scope == 'query_local':
+        return np.array(chunks_by_source_query.get(query_id, []), dtype=np.intp)
+    else:
+        raise RuntimeError('Unexpected pool_scope')
 
 
-def topn_by_query(
+def run_topn_cosine_retrieval(
     candidate_indices: NDArray[np.intp],
     chunk_vectors: NDArray[np.float32],
     query_vector: NDArray[np.float32],
@@ -98,6 +102,7 @@ def topn_by_query(
 ) -> tuple[NDArray[np.intp], NDArray[np.float32]]:
     if len(candidate_indices) == 0:
         return candidate_indices, np.array([], dtype=np.float32)
+
     sims = chunk_vectors[candidate_indices] @ query_vector
     order = np.argsort(sims)[::-1][: min(n, len(sims))]
     return candidate_indices[order], sims[order].astype(np.float32)
@@ -131,7 +136,7 @@ def select_indices(
     raise ValueError(f'Unsupported strategy: {strategy}')
 
 
-def retrieval_diagnostics(
+def compute_retrieval_diagnostics(
     selected_local_indices: NDArray[np.intp],
     sim_to_query: NDArray[np.float32],
     sim_matrix: NDArray[np.float32],

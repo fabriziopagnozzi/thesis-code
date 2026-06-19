@@ -1,5 +1,3 @@
-# Shared condition-level context used by both duration and rehab chunk renderers.
-
 # Per-condition presentation snippets inserted near the start of each chunk.
 condition_presentations:
   encephalitis_myelitis:

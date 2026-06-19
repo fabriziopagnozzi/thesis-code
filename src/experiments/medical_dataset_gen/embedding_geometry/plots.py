@@ -94,8 +94,15 @@ def plot_full_strategy_selection_overlay(
     render_k = int(artifact['k'] if k is None else k)
     effective_k = min(render_k, len(artifact['sim_to_query']))
     selection_variants = _selection_variants_for_k(artifact, effective_k)
-    n_cols = max(3, len(lambda_values))
     rows = ['mmr', 'fac_loc']
+    row_variants = {
+        strategy: _meaningful_lambda_selection_variants(
+            selection_variants.get(strategy, []),
+            lambda_values=lambda_values,
+        )
+        for strategy in rows
+    }
+    n_cols = max(3, *(len(row_variants[strategy]) for strategy in rows))
     fig, axes = plt.subplots(
         3,
         n_cols,
@@ -133,18 +140,9 @@ def plot_full_strategy_selection_overlay(
     for col_idx in range(3, n_cols):
         axes[0, col_idx].axis('off')
 
-    lambda_columns = sorted(lambda_values, reverse=True)
-    for col_idx, lam in enumerate(lambda_columns):
-        for row_idx, strategy in enumerate(rows, start=1):
-            variants = selection_variants.get(strategy, [])
-            if not variants:
-                continue
-            payload = next(
-                (variant for variant in variants if abs(float(variant['lam']) - lam) < 1e-12),
-                None,
-            )
-            if payload is None:
-                continue
+    for row_idx, strategy in enumerate(rows, start=1):
+        variants = row_variants[strategy]
+        for col_idx, payload in enumerate(variants):
             _plot_selection_panel(
                 ax=axes[row_idx, col_idx],
                 artifact=artifact,
@@ -157,9 +155,7 @@ def plot_full_strategy_selection_overlay(
                     local_indices=payload['local_indices'],
                 ),
             )
-
-    for row_idx in [1, 2]:
-        for col_idx in range(len(lambda_columns), n_cols):
+        for col_idx in range(len(variants), n_cols):
             axes[row_idx, col_idx].axis('off')
 
     legend_handles = _selection_legend_handles([ax for ax in axes.ravel() if ax.get_visible()])
@@ -348,6 +344,34 @@ def _selection_variants_for_k(
             for lam in lambda_values
         ]
     return variants
+
+
+def _meaningful_lambda_selection_variants(
+    variants: list[dict[str, Any]],
+    *,
+    lambda_values: list[float],
+) -> list[dict[str, Any]]:
+    ordered_variants: list[dict[str, Any]] = []
+    for lam in sorted(lambda_values, reverse=True):
+        payload = next(
+            (
+                variant
+                for variant in variants
+                if variant.get('lam') is not None and abs(float(variant['lam']) - lam) < 1e-12
+            ),
+            None,
+        )
+        if payload is not None:
+            ordered_variants.append(payload)
+
+    meaningful: list[dict[str, Any]] = []
+    previous_signature: frozenset[int] | None = None
+    for payload in ordered_variants:
+        signature = frozenset(int(index) for index in payload['local_indices'])
+        if previous_signature is None or signature != previous_signature:
+            meaningful.append(payload)
+        previous_signature = signature
+    return meaningful
 
 
 def _selection_panel_title(
@@ -804,5 +828,5 @@ def _apply_embedding_limits(ax: Any, artifact: dict[str, Any]) -> None:
 def strategy_title(strategy: str, lam: float | None) -> str:
     if strategy == 'top_k':
         return 'top-k'
-    label = 'MMR' if strategy == 'mmr' else 'FacLoc'
+    label = 'MMR' if strategy == 'mmr' else 'Coverage'
     return f'{label} lambda={lam:.2f}' if lam is not None else label

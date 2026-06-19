@@ -7,7 +7,14 @@ from pathlib import Path
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.generation.chunk_cache import (
+from experiments.medical_dataset_gen.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    read_parquet,
+    write_parquet,
+)
+
+from .chunk_cache import (
     GENERATION_CACHE_VERSION,
     REWRITE_CACHE_VERSION,
     GenerationCache,
@@ -19,11 +26,8 @@ from experiments.medical_dataset_gen.generation.chunk_cache import (
     load_generation_cache,
     remember_cache_entry,
 )
-from experiments.medical_dataset_gen.generation.chunk_grouped_llm import (
-    render_chunks_grouped_llm,
-    render_chunks_grouped_rewrite,
-)
-from experiments.medical_dataset_gen.generation.chunk_rendering import (
+from .chunk_grouped_llm import render_chunks_grouped_llm, render_chunks_grouped_rewrite
+from .chunk_rendering import (
     chunk_id,
     finalize_chunk_row,
     generate_llm_chunk,
@@ -34,18 +38,12 @@ from experiments.medical_dataset_gen.generation.chunk_rendering import (
     rewrite_llm_chunk,
     row_from_state,
 )
-from experiments.medical_dataset_gen.generation.chunk_templates import validate_chunk_text
-from experiments.medical_dataset_gen.generation.ontology import load_ontology
-from experiments.medical_dataset_gen.generation.schemas import (
+from .chunk_templates import validate_chunk_text
+from .ontology import load_ontology
+from .schemas import (
     ChunkRow,
     ClinicalFact,
     MedicalOntology,
-)
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
 )
 
 

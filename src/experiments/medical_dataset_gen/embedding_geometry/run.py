@@ -29,7 +29,7 @@ from experiments.medical_dataset_gen.embedding_geometry.plots import (
     plot_query_overview_4panel,
     plot_strategy_overlay,
 )
-from experiments.medical_dataset_gen.evaluation.evaluate import _assert_pool_scope_match
+from experiments.medical_dataset_gen.evaluation.utils import assert_pool_scope_match
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
@@ -76,10 +76,8 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
     queries = read_parquet(paths, 'queries')
     geometry = _maybe_read(paths, 'geometry_stats')
     eval_results = _maybe_read(paths, 'evaluation_results')
-    _assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
-    _assert_pool_scope_match(
-        eval_results, cfg.retrieval.pool_scope, table_name='evaluation_results'
-    )
+    assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
+    assert_pool_scope_match(eval_results, cfg.retrieval.pool_scope, table_name='evaluation_results')
 
     _chunk_vectors, _query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
     maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)

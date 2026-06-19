@@ -27,10 +27,10 @@ from experiments.medical_dataset_gen.global_configs import (
 from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
 from experiments.medical_dataset_gen.retrieval.utils import (
     build_index_maps,
-    candidate_pool_indices,
-    retrieval_diagnostics,
+    compute_retrieval_diagnostics,
+    get_candidate_pool_indices,
+    run_topn_cosine_retrieval,
     select_indices,
-    topn_by_query,
 )
 
 
@@ -52,7 +52,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
     ):
         qid = query['query_id']
         qidx = maps['query_id_to_idx'][qid]
-        candidate_idx = candidate_pool_indices(
+        candidate_idx = get_candidate_pool_indices(
             query_id=qid,
             pool_scope=cfg.retrieval.pool_scope,
             n_chunks=len(chunk_ids),
@@ -60,7 +60,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
             chunks_by_condition=maps['chunks_by_condition'],
             query_condition_id=query.get('condition_id'),
         )
-        topn_global, topn_sims = topn_by_query(
+        topn_global, topn_sims = run_topn_cosine_retrieval(
             candidate_indices=candidate_idx,
             chunk_vectors=chunk_vectors,
             query_vector=query_vectors[qidx],
@@ -175,9 +175,7 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'topk_dominant_count': topk_dominant,
                 'planned_dominant_facet_id': dominant_facet_id,
                 'planned_topk_dominant_count': planned_topk_dominant,
-                'planned_topk_dominant_fraction': primary_topk[
-                    'planned_dominant_fraction'
-                ],
+                'planned_topk_dominant_fraction': primary_topk['planned_dominant_fraction'],
                 'n_topk_retrieved_facets': n_topk_retrieved_facets,
                 'max_topk_retrieved_facets': cfg.geometry.max_topk_retrieved_facets,
                 'rank_where_all_facets_first_covered': all_facet_rank,
@@ -228,16 +226,14 @@ def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, dict[str, 
 
 
 def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
-    return sorted(
-        {
-            int(k)
-            for k in [
-                *cfg.retrieval.k_values,
-                cfg.geometry.topk_dominance_k,
-                cfg.geometry.primary_topk_dominance_k,
-            ]
-        }
-    )
+    return sorted({
+        int(k)
+        for k in [
+            *cfg.retrieval.k_values,
+            cfg.geometry.topk_dominance_k,
+            cfg.geometry.primary_topk_dominance_k,
+        ]
+    })
 
 
 def _topk_diagnostics_by_k(
@@ -285,9 +281,7 @@ def _flatten_topk_diagnostics(topk_by_k: dict[int, dict[str, object]]) -> dict[s
         flat[f'{prefix}_n_retrieved_facets'] = row['n_retrieved_facets']
         flat[f'{prefix}_facet_coverage'] = row['facet_coverage']
         flat[f'{prefix}_all_facets_covered'] = row['all_facets_covered']
-        flat[f'{prefix}_retrieved_facets_json'] = _json_str_list(
-            list(row['retrieved_facets'])
-        )
+        flat[f'{prefix}_retrieved_facets_json'] = _json_str_list(list(row['retrieved_facets']))
     return flat
 
 
@@ -438,9 +432,7 @@ def _is_background_outlier(query_qrels: dict[str, dict[str, Any]], chunk_id: str
     return query_qrels.get(chunk_id, {}).get('cluster_role') == 'background_outlier'
 
 
-def _is_query_near_miss_distractor(
-    query_qrels: dict[str, dict[str, Any]], chunk_id: str
-) -> bool:
+def _is_query_near_miss_distractor(query_qrels: dict[str, dict[str, Any]], chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
     return (
         bool(row)
@@ -490,8 +482,8 @@ def _topk_vs_facloc_diagnostics(
     sim_to_query = topn_sims.astype(np.float32)
     topk = select_indices('top_k', sim_to_query, sim_matrix, k=k, lam=None)
     fl = select_indices('fac_loc', sim_to_query, sim_matrix, k=k, lam=0.3)
-    topk_diag = retrieval_diagnostics(topk, sim_to_query, sim_matrix)
-    fl_diag = retrieval_diagnostics(fl, sim_to_query, sim_matrix, topk_local_indices=topk)
+    topk_diag = compute_retrieval_diagnostics(topk, sim_to_query, sim_matrix)
+    fl_diag = compute_retrieval_diagnostics(fl, sim_to_query, sim_matrix, topk_local_indices=topk)
     return {
         'fac_topk': topk_diag['fac_cov_score'],
         'fac_facloc': fl_diag['fac_cov_score'],

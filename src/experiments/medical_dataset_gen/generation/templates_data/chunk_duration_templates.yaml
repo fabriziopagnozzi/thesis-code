@@ -5,7 +5,6 @@ duration_chunk_templates:
   - "{patient} was treated inpatient for {condition}, with {presentation} on presentation. {duration_sentence}; {response_verb} {response} as the medication course ended. {close}"
   - "{patient} was hospitalized for {condition} in the setting of {presentation}. {duration_sentence}, and {response_verb} {response} at completion of therapy. {close}"
 
-# Alternative nouns interpolated into some duration_phrase_templates.
 duration_course_nouns:
   - active treatment course
   - active therapy interval

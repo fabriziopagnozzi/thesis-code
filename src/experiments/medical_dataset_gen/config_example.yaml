@@ -2,27 +2,7 @@
 #
 # Copy this file into the target experiment directory as:
 #   src/experiments/medical_dataset_gen/_results/<exp>/_config.yaml
-# The pipeline only reads that per-experiment file; src/experiments/medical_dataset_gen/_config.yaml
-# is no longer used.
 #
-# CLI flags can override the most common fields:
-#   --exp
-#   --max-queries
-#   --embedding-model
-#   --llm-name
-#   --llm-workers
-#   --device
-#   --embedding-devices
-#   --batch-size
-#   --pool-scope
-#   --no-llm-chunks
-#   --llm-chunks
-#   --no-llm-chunk-rewrite
-#   --llm-chunk-rewrite
-#   --embedding-geometry-queries
-#   --embedding-geometry-k
-#   --embedding-geometry-reduction
-
 global:
   seed: 42 # Random seed used by deterministic query/fact/chunk generation.
   n_queries: 120 # Number of multi-aspect queries to generate.
@@ -92,6 +72,21 @@ geometry:
   max_topk_retrieved_facets: 2 # Maximum distinct gold facets top-k may retrieve at primary_topk_dominance_k.
   min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
   min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
+
+evaluation:
+  fac_loc_mmr_comparison_kernels:
+    lambda_max: 0.80 # Ignore near-top-k lambda pairs in the FacLoc/MMR agreement sweep.
+    agreement_alpha: 3.0 # Exponent applied to the inverse quality-kernel penalty; larger is more aggressive.
+    kernel_floor: 0.05 # Caps the maximum penalty and prevents division by zero.
+    pair_aggregation: geometric_mean # How to combine FacLoc and MMR kernel scores into one pair score.
+    metrics:
+      - summary_metric: MeanFacetHitRate@k
+        enabled: true
+        weight: 1.0
+        target_gain_vs_topk: 0.08 # Soft threshold for "meaningfully better than top-k".
+        gain_bandwidth: 0.01 # Smaller = sharper transition around target_gain_vs_topk.
+        target_lower_bound_vs_topk: 0.03 # Require a clearly positive paired 95% CI lower bound.
+        lower_bound_bandwidth: 0.0075
 
 embedding_geometry:
   random_state: 42 # Seed for PCA/UMAP figure reproducibility.

@@ -1,0 +1,178 @@
+import json
+import os
+from collections import defaultdict
+from collections.abc import Mapping
+from typing import cast
+
+import polars as pl
+
+from experiments.medical_dataset_gen.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    read_parquet,
+)
+from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
+from experiments.medical_dataset_gen.retrieval.utils import build_index_maps
+
+from .schemas import (
+    AnswerReferenceTexts,
+    EvaluationIndexMaps,
+    EvaluationWorkerState,
+    QrelRecord,
+    coerce_chunk_document_record,
+    coerce_qrel_record,
+    coerce_query_record,
+)
+from .utils import (
+    assert_pool_scope_match,
+    build_query_to_facet_to_gold_chunks_map,
+)
+
+EVALUATION_WORKER_STATE: EvaluationWorkerState | None = None
+
+
+def set_evaluation_worker_state(target: EvaluationWorkerState | None) -> None:
+    global EVALUATION_WORKER_STATE
+    EVALUATION_WORKER_STATE = target
+
+
+def get_evaluation_worker_state() -> EvaluationWorkerState | None:
+    return EVALUATION_WORKER_STATE
+
+
+def init_evaluation_worker(cfg_dump: dict[str, object], exp_name: str) -> None:
+    cfg = ExperimentCfg.model_validate(cfg_dump)
+    paths = MedicalDatasetGenPaths(exp_name)
+
+    chunk_documents = read_parquet(paths, 'chunk_documents')
+    chunk_memberships = read_parquet(paths, 'chunk_memberships')
+    queries = read_parquet(paths, 'queries')
+    gold_answers = read_parquet(paths, 'gold_answers')
+    qrels = read_parquet(paths, 'qrels')
+    geometry = read_parquet(paths, 'geometry_stats')
+
+    assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
+    chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
+    raw_maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
+    maps = _build_evaluation_index_maps(raw_maps)
+
+    facet_gold = build_query_to_facet_to_gold_chunks_map(qrels)
+    answer_refs_by_query = _answer_refs_by_query(gold_answers)
+    gold_by_query = {
+        qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
+        for qid, facet_map in facet_gold.items()
+    }
+    pass_map = {
+        str(query_id): bool(passes_filter)
+        for query_id, passes_filter in zip(
+            geometry['query_id'].to_list(),
+            geometry['passes_filter'].to_list(),
+            strict=True,
+        )
+    }
+
+    set_evaluation_worker_state({
+        'cfg': cfg,
+        'queries_by_id': {
+            query_record['query_id']: query_record
+            for query_record in (coerce_query_record(row) for row in queries.iter_rows(named=True))
+        },
+        'chunk_vectors': chunk_vectors,
+        'query_vectors': query_vectors,
+        'chunk_ids': chunk_ids,
+        'maps': maps,
+        'facet_gold': facet_gold,
+        'gold_by_query': gold_by_query,
+        'qrels_by_query_chunk': _qrels_by_query_chunk(qrels),
+        'answer_refs_by_query': answer_refs_by_query,
+        'pass_map': pass_map,
+        'k_values': sorted(set(int(k) for k in cfg.retrieval.k_values)),
+    })
+
+
+def get_evaluation_worker_count(cfg: ExperimentCfg, n_queries: int) -> int:
+    requested = cfg.evaluation.workers
+
+    if requested is None:
+        raw_env = os.getenv('EVALUATION_WORKERS')
+        if raw_env is not None:
+            try:
+                requested = int(raw_env)
+            except ValueError as exc:
+                raise ValueError('EVALUATION_WORKERS must be an integer') from exc
+
+    workers = requested if requested is not None else (os.cpu_count() or 1)
+    return max(1, min(n_queries, workers))
+
+
+def get_evaluation_chunksize(n_queries: int, worker_count: int) -> int:
+    raw_env = os.getenv('EVALUATION_CHUNKSIZE')
+    if raw_env is not None:
+        try:
+            chunksize = int(raw_env)
+        except ValueError as exc:
+            raise ValueError('EVALUATION_CHUNKSIZE must be an integer') from exc
+        return max(1, chunksize)
+    return max(1, min(16, n_queries // max(worker_count * 4, 1)))
+
+
+def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, QrelRecord]]:
+    result: dict[str, dict[str, QrelRecord]] = defaultdict(dict)
+
+    for row in qrels.iter_rows(named=True):
+        qrel_record = coerce_qrel_record(row)
+        result[qrel_record['query_id']][qrel_record['chunk_id']] = qrel_record  # type: ignore
+
+    return result
+
+
+def _build_evaluation_index_maps(raw_maps: Mapping[str, object]) -> EvaluationIndexMaps:
+    raw_chunk_by_id = cast(dict[str, Mapping[str, object]], raw_maps['chunk_by_id'])
+    return {
+        'query_id_to_idx': cast(dict[str, int], raw_maps['query_id_to_idx']),
+        'chunk_by_id': {
+            chunk_id: coerce_chunk_document_record(chunk_row)
+            for chunk_id, chunk_row in raw_chunk_by_id.items()
+        },
+        'chunks_by_source_query': cast(dict[str, list[int]], raw_maps['chunks_by_source_query']),
+        'chunks_by_condition': cast(dict[str, list[int]], raw_maps['chunks_by_condition']),
+    }
+
+
+def _answer_refs_by_query(gold_answers: pl.DataFrame) -> dict[str, AnswerReferenceTexts]:
+    refs: dict[str, AnswerReferenceTexts] = {}
+
+    for row in gold_answers.iter_rows(named=True):
+        facet_references = _facet_references_from_answer_row(row)
+        refs[str(row['query_id'])] = {
+            'answer_text': str(row.get('answer_text') or ''),
+            'facet_references': facet_references,
+        }
+    return refs
+
+
+def _facet_references_from_answer_row(ans_row: Mapping[str, object]) -> list[str]:
+    summaries_raw = ans_row.get('facet_summaries_json')
+
+    if summaries_raw:
+        try:
+            summaries = json.loads(str(summaries_raw))
+        except json.JSONDecodeError:
+            summaries = {}
+        if isinstance(summaries, dict):
+            return [str(value) for value in summaries.values() if str(value).strip()]
+
+    facts_raw = ans_row.get('answer_facts_json')
+    if not facts_raw:
+        return []
+    try:
+        facts = json.loads(str(facts_raw))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(facts, list):
+        return []
+    return [
+        str(item.get('summary'))
+        for item in facts
+        if isinstance(item, dict) and str(item.get('summary') or '').strip()
+    ]

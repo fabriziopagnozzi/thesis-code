@@ -173,7 +173,14 @@ if __name__ == '__main__':
     points_path = get_pool_analysis_path('pool_points.parquet')
     if not stats_path.exists() or not points_path.exists():
         raise FileNotFoundError(
-            f'per_query_stats or pool_points not found in {MimicPaths.experiment_dir}'
+            'Missing pool-analysis artifacts for '
+            f'{MimicPaths.experiment_dir}.\n'
+            f'Expected:\n- {stats_path}\n- {points_path}\n'
+            'Generate them first with:\n'
+            f'  EXP={MimicPaths.exp_name} uv run task mimic_pool_analysis\n'
+            'or:\n'
+            f'  EXP={MimicPaths.exp_name} uv run python -m '
+            'experiments.mimic.pool_analysis.run_pool_analysis'
         )
 
     stats_df = pl.read_parquet(stats_path)
