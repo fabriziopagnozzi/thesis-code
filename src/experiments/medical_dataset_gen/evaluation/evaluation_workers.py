@@ -2,7 +2,13 @@ import os
 
 import polars as pl
 
-from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+    assert_pool_scope_match,
+    build_index_maps,
+    build_query_to_facet_gold_map,
+    get_qrels_by_query_chunk,
+)
+from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     EvaluationIndexMaps,
@@ -18,12 +24,6 @@ from experiments.medical_dataset_gen.utils.global_configs import (
     MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
-from experiments.medical_dataset_gen.utils.retrieval_utils import (
-    assert_pool_scope_match,
-    build_index_maps,
-    build_query_to_facet_gold_map,
-    get_qrels_by_query_chunk,
-)
 
 EVALUATION_WORKER_STATE: EvaluationWorkerState | None = None
 

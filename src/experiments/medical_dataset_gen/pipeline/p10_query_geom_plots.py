@@ -14,7 +14,11 @@ from pathlib import Path
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+    assert_pool_scope_match,
+    build_index_maps,
+)
+from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.query_geometry.artifacts import (
     build_query_artifact,
     choose_query_groups,
@@ -46,10 +50,6 @@ from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
     read_parquet_if_exists_else_empty_df,
     write_parquet,
-)
-from experiments.medical_dataset_gen.utils.retrieval_utils import (
-    assert_pool_scope_match,
-    build_index_maps,
 )
 
 GEOMETRY_WORKER_STATE: EmbeddingGeometryWorkerState | None = None

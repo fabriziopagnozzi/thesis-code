@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import yaml
 
@@ -17,7 +16,9 @@ from experiments.medical_dataset_gen.utils.global_configs import (
     MedicalDatasetGenPaths,
 )
 
-_QUERY_TEMPLATE_PATH = MedicalDatasetGenPaths.root / 'data_templates' / 'query_answer_templates.yaml'
+_QUERY_TEMPLATE_PATH = (
+    MedicalDatasetGenPaths.root / 'data_templates' / 'query_answer_templates.yaml'
+)
 
 
 def _load_query_template_data() -> QueryTemplateData:

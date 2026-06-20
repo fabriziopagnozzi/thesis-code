@@ -20,8 +20,8 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     render_canonical_chunk_text,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
-from experiments.medical_dataset_gen.pipeline.c_structured_facts import make_gold_fact
-from experiments.medical_dataset_gen.pipeline.e_queries_answers import render_query
+from experiments.medical_dataset_gen.pipeline.p03_structured_facts import make_gold_fact
+from experiments.medical_dataset_gen.pipeline.p05_queries_answers import render_query
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,
     QueryPlan,

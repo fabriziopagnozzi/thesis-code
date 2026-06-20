@@ -11,7 +11,8 @@ from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.plots_configs import NamedPlotMetric
-from experiments.medical_dataset_gen.pipeline.k_eval_plots import (
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
+from experiments.medical_dataset_gen.pipeline.p11_eval_plots import (
     parse_plots_cli_args,
     run_store_eval_figures,
 )
@@ -19,7 +20,6 @@ from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_
 from experiments.medical_dataset_gen.utils.global_configs import (
     paths_for,
 )
-from experiments.medical_dataset_gen.utils.retrieval_utils import ci_half_width
 
 from .plots_configs import (
     DEFAULT_PLOT_GRID_LAYOUTS,

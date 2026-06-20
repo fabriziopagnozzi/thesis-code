@@ -12,13 +12,13 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
+from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     load_config,
 )
-from experiments.medical_dataset_gen.utils.retrieval_utils import select_indices
 
 _QUERY_COLUMNS = [
     'query_id',

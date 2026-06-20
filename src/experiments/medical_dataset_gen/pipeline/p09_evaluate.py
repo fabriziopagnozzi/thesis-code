@@ -28,6 +28,14 @@ from experiments.medical_dataset_gen.evaluation.metrics_answer import (
     prepare_answer_rouge_scorer,
 )
 from experiments.medical_dataset_gen.evaluation.metrics_retrieval import compute_retrieval_metrics
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+    assert_pool_scope_match,
+    build_query_to_facet_gold_map,
+    compute_retrieval_diagnostics,
+    get_candidate_pool_indices,
+    run_topn_cosine_retrieval,
+    select_indices,
+)
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     EvaluationResultRow,
     QueryRecord,
@@ -37,14 +45,6 @@ from experiments.medical_dataset_gen.utils.global_configs import (
     MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
-from experiments.medical_dataset_gen.utils.retrieval_utils import (
-    assert_pool_scope_match,
-    build_query_to_facet_gold_map,
-    compute_retrieval_diagnostics,
-    get_candidate_pool_indices,
-    run_topn_cosine_retrieval,
-    select_indices,
-)
 
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:

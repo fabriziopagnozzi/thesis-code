@@ -6,12 +6,12 @@ from typing import Any, cast
 import numpy as np
 import polars as pl
 
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryArtifact,
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
-from experiments.medical_dataset_gen.utils.retrieval_utils import select_indices
 
 _FIXED_LABEL_COLORS = {
     'soft distractor: same condition, wrong subgroup': '#f3a6a6',

@@ -16,7 +16,17 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+    build_index_maps,
+    build_query_to_facet_gold_map,
+    compute_retrieval_diagnostics,
+    get_candidate_pool_indices,
+    get_qrels_by_query_chunk,
+    is_query_gold,
+    run_topn_cosine_retrieval,
+    select_indices,
+)
+from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     BackgroundOutlierDiagnostics,
     FacetIdToGoldChunks,
@@ -29,16 +39,6 @@ from experiments.medical_dataset_gen.utils.global_configs import (
     MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import json_dumps, read_parquet, write_parquet
-from experiments.medical_dataset_gen.utils.retrieval_utils import (
-    build_index_maps,
-    build_query_to_facet_gold_map,
-    compute_retrieval_diagnostics,
-    get_candidate_pool_indices,
-    get_qrels_by_query_chunk,
-    is_query_gold,
-    run_topn_cosine_retrieval,
-    select_indices,
-)
 
 
 def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:

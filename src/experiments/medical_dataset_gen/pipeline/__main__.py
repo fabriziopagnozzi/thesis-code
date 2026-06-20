@@ -4,27 +4,27 @@ import argparse
 from collections.abc import Callable
 from typing import Literal
 
-from experiments.medical_dataset_gen.pipeline.a_plans import (
+from experiments.medical_dataset_gen.pipeline.p01_plans import (
     run_make_query_plans,
 )
-from experiments.medical_dataset_gen.pipeline.b_plans_calibration import (
+from experiments.medical_dataset_gen.pipeline.p02_plans_calibration import (
     run_calibrate_query_plans,
 )
-from experiments.medical_dataset_gen.pipeline.c_structured_facts import run_make_facts
-from experiments.medical_dataset_gen.pipeline.d_chunks import run_make_chunks
-from experiments.medical_dataset_gen.pipeline.e_queries_answers import (
+from experiments.medical_dataset_gen.pipeline.p03_structured_facts import run_make_facts
+from experiments.medical_dataset_gen.pipeline.p04_chunks import run_make_chunks
+from experiments.medical_dataset_gen.pipeline.p05_queries_answers import (
     run_make_queries_answers,
 )
-from experiments.medical_dataset_gen.pipeline.f_qrels import (
+from experiments.medical_dataset_gen.pipeline.p06_qrels import (
     run_make_qrels,
 )
-from experiments.medical_dataset_gen.pipeline.g_embed import run_embed
-from experiments.medical_dataset_gen.pipeline.h_filter_queries import run_filter_queries
-from experiments.medical_dataset_gen.pipeline.i_evaluate import run_evaluate
-from experiments.medical_dataset_gen.pipeline.j_query_geom_plots import (
+from experiments.medical_dataset_gen.pipeline.p07_embed import run_embed
+from experiments.medical_dataset_gen.pipeline.p08_filter_queries import run_filter_queries
+from experiments.medical_dataset_gen.pipeline.p09_evaluate import run_evaluate
+from experiments.medical_dataset_gen.pipeline.p10_query_geom_plots import (
     run_query_geom_plots,
 )
-from experiments.medical_dataset_gen.pipeline.k_eval_plots import run_store_eval_figures
+from experiments.medical_dataset_gen.pipeline.p11_eval_plots import run_store_eval_figures
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
