@@ -7,7 +7,7 @@ from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     QrelRecord,
 )
 
-from .utils import harmonic_mean
+from ..retrieval.utils import harmonic_mean
 
 ALPHA_NDCG_REDUNDANCY = 0.5
 
@@ -88,8 +88,7 @@ def _redundancy_metrics(
     dominant_count = sum(
         1
         for chunk_id in selected_chunk_ids
-        if (qrel := query_qrels.get(chunk_id)) is not None
-        and qrel.facet_id == dominant_facet_id
+        if (qrel := query_qrels.get(chunk_id)) is not None and qrel.facet_id == dominant_facet_id
     )
     selected_facet_counts = Counter(
         qrel.facet_id

@@ -140,8 +140,8 @@ def _materialize_plan_row(
         template_id=template_id,
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
-        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),
-        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),
+        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),  # type:ignore
+        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),  # type:ignore
         dominant_facet_id=dominant_facet_id,
         n_facets=len(facets),
         gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
@@ -242,7 +242,6 @@ def _split_for_index(plan_idx: int) -> Split:
 
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.global_configs import (
-        dump_effective_config,
         load_config_from_cli,
         paths_for,
         setup_logging,
@@ -251,5 +250,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    dump_effective_config(cfg, paths)
     run_make_query_plans(cfg, paths)

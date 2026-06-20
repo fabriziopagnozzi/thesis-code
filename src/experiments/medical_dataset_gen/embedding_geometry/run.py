@@ -14,11 +14,9 @@ from pathlib import Path
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.evaluation.utils import assert_pool_scope_match
 from experiments.medical_dataset_gen.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
-    dump_effective_config,
     load_config_from_cli,
     paths_for,
     read_parquet,
@@ -26,7 +24,10 @@ from experiments.medical_dataset_gen.global_configs import (
     write_parquet,
 )
 from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
-from experiments.medical_dataset_gen.retrieval.utils import build_index_maps
+from experiments.medical_dataset_gen.retrieval.utils import (
+    assert_pool_scope_match,
+    build_index_maps,
+)
 from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
     EmbeddingGeometryPointRow,
     EmbeddingGeometryQueryStats,
@@ -182,7 +183,7 @@ def _init_embedding_geometry_worker(
 ) -> None:
     os.environ.setdefault('MPLBACKEND', 'Agg')
     cfg = ExperimentCfg.model_validate(cfg_dump)
-    paths = MedicalDatasetGenPaths(exp_name)
+    paths = MedicalDatasetGenPaths(exp_name, result_dir_overrides=cfg.global_.result_dir_overrides)
 
     chunk_documents = read_parquet(paths, 'chunk_documents')
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
@@ -258,5 +259,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    dump_effective_config(cfg, paths)
     run_embedding_geometry(cfg, paths)

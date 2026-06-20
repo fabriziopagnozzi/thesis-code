@@ -23,6 +23,7 @@ from experiments.medical_dataset_gen.global_configs import (
     write_parquet,
 )
 from experiments.medical_dataset_gen.retrieval.utils import (
+    build_query_to_facet_gold_map,
     compute_retrieval_diagnostics,
     get_candidate_pool_indices,
     run_topn_cosine_retrieval,
@@ -33,6 +34,7 @@ from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     QueryRecord,
 )
 
+from ..retrieval.utils import assert_pool_scope_match
 from .evaluation_workers import (
     get_evaluation_chunksize,
     get_evaluation_worker_count,
@@ -42,7 +44,6 @@ from .evaluation_workers import (
 from .lambda_agreement import build_lambda_pair_agreement
 from .metrics_answer import empty_answer_reference_texts, prepare_answer_rouge_scorer
 from .metrics_retrieval import retrieval_metrics
-from .utils import assert_pool_scope_match, build_query_to_facet_to_gold_chunks_map
 
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -51,7 +52,7 @@ def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFr
     geometry = read_parquet(paths, 'geometry_stats')
     assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
 
-    facet_gold = build_query_to_facet_to_gold_chunks_map(qrels)
+    facet_gold = build_query_to_facet_gold_map(qrels)
     gold_by_query = {
         qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
         for qid, facet_map in facet_gold.items()
@@ -352,7 +353,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
 
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.global_configs import (
-        dump_effective_config,
         load_config_from_cli,
         paths_for,
         setup_logging,
@@ -361,5 +361,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    dump_effective_config(cfg, paths)
     run_evaluate(cfg, paths)

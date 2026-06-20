@@ -52,7 +52,6 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
 
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.global_configs import (
-        dump_effective_config,
         load_config_from_cli,
         paths_for,
         setup_logging,
@@ -61,5 +60,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    dump_effective_config(cfg, paths)
     run_make_qrels(cfg, paths)

@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 
 import polars as pl
 
@@ -9,22 +8,24 @@ from experiments.medical_dataset_gen.global_configs import (
     read_parquet,
 )
 from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
-from experiments.medical_dataset_gen.retrieval.utils import build_index_maps
+from experiments.medical_dataset_gen.retrieval.utils import (
+    build_index_maps,
+    build_query_to_facet_gold_map,
+    get_qrels_by_query_chunk,
+)
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     EvaluationIndexMaps,
     EvaluationWorkerState,
     GoldAnswerRecord,
-    QrelRecord,
     QueryRecord,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     RetrievalIndexMaps as RawRetrievalIndexMaps,
 )
 
-from .utils import (
+from ..retrieval.utils import (
     assert_pool_scope_match,
-    build_query_to_facet_to_gold_chunks_map,
 )
 
 EVALUATION_WORKER_STATE: EvaluationWorkerState | None = None
@@ -41,7 +42,7 @@ def get_evaluation_worker_state() -> EvaluationWorkerState | None:
 
 def init_evaluation_worker(cfg_dump: dict[str, object], exp_name: str) -> None:
     cfg = ExperimentCfg.model_validate(cfg_dump)
-    paths = MedicalDatasetGenPaths(exp_name)
+    paths = MedicalDatasetGenPaths(exp_name, result_dir_overrides=cfg.global_.result_dir_overrides)
 
     chunk_documents = read_parquet(paths, 'chunk_documents')
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
@@ -55,7 +56,7 @@ def init_evaluation_worker(cfg_dump: dict[str, object], exp_name: str) -> None:
     raw_maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
     maps = _build_evaluation_index_maps(raw_maps)
 
-    facet_gold = build_query_to_facet_to_gold_chunks_map(qrels)
+    facet_gold = build_query_to_facet_gold_map(qrels)
     answer_refs_by_query = _answer_refs_by_query(gold_answers)
     query_id_to_gold_chunks = {
         qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
@@ -84,7 +85,7 @@ def init_evaluation_worker(cfg_dump: dict[str, object], exp_name: str) -> None:
         'maps': maps,
         'facet_gold': facet_gold,
         'gold_by_query': query_id_to_gold_chunks,
-        'qrels_by_query_chunk': _qrels_by_query_chunk(qrels),
+        'qrels_by_query_chunk': get_qrels_by_query_chunk(qrels),
         'answer_refs_by_query': answer_refs_by_query,
         'pass_map': pass_map,
         'k_values': sorted(set(int(k) for k in cfg.retrieval.k_values)),
@@ -115,16 +116,6 @@ def get_evaluation_chunksize(n_queries: int, worker_count: int) -> int:
             raise ValueError('EVALUATION_CHUNKSIZE must be an integer') from exc
         return max(1, chunksize)
     return max(1, min(16, n_queries // max(worker_count * 4, 1)))
-
-
-def _qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, QrelRecord]]:
-    result: dict[str, dict[str, QrelRecord]] = defaultdict(dict)
-
-    for row in qrels.iter_rows(named=True):
-        qrel_record = QrelRecord.model_validate(row)
-        result[qrel_record.query_id][qrel_record.chunk_id] = qrel_record
-
-    return result
 
 
 def _build_evaluation_index_maps(raw_maps: RawRetrievalIndexMaps) -> EvaluationIndexMaps:

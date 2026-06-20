@@ -17,8 +17,8 @@ from experiments.medical_dataset_gen.global_configs import (
 )
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
+from ..retrieval.utils import ci_half_width
 from .lambda_agreement import build_lambda_pair_agreement
-from .utils import ci_half_width
 
 STRATEGY_STYLE: dict[str, dict[str, str]] = {
     'top_k': {'color': '#333333', 'ls': '--', 'label': 'top-k'},

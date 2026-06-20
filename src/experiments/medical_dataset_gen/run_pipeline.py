@@ -17,7 +17,6 @@ from .generation.query_plans import run_make_query_plans
 from .global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
-    dump_effective_config,
     load_config_from_cli,
     paths_for,
     setup_logging,
@@ -61,7 +60,6 @@ def main() -> None:
     paths = paths_for(cfg)
     if not args.no_log_tee:
         setup_logging(paths)
-    dump_effective_config(cfg, paths)
 
     if args.only:
         start_idx = _stage_index(args.only)

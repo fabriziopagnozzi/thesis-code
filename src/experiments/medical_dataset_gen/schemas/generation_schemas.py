@@ -102,6 +102,7 @@ class SubgroupOntology(BenchmarkModel):
     field: str
     value: str
     aliases: list[str] = Field(default_factory=list)
+    surface_phrases: list[str] = Field(default_factory=list)
 
     def prefixed_fields(self, prefix: str, subgroup_id: str) -> dict[str, object]:
         return {

@@ -23,13 +23,15 @@ from experiments.medical_dataset_gen.global_configs import (
     read_parquet,
     write_parquet,
 )
+from experiments.medical_dataset_gen.retrieval.utils import (
+    build_query_to_facet_gold_map,
+    get_qrels_by_query_chunk,
+    is_query_gold,
+)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     BackgroundOutlierDiagnostics,
-    FacetGoldByQuery,
-    FacetGoldChunks,
-    QrelRecord,
-    QrelsByQueryChunk,
-    QueryQrels,
+    FacetIdToGoldChunks,
+    QueryIdToQrels,
     QueryRecord,
     TopKDiagnosticsByK,
 )
@@ -52,11 +54,12 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
     maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
-    facet_gold = _facet_gold_map(qrels)
-    qrels_by_query_chunk = _qrels_by_query_chunk(qrels)
+    facet_gold = build_query_to_facet_gold_map(qrels)
+    qrels_by_query_chunk = get_qrels_by_query_chunk(qrels)
     primary_k = int(cfg.geometry.primary_topk_dominance_k)
     diagnostic_k_values = _diagnostic_k_values(cfg)
     rows = []
+
     for query_row in tqdm(
         queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True
     ):
@@ -222,24 +225,6 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
     return df
 
 
-def _facet_gold_map(qrels: pl.DataFrame) -> FacetGoldByQuery:
-    result: FacetGoldByQuery = defaultdict(lambda: defaultdict(list))
-    for row in qrels.filter(pl.col('is_gold')).iter_rows(named=True):
-        qrel = QrelRecord.model_validate(row)
-        if qrel.facet_id is None:
-            raise ValueError(f'gold qrel {qrel.chunk_id!r} has no facet_id')
-        result[qrel.query_id][qrel.facet_id].append(qrel.chunk_id)
-    return result
-
-
-def _qrels_by_query_chunk(qrels: pl.DataFrame) -> QrelsByQueryChunk:
-    result: QrelsByQueryChunk = defaultdict(dict)
-    for row in qrels.iter_rows(named=True):
-        record = QrelRecord.model_validate(row)
-        result[record.query_id][record.chunk_id] = record
-    return result
-
-
 def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
     return sorted({
         int(k)
@@ -254,8 +239,8 @@ def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
 def _topk_diagnostics_by_k(
     *,
     topn_chunk_ids: list[str],
-    query_qrels: QueryQrels,
-    query_facets: FacetGoldChunks,
+    query_qrels: QueryIdToQrels,
+    query_facets: FacetIdToGoldChunks,
     dominant_facet_id: str,
     k_values: list[int],
 ) -> TopKDiagnosticsByK:
@@ -302,7 +287,7 @@ def _flatten_topk_diagnostics(topk_by_k: TopKDiagnosticsByK) -> dict[str, object
 
 def _topk_facet_counts(
     topn_chunk_ids: list[str],
-    query_qrels: QueryQrels,
+    query_qrels: QueryIdToQrels,
     k: int,
 ) -> Counter[str]:
     counts: Counter[str] = Counter()
@@ -315,7 +300,7 @@ def _topk_facet_counts(
 
 def _topk_dominant_count(
     topn_chunk_ids: list[str],
-    query_qrels: QueryQrels,
+    query_qrels: QueryIdToQrels,
     k: int,
 ) -> int:
     counts = _topk_facet_counts(
@@ -328,7 +313,7 @@ def _topk_dominant_count(
 
 def _topk_retrieved_facets(
     topn_chunk_ids: list[str],
-    query_qrels: QueryQrels,
+    query_qrels: QueryIdToQrels,
     k: int,
 ) -> list[str]:
     facets: set[str] = set()
@@ -342,8 +327,8 @@ def _topk_retrieved_facets(
 def _rank_where_all_facets_first_covered(
     *,
     topn_chunk_ids: list[str],
-    query_qrels: QueryQrels,
-    query_facets: FacetGoldChunks,
+    query_qrels: QueryIdToQrels,
+    query_facets: FacetIdToGoldChunks,
 ) -> int | None:
     expected = set(query_facets)
     seen: set[str] = set()
@@ -359,7 +344,7 @@ def _rank_where_all_facets_first_covered(
 
 def _facet_separation(
     qid: str,
-    query_facets: FacetGoldChunks,
+    query_facets: FacetIdToGoldChunks,
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
 ) -> tuple[float, float]:
@@ -389,7 +374,7 @@ def _facet_separation(
 def _background_outlier_diagnostics(
     topn_chunk_ids: list[str],
     topn_sims: NDArray[np.float32],
-    query_qrels: QueryQrels,
+    query_qrels: QueryIdToQrels,
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
     expected_background_chunks: int,
@@ -400,11 +385,9 @@ def _background_outlier_diagnostics(
         if _is_background_outlier(query_qrels, chunk_id)
     ]
     background_ids = [topn_chunk_ids[idx] for idx in background_positions]
-    background_clusters = {
-        str(query_qrels[chunk_id].cluster_id) for chunk_id in background_ids
-    }
+    background_clusters = {str(query_qrels[chunk_id].cluster_id) for chunk_id in background_ids}
     gold_positions = [
-        idx for idx, chunk_id in enumerate(topn_chunk_ids) if _is_query_gold(query_qrels, chunk_id)
+        idx for idx, chunk_id in enumerate(topn_chunk_ids) if is_query_gold(query_qrels, chunk_id)
     ]
 
     query_to_background = (
@@ -440,24 +423,19 @@ def _background_outlier_diagnostics(
     }
 
 
-def _is_query_gold(query_qrels: QueryQrels, chunk_id: str) -> bool:
-    row = query_qrels.get(chunk_id)
-    return row is not None and row.is_gold
-
-
-def _is_background_outlier(query_qrels: QueryQrels, chunk_id: str) -> bool:
+def _is_background_outlier(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
     return row is not None and row.cluster_role == 'background_outlier'
 
 
-def _is_query_near_miss_distractor(query_qrels: QueryQrels, chunk_id: str) -> bool:
+def _is_query_near_miss_distractor(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
     return row is not None and not row.is_gold and row.cluster_role != 'background_outlier'
 
 
 def _mean_same_cluster_similarity(
     chunk_ids: list[str],
-    query_qrels: QueryQrels,
+    query_qrels: QueryIdToQrels,
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
 ) -> float | None:
@@ -517,7 +495,6 @@ def _json_str_list(value: list[str]) -> str:
 
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.global_configs import (
-        dump_effective_config,
         load_config_from_cli,
         paths_for,
         setup_logging,
@@ -526,5 +503,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    dump_effective_config(cfg, paths)
     run_filter_geometry(cfg, paths)

@@ -346,6 +346,7 @@ subgroups:
     field: age_group
     value: over_75
     aliases: [elderly patients, older adults above 75]
+    surface_phrases: [older adult, patient above age 75, elderly patient]
 
   age_under_50:
     axis: demographic
@@ -353,6 +354,7 @@ subgroups:
     field: age_group
     value: under_50
     aliases: [younger adults, adults below 50]
+    surface_phrases: [younger adult, adult below age 50, younger patient]
 
   uncomplicated_diabetes:
     axis: comorbidity
@@ -360,6 +362,9 @@ subgroups:
     field: comorbidity
     value: uncomplicated_diabetes
     aliases: [diabetes without end-organ complications]
+    surface_phrases:
+      - uncomplicated type 2 diabetes
+      - diabetes without documented end-organ complications
 
   chronic_kidney_disease:
     axis: comorbidity
@@ -367,6 +372,7 @@ subgroups:
     field: comorbidity
     value: chronic_kidney_disease
     aliases: [renal disease, CKD]
+    surface_phrases: [stage 3 chronic kidney disease, baseline chronic kidney disease]
 
   copd:
     axis: comorbidity
@@ -374,6 +380,9 @@ subgroups:
     field: comorbidity
     value: copd
     aliases: [chronic obstructive pulmonary disease]
+    surface_phrases:
+      - COPD treated with maintenance inhalers
+      - chronic obstructive pulmonary disease
 
   immunosuppression:
     axis: comorbidity
@@ -381,6 +390,9 @@ subgroups:
     field: comorbidity
     value: immunosuppression
     aliases: [patients receiving immunosuppression]
+    surface_phrases:
+      - immunosuppression from chronic steroid therapy
+      - immunosuppression after transplant medication use
 
   obesity:
     axis: comorbidity
@@ -388,6 +400,9 @@ subgroups:
     field: comorbidity
     value: obesity
     aliases: [obese patients, patients with elevated body mass index]
+    surface_phrases:
+      - obesity with limited baseline exercise tolerance
+      - elevated body mass index with chronic mobility strain
 
   malignancy:
     axis: comorbidity
@@ -395,6 +410,9 @@ subgroups:
     field: comorbidity
     value: malignancy
     aliases: [patients undergoing cancer treatment, patients with active cancer]
+    surface_phrases:
+      - active malignancy on recent systemic therapy
+      - ongoing cancer treatment with baseline frailty
 
   atrial_fibrillation:
     axis: comorbidity
@@ -402,6 +420,9 @@ subgroups:
     field: comorbidity
     value: atrial_fibrillation
     aliases: [patients with AF, patients with chronic atrial fibrillation]
+    surface_phrases:
+      - chronic atrial fibrillation on long-term rate control
+      - baseline atrial fibrillation treated with anticoagulation
 
   chronic_liver_disease:
     axis: comorbidity
@@ -409,6 +430,9 @@ subgroups:
     field: comorbidity
     value: chronic_liver_disease
     aliases: [patients with cirrhosis, patients with chronic hepatic disease]
+    surface_phrases:
+      - chronic liver disease with prior hepatic decompensation
+      - cirrhosis with baseline hepatic dysfunction
 
   dementia:
     axis: comorbidity
@@ -416,6 +440,9 @@ subgroups:
     field: comorbidity
     value: dementia
     aliases: [patients with baseline cognitive impairment, patients with major neurocognitive disorder]
+    surface_phrases:
+      - baseline dementia with memory impairment
+      - chronic cognitive impairment from dementia
 
   frailty:
     axis: comorbidity
@@ -423,6 +450,7 @@ subgroups:
     field: comorbidity
     value: frailty
     aliases: [patients with frailty, patients with baseline frailty]
+    surface_phrases: [baseline frailty with reduced reserve, frailty with limited pre-hospital mobility]
 
   peripheral_vascular_disease:
     axis: comorbidity
@@ -430,6 +458,9 @@ subgroups:
     field: comorbidity
     value: peripheral_vascular_disease
     aliases: [patients with peripheral artery disease, patients with PAD]
+    surface_phrases:
+      - peripheral vascular disease with chronic limb symptoms
+      - baseline peripheral artery disease
 
   autoimmune_disease:
     axis: comorbidity
@@ -437,6 +468,9 @@ subgroups:
     field: comorbidity
     value: autoimmune_disease
     aliases: [patients with systemic autoimmune disease, patients with chronic inflammatory autoimmune disease]
+    surface_phrases:
+      - systemic autoimmune disease on chronic immunomodulatory therapy
+      - chronic inflammatory autoimmune disease
 
 clinical_axes:
   treatment_duration:

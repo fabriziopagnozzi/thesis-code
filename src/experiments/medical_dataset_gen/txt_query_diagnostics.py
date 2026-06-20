@@ -180,7 +180,10 @@ _CHUNK_COLUMNS = [
 def main() -> None:
     args = _parse_args()
     cfg = load_config(args.exp)
-    paths = MedicalDatasetGenPaths(cfg.global_.output_experiment)
+    paths = MedicalDatasetGenPaths(
+        cfg.global_.output_experiment,
+        result_dir_overrides=cfg.global_.result_dir_overrides,
+    )
 
     requested_query_ids = _requested_query_ids(args, paths)
     if not requested_query_ids:

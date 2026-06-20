@@ -340,7 +340,7 @@ def make_base_fact(
     ])
     patient_age = _patient_age(subgroup_id, surface_rng)
     patient_sex = surface_rng.choice(['female', 'male'])
-    clinical_subgroup_phrase = _clinical_subgroup_phrase(subgroup_id, surface_rng)
+    clinical_subgroup_phrase = _clinical_subgroup_phrase(ontology, subgroup_id, surface_rng)
 
     must_mention = [
         condition_display,
@@ -504,63 +504,13 @@ def _patient_age(subgroup_id: str, rng: Random) -> int:
     return rng.randint(52, 74)
 
 
-def _clinical_subgroup_phrase(subgroup_id: str, rng: Random) -> str:
-    phrases = {
-        'age_over_75': ['older adult', 'patient above age 75', 'elderly patient'],
-        'age_under_50': ['younger adult', 'adult below age 50', 'younger patient'],
-        'uncomplicated_diabetes': [
-            'uncomplicated type 2 diabetes',
-            'diabetes without documented end-organ complications',
-        ],
-        'chronic_kidney_disease': [
-            'stage 3 chronic kidney disease',
-            'baseline chronic kidney disease',
-        ],
-        'copd': [
-            'COPD treated with maintenance inhalers',
-            'chronic obstructive pulmonary disease',
-        ],
-        'immunosuppression': [
-            'immunosuppression from chronic steroid therapy',
-            'immunosuppression after transplant medication use',
-        ],
-        'obesity': [
-            'obesity with limited baseline exercise tolerance',
-            'elevated body mass index with chronic mobility strain',
-        ],
-        'malignancy': [
-            'active malignancy on recent systemic therapy',
-            'ongoing cancer treatment with baseline frailty',
-        ],
-        'atrial_fibrillation': [
-            'chronic atrial fibrillation on long-term rate control',
-            'baseline atrial fibrillation treated with anticoagulation',
-        ],
-        'chronic_liver_disease': [
-            'chronic liver disease with prior hepatic decompensation',
-            'cirrhosis with baseline hepatic dysfunction',
-        ],
-        'dementia': [
-            'baseline dementia with memory impairment',
-            'chronic cognitive impairment from dementia',
-        ],
-        'frailty': [
-            'baseline frailty with reduced reserve',
-            'frailty with limited pre-hospital mobility',
-        ],
-        'peripheral_vascular_disease': [
-            'peripheral vascular disease with chronic limb symptoms',
-            'baseline peripheral artery disease',
-        ],
-        'autoimmune_disease': [
-            'systemic autoimmune disease on chronic immunomodulatory therapy',
-            'chronic inflammatory autoimmune disease',
-        ],
-    }
-    choices = phrases.get(subgroup_id)
-    if not choices:
-        return subgroup_id.replace('_', ' ')
-    return rng.choice(choices)
+def _clinical_subgroup_phrase(ontology: MedicalOntology, subgroup_id: str, rng: Random) -> str:
+    subgroup = ontology.subgroups[subgroup_id]
+    if subgroup.surface_phrases:
+        return rng.choice(subgroup.surface_phrases)
+    if subgroup.aliases:
+        return rng.choice(subgroup.aliases)
+    return subgroup.label.removeprefix('patients with ').removeprefix('patients ').strip()
 
 
 def _subgroup_required_mention(subgroup_id: str, subgroup_label: str, patient_age: int) -> str:
@@ -571,7 +521,6 @@ def _subgroup_required_mention(subgroup_id: str, subgroup_label: str, patient_ag
 
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.global_configs import (
-        dump_effective_config,
         load_config_from_cli,
         paths_for,
         setup_logging,
@@ -580,5 +529,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    dump_effective_config(cfg, paths)
     run_make_facts(cfg, paths)

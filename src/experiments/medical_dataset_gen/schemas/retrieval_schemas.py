@@ -12,14 +12,14 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
-type ChunkSupportType = Literal['positive', 'background_outlier', 'hard_negative']
-CHUNK_SUPPORT_TYPE_LIST: list[ChunkSupportType] = list(get_args(ChunkSupportType.__value__))
+type ChunkSupport = Literal['positive', 'background_outlier', 'hard_negative']
+CHUNK_SUPPORT_LIST: list[ChunkSupport] = list(get_args(ChunkSupport.__value__))
 
-type QueryQrels = dict[str, QrelRecord]
-type QrelsByQueryChunk = dict[str, QueryQrels]
+type QueryIdToQrels = dict[str, QrelRecord]
+type QrelsByQueryChunk = dict[str, QueryIdToQrels]
 
-type FacetGoldChunks = dict[str, list[str]]
-type FacetGoldByQuery = dict[str, FacetGoldChunks]
+type FacetIdToGoldChunks = dict[str, list[str]]
+type QueryIdToFacetMap = dict[str, FacetIdToGoldChunks]
 
 type TopKDiagnosticsByK = dict[int, TopKDiagnostics]
 
@@ -35,7 +35,7 @@ class QrelRecord(BenchmarkModel):
     is_gold: bool = False
     distractor_type: str | None = None
     relevance_grade: int | None = None
-    support_type: ChunkSupportType | None = None
+    support_type: ChunkSupport | None = None
 
 
 class QueryRecord(BenchmarkModel):

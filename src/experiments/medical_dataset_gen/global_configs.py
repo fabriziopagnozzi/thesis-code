@@ -6,7 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 from uuid import uuid4
 
 import polars as pl
@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, Positive
 from experiments.medical_dataset_gen.schemas.generation_schemas import QueryType
 from helpers.dir_paths import ROOT_DIR
 
-type TableName = Literal[
+type SyntheticMedicalTableName = Literal[
     'query_plans',
     'query_plan_calibration',
     'clinical_facts',
@@ -41,6 +41,7 @@ class GlobalCfg(BaseModel):
     n_queries: PositiveInt = 120
     conditions: PositiveInt = 4
     output_experiment: str = 'mvp'
+    result_dir_overrides: dict[SyntheticMedicalTableName, str] = Field(default_factory=dict)
 
 
 class GenerationCfg(BaseModel):
@@ -98,7 +99,7 @@ class GeometryCfg(BaseModel):
     min_distractors_in_pool: PositiveInt = 10
 
 
-class FacLocMmrComparisonKernelMetricCfg(BaseModel):
+class MethodsComparisonKernelMetricCfg(BaseModel):
     summary_metric: str = 'MeanFacetHitRate@k'
     enabled: bool = True
     weight: PositiveFloat = 1.0
@@ -108,20 +109,20 @@ class FacLocMmrComparisonKernelMetricCfg(BaseModel):
     lower_bound_bandwidth: PositiveFloat = 0.0075
 
 
-class FacLocMmrComparisonKernelsCfg(BaseModel):
+class MethodsComparisonKernelsCfg(BaseModel):
     lambda_max: NonNegativeFloat = 0.80
     agreement_alpha: PositiveFloat = 3.0
     kernel_floor: float = Field(default=0.05, gt=0, le=1)
     pair_aggregation: Literal['geometric_mean', 'arithmetic_mean', 'minimum'] = 'geometric_mean'
-    metrics: list[FacLocMmrComparisonKernelMetricCfg] = Field(
-        default_factory=lambda: [FacLocMmrComparisonKernelMetricCfg()]
+    metrics: list[MethodsComparisonKernelMetricCfg] = Field(
+        default_factory=lambda: [MethodsComparisonKernelMetricCfg()]
     )
 
 
 class EvaluationCfg(BaseModel):
     workers: PositiveInt | None = None
-    fac_loc_mmr_comparison_kernels: FacLocMmrComparisonKernelsCfg = Field(
-        default_factory=FacLocMmrComparisonKernelsCfg
+    fac_loc_mmr_comparison_kernels: MethodsComparisonKernelsCfg = Field(
+        default_factory=MethodsComparisonKernelsCfg
     )
 
 
@@ -159,12 +160,17 @@ class MedicalDatasetGenPaths:
     results_dir = root / '_results'
     default_ontology_path = root / 'generation' / 'templates_data' / 'medical_ontology.yaml'
 
-    def __init__(self, exp_name: str):
+    def __init__(
+        self,
+        exp_name: str,
+        result_dir_overrides: dict[SyntheticMedicalTableName, str] | None = None,
+    ):
         self.exp_name = exp_name
         self.experiment_dir = self.results_dir / exp_name
         self.logs_dir = self.experiment_dir / '_logs'
         self.figures_dir = self.experiment_dir / '_figures'
         self.config_path = self.experiment_dir / '_config.yaml'
+        self.result_dir_overrides = dict(result_dir_overrides or {})
         self.embeddings_npz_path = self.experiment_dir / 'embeddings.npz'
         self.embeddings_chunk_vectors_path = self.experiment_dir / 'embeddings_chunk_vectors.npy'
         self.embeddings_query_vectors_path = self.experiment_dir / 'embeddings_query_vectors.npy'
@@ -178,33 +184,25 @@ class MedicalDatasetGenPaths:
 
     def table_path(
         self,
-        table: TableName,
+        table: SyntheticMedicalTableName,
         ext: Literal['parquet', 'json', 'jsonl', 'csv'] = 'parquet',
     ) -> Path:
-        return self.experiment_dir / f'{table}.{ext}'
+        override = self.result_dir_overrides.get(table)
+        if override is None:
+            return self.experiment_dir / f'{table}.{ext}'
 
+        override_path = Path(override)
+        if override_path.suffix:
+            if override_path.is_absolute():
+                return override_path
+            return self.experiment_dir / override_path
 
-def _resolve_experiment_name(
-    exp_name: str, results_dir: Path = MedicalDatasetGenPaths.results_dir
-) -> str:
-    exact_dir = results_dir / exp_name
-    if exact_dir.is_dir():
-        return exp_name
+        if override_path.is_absolute():
+            return override_path / f'{table}.{ext}'
+        return self.results_dir / override_path / f'{table}.{ext}'
 
-    matches = sorted(
-        path.name
-        for path in results_dir.iterdir()
-        if path.is_dir() and path.name.startswith(exp_name)
-    )
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        raise ValueError(f'exp={exp_name!r} is ambiguous in {results_dir}: {matches}')
-
-    raise FileNotFoundError(
-        f'no experiment directory matching {exp_name!r} in {results_dir}. '
-        'Use the full directory name or a unique prefix.'
-    )
+    def get_result_dir(self, table: SyntheticMedicalTableName) -> Path:
+        return self.table_path(table).parent
 
 
 def load_config(exp: str | None = None) -> ExperimentCfg:
@@ -233,47 +231,26 @@ def load_config(exp: str | None = None) -> ExperimentCfg:
 def load_config_from_cli() -> ExperimentCfg:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
-    parser.add_argument('--max-queries', type=int, default=None)
-    parser.add_argument(
-        '--embedding-devices',
-        type=str,
-        default=None,
-        help='Comma-separated SentenceTransformers target devices, e.g. cuda:0,cuda:1',
-    )
-    args, unknown = parser.parse_known_args()
-    if any(token == '--config' or token.startswith('--config=') for token in unknown):
-        raise ValueError(
-            '--config is no longer supported for medical_dataset_gen; '
-            'place _config.yaml in the target experiment directory instead'
-        )
-
-    cfg: ExperimentCfg = load_config(exp=args.exp)  # a pydantic validated model
-    if args.max_queries is not None:
-        cfg.global_.n_queries = args.max_queries
-    if args.embedding_devices is not None:
-        cfg.embeddings.devices = [
-            device.strip() for device in args.embedding_devices.split(',') if device.strip()
-        ]
-    return cfg
+    (args, _) = parser.parse_known_args()
+    return load_config(exp=args.exp)  # a pydantic validated model
 
 
 def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
-    paths = MedicalDatasetGenPaths(cfg.global_.output_experiment)
+    paths = MedicalDatasetGenPaths(
+        cfg.global_.output_experiment,
+        result_dir_overrides=cfg.global_.result_dir_overrides,
+    )
     paths.ensure_dirs()
     return paths
 
 
-def dump_effective_config(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
-    # Intentionally do nothing: experiment configs are user-managed files stored
-    # in _results/<exp>/_config.yaml and must never be overwritten here.
-    paths.ensure_dirs()
-
-
-def read_parquet(paths: MedicalDatasetGenPaths, table: TableName) -> pl.DataFrame:
+def read_parquet(paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName) -> pl.DataFrame:
     return pl.read_parquet(paths.table_path(table))
 
 
-def write_parquet(paths: MedicalDatasetGenPaths, table: TableName, df: pl.DataFrame) -> Path:
+def write_parquet(
+    paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName, df: pl.DataFrame
+) -> Path:
     path = paths.table_path(table)
     path.parent.mkdir(parents=True, exist_ok=True)
     df.write_parquet(path)
@@ -320,3 +297,30 @@ def json_loads(value: str | None, default: Any = None) -> Any:
     if value is None or value == '':
         return default
     return json.loads(value)
+
+
+def unreachable(err: str) -> NoReturn:
+    raise RuntimeError(err)
+
+
+def _resolve_experiment_name(
+    exp_name: str, results_dir: Path = MedicalDatasetGenPaths.results_dir
+) -> str:
+    exact_dir = results_dir / exp_name
+    if exact_dir.is_dir():
+        return exp_name
+
+    matches = sorted(
+        path.name
+        for path in results_dir.iterdir()
+        if path.is_dir() and path.name.startswith(exp_name)
+    )
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ValueError(f'exp={exp_name!r} is ambiguous in {results_dir}: {matches}')
+
+    raise FileNotFoundError(
+        f'no experiment directory matching {exp_name!r} in {results_dir}. '
+        'Use the full directory name or a unique prefix.'
+    )

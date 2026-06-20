@@ -1,12 +1,12 @@
 import polars as pl
 
 from experiments.medical_dataset_gen.global_configs import (
-    FacLocMmrComparisonKernelMetricCfg,
-    FacLocMmrComparisonKernelsCfg,
+    MethodsComparisonKernelMetricCfg,
+    MethodsComparisonKernelsCfg,
 )
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
-from .utils import (
+from ..retrieval.utils import (
     pair_kernel_polars_expr,
     sigmoid_polars_expr,
 )
@@ -40,13 +40,13 @@ def lambda_pair_agreement_metric_cols(stats_df: pl.DataFrame) -> list[str]:
 
 
 def _active_lambda_pair_kernel_metrics(
-    kernel_cfg: FacLocMmrComparisonKernelsCfg,
+    kernel_cfg: MethodsComparisonKernelsCfg,
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame | None,
-) -> list[FacLocMmrComparisonKernelMetricCfg]:
+) -> list[MethodsComparisonKernelMetricCfg]:
     if results_df is None or results_df.is_empty():
         return []
-    active: list[FacLocMmrComparisonKernelMetricCfg] = []
+    active: list[MethodsComparisonKernelMetricCfg] = []
     for metric_cfg in kernel_cfg.metrics:
         if not metric_cfg.enabled:
             continue
@@ -67,7 +67,7 @@ def _attach_strategy_kernel_columns(
     *,
     strategy: str,
     results_df: pl.DataFrame | None,
-    metric_cfgs: list[FacLocMmrComparisonKernelMetricCfg],
+    metric_cfgs: list[MethodsComparisonKernelMetricCfg],
 ) -> pl.DataFrame:
     if results_df is None or results_df.is_empty() or not metric_cfgs or stats_df.is_empty():
         return stats_df.with_columns(pl.lit(0.0).alias('kernel_score'))
@@ -162,11 +162,11 @@ def build_lambda_pair_agreement(
     stats_df: pl.DataFrame,
     *,
     results_df: pl.DataFrame | None = None,
-    kernel_cfg: FacLocMmrComparisonKernelsCfg | None = None,
+    kernel_cfg: MethodsComparisonKernelsCfg | None = None,
 ) -> pl.DataFrame:
     metric_cols = lambda_pair_agreement_metric_cols(stats_df)
     active_kernel_metrics = _active_lambda_pair_kernel_metrics(
-        kernel_cfg or FacLocMmrComparisonKernelsCfg(),
+        kernel_cfg or MethodsComparisonKernelsCfg(),
         stats_df,
         results_df,
     )
@@ -201,7 +201,7 @@ def build_lambda_pair_agreement(
     if stats_df.is_empty() or not metric_cols:
         return pl.DataFrame(schema=schema)
 
-    cfg = kernel_cfg or FacLocMmrComparisonKernelsCfg()
+    cfg = kernel_cfg or MethodsComparisonKernelsCfg()
     lambda_max = float(cfg.lambda_max)
     fac_df = stats_df.filter((pl.col('strategy') == 'fac_loc') & (pl.col('lam') <= lambda_max))
     mmr_df = stats_df.filter((pl.col('strategy') == 'mmr') & (pl.col('lam') <= lambda_max))
