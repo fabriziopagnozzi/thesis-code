@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from rouge_score import rouge_scorer
 
+from experiments.medical_dataset_gen.constants import GENERIC_CLINICAL_STOPWORDS
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     ChunkDocumentRecord,
@@ -19,75 +20,6 @@ from experiments.medical_dataset_gen.schemas.metrics_schemas import (
 _ANSWER_ROUGE_SCORER = rouge_scorer.RougeScorer(['rouge1', 'rouge2'], use_stemmer=True)
 _TOKEN_RE = re.compile(r'[a-z0-9]+')
 _MIN_ANSWER_TOKEN_LEN = 3
-_GENERIC_CLINICAL_STOPWORDS = frozenset({
-    'about',
-    'after',
-    'again',
-    'also',
-    'among',
-    'and',
-    'are',
-    'axis',
-    'been',
-    'being',
-    'between',
-    'but',
-    'can',
-    'care',
-    'case',
-    'clinical',
-    'clinically',
-    'common',
-    'commonly',
-    'compare',
-    'compared',
-    'corpus',
-    'course',
-    'data',
-    'diagnosed',
-    'diagnosis',
-    'discharge',
-    'documented',
-    'during',
-    'each',
-    'evidence',
-    'from',
-    'had',
-    'has',
-    'have',
-    'hospital',
-    'how',
-    'into',
-    'medical',
-    'more',
-    'most',
-    'note',
-    'often',
-    'outcome',
-    'outcomes',
-    'patient',
-    'patients',
-    'pattern',
-    'rehab',
-    'rehabilitation',
-    'shows',
-    'status',
-    'subgroup',
-    'synthetic',
-    'than',
-    'that',
-    'the',
-    'their',
-    'therapy',
-    'this',
-    'through',
-    'treatment',
-    'versus',
-    'was',
-    'were',
-    'with',
-    'without',
-})
 
 
 @dataclass
@@ -102,7 +34,7 @@ class AnswerRougeScorer:
         cached_scores = self._cache.get(score_key)
 
         if cached_scores is None:
-            cached_scores = answer_rouge_metrics(
+            cached_scores = compute_answer_rouge_metrics(
                 selected_chunk_ids=selected_chunk_ids,
                 candidate_rouge_text_by_id=self.candidate_rouge_text_by_id,
                 reference_ngrams=self.reference_ngrams,
@@ -113,31 +45,7 @@ class AnswerRougeScorer:
         return cached_scores
 
 
-def prepare_answer_rouge_scorer(
-    query_text: str,
-    candidate_chunk_ids: list[str],
-    chunk_by_id: dict[str, ChunkDocumentRecord],
-    answer_refs: AnswerReferenceTexts,
-) -> AnswerRougeScorer:
-    query_terms = _get_answer_terms(query_text)
-    candidate_rouge_text_by_id = _preprocess_candidate_chunk_texts(
-        candidate_chunk_ids=candidate_chunk_ids,
-        chunk_by_id=chunk_by_id,
-        query_terms=query_terms,
-    )
-    prepared_refs = _prepare_answer_rouge_refs(
-        answer_refs=answer_refs,
-        query_terms=query_terms,
-    )
-
-    return AnswerRougeScorer(
-        candidate_rouge_text_by_id=candidate_rouge_text_by_id,
-        reference_ngrams=prepared_refs['answer_ngrams'],
-        facet_reference_rouge1_ngrams=prepared_refs['facet_rouge1_ngrams'],
-    )
-
-
-def answer_rouge_metrics(
+def compute_answer_rouge_metrics(
     selected_chunk_ids: list[str],
     candidate_rouge_text_by_id: dict[str, str],
     reference_ngrams: RougeNgramBundle,
@@ -168,6 +76,30 @@ def answer_rouge_metrics(
     }
 
 
+def prepare_answer_rouge_scorer(
+    query_text: str,
+    candidate_chunk_ids: list[str],
+    chunk_by_id: dict[str, ChunkDocumentRecord],
+    answer_refs: AnswerReferenceTexts,
+) -> AnswerRougeScorer:
+    query_terms = _get_answer_terms(query_text)
+    candidate_rouge_text_by_id = _preprocess_candidate_chunk_texts(
+        candidate_chunk_ids=candidate_chunk_ids,
+        chunk_by_id=chunk_by_id,
+        query_terms=query_terms,
+    )
+    prepared_refs = _prepare_answer_rouge_refs(
+        answer_refs=answer_refs,
+        query_terms=query_terms,
+    )
+
+    return AnswerRougeScorer(
+        candidate_rouge_text_by_id=candidate_rouge_text_by_id,
+        reference_ngrams=prepared_refs['answer_ngrams'],
+        facet_reference_rouge1_ngrams=prepared_refs['facet_rouge1_ngrams'],
+    )
+
+
 def empty_answer_reference_texts() -> AnswerReferenceTexts:
     return {
         'answer_text': '',
@@ -179,7 +111,7 @@ def _get_answer_terms(query_text: str) -> set[str]:
     return {
         token
         for token in _TOKEN_RE.findall(query_text.lower())
-        if _is_answer_valid_token(token) and token not in _GENERIC_CLINICAL_STOPWORDS
+        if _is_answer_valid_token(token) and token not in GENERIC_CLINICAL_STOPWORDS
     }
 
 
@@ -208,7 +140,7 @@ def _preprocess_answer_metric_text(text: str, query_terms: set[str]) -> str:
     for token in _TOKEN_RE.findall(text.lower()):
         if not _is_answer_valid_token(token):
             continue
-        if token in query_terms or token in _GENERIC_CLINICAL_STOPWORDS:
+        if token in query_terms or token in GENERIC_CLINICAL_STOPWORDS:
             continue
         tokens.append(token)
     return ' '.join(tokens)

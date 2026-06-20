@@ -35,129 +35,6 @@ _LAMBDA_PAIR_AGREEMENT_METRICS = [
 ]
 
 
-def lambda_pair_agreement_metric_cols(stats_df: pl.DataFrame) -> list[str]:
-    return [metric for metric in _LAMBDA_PAIR_AGREEMENT_METRICS if metric in stats_df.columns]
-
-
-def _active_lambda_pair_kernel_metrics(
-    kernel_cfg: MethodsComparisonKernelsCfg,
-    stats_df: pl.DataFrame,
-    results_df: pl.DataFrame | None,
-) -> list[MethodsComparisonKernelMetricCfg]:
-    if results_df is None or results_df.is_empty():
-        return []
-    active: list[MethodsComparisonKernelMetricCfg] = []
-    for metric_cfg in kernel_cfg.metrics:
-        if not metric_cfg.enabled:
-            continue
-        metric_spec = METRIC_NAME_TO_FIELD.get(metric_cfg.summary_metric)
-        if metric_spec is None:
-            continue
-        if (
-            metric_cfg.summary_metric not in stats_df.columns
-            or metric_spec.result_col not in results_df.columns
-        ):
-            continue
-        active.append(metric_cfg)
-    return active
-
-
-def _attach_strategy_kernel_columns(
-    stats_df: pl.DataFrame,
-    *,
-    strategy: str,
-    results_df: pl.DataFrame | None,
-    metric_cfgs: list[MethodsComparisonKernelMetricCfg],
-) -> pl.DataFrame:
-    if results_df is None or results_df.is_empty() or not metric_cfgs or stats_df.is_empty():
-        return stats_df.with_columns(pl.lit(0.0).alias('kernel_score'))
-    metric_meta = [
-        (
-            metric_cfg,
-            METRIC_NAME_TO_FIELD[metric_cfg.summary_metric].result_col,
-            METRIC_NAME_TO_FIELD[metric_cfg.summary_metric].higher_is_better,
-        )
-        for metric_cfg in metric_cfgs
-    ]
-    result_cols = list(dict.fromkeys(result_col for _, result_col, _ in metric_meta))
-    topk_df = results_df.filter(pl.col('strategy') == 'top_k').select(
-        'query_id',
-        'k',
-        *[pl.col(col).alias(f'topk__{col}') for col in result_cols],
-    )
-    strat_df = results_df.filter(pl.col('strategy') == strategy).select(
-        'query_id',
-        'k',
-        'lam',
-        *[pl.col(col).alias(f'strategy__{col}') for col in result_cols],
-    )
-    paired_df = topk_df.join(strat_df, on=['query_id', 'k'], how='inner')
-    if paired_df.is_empty():
-        return stats_df.with_columns(pl.lit(0.0).alias('kernel_score'))
-
-    summary = paired_df.group_by('k', 'lam').agg(*[
-        expr
-        for result_col in result_cols
-        for expr in (
-            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
-            .mean()
-            .alias(f'mean_delta__{result_col}'),
-            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
-            .std(ddof=1)
-            .alias(f'std_delta__{result_col}'),
-            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
-            .count()
-            .alias(f'n_delta__{result_col}'),
-        )
-    ])
-
-    kernel_exprs: list[pl.Expr] = []
-    weighted_kernel_sum: pl.Expr | None = None
-    total_weight = 0.0
-    for metric_cfg, result_col, higher_is_better in metric_meta:
-        direction = 1.0 if higher_is_better else -1.0
-        gain_expr = pl.col(f'mean_delta__{result_col}') * direction
-        count_expr = pl.col(f'n_delta__{result_col}').cast(pl.Float64)
-        ci_half_width_expr = (
-            pl
-            .when(count_expr >= 2.0)
-            .then(1.96 * pl.col(f'std_delta__{result_col}') / count_expr.sqrt())
-            .otherwise(pl.lit(float('nan')))
-        )
-        lower95_expr = gain_expr - ci_half_width_expr
-        kernel_expr = sigmoid_polars_expr(
-            (gain_expr - float(metric_cfg.target_gain_vs_topk)) / float(metric_cfg.gain_bandwidth)
-        ) * sigmoid_polars_expr(
-            (lower95_expr - float(metric_cfg.target_lower_bound_vs_topk))
-            / float(metric_cfg.lower_bound_bandwidth)
-        )
-        kernel_exprs.extend([
-            gain_expr.alias(f'gain_vs_topk__{metric_cfg.summary_metric}'),
-            lower95_expr.alias(f'lower95_gain_vs_topk__{metric_cfg.summary_metric}'),
-            kernel_expr.alias(f'kernel__{metric_cfg.summary_metric}'),
-        ])
-        weight = float(metric_cfg.weight)
-        weighted_component = kernel_expr * weight
-        weighted_kernel_sum = (
-            weighted_component
-            if weighted_kernel_sum is None
-            else weighted_kernel_sum + weighted_component
-        )
-        total_weight += weight
-
-    kernel_df = summary.select(
-        'k',
-        'lam',
-        *kernel_exprs,
-        (
-            weighted_kernel_sum / total_weight if weighted_kernel_sum is not None else pl.lit(0.0)
-        ).alias('kernel_score'),
-    )
-    return stats_df.join(kernel_df, on=['k', 'lam'], how='left').with_columns(
-        pl.col('kernel_score').fill_null(0.0)
-    )
-
-
 def build_lambda_pair_agreement(
     stats_df: pl.DataFrame,
     *,
@@ -367,3 +244,126 @@ def build_lambda_pair_agreement(
         'weighted_rank_within_k',
     ]
     return agreement.select(output_cols)
+
+
+def lambda_pair_agreement_metric_cols(stats_df: pl.DataFrame) -> list[str]:
+    return [metric for metric in _LAMBDA_PAIR_AGREEMENT_METRICS if metric in stats_df.columns]
+
+
+def _active_lambda_pair_kernel_metrics(
+    kernel_cfg: MethodsComparisonKernelsCfg,
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame | None,
+) -> list[MethodsComparisonKernelMetricCfg]:
+    if results_df is None or results_df.is_empty():
+        return []
+    active: list[MethodsComparisonKernelMetricCfg] = []
+    for metric_cfg in kernel_cfg.metrics:
+        if not metric_cfg.enabled:
+            continue
+        metric_spec = METRIC_NAME_TO_FIELD.get(metric_cfg.summary_metric)
+        if metric_spec is None:
+            continue
+        if (
+            metric_cfg.summary_metric not in stats_df.columns
+            or metric_spec.result_col not in results_df.columns
+        ):
+            continue
+        active.append(metric_cfg)
+    return active
+
+
+def _attach_strategy_kernel_columns(
+    stats_df: pl.DataFrame,
+    *,
+    strategy: str,
+    results_df: pl.DataFrame | None,
+    metric_cfgs: list[MethodsComparisonKernelMetricCfg],
+) -> pl.DataFrame:
+    if results_df is None or results_df.is_empty() or not metric_cfgs or stats_df.is_empty():
+        return stats_df.with_columns(pl.lit(0.0).alias('kernel_score'))
+    metric_meta = [
+        (
+            metric_cfg,
+            METRIC_NAME_TO_FIELD[metric_cfg.summary_metric].result_col,
+            METRIC_NAME_TO_FIELD[metric_cfg.summary_metric].higher_is_better,
+        )
+        for metric_cfg in metric_cfgs
+    ]
+    result_cols = list(dict.fromkeys(result_col for _, result_col, _ in metric_meta))
+    topk_df = results_df.filter(pl.col('strategy') == 'top_k').select(
+        'query_id',
+        'k',
+        *[pl.col(col).alias(f'topk__{col}') for col in result_cols],
+    )
+    strat_df = results_df.filter(pl.col('strategy') == strategy).select(
+        'query_id',
+        'k',
+        'lam',
+        *[pl.col(col).alias(f'strategy__{col}') for col in result_cols],
+    )
+    paired_df = topk_df.join(strat_df, on=['query_id', 'k'], how='inner')
+    if paired_df.is_empty():
+        return stats_df.with_columns(pl.lit(0.0).alias('kernel_score'))
+
+    summary = paired_df.group_by('k', 'lam').agg(*[
+        expr
+        for result_col in result_cols
+        for expr in (
+            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
+            .mean()
+            .alias(f'mean_delta__{result_col}'),
+            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
+            .std(ddof=1)
+            .alias(f'std_delta__{result_col}'),
+            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
+            .count()
+            .alias(f'n_delta__{result_col}'),
+        )
+    ])
+
+    kernel_exprs: list[pl.Expr] = []
+    weighted_kernel_sum: pl.Expr | None = None
+    total_weight = 0.0
+    for metric_cfg, result_col, higher_is_better in metric_meta:
+        direction = 1.0 if higher_is_better else -1.0
+        gain_expr = pl.col(f'mean_delta__{result_col}') * direction
+        count_expr = pl.col(f'n_delta__{result_col}').cast(pl.Float64)
+        ci_half_width_expr = (
+            pl
+            .when(count_expr >= 2.0)
+            .then(1.96 * pl.col(f'std_delta__{result_col}') / count_expr.sqrt())
+            .otherwise(pl.lit(float('nan')))
+        )
+        lower95_expr = gain_expr - ci_half_width_expr
+        kernel_expr = sigmoid_polars_expr(
+            (gain_expr - float(metric_cfg.target_gain_vs_topk)) / float(metric_cfg.gain_bandwidth)
+        ) * sigmoid_polars_expr(
+            (lower95_expr - float(metric_cfg.target_lower_bound_vs_topk))
+            / float(metric_cfg.lower_bound_bandwidth)
+        )
+        kernel_exprs.extend([
+            gain_expr.alias(f'gain_vs_topk__{metric_cfg.summary_metric}'),
+            lower95_expr.alias(f'lower95_gain_vs_topk__{metric_cfg.summary_metric}'),
+            kernel_expr.alias(f'kernel__{metric_cfg.summary_metric}'),
+        ])
+        weight = float(metric_cfg.weight)
+        weighted_component = kernel_expr * weight
+        weighted_kernel_sum = (
+            weighted_component
+            if weighted_kernel_sum is None
+            else weighted_kernel_sum + weighted_component
+        )
+        total_weight += weight
+
+    kernel_df = summary.select(
+        'k',
+        'lam',
+        *kernel_exprs,
+        (
+            weighted_kernel_sum / total_weight if weighted_kernel_sum is not None else pl.lit(0.0)
+        ).alias('kernel_score'),
+    )
+    return stats_df.join(kernel_df, on=['k', 'lam'], how='left').with_columns(
+        pl.col('kernel_score').fill_null(0.0)
+    )

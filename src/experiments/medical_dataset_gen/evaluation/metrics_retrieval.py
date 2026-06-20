@@ -12,7 +12,7 @@ from ..retrieval.utils import harmonic_mean
 ALPHA_NDCG_REDUNDANCY = 0.5
 
 
-def retrieval_metrics(
+def compute_retrieval_metrics(
     selected_chunk_ids: list[str],
     chunk_by_id: dict[str, ChunkDocumentRecord],
     query_qrels: dict[str, QrelRecord],

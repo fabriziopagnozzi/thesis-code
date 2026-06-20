@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+import argparse
+import sys
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -80,9 +82,24 @@ _PRIMARY_SORT = [
 ]
 _PRIMARY_DESC = [True, True, False, True]
 _LAMBDA_POLICY_NOTE = 'lambda*: max mean MeanFacetHitRate@k within strategy x k'
+type PlotName = str
 
 
-def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
+def store_eval_figures(
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    selected_plots: set[PlotName] | None = None,
+) -> None:
+    selected_plot_set = selected_plots
+    available_plot_names = set(_available_plot_names(cfg))
+
+    if selected_plot_set is not None:
+        unknown_plots = sorted(selected_plot_set - available_plot_names)
+        if unknown_plots:
+            available = ', '.join(sorted(available_plot_names))
+            unknown = ', '.join(unknown_plots)
+            raise ValueError(f'Unknown plot name(s): {unknown}. Available plots: {available}')
+
     stats_path = paths.table_path('evaluation_stats')
     results_path = paths.table_path('evaluation_results')
     if not stats_path.exists() or not results_path.exists():
@@ -108,20 +125,118 @@ def store_eval_figures(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> Non
     out_dir = paths.figures_dir / 'evaluation'
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_strategy_comparison(stats_df, results_df, out_dir)
-    plot_strategy_comparison_heatmap(stats_df, results_df, out_dir)
-    plot_strategy_comparison_heatmap_html(stats_df, results_df, out_dir)
-    plot_lambda_sensitivity(stats_df, out_dir)
-    plot_per_query_distributions(results_df, out_dir)
-    plot_gain_over_topk(stats_df, results_df, out_dir)
-    plot_gain_over_topk_simple(stats_df, results_df, out_dir)
-    plot_lambda_agreement_facloc_mmr(agreement_df, out_dir)
-    plot_selection_diagnostics(stats_df, out_dir)
-    if cfg.retrieval.compute_answer_rouge:
-        plot_answer_rouge_comparison(stats_df, results_df, out_dir)
-        plot_answer_rouge_lambda_sensitivity(stats_df, out_dir)
+    plot_jobs = _build_plot_jobs(
+        cfg=cfg,
+        stats_df=stats_df,
+        results_df=results_df,
+        agreement_df=agreement_df,
+        out_dir=out_dir,
+    )
+    selected_job_names = (
+        [name for name, _ in plot_jobs if name in selected_plot_set]
+        if selected_plot_set is not None
+        else [name for name, _ in plot_jobs]
+    )
 
-    print(f'[plots] saved evaluation figures to {out_dir}')
+    for plot_name, plot_callable in plot_jobs:
+        if selected_plot_set is not None and plot_name not in selected_plot_set:
+            continue
+        plot_callable()
+
+    selection_note = f' ({", ".join(selected_job_names)})' if selected_plot_set is not None else ''
+    print(f'[plots] saved evaluation figures to {out_dir}{selection_note}')
+
+
+def _build_plot_jobs(
+    cfg: ExperimentCfg,
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    agreement_df: pl.DataFrame,
+    out_dir: Path,
+) -> list[tuple[PlotName, Callable[[], None]]]:
+    plot_jobs: list[tuple[PlotName, Callable[[], None]]] = [
+        ('strategy_comparison', lambda: plot_strategy_comparison(stats_df, results_df, out_dir)),
+        (
+            'strategy_comparison_heatmap',
+            lambda: plot_strategy_comparison_heatmap(stats_df, results_df, out_dir),
+        ),
+        (
+            'strategy_comparison_heatmap_html',
+            lambda: plot_strategy_comparison_heatmap_html(stats_df, results_df, out_dir),
+        ),
+        ('lambda_sensitivity', lambda: plot_lambda_sensitivity(stats_df, out_dir)),
+        ('per_query_distributions', lambda: plot_per_query_distributions(results_df, out_dir)),
+        ('gain_over_topk', lambda: plot_gain_over_topk(stats_df, results_df, out_dir)),
+        (
+            'gain_over_topk_simple',
+            lambda: plot_gain_over_topk_simple(stats_df, results_df, out_dir),
+        ),
+        (
+            'lambda_agreement_facloc_mmr',
+            lambda: plot_lambda_agreement_facloc_mmr(agreement_df, out_dir),
+        ),
+        ('selection_diagnostics', lambda: plot_selection_diagnostics(stats_df, out_dir)),
+    ]
+
+    if cfg.retrieval.compute_answer_rouge:
+        plot_jobs.extend([
+            (
+                'answer_rouge_comparison',
+                lambda: plot_answer_rouge_comparison(stats_df, results_df, out_dir),
+            ),
+            (
+                'answer_rouge_lambda_sensitivity',
+                lambda: plot_answer_rouge_lambda_sensitivity(stats_df, out_dir),
+            ),
+        ])
+    return plot_jobs
+
+
+def _available_plot_names(cfg: ExperimentCfg) -> list[PlotName]:
+    names = [
+        'strategy_comparison',
+        'strategy_comparison_heatmap',
+        'strategy_comparison_heatmap_html',
+        'lambda_sensitivity',
+        'per_query_distributions',
+        'gain_over_topk',
+        'gain_over_topk_simple',
+        'lambda_agreement_facloc_mmr',
+        'selection_diagnostics',
+    ]
+    if cfg.retrieval.compute_answer_rouge:
+        names.extend([
+            'answer_rouge_comparison',
+            'answer_rouge_lambda_sensitivity',
+        ])
+    return names
+
+
+def _parse_plot_names(raw_value: str | None) -> set[PlotName] | None:
+    if raw_value is None:
+        return None
+    plot_names = {part.strip() for part in raw_value.split(',') if part.strip()}
+    if not plot_names:
+        raise ValueError('--plots was provided but no plot names were specified')
+    return plot_names
+
+
+def _parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[PlotName] | None]:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        '--plots',
+        type=str,
+        help='Comma-separated plot names to generate selectively.',
+    )
+    args, remaining_argv = parser.parse_known_args(argv)
+
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = [sys.argv[0], *remaining_argv]
+        cfg = load_config_from_cli()
+    finally:
+        sys.argv = original_argv
+    return cfg, _parse_plot_names(args.plots)
 
 
 def plot_strategy_comparison(
@@ -1295,6 +1410,7 @@ def _available_metric_specs(
 ) -> list[_NamedPlotMetric]:
     metrics: list[_NamedPlotMetric] = []
     result_columns = set(results_df.columns) if results_df is not None else set[str]()
+
     for metric_name in metric_names:
         metric_spec = METRIC_NAME_TO_FIELD.get(metric_name)
         if metric_spec is None or metric_name not in stats_df.columns:
@@ -1309,6 +1425,7 @@ def _available_metric_specs(
                 higher_is_better=metric_spec.higher_is_better,
             )
         )
+
     return metrics
 
 
@@ -1930,6 +2047,6 @@ def _figure_legend(fig: Figure, axes: NDArray[Any]) -> None:
 
 
 if __name__ == '__main__':
-    cfg = load_config_from_cli()
+    cfg, selected_plots = _parse_plots_cli_args(sys.argv[1:])
     paths = paths_for(cfg)
-    store_eval_figures(cfg, paths)
+    store_eval_figures(cfg, paths, selected_plots=selected_plots)

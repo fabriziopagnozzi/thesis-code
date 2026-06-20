@@ -43,8 +43,9 @@ dev = [
 
 
 [tool.taskipy.tasks]
-# Medical Dataset Generation
-med_pipeline = "python -m experiments.medical_dataset_gen.run_pipeline"
+# Synthetic Medical Dataset Generation
+synth_pipeline = "python -m experiments.medical_dataset_gen.run_pipeline"
+synth_eval_plots = "python -m experiments.medical_dataset_gen.evaluation.plots"
 
 # -----------------------------------------------------------------------------------------------
 # MIMIC Experiments

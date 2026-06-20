@@ -43,7 +43,7 @@ from .evaluation_workers import (
 )
 from .lambda_agreement import build_lambda_pair_agreement
 from .metrics_answer import empty_answer_reference_texts, prepare_answer_rouge_scorer
-from .metrics_retrieval import retrieval_metrics
+from .metrics_retrieval import compute_retrieval_metrics
 
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -233,7 +233,7 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                     'lam': lam,
                     'pool_scope': cfg.retrieval.pool_scope,
                     'pool_size': len(candidate_chunk_ids),
-                    **retrieval_metrics(
+                    **compute_retrieval_metrics(
                         selected_chunk_ids=selected_chunk_ids,
                         chunk_by_id=maps['chunk_by_id'],
                         query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
