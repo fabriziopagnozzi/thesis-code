@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+from typing import Literal
 
 from experiments.medical_dataset_gen.pipeline.a_plans import (
     run_make_query_plans,
@@ -19,10 +20,10 @@ from experiments.medical_dataset_gen.pipeline.f_qrels import (
 )
 from experiments.medical_dataset_gen.pipeline.g_embed import run_embed
 from experiments.medical_dataset_gen.pipeline.h_filter_queries import run_filter_queries
-from experiments.medical_dataset_gen.pipeline.i_query_geom_plots import (
+from experiments.medical_dataset_gen.pipeline.i_evaluate import run_evaluate
+from experiments.medical_dataset_gen.pipeline.j_query_geom_plots import (
     run_query_geom_plots,
 )
-from experiments.medical_dataset_gen.pipeline.j_evaluate import run_evaluate
 from experiments.medical_dataset_gen.pipeline.k_eval_plots import run_store_eval_figures
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
@@ -33,10 +34,22 @@ from experiments.medical_dataset_gen.utils.global_configs import (
 )
 from helpers.ollama_client import stop_model
 
+type PipelineStage = Literal[
+    'plans',
+    'calibrate_plans',
+    'facts',
+    'chunks',
+    'queries_answers',
+    'qrels',
+    'embed',
+    'filter_queries',
+    'eval',
+    'geom_plots',
+    'eval_plots',
+]
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 
-
-STAGES: list[tuple[str, PipelineStageFn]] = [
+STAGES: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('plans', run_make_query_plans),
     ('calibrate_plans', run_calibrate_query_plans),
     ('facts', run_make_facts),
@@ -45,8 +58,8 @@ STAGES: list[tuple[str, PipelineStageFn]] = [
     ('qrels', run_make_qrels),
     ('embed', run_embed),
     ('filter_queries', run_filter_queries),
-    ('geom_plots', run_query_geom_plots),
     ('eval', run_evaluate),
+    ('geom_plots', run_query_geom_plots),
     ('eval_plots', run_store_eval_figures),
 ]
 
