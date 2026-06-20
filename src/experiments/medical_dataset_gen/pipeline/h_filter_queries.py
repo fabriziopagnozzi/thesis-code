@@ -9,7 +9,6 @@ queries are valid for later evaluation.
 
 from __future__ import annotations
 
-import json
 from collections import Counter, defaultdict
 
 import numpy as np
@@ -17,17 +16,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
-)
-from experiments.medical_dataset_gen.retrieval.utils import (
-    build_query_to_facet_gold_map,
-    get_qrels_by_query_chunk,
-    is_query_gold,
-)
+from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     BackgroundOutlierDiagnostics,
     FacetIdToGoldChunks,
@@ -35,18 +24,24 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QueryRecord,
     TopKDiagnosticsByK,
 )
-
-from .embed import load_embedding_arrays
-from .utils import (
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
+from experiments.medical_dataset_gen.utils.io_utils import json_dumps, read_parquet, write_parquet
+from experiments.medical_dataset_gen.utils.retrieval_utils import (
     build_index_maps,
+    build_query_to_facet_gold_map,
     compute_retrieval_diagnostics,
     get_candidate_pool_indices,
+    get_qrels_by_query_chunk,
+    is_query_gold,
     run_topn_cosine_retrieval,
     select_indices,
 )
 
 
-def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
+def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     chunk_documents = read_parquet(paths, 'chunk_documents')
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
@@ -210,8 +205,8 @@ def run_filter_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl
                 'fail_missing_or_malformed_background_outlier': (
                     missing_or_malformed_background_outlier
                 ),
-                'facets_present_json': _json_bool_map(facets_present),
-                'topk_retrieved_facets_json': _json_str_list(topk_retrieved_facets),
+                'facets_present_json': json_dumps(facets_present),
+                'topk_retrieved_facets_json': json_dumps(topk_retrieved_facets),
             }
             | _flatten_topk_diagnostics(topk_by_k)
             | background_diagnostics
@@ -281,7 +276,7 @@ def _flatten_topk_diagnostics(topk_by_k: TopKDiagnosticsByK) -> dict[str, object
         flat[f'{prefix}_n_retrieved_facets'] = row['n_retrieved_facets']
         flat[f'{prefix}_facet_coverage'] = row['facet_coverage']
         flat[f'{prefix}_all_facets_covered'] = row['all_facets_covered']
-        flat[f'{prefix}_retrieved_facets_json'] = _json_str_list(row['retrieved_facets'])
+        flat[f'{prefix}_retrieved_facets_json'] = json_dumps(row['retrieved_facets'])
     return flat
 
 
@@ -469,6 +464,7 @@ def _topk_vs_facloc_diagnostics(
             'avg_cos_facloc': 0.0,
             'jaccard_topk_facloc': 0.0,
         }
+
     candidate_vectors = chunk_vectors[topn_global]
     sim_matrix = candidate_vectors @ candidate_vectors.T
     sim_to_query = topn_sims.astype(np.float32)
@@ -476,6 +472,7 @@ def _topk_vs_facloc_diagnostics(
     fl = select_indices('fac_loc', sim_to_query, sim_matrix, k=k, lam=0.3)
     topk_diag = compute_retrieval_diagnostics(topk, sim_to_query, sim_matrix)
     fl_diag = compute_retrieval_diagnostics(fl, sim_to_query, sim_matrix, topk_local_indices=topk)
+
     return {
         'fac_topk': topk_diag['fac_cov_score'],
         'fac_facloc': fl_diag['fac_cov_score'],
@@ -485,16 +482,8 @@ def _topk_vs_facloc_diagnostics(
     }
 
 
-def _json_bool_map(value: dict[str, bool]) -> str:
-    return json.dumps(value, sort_keys=True)
-
-
-def _json_str_list(value: list[str]) -> str:
-    return json.dumps(value, sort_keys=True)
-
-
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,
@@ -503,4 +492,4 @@ if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    run_filter_geometry(cfg, paths)
+    run_filter_queries(cfg, paths)

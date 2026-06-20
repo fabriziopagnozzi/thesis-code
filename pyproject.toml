@@ -43,9 +43,11 @@ dev = [
 
 
 [tool.taskipy.tasks]
+# -----------------------------------------------------------------------------------------------
 # Synthetic Medical Dataset Generation
-synth_pipeline = "python -m experiments.medical_dataset_gen.run_pipeline"
-synth_eval_plots = "python -m experiments.medical_dataset_gen.evaluation.plots"
+synth_pipeline = "python -m experiments.medical_dataset_gen.pipeline.__main__"
+synth_eval_plots = "python -m experiments.medical_dataset_gen.pipeline.k_evalplots"
+synth_geom_plots = "python -m experiments.medical_dataset_gen.pipeline.i_query_geom_plots"
 
 # -----------------------------------------------------------------------------------------------
 # MIMIC Experiments
@@ -77,6 +79,7 @@ mimic_filter_queries = "python -m experiments.mimic.queries.c_filter_queries"
 
 # Utils
 mimic_lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"/home/pagnozzi/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
+# -----------------------------------------------------------------------------------------------
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]

@@ -4,15 +4,15 @@ from pathlib import Path
 
 import yaml
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ConditionOntology,
     MedicalOntology,
     SubgroupKey,
     SubgroupOntology,
+)
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
 )
 
 

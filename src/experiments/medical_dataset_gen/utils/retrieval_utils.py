@@ -16,10 +16,6 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.global_configs import (
-    MethodsComparisonKernelsCfg,
-    unreachable,
-)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     ChunkMembershipRecord,
@@ -29,6 +25,10 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QueryRecord,
     RetrievalIndexMaps,
     RetrievalStrategy,
+)
+from experiments.medical_dataset_gen.utils.global_configs import (
+    MethodsComparisonKernelsCfg,
+    unreachable_code,
 )
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import fac_loc_lazy_greedy, mmr, top_k
@@ -221,7 +221,7 @@ def pair_kernel_polars_expr(kernel_cfg: MethodsComparisonKernelsCfg) -> pl.Expr:
     if kernel_cfg.pair_aggregation == 'harmonic_mean':
         return (pl.col('fac_loc_kernel_score') * pl.col('mmr_kernel_score')).sqrt()
     else:
-        unreachable(
+        unreachable_code(
             f'Unexpected value {kernel_cfg.pair_aggregation} for kernel_cfg.pair_aggregation'
         )
 

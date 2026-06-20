@@ -7,7 +7,6 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Json
 
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerFact,
     BenchmarkModel,
@@ -17,6 +16,7 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QrelRecord,
     QueryRecord,
 )
+from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 type EvaluationResultScalar = str | int | float | None
 type EvaluationResultRow = dict[str, EvaluationResultScalar]

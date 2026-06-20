@@ -14,7 +14,7 @@ from experiments.medical_dataset_gen.embedding_geometry.plots import (
     plot_query_overview_4panel,
     plot_strategy_overlay,
 )
-from experiments.medical_dataset_gen.retrieval.utils import select_indices
+from experiments.medical_dataset_gen.utils.retrieval_utils import select_indices
 from experiments.mimic.global_configs import MimicPaths, get_pool_analysis_path, read_parquet
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
 from experiments.mimic.queries.schemas_queries import QueryModifier, QueryRow

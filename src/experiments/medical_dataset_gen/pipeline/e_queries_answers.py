@@ -6,11 +6,13 @@ from collections.abc import Sequence
 import polars as pl
 import pyarrow.parquet as pq
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
+from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
+from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
+    MedicalDatasetGenDefaultPrompts,
+)
+from experiments.medical_dataset_gen.dataset_generation.query_templates import (
+    render_answer_template,
+    render_query_template,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerFact,
@@ -23,16 +25,12 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlan,
     QueryPlanFacet,
 )
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 from helpers.ollama_client import generate
-
-from .ontology import load_ontology
-from .prompts_default import (
-    MedicalDatasetGenDefaultPrompts,
-)
-from .query_templates import (
-    render_answer_template,
-    render_query_template,
-)
 
 
 def run_make_queries_answers(
@@ -237,7 +235,9 @@ def _facet_summaries(
             duration_rows = [row for row in rows if row.axis == 'treatment_duration']
             if len(duration_rows) != len(rows):
                 raise ValueError(f'facet {facet_id!r} mixes treatment and rehabilitation facts')
-            durations = [row.duration_days for row in duration_rows if row.duration_days is not None]
+            durations = [
+                row.duration_days for row in duration_rows if row.duration_days is not None
+            ]
             avg_duration = round(sum(durations) / len(durations), 1)
             treatment = Counter(
                 row.treatment for row in duration_rows if row.treatment is not None
@@ -288,7 +288,7 @@ def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,

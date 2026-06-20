@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 import numpy as np
 from rouge_score import rouge_scorer
 
-from experiments.medical_dataset_gen.constants import GENERIC_CLINICAL_STOPWORDS
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     ChunkDocumentRecord,
@@ -16,6 +15,7 @@ from experiments.medical_dataset_gen.schemas.metrics_schemas import (
     PreparedAnswerRougeRefs,
     RougeNgramBundle,
 )
+from experiments.medical_dataset_gen.utils.constants import GENERIC_CLINICAL_STOPWORDS
 
 _ANSWER_ROUGE_SCORER = rouge_scorer.RougeScorer(['rouge1', 'rouge2'], use_stemmer=True)
 _TOKEN_RE = re.compile(r'[a-z0-9]+')

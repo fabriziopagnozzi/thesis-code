@@ -12,14 +12,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    ChunkRow,
-    ClinicalFact,
-    MedicalOntology,
-)
-
-from .chunk_cache import (
+from experiments.medical_dataset_gen.dataset_generation.chunk_cache import (
     GenerationCache,
     append_generation_cache,
     cached_chunk_state,
@@ -28,7 +21,7 @@ from .chunk_cache import (
     chunk_rewrite_cache_key,
     remember_cache_entry,
 )
-from .chunk_rendering import (
+from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     finalize_chunk_row,
     generate_llm_chunk,
     new_chunk_state,
@@ -37,7 +30,13 @@ from .chunk_rendering import (
     rewrite_llm_chunk,
     row_from_state,
 )
-from .chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkRow,
+    ClinicalFact,
+    MedicalOntology,
+)
+from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 
 def render_chunks_grouped_llm(
@@ -112,7 +111,7 @@ def render_chunks_grouped_llm(
             )
 
     materialized_rows: list[ChunkRow] = [
-        row for row in rows if row is not None and str(row['query_id']) not in failed_queries
+        row for row in rows if row is not None and row.query_id not in failed_queries
     ]
     return materialized_rows, rejects, failed_queries
 
@@ -183,7 +182,7 @@ def render_chunks_grouped_rewrite(
     )
 
     materialized_rows: list[ChunkRow] = [
-        row for row in rows if row is not None and str(row['query_id']) not in failed_queries
+        row for row in rows if row is not None and row.query_id not in failed_queries
     ]
     return materialized_rows, rejects, failed_queries
 

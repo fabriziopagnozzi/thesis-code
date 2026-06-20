@@ -14,43 +14,48 @@ from pathlib import Path
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
-    read_parquet,
-    setup_logging,
-    write_parquet,
-)
-from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
-from experiments.medical_dataset_gen.retrieval.utils import (
-    assert_pool_scope_match,
-    build_index_maps,
-)
-from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
-    EmbeddingGeometryPointRow,
-    EmbeddingGeometryQueryStats,
-    EmbeddingGeometryWorkerState,
-    RenderedGeometryResult,
-)
-
-from .artifacts import (
+from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.query_geometry.artifacts import (
     build_query_artifact,
     choose_query_groups,
 )
-from .diagnostics import point_rows, query_stats
-from .plots import (
+from experiments.medical_dataset_gen.query_geometry.diagnostics import (
+    build_geometry_points_row,
+    query_stats,
+)
+from experiments.medical_dataset_gen.query_geometry.plots import (
     plot_cluster_quality_overview,
     plot_full_strategy_selection_overlay,
     plot_query_overview_4panel,
     plot_strategy_overlay,
 )
+from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+    EmbeddingGeometry2DPoint,
+    EmbeddingGeometryQueryStats,
+    EmbeddingGeometryWorkerState,
+    RenderedGeometryResult,
+)
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
+    setup_logging,
+)
+from experiments.medical_dataset_gen.utils.io_utils import (
+    read_parquet,
+    read_parquet_if_exists_else_empty_df,
+    write_parquet,
+)
+from experiments.medical_dataset_gen.utils.retrieval_utils import (
+    assert_pool_scope_match,
+    build_index_maps,
+)
 
-_WORKER_STATE: EmbeddingGeometryWorkerState | None = None
+GEOMETRY_WORKER_STATE: EmbeddingGeometryWorkerState | None = None
 
 
-def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
+def run_query_geom_plots(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     required_paths = [
         paths.table_path('chunk_documents'),
         paths.table_path('chunk_memberships'),
@@ -58,6 +63,7 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
         paths.table_path('qrels'),
     ]
     missing = [str(path) for path in required_paths if not path.exists()]
+
     has_memmaps = all(
         path.exists()
         for path in [
@@ -68,6 +74,7 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
             paths.embeddings_query_ids_path,
         ]
     )
+
     has_legacy_npz = paths.embeddings_npz_path.exists()
     if not has_memmaps and not has_legacy_npz:
         missing.append(str(paths.embeddings_npz_path))
@@ -78,14 +85,15 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
     chunk_documents = read_parquet(paths, 'chunk_documents')
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
-    geometry = _maybe_read(paths, 'geometry_stats')
-    eval_results = _maybe_read(paths, 'evaluation_results')
+    geometry = read_parquet_if_exists_else_empty_df(paths, 'geometry_stats')
+    eval_results = read_parquet_if_exists_else_empty_df(paths, 'evaluation_results')
     assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
     assert_pool_scope_match(eval_results, cfg.retrieval.pool_scope, table_name='evaluation_results')
 
-    _chunk_vectors, _query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
+    _, _, chunk_ids, query_ids = load_embedding_arrays(paths)
     maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
     selected_query_groups = choose_query_groups(cfg, queries, geometry, eval_results)
+
     selected_query_ids: list[str] = []
     selected_query_group_by_id: dict[str, str] = {}
     for group, group_query_ids in selected_query_groups.items():
@@ -101,7 +109,7 @@ def run_embedding_geometry(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) ->
     out_dir = paths.figures_dir / 'embedding_geometry'
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    all_point_rows: list[EmbeddingGeometryPointRow] = []
+    all_point_rows: list[EmbeddingGeometry2DPoint] = []
     all_stat_rows: list[EmbeddingGeometryQueryStats] = []
 
     worker_count = _embedding_geometry_worker_count(len(selected_query_ids))
@@ -189,13 +197,13 @@ def _init_embedding_geometry_worker(
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     qrels = read_parquet(paths, 'qrels')
-    eval_stats = _maybe_read(paths, 'evaluation_stats')
-    eval_results = _maybe_read(paths, 'evaluation_results')
+    eval_stats = read_parquet_if_exists_else_empty_df(paths, 'evaluation_stats')
+    eval_results = read_parquet_if_exists_else_empty_df(paths, 'evaluation_results')
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
     maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
-    global _WORKER_STATE
-    _WORKER_STATE = {
+    global GEOMETRY_WORKER_STATE
+    GEOMETRY_WORKER_STATE = {
         'cfg': cfg,
         'queries': queries,
         'qrels': qrels,
@@ -212,9 +220,9 @@ def _init_embedding_geometry_worker(
 
 
 def _render_embedding_geometry_query(qid: str) -> RenderedGeometryResult | None:
-    if _WORKER_STATE is None:
+    if GEOMETRY_WORKER_STATE is None:
         raise RuntimeError('embedding geometry worker was not initialized')
-    state = _WORKER_STATE
+    state = GEOMETRY_WORKER_STATE
     maps = state['maps']
     if qid not in maps['query_id_to_idx']:
         return None
@@ -244,19 +252,13 @@ def _render_embedding_geometry_query(qid: str) -> RenderedGeometryResult | None:
         plot_full_strategy_selection_overlay(artifact, query_dir, k=k)
 
     return {
-        'point_rows': point_rows(artifact),
+        'point_rows': build_geometry_points_row(artifact),
         'query_stats': query_stats(artifact),
     }
-
-
-def _maybe_read(paths: MedicalDatasetGenPaths, table: str) -> pl.DataFrame:
-    if paths.table_path(table).exists():  # type: ignore[arg-type]
-        return read_parquet(paths, table)  # type: ignore[arg-type]
-    return pl.DataFrame()
 
 
 if __name__ == '__main__':
     cfg = load_config_from_cli()
     paths = paths_for(cfg)
     setup_logging(paths)
-    run_embedding_geometry(cfg, paths)
+    run_query_geom_plots(cfg, paths)

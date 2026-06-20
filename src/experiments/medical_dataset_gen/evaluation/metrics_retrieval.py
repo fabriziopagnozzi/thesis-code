@@ -6,8 +6,7 @@ from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
 )
-
-from ..retrieval.utils import harmonic_mean
+from experiments.medical_dataset_gen.utils.retrieval_utils import harmonic_mean
 
 ALPHA_NDCG_REDUNDANCY = 0.5
 

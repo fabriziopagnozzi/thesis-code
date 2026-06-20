@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 
 def reduce_for_plot(
@@ -69,7 +69,7 @@ def umap_reduce(
         min_dist=cfg.embedding_geometry.umap_min_dist,
         random_state=cfg.embedding_geometry.random_state,
     )
-    return reducer.fit_transform(features).astype(np.float32)
+    return reducer.fit_transform(features).astype(np.float32)  # type: ignore
 
 
 def pca_preprocess(

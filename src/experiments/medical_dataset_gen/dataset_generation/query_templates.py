@@ -13,8 +13,11 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryTemplateSpec,
     QueryType,
 )
+from experiments.medical_dataset_gen.utils.global_configs import (
+    MedicalDatasetGenPaths,
+)
 
-_QUERY_TEMPLATE_PATH = Path(__file__).with_name('templates_data') / 'query_answer_templates.yaml'
+_QUERY_TEMPLATE_PATH = MedicalDatasetGenPaths.root / 'data_templates' / 'query_answer_templates.yaml'
 
 
 def _load_query_template_data() -> QueryTemplateData:

@@ -130,6 +130,7 @@ The plotting stage writes:
 - `lambda_sensitivity.png`
 - `per_query_distributions.png`
 - `gain_over_topk.png`
+- `gain_over_topk.html`
 - `gain_over_topk_similar_lambda.png`
 - `coverage_precision_tradeoff.png`
 - `selection_diagnostics.png`

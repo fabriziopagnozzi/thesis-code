@@ -7,19 +7,7 @@ from pathlib import Path
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
-)
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    ChunkRow,
-    ClinicalFact,
-    MedicalOntology,
-)
-
-from .chunk_cache import (
+from experiments.medical_dataset_gen.dataset_generation.chunk_cache import (
     GENERATION_CACHE_VERSION,
     REWRITE_CACHE_VERSION,
     GenerationCache,
@@ -31,8 +19,11 @@ from .chunk_cache import (
     load_generation_cache,
     remember_cache_entry,
 )
-from .chunk_grouped_llm import render_chunks_grouped_llm, render_chunks_grouped_rewrite
-from .chunk_rendering import (
+from experiments.medical_dataset_gen.dataset_generation.chunk_grouped_llm import (
+    render_chunks_grouped_llm,
+    render_chunks_grouped_rewrite,
+)
+from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     chunk_id,
     finalize_chunk_row,
     generate_llm_chunk,
@@ -43,8 +34,18 @@ from .chunk_rendering import (
     rewrite_llm_chunk,
     row_from_state,
 )
-from .chunk_templates import validate_chunk_text
-from .ontology import load_ontology
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkRow,
+    ClinicalFact,
+    MedicalOntology,
+)
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -328,7 +329,6 @@ def _write_normalized_chunks(
         chunk_memberships = pl.DataFrame()
         write_parquet(paths, 'chunk_documents', chunk_documents)
         write_parquet(paths, 'chunk_memberships', chunk_memberships)
-        _remove_legacy_chunks_table(paths)
         return chunk_documents, chunk_memberships
 
     duplicate_text_keys = (
@@ -424,23 +424,12 @@ def _write_normalized_chunks(
 
     write_parquet(paths, 'chunk_documents', chunk_documents)
     write_parquet(paths, 'chunk_memberships', chunk_memberships)
-    _remove_legacy_chunks_table(paths)
     print(
         f'[chunks] normalized {len(chunk_rows):,} generated row(s) -> '
         f'{len(chunk_documents):,} chunk document(s), '
         f'{len(chunk_memberships):,} query membership(s)'
     )
     return chunk_documents, chunk_memberships
-
-
-def _remove_legacy_chunks_table(paths: MedicalDatasetGenPaths) -> None:
-    experiment_dir = getattr(paths, 'experiment_dir', None)
-    if experiment_dir is None:
-        return
-    legacy_path = experiment_dir / 'chunks.parquet'
-    if legacy_path.exists():
-        legacy_path.unlink()
-        print(f'[chunks] removed legacy denormalized table -> {legacy_path}')
 
 
 def _render_chunks_sequential(
@@ -584,7 +573,7 @@ def _render_chunks_sequential(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,

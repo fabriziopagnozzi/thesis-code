@@ -1,6 +1,7 @@
 .vscode/settings.json
 *.code-workspace
 **/_*
+!__main__.py
 datasets/full-data/
 results/
 data/

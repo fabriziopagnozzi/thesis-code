@@ -13,8 +13,8 @@ from collections import Counter
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.schemas.embedding_geometry_schemas import (
-    EmbeddingGeometryPointRow,
+from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+    EmbeddingGeometry2DPoint,
     EmbeddingGeometryQueryStats,
     GeometryArtifact,
 )
@@ -24,15 +24,18 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
 )
 
 
-def point_rows(artifact: GeometryArtifact) -> list[EmbeddingGeometryPointRow]:
+def build_geometry_points_row(artifact: GeometryArtifact) -> list[EmbeddingGeometry2DPoint]:
     selected_sets = {
-        strategy: {int(i) for i in payload.local_indices} for strategy, payload in artifact.selections.items()
+        strategy: {int(i) for i in payload.local_indices}
+        for strategy, payload in artifact.selections.items()
     }
-    rows: list[EmbeddingGeometryPointRow] = []
+    geom_points: list[EmbeddingGeometry2DPoint] = []
+
+    # Append all the chunks
     for idx, chunk_id in enumerate(artifact.candidate_chunk_ids):
         row = artifact.qrel_by_chunk_id.get(chunk_id, artifact.chunk_by_id[chunk_id])
-        rows.append(
-            _point_row(
+        geom_points.append(
+            make_geom_point_row(
                 artifact=artifact,
                 chunk_id=chunk_id,
                 row=row,
@@ -52,8 +55,10 @@ def point_rows(artifact: GeometryArtifact) -> list[EmbeddingGeometryPointRow]:
                 selected_fac_loc=idx in selected_sets.get('fac_loc', set()),
             )
         )
-    rows.append(
-        _point_row(
+
+    # Append the query
+    geom_points.append(
+        make_geom_point_row(
             artifact=artifact,
             chunk_id=None,
             row={},
@@ -73,7 +78,8 @@ def point_rows(artifact: GeometryArtifact) -> list[EmbeddingGeometryPointRow]:
             selected_fac_loc=False,
         )
     )
-    return rows
+
+    return geom_points
 
 
 def query_stats(artifact: GeometryArtifact) -> EmbeddingGeometryQueryStats:
@@ -120,6 +126,7 @@ def query_stats(artifact: GeometryArtifact) -> EmbeddingGeometryQueryStats:
         row[f'{strategy}_gold_precision'] = summary['gold_precision']
         row[f'{strategy}_distractor_rate'] = summary['distractor_rate']
         row[f'{strategy}_dominant_fraction'] = summary['dominant_fraction']
+
     return row
 
 
@@ -199,7 +206,7 @@ def string_codes(labels: list[str]) -> NDArray[np.int32]:
     return np.array([mapping[label] for label in labels], dtype=np.int32)
 
 
-def _point_row(
+def make_geom_point_row(
     artifact: GeometryArtifact,
     chunk_id: str | None,
     row: QrelRecord | ChunkDocumentRecord | dict[object, object],
@@ -217,7 +224,7 @@ def _point_row(
     selected_top_k: bool,
     selected_mmr: bool,
     selected_fac_loc: bool,
-) -> EmbeddingGeometryPointRow:
+) -> EmbeddingGeometry2DPoint:
     _ = idx
     facet_id = row.facet_id if isinstance(row, QrelRecord) else None
     target_facet_id = row.target_facet_id if isinstance(row, QrelRecord) else None

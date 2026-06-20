@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import argparse
 import io
-import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Literal, NoReturn
+from typing import Literal, NoReturn
 from uuid import uuid4
 
-import polars as pl
 import yaml
 from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
@@ -158,7 +156,7 @@ class ExperimentCfg(BaseModel):
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
     results_dir = root / '_results'
-    default_ontology_path = root / 'generation' / 'templates_data' / 'medical_ontology.yaml'
+    default_ontology_path = root / 'data_templates' / 'medical_ontology.yaml'
 
     def __init__(
         self,
@@ -244,27 +242,8 @@ def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
     return paths
 
 
-def read_parquet(paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName) -> pl.DataFrame:
-    return pl.read_parquet(paths.table_path(table))
-
-
-def write_parquet(
-    paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName, df: pl.DataFrame
-) -> Path:
-    path = paths.table_path(table)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    df.write_parquet(path)
-    print(f'[write] {table}: {len(df):,} rows -> {path}')
-    return path
-
-
-def write_json(paths: MedicalDatasetGenPaths, name: str, payload: Any) -> Path:
-    path = paths.experiment_dir / name
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, 'w') as f:
-        json.dump(payload, f, indent=2)
-    print(f'[write] {path}')
-    return path
+def unreachable_code(err: str) -> NoReturn:
+    raise RuntimeError(err)
 
 
 def setup_logging(paths: MedicalDatasetGenPaths) -> None:
@@ -287,20 +266,6 @@ def setup_logging(paths: MedicalDatasetGenPaths) -> None:
             self._file.flush()
 
     sys.stdout = _Tee(log_path)
-
-
-def json_dumps(value: Any) -> str:
-    return json.dumps(value, sort_keys=True)
-
-
-def json_loads(value: str | None, default: Any = None) -> Any:
-    if value is None or value == '':
-        return default
-    return json.loads(value)
-
-
-def unreachable(err: str) -> NoReturn:
-    raise RuntimeError(err)
 
 
 def _resolve_experiment_name(

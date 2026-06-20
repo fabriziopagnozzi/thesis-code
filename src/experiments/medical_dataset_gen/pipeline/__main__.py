@@ -3,31 +3,40 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 
-from helpers.ollama_client import stop_model
-
-from .embedding_geometry.run import run_embedding_geometry
-from .evaluation.evaluate import run_evaluate
-from .evaluation.plots import store_eval_figures
-from .generation.calibrate_plans import run_calibrate_query_plans
-from .generation.chunks import run_make_chunks
-from .generation.facts import run_make_facts
-from .generation.qrels import run_make_qrels
-from .generation.queries_answers import run_make_queries_answers
-from .generation.query_plans import run_make_query_plans
-from .global_configs import (
+from experiments.medical_dataset_gen.pipeline.a_plans import (
+    run_make_query_plans,
+)
+from experiments.medical_dataset_gen.pipeline.b_plans_calibration import (
+    run_calibrate_query_plans,
+)
+from experiments.medical_dataset_gen.pipeline.c_structured_facts import run_make_facts
+from experiments.medical_dataset_gen.pipeline.d_chunks import run_make_chunks
+from experiments.medical_dataset_gen.pipeline.e_queries_answers import (
+    run_make_queries_answers,
+)
+from experiments.medical_dataset_gen.pipeline.f_qrels import (
+    run_make_qrels,
+)
+from experiments.medical_dataset_gen.pipeline.g_embed import run_embed
+from experiments.medical_dataset_gen.pipeline.h_filter_queries import run_filter_queries
+from experiments.medical_dataset_gen.pipeline.i_query_geom_plots import (
+    run_query_geom_plots,
+)
+from experiments.medical_dataset_gen.pipeline.j_evaluate import run_evaluate
+from experiments.medical_dataset_gen.pipeline.k_eval_plots import run_store_eval_figures
+from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     load_config_from_cli,
     paths_for,
     setup_logging,
 )
-from .retrieval.embed import run_embed
-from .retrieval.filter_geometry import run_filter_geometry
+from helpers.ollama_client import stop_model
 
-type StageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
+type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 
 
-STAGES: list[tuple[str, StageFn]] = [
+STAGES: list[tuple[str, PipelineStageFn]] = [
     ('plans', run_make_query_plans),
     ('calibrate_plans', run_calibrate_query_plans),
     ('facts', run_make_facts),
@@ -35,10 +44,10 @@ STAGES: list[tuple[str, StageFn]] = [
     ('queries_answers', run_make_queries_answers),
     ('qrels', run_make_qrels),
     ('embed', run_embed),
-    ('geom_filter', run_filter_geometry),
-    ('geom_plots', run_embedding_geometry),
+    ('filter_queries', run_filter_queries),
+    ('geom_plots', run_query_geom_plots),
     ('eval', run_evaluate),
-    ('eval_plots', store_eval_figures),
+    ('eval_plots', run_store_eval_figures),
 ]
 
 
@@ -73,6 +82,7 @@ def main() -> None:
 
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
     print(f'[pipeline] running stages: {[name for name, _ in STAGES[start_idx : stop_idx + 1]]}')
+
     for name, fn in STAGES[start_idx : stop_idx + 1]:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)

@@ -8,7 +8,6 @@ import polars as pl
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.global_configs import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import BenchmarkModel
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
@@ -17,6 +16,7 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     RetrievalIndexMaps,
     RetrievalStrategy,
 )
+from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 
 class GeometrySelection(BenchmarkModel):
@@ -56,7 +56,7 @@ class GeometryArtifact(BenchmarkModel):
     selection_group: str | None = None
 
 
-class EmbeddingGeometryPointRow(TypedDict):
+class EmbeddingGeometry2DPoint(TypedDict):
     query_id: str
     selection_group: str | None
     point_kind: str
@@ -104,7 +104,7 @@ class EmbeddingGeometryQueryStats(TypedDict, total=False):
 
 
 class RenderedGeometryResult(TypedDict):
-    point_rows: list[EmbeddingGeometryPointRow]
+    point_rows: list[EmbeddingGeometry2DPoint]
     query_stats: EmbeddingGeometryQueryStats
 
 

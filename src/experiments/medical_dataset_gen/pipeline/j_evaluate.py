@@ -16,34 +16,35 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.global_configs import (
+from experiments.medical_dataset_gen.evaluation.evaluation_workers import (
+    get_evaluation_chunksize,
+    get_evaluation_worker_count,
+    get_evaluation_worker_state,
+    init_evaluation_worker,
+)
+from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
+from experiments.medical_dataset_gen.evaluation.metrics_answer import (
+    empty_answer_reference_texts,
+    prepare_answer_rouge_scorer,
+)
+from experiments.medical_dataset_gen.evaluation.metrics_retrieval import compute_retrieval_metrics
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
+    EvaluationResultRow,
+    QueryRecord,
+)
+from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
 )
-from experiments.medical_dataset_gen.retrieval.utils import (
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
+from experiments.medical_dataset_gen.utils.retrieval_utils import (
+    assert_pool_scope_match,
     build_query_to_facet_gold_map,
     compute_retrieval_diagnostics,
     get_candidate_pool_indices,
     run_topn_cosine_retrieval,
     select_indices,
 )
-from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
-    EvaluationResultRow,
-    QueryRecord,
-)
-
-from ..retrieval.utils import assert_pool_scope_match
-from .evaluation_workers import (
-    get_evaluation_chunksize,
-    get_evaluation_worker_count,
-    get_evaluation_worker_state,
-    init_evaluation_worker,
-)
-from .lambda_agreement import build_lambda_pair_agreement
-from .metrics_answer import empty_answer_reference_texts, prepare_answer_rouge_scorer
-from .metrics_retrieval import compute_retrieval_metrics
 
 
 def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -352,7 +353,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,

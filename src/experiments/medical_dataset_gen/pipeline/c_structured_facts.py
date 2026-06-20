@@ -16,10 +16,10 @@ from typing import Literal, cast
 import polars as pl
 import pyarrow.parquet as pq
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
+from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
+    load_ontology,
+    other_conditions,
+    other_subgroups,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
@@ -28,12 +28,11 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanFacet,
     SubgroupAxis,
 )
-
-from .ontology import (
-    load_ontology,
-    other_conditions,
-    other_subgroups,
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
 )
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -520,7 +519,7 @@ def _subgroup_required_mention(subgroup_id: str, subgroup_label: str, patient_ag
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,

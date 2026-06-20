@@ -16,24 +16,22 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    read_parquet,
-    write_parquet,
+from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
+    render_canonical_chunk_text,
 )
+from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
+from experiments.medical_dataset_gen.pipeline.c_structured_facts import make_gold_fact
+from experiments.medical_dataset_gen.pipeline.e_queries_answers import render_query
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,
     QueryPlan,
     QueryPlanFacet,
 )
-
-from .chunk_rendering import (
-    render_canonical_chunk_text,
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
 )
-from .facts import make_gold_fact
-from .ontology import load_ontology
-from .queries_answers import render_query
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
 
 def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -311,7 +309,7 @@ def _print_calibration_summary(calibration: pl.DataFrame) -> None:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,

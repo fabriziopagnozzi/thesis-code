@@ -12,8 +12,11 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
 )
+from experiments.medical_dataset_gen.utils.global_configs import (
+    MedicalDatasetGenPaths,
+)
 
-_TEMPLATE_DATA_DIR = Path(__file__).with_name('templates_data')
+_TEMPLATE_DATA_DIR = MedicalDatasetGenPaths.root / 'data_templates'
 _TEMPLATE_DATA_FILES = (
     'chunk_condition_context.yaml',
     'chunk_duration_templates.yaml',

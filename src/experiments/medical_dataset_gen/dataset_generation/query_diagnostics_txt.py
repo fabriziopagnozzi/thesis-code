@@ -12,13 +12,13 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.global_configs import (
+from experiments.medical_dataset_gen.pipeline.g_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     load_config,
 )
-from experiments.medical_dataset_gen.retrieval.embed import load_embedding_arrays
-from experiments.medical_dataset_gen.retrieval.utils import select_indices
+from experiments.medical_dataset_gen.utils.retrieval_utils import select_indices
 
 _QUERY_COLUMNS = [
     'query_id',
@@ -1004,7 +1004,7 @@ def _render_embedding_separability(
         ]
         matrix_rows = []
         for left in facet_ids:
-            row = {'facet_id': left}
+            row: dict[str, str | float] = {'facet_id': left}
             for right in facet_ids:
                 row[right] = float(centroids[left] @ centroids[right])
             matrix_rows.append(row)

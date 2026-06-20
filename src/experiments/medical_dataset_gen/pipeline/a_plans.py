@@ -13,11 +13,13 @@ from typing import cast
 
 import polars as pl
 
-from experiments.medical_dataset_gen.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    write_parquet,
+from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
+    get_axes_keys,
+    get_selected_conditions,
+    load_ontology,
+    make_subgroup_pairs,
 )
+from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ConditionKey,
     ConditionOntology,
@@ -32,14 +34,11 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     SubgroupKey,
     SubgroupOntology,
 )
-
-from .ontology import (
-    get_axes_keys,
-    get_selected_conditions,
-    load_ontology,
-    make_subgroup_pairs,
+from experiments.medical_dataset_gen.utils.global_configs import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
 )
-from .query_templates import query_template_ids
+from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
 
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -241,7 +240,7 @@ def _split_for_index(plan_idx: int) -> Split:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_configs import (
+    from experiments.medical_dataset_gen.utils.global_configs import (
         load_config_from_cli,
         paths_for,
         setup_logging,
