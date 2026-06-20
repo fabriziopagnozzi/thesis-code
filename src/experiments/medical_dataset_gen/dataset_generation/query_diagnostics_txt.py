@@ -12,8 +12,10 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
-from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+    load_embedding_arrays,
+    select_indices,
+)
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,

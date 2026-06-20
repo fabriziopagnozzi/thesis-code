@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from random import Random
-from typing import Literal, cast
+from typing import cast
 
 import polars as pl
 import pyarrow.parquet as pq
@@ -22,8 +22,12 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     other_subgroups,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    DISTRACTOR_TYPES,
+    ClinicalAxis,
     ClinicalFact,
+    ClusterRole,
     MedicalOntology,
+    PatientSex,
     QueryPlan,
     QueryPlanFacet,
     SubgroupAxis,
@@ -31,6 +35,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
+    unreachable_code,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
@@ -149,14 +154,10 @@ def make_distractor_facts(
 ) -> list[ClinicalFact]:
     facets = plan.facets
     excluded_subgroups = {plan.subgroup_a_id, plan.subgroup_b_id}
-    distractor_types = [
-        'same_condition_wrong_subgroup',
-        'same_subgroup_wrong_condition',
-        'same_axis_wrong_condition',
-    ]
+
     rows: list[ClinicalFact] = []
     for local_idx in range(n):
-        dtype = distractor_types[local_idx % len(distractor_types)]
+        distractor_type = DISTRACTOR_TYPES[local_idx % len(DISTRACTOR_TYPES)]
         target_facet = facets[local_idx % len(facets)]
 
         condition_id = plan.condition_id
@@ -168,18 +169,18 @@ def make_distractor_facts(
         subgroup_value = target_facet.subgroup_value
         axis = target_facet.axis
 
-        if dtype == 'same_condition_wrong_subgroup':
+        if distractor_type == 'same_condition_wrong_subgroup':
             choices = other_subgroups(ontology, excluded_subgroups)
             subgroup_id, subgroup = choices[local_idx % len(choices)]
             subgroup_label = subgroup.label
             subgroup_axis = subgroup.axis
             subgroup_field = subgroup.field
             subgroup_value = subgroup.value
-        elif dtype == 'same_subgroup_wrong_condition':
+        elif distractor_type == 'same_subgroup_wrong_condition':
             choices = other_conditions(ontology, condition_id)
             condition_id, condition = choices[local_idx % len(choices)]
             condition_display = condition.display
-        elif dtype == 'same_axis_wrong_condition':
+        elif distractor_type == 'same_axis_wrong_condition':
             condition_choices = other_conditions(ontology, condition_id)
             subgroup_choices = other_subgroups(ontology, excluded_subgroups)
             condition_id, condition = condition_choices[(local_idx + 1) % len(condition_choices)]
@@ -189,6 +190,8 @@ def make_distractor_facts(
             subgroup_axis = subgroup.axis
             subgroup_field = subgroup.field
             subgroup_value = subgroup.value
+        else:
+            unreachable_code(f'Distractor type not covered: {distractor_type}')
 
         rows.append(
             make_base_fact(
@@ -198,7 +201,7 @@ def make_distractor_facts(
                 rng=rng,
                 local_idx=local_idx,
                 is_gold=False,
-                distractor_type=dtype,
+                distractor_type=distractor_type,
                 condition_id=condition_id,
                 condition_display=condition_display,
                 subgroup_id=subgroup_id,
@@ -287,7 +290,7 @@ def make_base_fact(
     subgroup_axis: SubgroupAxis,
     subgroup_field: str,
     subgroup_value: str,
-    axis: str,
+    axis: ClinicalAxis,
     cluster_id: str,
     cluster_role: str,
     target_value_bin: str | None = None,
@@ -368,10 +371,7 @@ def make_base_fact(
         facet_id=support_facet_id,
         target_facet_id=target_facet_id,
         cluster_id=cluster_id,
-        cluster_role=cast(
-            Literal['dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'],
-            cluster_role,
-        ),
+        cluster_role=cast(ClusterRole, cluster_role),
         condition_id=condition_id,
         condition_display=condition_display,
         subgroup_id=subgroup_id,
@@ -379,7 +379,7 @@ def make_base_fact(
         subgroup_axis=subgroup_axis,
         subgroup_field=subgroup_field,
         subgroup_value=subgroup_value,
-        axis=cast(Literal['treatment_duration', 'rehab_outcome'], axis),
+        axis=cast(ClinicalAxis, axis),
         value_bin=value_bin,
         duration_days=duration_days,
         treatment=treatment,
@@ -389,7 +389,7 @@ def make_base_fact(
         admission_id=admission_id,
         patient_id=patient_id,
         patient_age=patient_age,
-        patient_sex=cast(Literal['female', 'male'], patient_sex),
+        patient_sex=cast(PatientSex, patient_sex),
         clinical_subgroup_phrase=clinical_subgroup_phrase,
         note_style=note_style,
         split=plan.split,
@@ -421,7 +421,7 @@ def _axis_value_bin(
 def _axis_values(
     ontology: MedicalOntology,
     condition_id: str,
-    axis: str,
+    axis: ClinicalAxis,
     value_bin: str,
     rng: Random,
 ) -> tuple[int | None, str | None, str | None]:

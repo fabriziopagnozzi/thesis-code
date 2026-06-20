@@ -23,10 +23,10 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     get_candidate_pool_indices,
     get_qrels_by_query_chunk,
     is_query_gold,
+    load_embedding_arrays,
     run_topn_cosine_retrieval,
     select_indices,
 )
-from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     BackgroundOutlierDiagnostics,
     FacetIdToGoldChunks,

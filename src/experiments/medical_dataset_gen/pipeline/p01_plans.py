@@ -21,16 +21,16 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ClinicalAxis,
     ConditionKey,
     ConditionOntology,
-    FacetAxis,
+    DataSplit,
     MedicalOntology,
     QueryLogicalForm,
     QueryPlan,
     QueryPlanFacet,
     QueryPlanSpec,
     QueryType,
-    Split,
     SubgroupKey,
     SubgroupOntology,
 )
@@ -123,6 +123,7 @@ def _materialize_plan_row(
         complementary_size=cfg.generation.gold_chunks_complementary,
     )
     dominant_facet_id = facets[dominant_slot].facet_id
+
     logical_form = QueryLogicalForm(
         type=spec.query_type,
         condition=spec.condition_key,
@@ -131,6 +132,7 @@ def _materialize_plan_row(
         facets=[facet.facet_id for facet in facets],
         dominant_facet_id=dominant_facet_id,
     )
+
     return QueryPlan(
         query_id=query_id,
         plan_seed=rng.randint(0, 2**31 - 1),
@@ -198,7 +200,7 @@ def _facets_for_plan(
                 subgroup_axis=subgroup.axis,
                 subgroup_field=subgroup.field,
                 subgroup_value=subgroup.value,
-                axis=cast(FacetAxis, axis),
+                axis=cast(ClinicalAxis, axis),
                 value_bin=value_bin,
                 cluster_id=f'{query_id}_c{idx + 1}',
                 cluster_role='dominant_gold' if is_dominant else 'complementary_gold',
@@ -230,7 +232,7 @@ def _rehab_value_pattern(value_pattern_idx: int) -> tuple[str, str]:
     return patterns[(value_pattern_idx // 2) % len(patterns)]
 
 
-def _split_for_index(plan_idx: int) -> Split:
+def _split_for_index(plan_idx: int) -> DataSplit:
     bucket = plan_idx % 20
     if bucket in {0, 1, 2}:
         return 'test'

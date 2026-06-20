@@ -7,18 +7,30 @@ from typing import Literal, TypedDict, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-type FacetAxis = Literal['treatment_duration', 'rehab_outcome']
+type ClinicalAxisKey = str
+type ClinicalAxis = Literal['treatment_duration', 'rehab_outcome']
+
 type ClusterRole = Literal[
     'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
 ]
 CLUSTER_ROLE_LIST: list[ClusterRole] = list(get_args(ClusterRole.__value__))
+
+type DistractorStr = Literal[
+    'same_condition_wrong_subgroup',
+    'same_subgroup_wrong_condition',
+    'same_axis_wrong_condition',
+]
+DISTRACTOR_TYPES: list[DistractorStr] = list(get_args(DistractorStr.__value__))
+
 type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
-type Split = Literal['train', 'validation', 'test']
-type PatientSex = Literal['female', 'male']
+
+
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
+
+type DataSplit = Literal['train', 'validation', 'test']
+type PatientSex = Literal['female', 'male']
 type ConditionKey = str
-type ClinicalAxisKey = str
 
 
 class QueryOutputRow(TypedDict):
@@ -32,7 +44,7 @@ class QueryOutputRow(TypedDict):
     subgroup_b_id: str
     subgroup_b_label: str
     dominant_facet_id: str
-    split: Split
+    split: DataSplit
     n_facets: int
     facets_json: str
     logical_form_json: str
@@ -57,7 +69,7 @@ class AnswerSourceFact(BenchmarkModel):
 
     query_id: str
     facet_id: str
-    axis: FacetAxis
+    axis: ClinicalAxis
     value_bin: str
     duration_days: int | None
     treatment: str | None
@@ -82,7 +94,7 @@ class AnswerSourceFact(BenchmarkModel):
 class AnswerFact(BenchmarkModel):
     facet_id: str
     subgroup_label: str
-    axis: FacetAxis
+    axis: ClinicalAxis
     summary: str
     supporting_fact_ids: list[str]
 
@@ -136,7 +148,7 @@ class QueryPlanFacet(BenchmarkModel):
     subgroup_axis: SubgroupAxis
     subgroup_field: str
     subgroup_value: str
-    axis: FacetAxis
+    axis: ClinicalAxis
     value_bin: str
     cluster_id: str
     cluster_role: ClusterRole
@@ -147,7 +159,7 @@ class QueryLogicalForm(BenchmarkModel):
     query_type: QueryType = Field(alias='type')
     condition: str
     subgroups: list[str]
-    axes: list[FacetAxis]
+    axes: list[ClinicalAxis]
     facets: list[str]
     dominant_facet_id: str
 
@@ -167,7 +179,7 @@ class QueryPlanSpec(BenchmarkModel):
 class QueryPlan(BenchmarkModel):
     query_id: str
     plan_seed: int
-    split: Split
+    split: DataSplit
     query_type: QueryType
     template_id: str
     condition_id: str
@@ -277,7 +289,7 @@ class ClinicalFact(BenchmarkModel):
     subgroup_axis: SubgroupAxis
     subgroup_field: str
     subgroup_value: str
-    axis: FacetAxis
+    axis: ClinicalAxis
     value_bin: str
     duration_days: int | None
     treatment: str | None
@@ -290,7 +302,7 @@ class ClinicalFact(BenchmarkModel):
     patient_sex: PatientSex
     clinical_subgroup_phrase: str
     note_style: str
-    split: Split
+    split: DataSplit
     must_mention: list[str] = Field(default_factory=list)
     must_not_mention: list[str] = Field(default_factory=list)
 

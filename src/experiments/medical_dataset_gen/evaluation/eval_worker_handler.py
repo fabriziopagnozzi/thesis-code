@@ -7,8 +7,8 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     build_index_maps,
     build_query_to_facet_gold_map,
     get_qrels_by_query_chunk,
+    load_embedding_arrays,
 )
-from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     EvaluationIndexMaps,

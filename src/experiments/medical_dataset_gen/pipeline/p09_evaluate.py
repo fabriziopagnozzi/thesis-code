@@ -16,7 +16,7 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.evaluation.evaluation_workers import (
+from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
     get_evaluation_chunksize,
     get_evaluation_worker_count,
     get_evaluation_worker_state,

@@ -7,9 +7,7 @@ artifacts that downstream plots and evaluation checks consume.
 from __future__ import annotations
 
 import multiprocessing as mp
-import os
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import polars as pl
 from tqdm import tqdm
@@ -17,8 +15,8 @@ from tqdm import tqdm
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     assert_pool_scope_match,
     build_index_maps,
+    load_embedding_arrays,
 )
-from experiments.medical_dataset_gen.pipeline.p07_embed import load_embedding_arrays
 from experiments.medical_dataset_gen.query_geometry.artifacts import (
     build_query_artifact,
     choose_query_groups,
@@ -26,6 +24,11 @@ from experiments.medical_dataset_gen.query_geometry.artifacts import (
 from experiments.medical_dataset_gen.query_geometry.diagnostics import (
     build_geometry_points_row,
     query_stats,
+)
+from experiments.medical_dataset_gen.query_geometry.geom_worker_handler import (
+    embedding_geometry_worker_count,
+    get_geom_worker_state,
+    init_embedding_geometry_worker,
 )
 from experiments.medical_dataset_gen.query_geometry.plots import (
     plot_cluster_quality_overview,
@@ -36,7 +39,6 @@ from experiments.medical_dataset_gen.query_geometry.plots import (
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometry2DPoint,
     EmbeddingGeometryQueryStats,
-    EmbeddingGeometryWorkerState,
     RenderedGeometryResult,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
@@ -51,8 +53,6 @@ from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet_if_exists_else_empty_df,
     write_parquet,
 )
-
-GEOMETRY_WORKER_STATE: EmbeddingGeometryWorkerState | None = None
 
 
 def run_query_geom_plots(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -112,9 +112,9 @@ def run_query_geom_plots(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     all_point_rows: list[EmbeddingGeometry2DPoint] = []
     all_stat_rows: list[EmbeddingGeometryQueryStats] = []
 
-    worker_count = _embedding_geometry_worker_count(len(selected_query_ids))
+    worker_count = embedding_geometry_worker_count(len(selected_query_ids))
     if worker_count == 1:
-        _init_embedding_geometry_worker(
+        init_embedding_geometry_worker(
             cfg_dump=cfg.model_dump(mode='python'),
             exp_name=paths.exp_name,
             out_dir=str(out_dir),
@@ -140,7 +140,7 @@ def run_query_geom_plots(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
         with ProcessPoolExecutor(
             max_workers=worker_count,
             mp_context=worker_context,
-            initializer=_init_embedding_geometry_worker,
+            initializer=init_embedding_geometry_worker,
             initargs=(
                 cfg.model_dump(mode='python'),
                 paths.exp_name,
@@ -171,58 +171,13 @@ def run_query_geom_plots(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     return stats
 
 
-def _embedding_geometry_worker_count(n_queries: int) -> int:
-    requested = os.getenv('EMBEDDING_GEOMETRY_WORKERS')
-    if requested is not None:
-        try:
-            workers = int(requested)
-        except ValueError as exc:
-            raise ValueError('EMBEDDING_GEOMETRY_WORKERS must be an integer') from exc
-    else:
-        workers = os.cpu_count() or 1
-    return max(1, min(n_queries, workers))
-
-
-def _init_embedding_geometry_worker(
-    cfg_dump: dict[str, object],
-    exp_name: str,
-    out_dir: str,
-    query_group_by_id: dict[str, str],
-) -> None:
-    os.environ.setdefault('MPLBACKEND', 'Agg')
-    cfg = ExperimentCfg.model_validate(cfg_dump)
-    paths = MedicalDatasetGenPaths(exp_name, result_dir_overrides=cfg.global_.result_dir_overrides)
-
-    chunk_documents = read_parquet(paths, 'chunk_documents')
-    chunk_memberships = read_parquet(paths, 'chunk_memberships')
-    queries = read_parquet(paths, 'queries')
-    qrels = read_parquet(paths, 'qrels')
-    eval_stats = read_parquet_if_exists_else_empty_df(paths, 'evaluation_stats')
-    eval_results = read_parquet_if_exists_else_empty_df(paths, 'evaluation_results')
-    chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
-
-    global GEOMETRY_WORKER_STATE
-    GEOMETRY_WORKER_STATE = {
-        'cfg': cfg,
-        'queries': queries,
-        'qrels': qrels,
-        'chunk_vectors': chunk_vectors,
-        'query_vectors': query_vectors,
-        'chunk_ids': chunk_ids,
-        'maps': maps,
-        'eval_stats': eval_stats,
-        'eval_results': eval_results,
-        'out_dir': Path(out_dir),
-        'query_group_by_id': query_group_by_id,
-        'k_values': list(dict.fromkeys(cfg.retrieval.k_values)),
-    }
-
-
 def _render_embedding_geometry_query(qid: str) -> RenderedGeometryResult | None:
-    if GEOMETRY_WORKER_STATE is None:
+    worker_state = get_geom_worker_state()
+
+    if worker_state is None:
         raise RuntimeError('embedding geometry worker was not initialized')
-    state = GEOMETRY_WORKER_STATE
+
+    state = worker_state
     maps = state['maps']
     if qid not in maps['query_id_to_idx']:
         return None

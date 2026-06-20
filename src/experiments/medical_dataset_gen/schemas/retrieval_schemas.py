@@ -7,8 +7,8 @@ from pydantic import ConfigDict
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ClusterRole,
+    DataSplit,
     QueryType,
-    Split,
 )
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
@@ -45,7 +45,7 @@ class QueryRecord(BenchmarkModel):
     query_type: QueryType
     condition_id: str | None
     condition_display: str | None = None
-    split: Split
+    split: DataSplit
     dominant_facet_id: str
     facets_json: str | None = None
     query_text: str = ''

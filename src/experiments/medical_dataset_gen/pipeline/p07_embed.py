@@ -27,30 +27,6 @@ def run_embed(
     return chunk_vectors, query_vectors
 
 
-def load_embedding_arrays(
-    paths: MedicalDatasetGenPaths,
-) -> tuple[NDArray[np.float32], NDArray[np.float32], list[str], list[str]]:
-    if (
-        paths.embeddings_meta_path.exists()
-        and paths.embeddings_chunk_vectors_path.exists()
-        and paths.embeddings_query_vectors_path.exists()
-        and paths.embeddings_chunk_ids_path.exists()
-        and paths.embeddings_query_ids_path.exists()
-    ):
-        chunk_vectors = np.load(paths.embeddings_chunk_vectors_path, mmap_mode='r')
-        query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
-        chunk_ids = np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')
-        query_ids = np.load(paths.embeddings_query_ids_path, mmap_mode='r')
-        return chunk_vectors, query_vectors, chunk_ids, query_ids
-
-    payload = np.load(paths.embeddings_npz_path)
-    chunk_vectors = np.asarray(payload['chunk_vectors'], dtype=np.float32)
-    query_vectors = np.asarray(payload['query_vectors'], dtype=np.float32)
-    chunk_ids = [str(x) for x in payload['chunk_ids'].tolist()]
-    query_ids = [str(x) for x in payload['query_ids'].tolist()]
-    return chunk_vectors, query_vectors, chunk_ids, query_ids
-
-
 def _embed_sentence_transformers_streaming(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,

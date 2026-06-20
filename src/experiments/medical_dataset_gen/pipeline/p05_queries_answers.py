@@ -17,8 +17,8 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerFact,
     AnswerSourceFact,
+    ClinicalAxis,
     ClinicalAxisOntology,
-    FacetAxis,
     GoldAnswerOutputRow,
     MedicalOntology,
     QueryOutputRow,
@@ -205,7 +205,7 @@ def canonical_answer(plan: QueryPlan, facet_summaries: dict[str, str]) -> str:
     )
 
 
-def facets_by(plan: QueryPlan, subgroup_label: str, axis: FacetAxis) -> str:
+def facets_by(plan: QueryPlan, subgroup_label: str, axis: ClinicalAxis) -> str:
     for facet in plan.facets:
         if facet.subgroup_label == subgroup_label and facet.axis == axis:
             return facet.facet_id
