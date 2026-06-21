@@ -2,6 +2,7 @@ import argparse
 import inspect
 import sys
 from collections.abc import Callable
+from importlib import import_module
 from pathlib import Path
 from typing import cast
 
@@ -17,11 +18,13 @@ from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     load_config_from_cli,
+    paths_for,
+    setup_logging,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
 
-def run_store_eval_figures(
+def run_eval_plots(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
     selected_plots: set[str] | None = None,
@@ -90,7 +93,8 @@ def build_plot_callable(
     plot_context: PlotCallContext,
 ) -> Callable[[], None]:
     plot_fn_name = f'plot_{plot_name}'
-    plot_fn = globals().get(plot_fn_name)
+    plot_module = import_module('experiments.medical_dataset_gen.evaluation.plots')
+    plot_fn = getattr(plot_module, plot_fn_name, None)
     if plot_fn is None or not callable(plot_fn):
         raise ValueError(f'Missing plot function: {plot_fn_name}')
 
@@ -158,3 +162,15 @@ def parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[str] | Non
     finally:
         sys.argv = original_argv
     return cfg, parse_plot_names(args.plots)
+
+
+def main(argv: list[str] | None = None) -> None:
+    cli_argv = sys.argv[1:] if argv is None else argv
+    cfg, selected_plots = parse_plots_cli_args(cli_argv)
+    paths = paths_for(cfg)
+    setup_logging(paths)
+    run_eval_plots(cfg, paths, selected_plots=selected_plots)
+
+
+if __name__ == '__main__':
+    main()

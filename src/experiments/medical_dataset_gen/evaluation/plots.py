@@ -14,7 +14,7 @@ from experiments.medical_dataset_gen.evaluation.plots_configs import NamedPlotMe
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
 from experiments.medical_dataset_gen.pipeline.p11_eval_plots import (
     parse_plots_cli_args,
-    run_store_eval_figures,
+    run_eval_plots,
 )
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 from experiments.medical_dataset_gen.utils.global_configs import (
@@ -833,7 +833,7 @@ def plot_gain_over_topk_html(
     )
 
 
-def plot_gain_over_topk_simple(
+def plot_gain_over_topk_best_facet_hit_lambda(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
@@ -852,7 +852,7 @@ def plot_gain_over_topk_simple(
     x = np.arange(len(k_values))
     width = 0.8 / max(len(diversity_strategies), 1)
 
-    fig, axes = _grid_figure('gain_over_topk_simple')
+    fig, axes = _grid_figure('gain_over_topk_best_facet_hit_lambda')
     for ax, (stats_col, result_col, title, higher_is_better) in zip(
         axes.flatten(),
         metrics,
@@ -914,7 +914,7 @@ def plot_gain_over_topk_simple(
         _best_lambda_note(stats_df, diversity_strategies, k_values),
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
-    fig.savefig(out_dir / 'gain_over_topk_simple.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'gain_over_topk_best_facet_hit_lambda.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
@@ -1802,7 +1802,7 @@ def _gain_over_topk_offset(*, group_idx: int, n_groups: int, slot_width: float) 
 
 
 def _gain_over_topk_footer_layout(lambda_values: list[float]) -> GainOverTopkFooterLayout:
-    values_per_line = 20
+    values_per_line = 35
     lambda_line_count = len(
         _format_lambda_value_lines(lambda_values, values_per_line=values_per_line)
     )
@@ -2127,4 +2127,4 @@ def _figure_legend(fig: Figure, axes: NDArray[Any]) -> None:
 if __name__ == '__main__':
     cfg, selected_plots = parse_plots_cli_args(sys.argv[1:])
     paths = paths_for(cfg)
-    run_store_eval_figures(cfg, paths, selected_plots=selected_plots)
+    run_eval_plots(cfg, paths, selected_plots=selected_plots)

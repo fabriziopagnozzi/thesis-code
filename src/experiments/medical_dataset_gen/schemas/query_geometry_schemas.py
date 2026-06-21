@@ -8,7 +8,10 @@ import polars as pl
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import BenchmarkModel
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    BenchmarkModel,
+    ChunkPoolScope,
+)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
@@ -31,7 +34,7 @@ class GeometryArtifact(BenchmarkModel):
 
     query_id: str
     query: QueryRecord
-    pool_scope: str
+    pool_scope: ChunkPoolScope
     candidate_chunk_ids: list[str]
     candidate_vectors: NDArray[np.float32]
     query_vector: NDArray[np.float32]
@@ -84,7 +87,7 @@ class EmbeddingGeometryQueryStats(TypedDict, total=False):
     selection_group: str | None
     query_type: str
     condition_id: str | None
-    pool_scope: str
+    pool_scope: ChunkPoolScope
     pool_size: int
     plot_k: int
     reduction_method: str

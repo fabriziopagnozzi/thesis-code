@@ -11,7 +11,11 @@ from uuid import uuid4
 import yaml
 from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import QueryType
+from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkPoolScope,
+    PlanCalibrationMode,
+    QueryType,
+)
 from helpers.dir_paths import ROOT_DIR
 
 type SyntheticMedicalTableName = Literal[
@@ -45,7 +49,7 @@ class GlobalCfg(BaseModel):
 class GenerationCfg(BaseModel):
     ontology_path: str | None = None
     query_types: list[QueryType] = Field(default_factory=lambda: ['subgroup_comparison'])
-    dominance_mode: Literal['rotating', 'embedding_calibrated'] = 'rotating'
+    dominance_mode: PlanCalibrationMode = 'rotating'
     dominance_probe_chunks_per_facet: PositiveInt = 8
     calibration_min_probe_margin: float | None = Field(default=None, ge=0.0)
     gold_chunks_dominant: PositiveInt = 25
@@ -76,7 +80,7 @@ class EmbeddingCfg(BaseModel):
 
 
 class RetrievalCfg(BaseModel):
-    pool_scope: Literal['query_local', 'same_condition', 'full_corpus'] = 'query_local'
+    pool_scope: ChunkPoolScope = 'query_local'
     candidate_pool_n: PositiveInt = 300
     k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
     lambda_values: list[NonNegativeFloat] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
@@ -216,9 +220,9 @@ def load_config(exp: str | None = None) -> ExperimentCfg:
     if not cfg_path.exists():
         raise FileNotFoundError(
             f'missing experiment config: {cfg_path}. '
-            'Create it manually before running the pipeline; '
-            'src/experiments/medical_dataset_gen/_config.yaml is no longer used.'
+            'Create it manually before running the pipeline.'
         )
+
     with open(cfg_path) as f:
         raw = yaml.safe_load(f)
     cfg = ExperimentCfg.model_validate(raw)

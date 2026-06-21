@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-from typing import Literal
+from typing import Literal, get_args
 
 from experiments.medical_dataset_gen.pipeline.p01_plans import (
     run_make_query_plans,
@@ -24,7 +24,7 @@ from experiments.medical_dataset_gen.pipeline.p09_evaluate import run_evaluate
 from experiments.medical_dataset_gen.pipeline.p10_query_geom_plots import (
     run_query_geom_plots,
 )
-from experiments.medical_dataset_gen.pipeline.p11_eval_plots import run_store_eval_figures
+from experiments.medical_dataset_gen.pipeline.p11_eval_plots import run_eval_plots
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
@@ -47,9 +47,10 @@ type PipelineStage = Literal[
     'geom_plots',
     'eval_plots',
 ]
+PIPELINE_STAGES_SET = set[PipelineStage](get_args(PipelineStage.__value__))
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 
-STAGES: list[tuple[PipelineStage, PipelineStageFn]] = [
+STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('plans', run_make_query_plans),
     ('calibrate_plans', run_calibrate_query_plans),
     ('facts', run_make_facts),
@@ -60,22 +61,18 @@ STAGES: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
     ('geom_plots', run_query_geom_plots),
-    ('eval_plots', run_store_eval_figures),
+    ('eval_plots', run_eval_plots),
 ]
 
 
 def main() -> None:
-    stage_parser = argparse.ArgumentParser()
-    stage_parser.add_argument(
-        '--from', dest='from_stage', choices=[name for name, _ in STAGES], default=None
-    )
-    stage_parser.add_argument(
-        '--to', dest='to_stage', choices=[name for name, _ in STAGES], default=None
-    )
-    stage_parser.add_argument('--only', choices=[name for name, _ in STAGES], default=None)
-    stage_parser.add_argument('--release-llm', type=bool, default=None)
-    stage_parser.add_argument('--no-log-tee', action='store_true')
-    args, _ = stage_parser.parse_known_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGES_SET, default=None)
+    parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGES_SET, default=None)
+    parser.add_argument('--only', choices=PIPELINE_STAGES_SET, default=None)
+    parser.add_argument('--release-llm', type=bool, default=None)
+    parser.add_argument('--no-log-tee', action='store_true')
+    args, _ = parser.parse_known_args()
 
     cfg = load_config_from_cli()
 
@@ -88,15 +85,17 @@ def main() -> None:
         stop_idx = _stage_index(args.only)
     else:
         start_idx = _stage_index(args.from_stage) if args.from_stage else 0
-        stop_idx = _stage_index(args.to_stage) if args.to_stage else len(STAGES) - 1
+        stop_idx = _stage_index(args.to_stage) if args.to_stage else len(STAGES_TO_FNS_SORTED) - 1
 
     if stop_idx < start_idx:
         raise ValueError('--to must be the same as or later than --from')
 
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
-    print(f'[pipeline] running stages: {[name for name, _ in STAGES[start_idx : stop_idx + 1]]}')
+    print(
+        f'[pipeline] running stages: {[name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]}'
+    )
 
-    for name, fn in STAGES[start_idx : stop_idx + 1]:
+    for name, fn in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
         print(f'\n=== Stage: {name} ===')
@@ -104,7 +103,7 @@ def main() -> None:
 
 
 def _stage_index(name: str) -> int:
-    for i, (stage_name, _) in enumerate(STAGES):
+    for i, (stage_name, _) in enumerate(STAGES_TO_FNS_SORTED):
         if stage_name == name:
             return i
     raise KeyError(name)

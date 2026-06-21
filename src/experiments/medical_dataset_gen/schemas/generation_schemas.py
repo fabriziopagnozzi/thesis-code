@@ -13,24 +13,46 @@ type ClinicalAxis = Literal['treatment_duration', 'rehab_outcome']
 type ClusterRole = Literal[
     'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
 ]
-CLUSTER_ROLE_LIST: list[ClusterRole] = list(get_args(ClusterRole.__value__))
+CLUSTER_ROLE_LIST = list[ClusterRole](get_args(ClusterRole.__value__))
 
 type DistractorStr = Literal[
     'same_condition_wrong_subgroup',
     'same_subgroup_wrong_condition',
     'same_axis_wrong_condition',
 ]
-DISTRACTOR_TYPES: list[DistractorStr] = list(get_args(DistractorStr.__value__))
+DISTRACTOR_TYPES = list[DistractorStr](get_args(DistractorStr.__value__))
 
 type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
 
+type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
+
+type ChunkPoolScope = Literal['query_local', 'same_condition', 'full_corpus']
 
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
 
 type DataSplit = Literal['train', 'validation', 'test']
 type PatientSex = Literal['female', 'male']
-type ConditionKey = str
+
+type ConditionKey = Literal[
+    'encephalitis_myelitis',
+    'pneumonia',
+    'ischemic_stroke',
+    'heart_failure',
+    'bacterial_meningitis',
+    'multiple_sclerosis_relapse',
+    'spinal_epidural_abscess',
+    'pulmonary_embolism',
+    'copd_exacerbation',
+    'infective_endocarditis',
+    'osteomyelitis',
+    'pyelonephritis_sepsis',
+    'diabetic_foot_infection',
+    'cirrhosis_encephalopathy',
+    'lupus_nephritis',
+    'severe_cellulitis',
+    'ulcerative_colitis_flare',
+]
 
 
 class QueryOutputRow(TypedDict):

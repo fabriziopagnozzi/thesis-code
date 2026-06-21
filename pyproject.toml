@@ -46,8 +46,8 @@ dev = [
 # -----------------------------------------------------------------------------------------------
 # Synthetic Medical Dataset Generation
 synth_pipeline = "python -m experiments.medical_dataset_gen.pipeline"
-synth_eval_plots = "python -m experiments.medical_dataset_gen.pipeline.k_evalplots"
-synth_geom_plots = "python -m experiments.medical_dataset_gen.pipeline.i_query_geom_plots"
+synth_eval_plots = "python -m experiments.medical_dataset_gen.pipeline.p11_eval_plots"
+synth_geom_plots = "python -m experiments.medical_dataset_gen.pipeline.p10_query_geom_plots"
 
 # -----------------------------------------------------------------------------------------------
 # MIMIC Experiments
@@ -78,7 +78,7 @@ mimic_gen_queries_llm = "python -m experiments.mimic.queries.b_gen_queries_llm"
 mimic_filter_queries = "python -m experiments.mimic.queries.c_filter_queries"
 
 # Utils
-mimic_lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"/home/pagnozzi/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
+mimic_lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"~/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
 # -----------------------------------------------------------------------------------------------
 
 [tool.uv]

@@ -6,6 +6,7 @@ import yaml
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalAxis,
+    ConditionKey,
     ConditionOntology,
     MedicalOntology,
     SubgroupKey,
@@ -30,7 +31,7 @@ def load_ontology(cfg: ExperimentCfg) -> MedicalOntology:
 
 def get_selected_conditions(
     ontology: MedicalOntology, n_conditions: int
-) -> list[tuple[str, ConditionOntology]]:
+) -> list[tuple[ConditionKey, ConditionOntology]]:
     items = list(ontology.conditions.items())
     if n_conditions > len(items):
         raise ValueError(f'Config asks for {n_conditions} conditions but ontology has {len(items)}')

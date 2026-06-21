@@ -10,12 +10,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Literal
 
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
+from experiments.medical_dataset_gen.schemas.generation_schemas import ChunkPoolScope
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     ChunkMembershipRecord,
@@ -90,7 +90,7 @@ def build_index_maps(
 
 def get_candidate_pool_indices(
     query_id: str,
-    pool_scope: Literal['query_local', 'same_condition', 'full_corpus'],
+    pool_scope: ChunkPoolScope,
     n_chunks: int,
     chunks_by_source_query: dict[str, list[int]],
     chunks_by_condition: dict[str, list[int]],
@@ -234,7 +234,7 @@ def sigmoid_polars_expr(expr: pl.Expr) -> pl.Expr:
 # Miscellaneous utils
 def assert_pool_scope_match(
     df: pl.DataFrame,
-    expected_pool_scope: str,
+    expected_pool_scope: ChunkPoolScope,
     table_name: str,
 ) -> None:
     if 'pool_scope' not in df.columns or df.is_empty():
