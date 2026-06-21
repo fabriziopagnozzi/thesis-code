@@ -103,6 +103,7 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
                 f'queries={query_written}/{n_queries}'
             )
         meta = {
+            'dataset_schema_version': cfg.dataset_schema_version,
             'backend': 'sentence_transformers',
             'model_name': cfg.embeddings.model_name,
             'dimension': int(dim),
@@ -110,6 +111,8 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
             'device': cfg.embeddings.device,
             'devices': list(cfg.embeddings.devices),
             'format': 'npy_memmap',
+            'n_chunks': int(n_chunks),
+            'n_queries': int(n_queries),
             'chunk_vectors_file': str(paths.embeddings_chunk_vectors_path),
             'query_vectors_file': str(paths.embeddings_query_vectors_path),
             'chunk_ids_file': str(paths.embeddings_chunk_ids_path),

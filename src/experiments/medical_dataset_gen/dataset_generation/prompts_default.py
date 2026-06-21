@@ -7,12 +7,13 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
     QueryPlan,
+    parse_axis_payload,
 )
 
 
 class MedicalDatasetGenDefaultPrompts:
-    chunk_generation_prompt_id = 'chunk_generation_v3'
-    chunk_rewrite_prompt_id = 'chunk_rewrite_v1'
+    chunk_generation_prompt_id = 'chunk_generation_v4_axis_payload'
+    chunk_rewrite_prompt_id = 'chunk_rewrite_v2_axis_payload'
 
     chunk_generation_system = inspect.cleandoc("""
         You write concise, realistic synthetic clinical note fragments for retrieval evaluation.
@@ -39,38 +40,22 @@ class MedicalDatasetGenDefaultPrompts:
         style_directive = _chunk_style_directive(fact)
         clinical_detail = _chunk_clinical_detail(fact)
 
-        if fact.axis == 'treatment_duration':
-            evidence = inspect.cleandoc(f"""
-                Evidence focus: treatment course length.
-                Required facts to preserve exactly:
-                - Condition: {condition}
-                - Patient anchor: {patient_descriptor}
-                - Treatment: {fact.treatment}
-                - Duration: {fact.duration_days} days
+        payload = parse_axis_payload(fact.axis_payload_json)
+        required_lines = '\n'.join(f'- {item}' for item in fact.must_mention)
+        evidence = inspect.cleandoc(f"""
+            Evidence focus: {fact.axis.replace('_', ' ')}.
+            Required facts to preserve exactly:
+            - Condition: {condition}
+            - Patient anchor: {patient_descriptor}
+            {required_lines}
+            - Typed axis payload: {payload.model_dump_json()}
 
-                Excluded content:
-                - Do not mention discharge destination, rehabilitation placement, outpatient therapy,
-                  home health, home nursing, inpatient rehab, persistent functional deficits, or rehab outcome.
+            Excluded content:
+            - Do not add evidence from any other clinical axis.
 
-                Required clinical texture:
-                - Add one concrete non-rehabilitation course detail: {clinical_detail}
-                - Describe response without using generic "stable" or "significant improvement" language.
-            """)
-        else:
-            evidence = inspect.cleandoc(f"""
-                Evidence focus: discharge functional or rehabilitation status.
-                Required facts to preserve exactly:
-                - Condition: {condition}
-                - Patient anchor: {patient_descriptor}
-                - Rehabilitation or functional outcome: {fact.rehab_outcome}
-
-                Excluded content:
-                - Do not mention number of treatment days, therapy-course length, or duration labels.
-
-                Required clinical texture:
-                - Add one concrete functional detail: {clinical_detail}
-                - Tie the functional detail directly to the listed rehabilitation or discharge outcome.
-            """)
+            Required clinical texture:
+            - Keep all detail tied directly to the requested axis: {clinical_detail}
+        """)
 
         revision_block = ''
         if revision_feedback:
@@ -135,11 +120,7 @@ class MedicalDatasetGenDefaultPrompts:
         style_label = fact.note_style.replace('_', ' ')
         required_block = '\n'.join(f'- {fact_line}' for fact_line in required_facts)
         forbidden_block = '\n'.join(f'- {fact_line}' for fact_line in forbidden_facts)
-        facet_focus = (
-            f'treatment duration with {fact.treatment} for {fact.duration_days} days'
-            if fact.axis == 'treatment_duration'
-            else f'rehabilitation or discharge functional outcome: {fact.rehab_outcome}'
-        )
+        facet_focus = f'{fact.axis.replace("_", " ")}: {fact.axis_payload_json}'
 
         revision_block = ''
         if revision_feedback:
@@ -231,6 +212,8 @@ def _chunk_structure_variant(fact: ClinicalFact) -> str:
 
 
 def _chunk_clinical_detail(fact: ClinicalFact) -> str:
+    if fact.axis not in {'treatment_duration', 'rehab_outcome'}:
+        return fact.must_mention[-1]
     condition_id = str(fact.condition_id)
     if fact.axis == 'treatment_duration':
         details = {

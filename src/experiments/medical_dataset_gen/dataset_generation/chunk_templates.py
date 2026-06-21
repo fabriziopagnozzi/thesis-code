@@ -7,9 +7,15 @@ from random import Random
 import yaml
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    AcuteClinicalCoursePayload,
+    CareIntensityPayload,
     ChunkTemplateUtils,
     ClinicalFact,
+    ComplicationBurdenPayload,
     MedicalOntology,
+    RehabOutcomePayload,
+    TreatmentDurationPayload,
+    parse_axis_payload,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     MedicalDatasetGenPaths,
@@ -21,6 +27,7 @@ _TEMPLATE_DATA_FILES = (
     'chunk_duration_templates.yaml',
     'chunk_rehab_templates.yaml',
     'validation_terms.yaml',
+    'chunk_v2_axis_templates.yaml',
 )
 
 _DURATION_RE = re.compile(r'\b\d+\s*[- ]?(?:day|days)\b', re.IGNORECASE)
@@ -57,90 +64,59 @@ TEMPLATE_DATA = _load_template_utils()
 
 
 def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rng: Random) -> str:
-    if fact.axis == 'treatment_duration':
-        body = render_duration_chunk(fact, rng)
-    elif fact.axis == 'rehab_outcome':
-        body = render_rehab_chunk(fact, rng)
-    else:
-        raise ValueError(f'Unsupported axis: {fact.axis}')
-
-    return squash_whitespaces(body)
+    payload = parse_axis_payload(fact.axis_payload_json)
+    patient_lower = patient_descriptor(fact)
+    context = {
+        'patient': _sentence_start(patient_lower),
+        'patient_lower': patient_lower,
+        'condition': fact.condition_display,
+        'presentation': rng.choice(TEMPLATE_DATA.condition_presentations[fact.condition_id]),
+        'axis_sentence': _axis_sentence(fact, payload, rng),
+        'close': rng.choice(TEMPLATE_DATA.axis_closing_sentences[fact.axis]),
+    }
+    templates = TEMPLATE_DATA.note_style_templates.get(
+        fact.note_style, TEMPLATE_DATA.note_style_templates['brief_hospital_course']
+    )
+    return squash_whitespaces(rng.choice(templates).format(**context))
 
 
 def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
-    patient_lower = patient_descriptor(fact)
-    patient = _sentence_start(patient_lower)
-    condition = fact.condition_display
-    presentation = rng.choice(TEMPLATE_DATA.condition_presentations[fact.condition_id])
-    response = rng.choice(TEMPLATE_DATA.condition_status_phrases[fact.condition_id])
+    payload = parse_axis_payload(fact.axis_payload_json)
+    if not isinstance(payload, TreatmentDurationPayload):
+        raise TypeError('duration renderer requires TreatmentDurationPayload')
     course_noun = rng.choice(TEMPLATE_DATA.duration_course_nouns)
     duration_phrase = rng.choice([
         template.format(
-            treatment=fact.treatment,
-            duration_days=fact.duration_days,
+            treatment=payload.treatment,
+            duration_days=payload.duration_days,
             course_noun=course_noun,
         )
         for template in TEMPLATE_DATA.duration_phrase_templates
     ])
-    duration_focus = rng.choice([
-        'for treatment duration and therapy-course length',
-        'for total treatment duration',
-        'for the active therapy-course interval',
-    ])
-    response_verb = rng.choice(TEMPLATE_DATA.duration_response_verbs)
-    close = rng.choice(TEMPLATE_DATA.duration_closing_sentences[fact.condition_id])
-    template = rng.choice(TEMPLATE_DATA.duration_chunk_templates)
-    duration_sentence_lower = f'{duration_focus}, {duration_phrase}'
-
-    return template.format(
-        patient=patient,
-        patient_lower=patient_lower,
-        condition=condition,
-        presentation=presentation,
-        response=response,
-        response_verb=response_verb,
-        duration_sentence=_sentence_start(duration_sentence_lower),
-        duration_sentence_lower=duration_sentence_lower,
-        close=close,
+    return _sentence_start(
+        f'{rng.choice(TEMPLATE_DATA.duration_focus_phrases)}, {duration_phrase}.'
     )
 
 
 def render_rehab_chunk(fact: ClinicalFact, rng: Random) -> str:
-    patient_lower = patient_descriptor(fact)
-    patient = _sentence_start(patient_lower)
-    condition = fact.condition_display
+    payload = parse_axis_payload(fact.axis_payload_json)
+    if not isinstance(payload, RehabOutcomePayload):
+        raise TypeError('rehab renderer requires RehabOutcomePayload')
+    return f'The rehabilitation outcome was {payload.outcome}.'
 
-    presentation = rng.choice(TEMPLATE_DATA.condition_presentations[fact.condition_id])
-    functional_detail = rng.choice(
-        TEMPLATE_DATA.functional_status_phrases[fact.condition_id][fact.value_bin]
-    )
-    transition = rng.choice(TEMPLATE_DATA.rehab_transitions)
-    rehab_outcome_verb = rng.choice(TEMPLATE_DATA.rehab_outcome_verbs)
-    if fact.value_bin == 'persistent_deficit':
-        close = rng.choice(
-            TEMPLATE_DATA.rehab_closing_sentences.persistent_deficit[fact.condition_id]
-        )
-    else:
-        close = rng.choice(getattr(TEMPLATE_DATA.rehab_closing_sentences, fact.value_bin))
-    template = rng.choice(TEMPLATE_DATA.rehab_chunk_templates)
-    rehab_outcome = rng.choice([
-        f'the rehabilitation outcome as {fact.rehab_outcome}',
-        f'the discharge rehabilitation status as {fact.rehab_outcome}',
-        f'the discharge functional outcome as {fact.rehab_outcome}',
-        f'the functional recovery status as {fact.rehab_outcome}',
-    ])
 
-    return template.format(
-        patient=patient,
-        patient_lower=patient_lower,
-        condition=condition,
-        presentation=presentation,
-        transition=transition,
-        functional_detail=functional_detail,
-        rehab_outcome=rehab_outcome,
-        rehab_outcome_verb=rehab_outcome_verb,
-        close=close,
-    )
+def _axis_sentence(fact: ClinicalFact, payload, rng: Random) -> str:
+    if isinstance(payload, TreatmentDurationPayload):
+        return render_duration_chunk(fact, rng)
+    if isinstance(payload, RehabOutcomePayload):
+        return render_rehab_chunk(fact, rng)
+    if not isinstance(
+        payload,
+        (ComplicationBurdenPayload, AcuteClinicalCoursePayload, CareIntensityPayload),
+    ):
+        raise TypeError(type(payload))
+    template = rng.choice(TEMPLATE_DATA.axis_sentence_templates[fact.axis])
+    return template.format(axis_value=payload.detail)
 
 
 def validate_chunk_text(
@@ -161,29 +137,24 @@ def validate_chunk_text(
     if not _contains_subgroup_evidence(text, fact, ontology):
         hard_errors.append(f'missing subgroup evidence: {fact.subgroup_label}')
 
-    if fact.axis == 'treatment_duration':
-        duration = str(fact.duration_days)
-        treatment = str(fact.treatment).lower()
-        if duration not in lower:
-            hard_errors.append(f'missing treatment duration days: {duration}')
-        if treatment and treatment not in lower:
-            hard_errors.append(f'missing treatment: {fact.treatment}')
-        extra_treatments = _extra_condition_treatments(text, fact, ontology)
-        if extra_treatments:
-            soft_warnings.append(f'contains extra treatment(s): {", ".join(extra_treatments)}')
-        if _contains_rehab_language(text):
-            soft_warnings.append('duration chunk contains rehabilitation-outcome language')
-    elif fact.axis == 'rehab_outcome':
-        has_exact_rehab = _contains_exact_rehab_outcome(text, fact)
-        has_bin_rehab = _contains_rehab_bin_evidence(text, fact, ontology)
-        if not has_bin_rehab:
-            hard_errors.append(f'missing rehabilitation outcome evidence: {fact.rehab_outcome}')
-        elif not has_exact_rehab:
-            soft_warnings.append(f'missing exact rehabilitation phrase: {fact.rehab_outcome}')
-        if _DURATION_RE.search(text):
-            soft_warnings.append('rehab chunk contains explicit duration days')
-    else:
-        hard_errors.append(f'unsupported axis: {fact.axis}')
+    payload = parse_axis_payload(fact.axis_payload_json)
+    required = (
+        [str(payload.duration_days), payload.treatment]
+        if isinstance(payload, TreatmentDurationPayload)
+        else [payload.outcome]
+        if isinstance(payload, RehabOutcomePayload)
+        else [payload.detail]
+    )
+    for phrase in required:
+        if phrase.lower() not in lower:
+            hard_errors.append(f'missing axis payload evidence: {phrase}')
+
+    for other_axis, bins in TEMPLATE_DATA.axis_bin_terms.items():
+        if other_axis == fact.axis:
+            continue
+        foreign_terms = [term for terms in bins.values() for term in terms]
+        if any(term.lower() in lower for term in foreign_terms):
+            hard_errors.append(f'contains explicit foreign-axis evidence: {other_axis}')
 
     return ChunkValidation(hard_errors=hard_errors, soft_warnings=soft_warnings)
 
@@ -192,12 +163,10 @@ def patient_descriptor(fact: ClinicalFact) -> str:
     age = int(fact.patient_age)
     noun = 'woman' if fact.patient_sex == 'female' else 'man'
     phrase = fact.clinical_subgroup_phrase
-    if fact.subgroup_id == 'age_over_75':
-        return f'the {age}-year-old {noun}'
-    if fact.subgroup_id == 'age_under_50':
-        return f'the {age}-year-old {noun}'
-    if fact.subgroup_axis == 'demographic':
-        return f'the {age}-year-old {noun}'
+    if fact.subgroup_dimension_id == 'age_band':
+        return f'the {age}-year-old {noun}, {phrase}'
+    if fact.subgroup_dimension_id == 'sex':
+        return f'the {age}-year-old {noun}, described as a {phrase}'
     return f'the {age}-year-old {noun} with {phrase}'
 
 
@@ -225,6 +194,8 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
         return (
             _has_age_in_range(text, 18, 49) or 'younger than 50' in lower or 'below age 50' in lower
         )
+    if subgroup_id == 'age_50_to_75':
+        return _has_age_in_range(text, 50, 75)
 
     phrase = str(fact.clinical_subgroup_phrase).lower()
     if phrase and phrase in lower:
@@ -241,90 +212,6 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
 
 def _has_age_in_range(text: str, low: int, high: int) -> bool:
     return any(low <= int(match.group(1)) <= high for match in _AGE_RE.finditer(text))
-
-
-def _contains_rehab_language(text: str) -> bool:
-    lower = text.lower()
-    return any(term in lower for term in TEMPLATE_DATA.rehab_language_terms)
-
-
-def _contains_exact_rehab_outcome(
-    text: str,
-    fact: ClinicalFact,
-) -> bool:
-    lower = text.lower()
-    outcome = str(fact.rehab_outcome).lower()
-    return bool(outcome and outcome in lower)
-
-
-def _contains_rehab_bin_evidence(text: str, fact: ClinicalFact, ontology: MedicalOntology) -> bool:
-    lower = text.lower()
-    condition = ontology.conditions[fact.condition_id]
-    value_bin = fact.value_bin
-
-    for phrase in condition.rehab_outcomes.get(value_bin, []):
-        if _rehab_phrase_matches(lower, str(phrase)):
-            return True
-
-    if any(term in lower for term in TEMPLATE_DATA.rehab_bin_terms.get(value_bin, [])):
-        return True
-
-    if value_bin == 'persistent_deficit':
-        return _contains_persistent_deficit_evidence(lower)
-
-    return False
-
-
-def _rehab_phrase_matches(lower_text: str, phrase: str) -> bool:
-    phrase_lower = phrase.lower()
-    if phrase_lower in lower_text:
-        return True
-
-    phrase_tokens = _meaningful_tokens(phrase_lower)
-    if len(phrase_tokens) < 2:
-        return False
-
-    text_tokens = _meaningful_tokens(lower_text)
-    overlap = len(phrase_tokens & text_tokens)
-    threshold = 2 if len(phrase_tokens) < 5 else 3
-    return overlap >= threshold
-
-
-def _contains_persistent_deficit_evidence(lower_text: str) -> bool:
-    return any(
-        term in lower_text for term in TEMPLATE_DATA.persistent_deficit_descriptor_terms
-    ) and any(term in lower_text for term in TEMPLATE_DATA.persistent_deficit_rehab_terms)
-
-
-def _meaningful_tokens(text: str) -> set[str]:
-    stopwords = set(TEMPLATE_DATA.meaningful_token_stopwords)
-    return {
-        token
-        for token in re.findall(r'[a-z0-9]+', text.lower())
-        if len(token) > 2 and token not in stopwords
-    }
-
-
-def _extra_condition_treatments(
-    text: str, fact: ClinicalFact, ontology: MedicalOntology
-) -> list[str]:
-    lower = text.lower()
-    expected = str(fact.treatment).lower()
-    extras = []
-    for treatment in _duration_treatment_terms(fact, ontology):
-        treatment_lower = str(treatment).lower()
-        if treatment_lower != expected and treatment_lower in lower:
-            extras.append(str(treatment))
-    return extras
-
-
-def _duration_treatment_terms(
-    fact: ClinicalFact,
-    ontology: MedicalOntology,
-) -> list[str]:
-    condition = ontology.conditions[fact.condition_id]
-    treatments = condition.duration_treatments or condition.treatments
-    return [str(treatment) for treatment in treatments]
 
 
 def squash_whitespaces(text: str) -> str:

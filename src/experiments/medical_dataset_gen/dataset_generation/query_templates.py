@@ -39,8 +39,8 @@ def render_query_template(plan: QueryPlan, ontology: MedicalOntology) -> str:
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'treatment_duration_label': ontology.clinical_axes['treatment_duration'].label,
-        'rehab_outcome_label': ontology.clinical_axes['rehab_outcome'].label,
+        'primary_axis_label': ontology.clinical_axes[plan.primary_axis].label,
+        'secondary_axis_label': ontology.clinical_axes[plan.secondary_axis].label,
     }
 
     return squash_whitespaces(template.format(**context))
@@ -48,10 +48,12 @@ def render_query_template(plan: QueryPlan, ontology: MedicalOntology) -> str:
 
 def render_answer_template(
     plan: QueryPlan,
-    subgroup_a_duration: str,
-    subgroup_a_rehab: str,
-    subgroup_b_duration: str,
-    subgroup_b_rehab: str,
+    *,
+    subgroup_a_primary: str,
+    subgroup_a_secondary: str,
+    subgroup_b_primary: str,
+    subgroup_b_secondary: str,
+    ontology: MedicalOntology,
 ) -> str:
     template = answer_template_spec(plan.query_type).template
     context = {
@@ -61,10 +63,12 @@ def render_answer_template(
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'subgroup_a_duration': subgroup_a_duration,
-        'subgroup_a_rehab': subgroup_a_rehab,
-        'subgroup_b_duration': subgroup_b_duration,
-        'subgroup_b_rehab': subgroup_b_rehab,
+        'primary_axis_label': ontology.clinical_axes[plan.primary_axis].label,
+        'secondary_axis_label': ontology.clinical_axes[plan.secondary_axis].label,
+        'subgroup_a_primary': subgroup_a_primary,
+        'subgroup_a_secondary': subgroup_a_secondary,
+        'subgroup_b_primary': subgroup_b_primary,
+        'subgroup_b_secondary': subgroup_b_secondary,
     }
     return squash_whitespaces(template.format(**context))
 

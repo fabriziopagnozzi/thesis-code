@@ -68,25 +68,27 @@ def init_evaluation_worker(cfg_dump: dict[str, object], exp_name: str) -> None:
         )
     }
 
-    set_evaluation_worker_state({
-        'cfg': cfg,
-        'queries_by_id': {
-            query_record.query_id: query_record
-            for query_record in (
-                QueryRecord.model_validate(row) for row in queries.iter_rows(named=True)
-            )
-        },
-        'chunk_vectors': chunk_vectors,
-        'query_vectors': query_vectors,
-        'chunk_ids': chunk_ids,
-        'maps': maps,
-        'facet_gold': facet_gold,
-        'gold_by_query': query_id_to_gold_chunks,
-        'qrels_by_query_chunk': get_qrels_by_query_chunk(qrels),
-        'answer_refs_by_query': answer_refs_by_query,
-        'pass_map': pass_map,
-        'k_values': sorted(set(int(k) for k in cfg.retrieval.k_values)),
-    })
+    set_evaluation_worker_state(
+        {
+            'cfg': cfg,
+            'queries_by_id': {
+                query_record.query_id: query_record
+                for query_record in (
+                    QueryRecord.model_validate(row) for row in queries.iter_rows(named=True)
+                )
+            },
+            'chunk_vectors': chunk_vectors,
+            'query_vectors': query_vectors,
+            'chunk_ids': chunk_ids,
+            'maps': maps,
+            'facet_gold': facet_gold,
+            'gold_by_query': query_id_to_gold_chunks,
+            'qrels_by_query_chunk': get_qrels_by_query_chunk(qrels),
+            'answer_refs_by_query': answer_refs_by_query,
+            'pass_map': pass_map,
+            'k_values': sorted(set(int(k) for k in cfg.retrieval.k_values)),
+        }
+    )
 
 
 def get_evaluation_worker_count(cfg: ExperimentCfg, n_queries: int) -> int:

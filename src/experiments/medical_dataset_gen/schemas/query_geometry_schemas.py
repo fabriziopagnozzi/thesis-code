@@ -68,6 +68,8 @@ class GeometryFilterStatsRow(BenchmarkModel):
     model_config = ConfigDict(extra='allow')
 
     query_id: str
+    evidence_profile_id: str
+    pool_id: str
     pool_scope: ChunkPoolScope
     pool_size: int
     topk_dominance_k: int
@@ -76,9 +78,13 @@ class GeometryFilterStatsRow(BenchmarkModel):
     n_facets_present: int
     all_facets_present: bool
     topk_dominant_count: int
-    planned_dominant_facet_id: str
-    planned_topk_dominant_count: int
-    planned_topk_dominant_fraction: float
+    calibrated_primary_facet_id: str
+    calibrated_primary_topk_count: int
+    calibrated_primary_topk_fraction: float
+    primary_axis: str
+    secondary_axis: str
+    primary_axis_topk_count: int
+    primary_axis_topk_fraction: float
     n_topk_retrieved_facets: int
     max_topk_retrieved_facets: int | None
     rank_where_all_facets_first_covered: int | None
@@ -88,11 +94,18 @@ class GeometryFilterStatsRow(BenchmarkModel):
     mean_in_facet_similarity: float
     mean_cross_facet_similarity: float
     in_minus_cross_similarity: float
+    mean_same_axis_different_cohort_similarity: float
+    mean_same_cohort_different_axis_similarity: float
+    mean_different_axis_cohort_similarity: float
+    same_axis_cohort_gap: float
+    same_cohort_axis_gap: float
     passes_filter: bool
     fail_missing_facet: bool
-    fail_weak_topk_dominance: bool
+    fail_weak_primary_axis_dominance: bool
     fail_too_many_topk_facets: bool
     fail_weak_facet_separation: bool
+    fail_weak_same_axis_cohort_separation: bool
+    fail_weak_same_cohort_axis_separation: bool
     fail_too_few_near_miss_distractors: bool
     fail_missing_or_malformed_background_outlier: bool
     facets_present_json: str

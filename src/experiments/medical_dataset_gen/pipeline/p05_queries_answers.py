@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Sequence
 
 import polars as pl
@@ -15,15 +15,21 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     render_query_template,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    AcuteClinicalCoursePayload,
     AnswerFact,
     AnswerSourceFact,
+    CareIntensityPayload,
     ClinicalAxis,
     ClinicalAxisOntology,
+    ComplicationBurdenPayload,
     GoldAnswerOutputRow,
     MedicalOntology,
     QueryOutputRow,
     QueryPlan,
     QueryPlanFacet,
+    RehabOutcomePayload,
+    TreatmentDurationPayload,
+    parse_axis_payload,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
@@ -60,9 +66,8 @@ def run_make_queries_answers(
             'facet_id',
             'axis',
             'value_bin',
-            'duration_days',
-            'treatment',
-            'rehab_outcome',
+            'axis_payload_json',
+            'facet_priority',
             'fact_id',
         ],
         batch_size=65536,
@@ -101,6 +106,12 @@ def run_make_queries_answers(
 
     queries = pl.from_dicts(query_rows, infer_schema_length=None)
     answers = pl.from_dicts(answer_rows, infer_schema_length=None)
+    expected_queries = len(plans_by_query)
+    if len(queries) != expected_queries or len(answers) != expected_queries:
+        raise RuntimeError(
+            'planned-versus-written query count mismatch: '
+            f'plans={expected_queries}, queries={len(queries)}, answers={len(answers)}'
+        )
     write_parquet(paths, 'queries', queries)
     write_parquet(paths, 'gold_answers', answers)
     if failed_query_ids:
@@ -136,7 +147,7 @@ def _finalize_query(
     )
 
     facet_summaries, facet_answer_objects = _facet_summaries(plan.facets, fact_rows)
-    answer_text = _canonical_answer(plan, facet_summaries)
+    answer_text = _canonical_answer(plan, facet_summaries, ontology)
 
     query_rows.append(plan.to_query_row(query_text))
     answer_rows.append(
@@ -175,7 +186,7 @@ def maybe_paraphrase_query(
     has_required_entities = all(label.lower() in lower for label in required)
     has_balanced_axes = all(
         _contains_axis_language(lower, ontology.clinical_axes[axis_id])
-        for axis_id in ('treatment_duration', 'rehab_outcome')
+        for axis_id in (plan.primary_axis, plan.secondary_axis)
     )
     if paraphrase and has_required_entities and has_balanced_axes:
         return paraphrase
@@ -187,29 +198,30 @@ def _contains_axis_language(lower_text: str, axis: ClinicalAxisOntology) -> bool
     return any(str(term).lower() in lower_text for term in terms)
 
 
-def _canonical_answer(plan: QueryPlan, facet_summaries: dict[str, str]) -> str:
-    subgroup_a_duration = facet_summaries[
-        facets_by(plan, plan.subgroup_a_label, 'treatment_duration')
-    ]
-    subgroup_a_rehab = facet_summaries[facets_by(plan, plan.subgroup_a_label, 'rehab_outcome')]
-    subgroup_b_duration = facet_summaries[
-        facets_by(plan, plan.subgroup_b_label, 'treatment_duration')
-    ]
-    subgroup_b_rehab = facet_summaries[facets_by(plan, plan.subgroup_b_label, 'rehab_outcome')]
+def _canonical_answer(
+    plan: QueryPlan, facet_summaries: dict[str, str], ontology: MedicalOntology
+) -> str:
     return render_answer_template(
         plan,
-        subgroup_a_duration=subgroup_a_duration,
-        subgroup_a_rehab=subgroup_a_rehab,
-        subgroup_b_duration=subgroup_b_duration,
-        subgroup_b_rehab=subgroup_b_rehab,
+        subgroup_a_primary=facet_summaries[
+            _profile_facet_key(plan.subgroup_a_id, plan.primary_axis)
+        ],
+        subgroup_a_secondary=facet_summaries[
+            _profile_facet_key(plan.subgroup_a_id, plan.secondary_axis)
+        ],
+        subgroup_b_primary=facet_summaries[
+            _profile_facet_key(plan.subgroup_b_id, plan.primary_axis)
+        ],
+        subgroup_b_secondary=facet_summaries[
+            _profile_facet_key(plan.subgroup_b_id, plan.secondary_axis)
+        ],
+        ontology=ontology,
     )
 
 
-def facets_by(plan: QueryPlan, subgroup_label: str, axis: ClinicalAxis) -> str:
-    for facet in plan.facets:
-        if facet.subgroup_label == subgroup_label and facet.axis == axis:
-            return facet.facet_id
-    raise KeyError((subgroup_label, axis))
+def _profile_facet_key(subgroup_id: str, axis: ClinicalAxis) -> str:
+    # Profile-level keys are invariant across the two query-specific facet-ID spaces.
+    return f'{subgroup_id}|{axis}'
 
 
 def _facet_summaries(
@@ -226,39 +238,19 @@ def _facet_summaries(
         facet_id = facet.facet_id
         rows = by_facet[facet_id]
         if not rows:
-            summaries[facet_id] = 'no generated evidence'
+            summaries[_profile_facet_key(facet.subgroup_id, facet.axis)] = (
+                'no generated evidence'
+            )
             continue
 
-        bins = Counter(row.value_bin for row in rows)
-        mode_bin = bins.most_common(1)[0][0]
-        if facet.axis == 'treatment_duration':
-            duration_rows = [row for row in rows if row.axis == 'treatment_duration']
-            if len(duration_rows) != len(rows):
-                raise ValueError(f'facet {facet_id!r} mixes treatment and rehabilitation facts')
-            durations = [
-                row.duration_days for row in duration_rows if row.duration_days is not None
-            ]
-            avg_duration = round(sum(durations) / len(durations), 1)
-            treatment = Counter(
-                row.treatment for row in duration_rows if row.treatment is not None
-            ).most_common(1)[0][0]
-            text = (
-                f'{_with_indefinite_article(mode_bin.replace("_", " "))} course, averaging {avg_duration} days, '
-                f'most often with {treatment}'
-            )
-        else:
-            rehab_rows = [row for row in rows if row.axis == 'rehab_outcome']
-            if len(rehab_rows) != len(rows):
-                raise ValueError(f'facet {facet_id!r} mixes treatment and rehabilitation facts')
-            example = Counter(
-                row.rehab_outcome for row in rehab_rows if row.rehab_outcome is not None
-            ).most_common(1)[0][0]
-            text = (
-                f'{_with_indefinite_article(mode_bin.replace("_", " "))} pattern, '
-                f'commonly described as {example}'
-            )
+        if any(row.axis != facet.axis for row in rows):
+            raise ValueError(f'facet {facet_id!r} mixes clinical axes')
+        # Opposite-focus views always share local_idx=0, making this canonical
+        # payload summary invariant to their different membership prefix sizes.
+        payload = parse_axis_payload(rows[0].axis_payload_json)
+        text = _summarize_payload(facet.value_bin, payload)
 
-        summaries[facet_id] = text
+        summaries[_profile_facet_key(facet.subgroup_id, facet.axis)] = text
         answer_facts.append(
             AnswerFact(
                 facet_id=facet_id,
@@ -275,6 +267,21 @@ def _facet_summaries(
 def _with_indefinite_article(phrase: str) -> str:
     article = 'an' if phrase[:1].lower() in {'a', 'e', 'i', 'o', 'u'} else 'a'
     return f'{article} {phrase}'
+
+
+def _summarize_payload(value_bin: str, payload) -> str:
+    bin_label = value_bin.replace('_', ' ')
+    if isinstance(payload, TreatmentDurationPayload):
+        return f'{_with_indefinite_article(bin_label)} course of {payload.duration_days} days with {payload.treatment}'
+    if isinstance(payload, RehabOutcomePayload):
+        return f'{_with_indefinite_article(bin_label)} pattern: {payload.outcome}'
+    if isinstance(payload, ComplicationBurdenPayload):
+        return f'{_with_indefinite_article(bin_label)} pattern: {payload.detail}'
+    if isinstance(payload, AcuteClinicalCoursePayload):
+        return f'{_with_indefinite_article(bin_label)} trajectory: {payload.detail}'
+    if isinstance(payload, CareIntensityPayload):
+        return f'{_with_indefinite_article(bin_label)} level: {payload.detail}'
+    raise TypeError(type(payload))
 
 
 def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:

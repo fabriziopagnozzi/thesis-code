@@ -70,7 +70,7 @@ def build_index_maps(
         chunk_id = row.chunk_id
         if chunk_id not in chunk_id_to_idx:
             continue
-        query_id = row.source_query_id
+        query_id = row.query_id
         chunk_idx = chunk_id_to_idx[chunk_id]
         if chunk_idx not in seen_by_query[query_id]:
             chunks_by_source_query[query_id].append(chunk_idx)

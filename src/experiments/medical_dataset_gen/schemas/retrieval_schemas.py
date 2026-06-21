@@ -6,6 +6,7 @@ from pydantic import ConfigDict
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
+    ClinicalAxis,
     ClusterRole,
     DataSplit,
     QueryType,
@@ -26,12 +27,19 @@ type TopKDiagnosticsByK = dict[int, TopKDiagnostics]
 
 class QrelRecord(BenchmarkModel):
     query_id: str
+    evidence_profile_id: str = ''
+    pool_id: str = ''
+    primary_axis: ClinicalAxis | None = None
+    secondary_axis: ClinicalAxis | None = None
+    calibrated_primary_facet_id: str | None = None
     chunk_id: str
     fact_id: str | None = None
     facet_id: str | None = None
     target_facet_id: str | None = None
     cluster_id: str | None = None
     cluster_role: ClusterRole | None = None
+    axis: ClinicalAxis | None = None
+    facet_priority: Literal['primary', 'secondary'] | None = None
     is_gold: bool = False
     distractor_type: str | None = None
     relevance_grade: int | None = None
@@ -42,11 +50,18 @@ class QueryRecord(BenchmarkModel):
     model_config = ConfigDict(extra='ignore')
 
     query_id: str
+    evidence_profile_id: str
+    pool_id: str
     query_type: QueryType
+    template_id: str
     condition_id: str | None
     condition_display: str | None = None
     split: DataSplit
-    dominant_facet_id: str
+    cohort_contrast_id: str
+    cohort_dimension_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
     facets_json: str | None = None
     query_text: str = ''
 
@@ -64,7 +79,11 @@ class ChunkMembershipRecord(BenchmarkModel):
     model_config = ConfigDict(extra='ignore')
 
     chunk_id: str
-    source_query_id: str
+    query_id: str
+    pool_id: str
+    primary_axis: ClinicalAxis | None = None
+    secondary_axis: ClinicalAxis | None = None
+    calibrated_primary_facet_id: str | None = None
 
 
 class TopKDiagnostics(TypedDict):
@@ -72,6 +91,10 @@ class TopKDiagnostics(TypedDict):
     dominant_fraction: float
     planned_dominant_count: int
     planned_dominant_fraction: float
+    primary_axis_count: int
+    primary_axis_fraction: float
+    calibrated_primary_count: int
+    calibrated_primary_fraction: float
     n_retrieved_facets: int
     facet_coverage: float
     all_facets_covered: bool

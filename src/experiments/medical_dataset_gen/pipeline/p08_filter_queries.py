@@ -9,7 +9,9 @@ queries are valid for later evaluation.
 
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
+from typing import TypedDict
 
 import numpy as np
 import polars as pl
@@ -39,9 +41,26 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
+    GeometryFilterCfg,
     MedicalDatasetGenPaths,
 )
-from experiments.medical_dataset_gen.utils.io_utils import json_dumps, read_parquet, write_parquet
+from experiments.medical_dataset_gen.utils.io_utils import (
+    json_dumps,
+    read_parquet,
+    write_json,
+    write_parquet,
+)
+
+
+class StrictGeometryFailures(TypedDict):
+    fail_missing_facet: bool
+    fail_weak_primary_axis_dominance: bool
+    fail_too_many_topk_facets: bool
+    fail_weak_facet_separation: bool
+    fail_weak_same_axis_cohort_separation: bool
+    fail_weak_same_cohort_axis_separation: bool
+    fail_too_few_near_miss_distractors: bool
+    fail_missing_or_malformed_background_outlier: bool
 
 
 def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -49,6 +68,19 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     qrels = read_parquet(paths, 'qrels')
+    calibration_path = paths.table_path('query_plan_calibration')
+    calibration_warning_by_query = (
+        {
+            str(query_id): bool(warning)
+            for query_id, warning in zip(
+                pl.read_parquet(calibration_path)['query_id'].to_list(),
+                pl.read_parquet(calibration_path)['calibration_warning'].to_list(),
+                strict=True,
+            )
+        }
+        if calibration_path.exists()
+        else {}
+    )
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
     maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
@@ -86,7 +118,11 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
         query_qrels = qrels_by_query_chunk.get(qid, {})
         if not query_facets:
             continue
-        dominant_facet_id = query.dominant_facet_id
+        calibrated_facet_id = query.calibrated_primary_facet_id
+        facet_meta = {
+            str(facet['facet_id']): (str(facet['subgroup_id']), str(facet['axis']))
+            for facet in json.loads(query.facets_json or '[]')
+        }
         facets_present = {
             facet_id: bool(topn_set & set(gold_ids)) for facet_id, gold_ids in query_facets.items()
         }
@@ -96,7 +132,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
             query_facets=query_facets,
-            dominant_facet_id=dominant_facet_id,
+            calibrated_facet_id=calibrated_facet_id,
+            primary_axis=query.primary_axis,
             k_values=diagnostic_k_values,
         )
         primary_topk = topk_by_k[primary_k]
@@ -111,7 +148,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             k=primary_k,
         )
         n_topk_retrieved_facets = len(topk_retrieved_facets)
-        planned_topk_dominant = int(primary_topk['planned_dominant_count'])
+        calibrated_topk_count = int(primary_topk['calibrated_primary_count'])
+        primary_axis_topk_count = int(primary_topk['primary_axis_count'])
         all_facet_rank = _rank_where_all_facets_first_covered(
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
@@ -127,9 +165,10 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             for chunk_id in topn_chunk_ids
             if _is_query_near_miss_distractor(query_qrels, chunk_id)
         )
-        in_sim, cross_sim = _facet_separation(
+        separation = _facet_separation(
             qid=qid,
             query_facets=query_facets,
+            facet_meta=facet_meta,
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
         )
@@ -152,34 +191,32 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             k=primary_k,
         )
 
-        missing_facet = n_facets_present != len(query_facets)
-        weak_topk_dominance = planned_topk_dominant < cfg.geometry_filter.min_topk_dominant_count
-        too_many_topk_facets = (
-            cfg.geometry_filter.max_topk_retrieved_facets is not None
-            and n_topk_retrieved_facets > cfg.geometry_filter.max_topk_retrieved_facets
+        failures = _strict_gate_failures(
+            cfg.geometry_filter,
+            n_facets_present=n_facets_present,
+            n_facets=len(query_facets),
+            primary_axis_topk_count=primary_axis_topk_count,
+            n_topk_retrieved_facets=n_topk_retrieved_facets,
+            in_minus_cross_similarity=separation['in_minus_cross_similarity'],
+            same_axis_cohort_gap=separation['same_axis_cohort_gap'],
+            same_cohort_axis_gap=separation['same_cohort_axis_gap'],
+            n_near_miss_distractors=n_near_miss_distractors,
+            background_outlier_complete=bool(
+                background_diagnostics['background_outlier_complete']
+            ),
         )
-        weak_facet_separation = (
-            in_sim - cross_sim
-        ) < cfg.geometry_filter.min_in_minus_cross_similarity
-        too_few_near_miss_distractors = (
-            n_near_miss_distractors < cfg.geometry_filter.min_distractors_in_pool
-        )
-        missing_or_malformed_background_outlier = not bool(
-            background_diagnostics['background_outlier_complete']
-        )
-
-        passes = not (
-            missing_facet
-            or weak_topk_dominance
-            or too_many_topk_facets
-            or weak_facet_separation
-            or too_few_near_miss_distractors
-            or missing_or_malformed_background_outlier
-        )
+        passes = not any(failures.values())
 
         geometry_row_data: dict[str, object] = (
             {
                 'query_id': qid,
+                'evidence_profile_id': query.evidence_profile_id,
+                'pool_id': query.pool_id,
+                'condition_id': query.condition_id,
+                'cohort_contrast_id': query.cohort_contrast_id,
+                'cohort_dimension_id': query.cohort_dimension_id,
+                'template_id': query.template_id,
+                'calibration_warning': calibration_warning_by_query.get(qid, False),
                 'pool_scope': cfg.retrieval.pool_scope,
                 'pool_size': len(topn_global),
                 'topk_dominance_k': primary_k,
@@ -188,9 +225,13 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'n_facets_present': n_facets_present,
                 'all_facets_present': n_facets_present == len(query_facets),
                 'topk_dominant_count': topk_dominant,
-                'planned_dominant_facet_id': dominant_facet_id,
-                'planned_topk_dominant_count': planned_topk_dominant,
-                'planned_topk_dominant_fraction': primary_topk['planned_dominant_fraction'],
+                'calibrated_primary_facet_id': calibrated_facet_id,
+                'calibrated_primary_topk_count': calibrated_topk_count,
+                'calibrated_primary_topk_fraction': primary_topk['calibrated_primary_fraction'],
+                'primary_axis': query.primary_axis,
+                'secondary_axis': query.secondary_axis,
+                'primary_axis_topk_count': primary_axis_topk_count,
+                'primary_axis_topk_fraction': primary_topk['primary_axis_fraction'],
                 'n_topk_retrieved_facets': n_topk_retrieved_facets,
                 'max_topk_retrieved_facets': cfg.geometry_filter.max_topk_retrieved_facets,
                 'rank_where_all_facets_first_covered': all_facet_rank,
@@ -199,18 +240,9 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 ),
                 'n_distractors_in_pool': n_distractors,
                 'n_near_miss_distractors_in_pool': n_near_miss_distractors,
-                'mean_in_facet_similarity': in_sim,
-                'mean_cross_facet_similarity': cross_sim,
-                'in_minus_cross_similarity': in_sim - cross_sim,
+                **separation,
                 'passes_filter': passes,
-                'fail_missing_facet': missing_facet,
-                'fail_weak_topk_dominance': weak_topk_dominance,
-                'fail_too_many_topk_facets': too_many_topk_facets,
-                'fail_weak_facet_separation': weak_facet_separation,
-                'fail_too_few_near_miss_distractors': too_few_near_miss_distractors,
-                'fail_missing_or_malformed_background_outlier': (
-                    missing_or_malformed_background_outlier
-                ),
+                **failures,
                 'facets_present_json': json_dumps(facets_present),
                 'topk_retrieved_facets_json': json_dumps(topk_retrieved_facets),
             }
@@ -223,20 +255,97 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)
+    slice_stats = (
+        df.group_by(
+            'condition_id',
+            'cohort_dimension_id',
+            'cohort_contrast_id',
+            'primary_axis',
+            'secondary_axis',
+            'template_id',
+            'calibration_warning',
+            'n_topk_retrieved_facets',
+        )
+        .agg(
+            pl.len().alias('n_queries'),
+            pl.col('passes_filter').sum().alias('n_eligible'),
+            pl.col('passes_filter').mean().alias('eligible_rate'),
+        )
+        .sort('condition_id', 'cohort_contrast_id', 'primary_axis', 'secondary_axis')
+    )
+    write_parquet(paths, 'geometry_slice_stats', slice_stats)
     n_pass = int(df['passes_filter'].sum()) if len(df) else 0
+    fail_columns = [column for column in df.columns if column.startswith('fail_')]
+    combinations = df.select(fail_columns).to_dicts() if len(df) else []
+    failure_combinations = Counter(
+        '+'.join(column.removeprefix('fail_') for column, failed in row.items() if failed) or 'pass'
+        for row in combinations
+    )
+    write_json(
+        paths,
+        'geometry_summary.json',
+        {
+            'dataset_schema_version': cfg.dataset_schema_version,
+            'raw_query_count': len(df),
+            'eligible_query_count': n_pass,
+            'eligible_target_minimum': 3001,
+            'target_met': n_pass > 3000,
+            'failure_combinations': dict(sorted(failure_combinations.items())),
+        },
+    )
     print(f'[geometry] {n_pass:,}/{len(df):,} queries pass')
     return df
 
 
+def _strict_gate_failures(
+    cfg: GeometryFilterCfg,
+    *,
+    n_facets_present: int,
+    n_facets: int,
+    primary_axis_topk_count: int,
+    n_topk_retrieved_facets: int,
+    in_minus_cross_similarity: float,
+    same_axis_cohort_gap: float,
+    same_cohort_axis_gap: float,
+    n_near_miss_distractors: int,
+    background_outlier_complete: bool,
+) -> StrictGeometryFailures:
+    max_facets = cfg.max_topk_retrieved_facets
+    return {
+        'fail_missing_facet': n_facets_present != n_facets,
+        'fail_weak_primary_axis_dominance': (
+            primary_axis_topk_count < cfg.min_primary_axis_count
+        ),
+        'fail_too_many_topk_facets': (
+            max_facets is not None and n_topk_retrieved_facets > max_facets
+        ),
+        'fail_weak_facet_separation': (
+            in_minus_cross_similarity < cfg.min_in_minus_cross_similarity
+        ),
+        'fail_weak_same_axis_cohort_separation': (
+            same_axis_cohort_gap < cfg.min_same_axis_cohort_gap
+        ),
+        'fail_weak_same_cohort_axis_separation': (
+            same_cohort_axis_gap < cfg.min_same_cohort_axis_gap
+        ),
+        'fail_too_few_near_miss_distractors': (
+            n_near_miss_distractors < cfg.min_distractors_in_pool
+        ),
+        'fail_missing_or_malformed_background_outlier': not background_outlier_complete,
+    }
+
+
 def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
-    return sorted({
-        int(k)
-        for k in [
-            *cfg.retrieval.k_values,
-            cfg.geometry_filter.topk_dominance_k,
-            cfg.geometry_filter.primary_topk_dominance_k,
-        ]
-    })
+    return sorted(
+        {
+            int(k)
+            for k in [
+                *cfg.retrieval.k_values,
+                cfg.geometry_filter.topk_dominance_k,
+                cfg.geometry_filter.primary_topk_dominance_k,
+            ]
+        }
+    )
 
 
 def _topk_diagnostics_by_k(
@@ -244,7 +353,8 @@ def _topk_diagnostics_by_k(
     topn_chunk_ids: list[str],
     query_qrels: QueryIdToQrels,
     query_facets: FacetIdToGoldChunks,
-    dominant_facet_id: str,
+    calibrated_facet_id: str,
+    primary_axis: str,
     k_values: list[int],
 ) -> TopKDiagnosticsByK:
     rows: TopKDiagnosticsByK = {}
@@ -258,13 +368,33 @@ def _topk_diagnostics_by_k(
         n_selected = min(k, len(topn_chunk_ids))
         denominator = max(n_selected, 1)
         most_common_count = counts.most_common(1)[0][1] if counts else 0
-        planned_count = counts.get(dominant_facet_id, 0)
+        calibrated_count = counts.get(calibrated_facet_id, 0)
+        primary_axis_count = sum(
+            count
+            for facet_id, count in counts.items()
+            if (
+                qrel := next(
+                    (
+                        row
+                        for row in query_qrels.values()
+                        if row.facet_id == facet_id and row.is_gold
+                    ),
+                    None,
+                )
+            )
+            is not None
+            and qrel.axis == primary_axis
+        )
         n_facets = len(query_facets)
         rows[k] = {
             'dominant_count': most_common_count,
             'dominant_fraction': most_common_count / denominator,
-            'planned_dominant_count': planned_count,
-            'planned_dominant_fraction': planned_count / denominator,
+            'planned_dominant_count': calibrated_count,
+            'planned_dominant_fraction': calibrated_count / denominator,
+            'primary_axis_count': primary_axis_count,
+            'primary_axis_fraction': primary_axis_count / denominator,
+            'calibrated_primary_count': calibrated_count,
+            'calibrated_primary_fraction': calibrated_count / denominator,
             'n_retrieved_facets': len(retrieved_facets),
             'facet_coverage': len(retrieved_facets) / n_facets if n_facets else 0.0,
             'all_facets_covered': len(retrieved_facets) == n_facets,
@@ -281,6 +411,10 @@ def _flatten_topk_diagnostics(topk_by_k: TopKDiagnosticsByK) -> dict[str, object
         flat[f'{prefix}_dominant_fraction'] = row['dominant_fraction']
         flat[f'{prefix}_planned_dominant_count'] = row['planned_dominant_count']
         flat[f'{prefix}_planned_dominant_fraction'] = row['planned_dominant_fraction']
+        flat[f'{prefix}_primary_axis_count'] = row['primary_axis_count']
+        flat[f'{prefix}_primary_axis_fraction'] = row['primary_axis_fraction']
+        flat[f'{prefix}_calibrated_primary_count'] = row['calibrated_primary_count']
+        flat[f'{prefix}_calibrated_primary_fraction'] = row['calibrated_primary_fraction']
         flat[f'{prefix}_n_retrieved_facets'] = row['n_retrieved_facets']
         flat[f'{prefix}_facet_coverage'] = row['facet_coverage']
         flat[f'{prefix}_all_facets_covered'] = row['all_facets_covered']
@@ -348,9 +482,10 @@ def _rank_where_all_facets_first_covered(
 def _facet_separation(
     qid: str,
     query_facets: FacetIdToGoldChunks,
+    facet_meta: dict[str, tuple[str, str]],
     chunk_id_to_idx: dict[str, int],
     chunk_vectors: NDArray[np.float32],
-) -> tuple[float, float]:
+) -> dict[str, float]:
     _ = qid
     gold_ids = list[str]()
     labels = list[str]()
@@ -361,7 +496,16 @@ def _facet_separation(
                 gold_ids.append(chunk_id)
                 labels.append(facet_id)
     if len(gold_ids) < 2:
-        return 0.0, 0.0
+        return {
+            'mean_in_facet_similarity': 0.0,
+            'mean_cross_facet_similarity': 0.0,
+            'in_minus_cross_similarity': 0.0,
+            'mean_same_axis_different_cohort_similarity': 0.0,
+            'mean_same_cohort_different_axis_similarity': 0.0,
+            'mean_different_axis_cohort_similarity': 0.0,
+            'same_axis_cohort_gap': 0.0,
+            'same_cohort_axis_gap': 0.0,
+        }
 
     vectors = chunk_vectors[[chunk_id_to_idx[chunk_id] for chunk_id in gold_ids]]
     sim = vectors @ vectors.T
@@ -372,7 +516,35 @@ def _facet_separation(
     cross_vals = sim[~same & not_self]
     in_sim = float(in_vals.mean()) if len(in_vals) else 0.0
     cross_sim = float(cross_vals.mean()) if len(cross_vals) else 0.0
-    return in_sim, cross_sim
+    same_axis_diff_cohort: list[float] = []
+    same_cohort_diff_axis: list[float] = []
+    diff_both: list[float] = []
+    for left in range(len(labels)):
+        left_cohort, left_axis = facet_meta[labels[left]]
+        for right in range(left + 1, len(labels)):
+            if labels[left] == labels[right]:
+                continue
+            right_cohort, right_axis = facet_meta[labels[right]]
+            value = float(sim[left, right])
+            if left_axis == right_axis:
+                same_axis_diff_cohort.append(value)
+            elif left_cohort == right_cohort:
+                same_cohort_diff_axis.append(value)
+            else:
+                diff_both.append(value)
+    same_axis_mean = float(np.mean(same_axis_diff_cohort))
+    same_cohort_mean = float(np.mean(same_cohort_diff_axis))
+    diff_both_mean = float(np.mean(diff_both))
+    return {
+        'mean_in_facet_similarity': in_sim,
+        'mean_cross_facet_similarity': cross_sim,
+        'in_minus_cross_similarity': in_sim - cross_sim,
+        'mean_same_axis_different_cohort_similarity': same_axis_mean,
+        'mean_same_cohort_different_axis_similarity': same_cohort_mean,
+        'mean_different_axis_cohort_similarity': diff_both_mean,
+        'same_axis_cohort_gap': in_sim - same_axis_mean,
+        'same_cohort_axis_gap': in_sim - same_cohort_mean,
+    }
 
 
 def _background_outlier_diagnostics(

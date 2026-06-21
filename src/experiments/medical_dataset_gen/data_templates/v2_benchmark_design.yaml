@@ -1,0 +1,551 @@
+dataset_schema_version: 2
+
+# Query cardinality comes from these explicit, clinically interpretable contrasts.
+# Reference cohorts are phrased as documented absence, not as an inference from a
+# missing diagnosis.
+cohort_levels:
+  age_under_50:
+    dimension_id: age_band
+    level_id: under_50
+    axis: demographic
+    label: patients younger than 50
+    field: age_group
+    value: under_50
+    is_reference: false
+    aliases: [younger adults, adults below 50]
+    surface_phrases: [younger adult below age 50, adult younger than 50]
+  age_50_to_75:
+    dimension_id: age_band
+    level_id: age_50_to_75
+    axis: demographic
+    label: patients aged 50 to 75
+    field: age_group
+    value: age_50_to_75
+    is_reference: true
+    aliases: [middle-aged and early older adults]
+    surface_phrases: [adult between 50 and 75 years old, patient aged 50 to 75]
+  age_over_75:
+    dimension_id: age_band
+    level_id: over_75
+    axis: demographic
+    label: patients older than 75
+    field: age_group
+    value: over_75
+    is_reference: false
+    aliases: [elderly patients, older adults above 75]
+    surface_phrases: [older adult above age 75, elderly patient older than 75]
+  female:
+    dimension_id: sex
+    level_id: female
+    axis: demographic
+    label: female patients
+    field: sex
+    value: female
+    is_reference: false
+    aliases: [women]
+    surface_phrases: [female patient, woman]
+  male:
+    dimension_id: sex
+    level_id: male
+    axis: demographic
+    label: male patients
+    field: sex
+    value: male
+    is_reference: true
+    aliases: [men]
+    surface_phrases: [male patient, man]
+
+  uncomplicated_diabetes:
+    dimension_id: diabetes_status
+    level_id: present
+    axis: comorbidity
+    label: patients with uncomplicated diabetes
+    field: comorbidity
+    value: uncomplicated_diabetes
+    is_reference: false
+    aliases: [diabetes without end-organ complications]
+    surface_phrases:
+      [
+        uncomplicated type 2 diabetes,
+        diabetes without documented end-organ complications,
+      ]
+  no_uncomplicated_diabetes:
+    dimension_id: diabetes_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without diabetes
+    field: comorbidity
+    value: no_uncomplicated_diabetes
+    is_reference: true
+    aliases: [no documented diabetes]
+    surface_phrases: [no documented diabetes, without a diabetes diagnosis]
+  chronic_kidney_disease:
+    dimension_id: kidney_disease_status
+    level_id: present
+    axis: comorbidity
+    label: patients with chronic kidney disease
+    field: comorbidity
+    value: chronic_kidney_disease
+    is_reference: false
+    aliases: [renal disease, CKD]
+    surface_phrases:
+      [stage 3 chronic kidney disease, baseline chronic kidney disease]
+  no_chronic_kidney_disease:
+    dimension_id: kidney_disease_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without chronic kidney disease
+    field: comorbidity
+    value: no_chronic_kidney_disease
+    is_reference: true
+    aliases: [preserved baseline renal function]
+    surface_phrases:
+      [no documented chronic kidney disease, preserved baseline renal function]
+  copd:
+    dimension_id: copd_status
+    level_id: present
+    axis: comorbidity
+    label: patients with COPD
+    field: comorbidity
+    value: copd
+    is_reference: false
+    aliases: [chronic obstructive pulmonary disease]
+    surface_phrases:
+      [
+        COPD treated with maintenance inhalers,
+        chronic obstructive pulmonary disease,
+      ]
+  no_copd:
+    dimension_id: copd_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without COPD
+    field: comorbidity
+    value: no_copd
+    is_reference: true
+    aliases: [no chronic obstructive lung disease]
+    surface_phrases: [no documented COPD, no chronic obstructive lung disease]
+  immunosuppression:
+    dimension_id: immune_status
+    level_id: present
+    axis: comorbidity
+    label: immunosuppressed patients
+    field: comorbidity
+    value: immunosuppression
+    is_reference: false
+    aliases: [patients receiving immunosuppression]
+    surface_phrases:
+      [
+        immunosuppression from chronic steroid therapy,
+        immunosuppression from transplant medication,
+      ]
+  no_immunosuppression:
+    dimension_id: immune_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without immunosuppression
+    field: comorbidity
+    value: no_immunosuppression
+    is_reference: true
+    aliases: [immunocompetent patients]
+    surface_phrases:
+      [no documented immunosuppression, immunocompetent baseline status]
+  obesity:
+    dimension_id: obesity_status
+    level_id: present
+    axis: comorbidity
+    label: patients with obesity
+    field: comorbidity
+    value: obesity
+    is_reference: false
+    aliases: [obese patients]
+    surface_phrases: [obesity with elevated body mass index, documented obesity]
+  no_obesity:
+    dimension_id: obesity_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without obesity
+    field: comorbidity
+    value: no_obesity
+    is_reference: true
+    aliases: [patients without elevated body mass index]
+    surface_phrases:
+      [no documented obesity, body mass index below the obesity range]
+  malignancy:
+    dimension_id: malignancy_status
+    level_id: present
+    axis: comorbidity
+    label: patients with active malignancy
+    field: comorbidity
+    value: malignancy
+    is_reference: false
+    aliases: [patients with active cancer]
+    surface_phrases:
+      [active malignancy on systemic therapy, ongoing cancer treatment]
+  no_malignancy:
+    dimension_id: malignancy_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without active malignancy
+    field: comorbidity
+    value: no_malignancy
+    is_reference: true
+    aliases: [no active cancer]
+    surface_phrases:
+      [no documented active malignancy, no ongoing cancer treatment]
+  atrial_fibrillation:
+    dimension_id: atrial_fibrillation_status
+    level_id: present
+    axis: comorbidity
+    label: patients with atrial fibrillation
+    field: comorbidity
+    value: atrial_fibrillation
+    is_reference: false
+    aliases: [patients with AF]
+    surface_phrases:
+      [chronic atrial fibrillation, atrial fibrillation on rate control]
+  no_atrial_fibrillation:
+    dimension_id: atrial_fibrillation_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without atrial fibrillation
+    field: comorbidity
+    value: no_atrial_fibrillation
+    is_reference: true
+    aliases: [no AF]
+    surface_phrases:
+      [no documented atrial fibrillation, sinus rhythm without a history of AF]
+  chronic_liver_disease:
+    dimension_id: liver_disease_status
+    level_id: present
+    axis: comorbidity
+    label: patients with chronic liver disease
+    field: comorbidity
+    value: chronic_liver_disease
+    is_reference: false
+    aliases: [patients with cirrhosis]
+    surface_phrases:
+      [chronic liver disease, cirrhosis with baseline hepatic dysfunction]
+  no_chronic_liver_disease:
+    dimension_id: liver_disease_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without chronic liver disease
+    field: comorbidity
+    value: no_chronic_liver_disease
+    is_reference: true
+    aliases: [no chronic hepatic disease]
+    surface_phrases:
+      [no documented chronic liver disease, no baseline hepatic dysfunction]
+  dementia:
+    dimension_id: dementia_status
+    level_id: present
+    axis: comorbidity
+    label: patients with dementia
+    field: comorbidity
+    value: dementia
+    is_reference: false
+    aliases: [patients with baseline cognitive impairment]
+    surface_phrases:
+      [
+        baseline dementia with memory impairment,
+        chronic cognitive impairment from dementia,
+      ]
+  no_dementia:
+    dimension_id: dementia_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without dementia
+    field: comorbidity
+    value: no_dementia
+    is_reference: true
+    aliases: [cognitively intact baseline]
+    surface_phrases: [no documented dementia, cognitively intact baseline]
+  frailty:
+    dimension_id: frailty_status
+    level_id: present
+    axis: comorbidity
+    label: frail patients
+    field: comorbidity
+    value: frailty
+    is_reference: false
+    aliases: [patients with baseline frailty]
+    surface_phrases:
+      [
+        baseline frailty with reduced reserve,
+        frailty with limited pre-hospital mobility,
+      ]
+  no_frailty:
+    dimension_id: frailty_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without frailty
+    field: comorbidity
+    value: no_frailty
+    is_reference: true
+    aliases: [robust baseline status]
+    surface_phrases:
+      [no documented frailty, robust pre-hospital functional status]
+  peripheral_vascular_disease:
+    dimension_id: peripheral_vascular_status
+    level_id: present
+    axis: comorbidity
+    label: patients with peripheral vascular disease
+    field: comorbidity
+    value: peripheral_vascular_disease
+    is_reference: false
+    aliases: [patients with peripheral artery disease]
+    surface_phrases:
+      [peripheral vascular disease, baseline peripheral artery disease]
+  no_peripheral_vascular_disease:
+    dimension_id: peripheral_vascular_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without peripheral vascular disease
+    field: comorbidity
+    value: no_peripheral_vascular_disease
+    is_reference: true
+    aliases: [no peripheral artery disease]
+    surface_phrases:
+      [
+        no documented peripheral vascular disease,
+        no baseline peripheral artery disease,
+      ]
+  autoimmune_disease:
+    dimension_id: autoimmune_status
+    level_id: present
+    axis: comorbidity
+    label: patients with autoimmune disease
+    field: comorbidity
+    value: autoimmune_disease
+    is_reference: false
+    aliases: [patients with systemic autoimmune disease]
+    surface_phrases:
+      [systemic autoimmune disease, chronic inflammatory autoimmune disease]
+  no_autoimmune_disease:
+    dimension_id: autoimmune_status
+    level_id: absent
+    axis: comorbidity
+    label: patients without autoimmune disease
+    field: comorbidity
+    value: no_autoimmune_disease
+    is_reference: true
+    aliases: [no systemic autoimmune disease]
+    surface_phrases:
+      [
+        no documented autoimmune disease,
+        no chronic inflammatory autoimmune condition,
+      ]
+
+cohort_contrasts:
+  - {
+      id: age_under_50_vs_50_to_75,
+      dimension_id: age_band,
+      cohort_a_id: age_under_50,
+      cohort_b_id: age_50_to_75,
+    }
+  - {
+      id: age_over_75_vs_50_to_75,
+      dimension_id: age_band,
+      cohort_a_id: age_over_75,
+      cohort_b_id: age_50_to_75,
+    }
+  - {
+      id: age_under_50_vs_over_75,
+      dimension_id: age_band,
+      cohort_a_id: age_under_50,
+      cohort_b_id: age_over_75,
+    }
+  - {
+      id: female_vs_male,
+      dimension_id: sex,
+      cohort_a_id: female,
+      cohort_b_id: male,
+    }
+  - {
+      id: diabetes_present_vs_absent,
+      dimension_id: diabetes_status,
+      cohort_a_id: uncomplicated_diabetes,
+      cohort_b_id: no_uncomplicated_diabetes,
+    }
+  - {
+      id: ckd_present_vs_absent,
+      dimension_id: kidney_disease_status,
+      cohort_a_id: chronic_kidney_disease,
+      cohort_b_id: no_chronic_kidney_disease,
+    }
+  - {
+      id: copd_present_vs_absent,
+      dimension_id: copd_status,
+      cohort_a_id: copd,
+      cohort_b_id: no_copd,
+    }
+  - {
+      id: immunosuppression_present_vs_absent,
+      dimension_id: immune_status,
+      cohort_a_id: immunosuppression,
+      cohort_b_id: no_immunosuppression,
+    }
+  - {
+      id: obesity_present_vs_absent,
+      dimension_id: obesity_status,
+      cohort_a_id: obesity,
+      cohort_b_id: no_obesity,
+    }
+  - {
+      id: malignancy_present_vs_absent,
+      dimension_id: malignancy_status,
+      cohort_a_id: malignancy,
+      cohort_b_id: no_malignancy,
+    }
+  - {
+      id: atrial_fibrillation_present_vs_absent,
+      dimension_id: atrial_fibrillation_status,
+      cohort_a_id: atrial_fibrillation,
+      cohort_b_id: no_atrial_fibrillation,
+    }
+  - {
+      id: liver_disease_present_vs_absent,
+      dimension_id: liver_disease_status,
+      cohort_a_id: chronic_liver_disease,
+      cohort_b_id: no_chronic_liver_disease,
+    }
+  - {
+      id: dementia_present_vs_absent,
+      dimension_id: dementia_status,
+      cohort_a_id: dementia,
+      cohort_b_id: no_dementia,
+    }
+  - {
+      id: frailty_present_vs_absent,
+      dimension_id: frailty_status,
+      cohort_a_id: frailty,
+      cohort_b_id: no_frailty,
+    }
+  - {
+      id: peripheral_vascular_present_vs_absent,
+      dimension_id: peripheral_vascular_status,
+      cohort_a_id: peripheral_vascular_disease,
+      cohort_b_id: no_peripheral_vascular_disease,
+    }
+  - {
+      id: autoimmune_present_vs_absent,
+      dimension_id: autoimmune_status,
+      cohort_a_id: autoimmune_disease,
+      cohort_b_id: no_autoimmune_disease,
+    }
+
+# Two vetted, direction-balanced profiles per pair. Selection uses a deterministic
+# parity rotation across condition, contrast, and axis-pair ranks. Both queried axes
+# differ between cohorts.
+axis_pair_profiles:
+  treatment_duration__rehab_outcome:
+    - {
+        id: low_high,
+        cohort_a_bins: [short, home_rehab],
+        cohort_b_bins: [prolonged, inpatient_rehab],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [prolonged, persistent_deficit],
+        cohort_b_bins: [standard, home_rehab],
+      }
+  treatment_duration__complication_burden:
+    - {
+        id: low_high,
+        cohort_a_bins: [short, none_documented],
+        cohort_b_bins: [prolonged, major_complication],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [prolonged, limited_complication],
+        cohort_b_bins: [standard, none_documented],
+      }
+  treatment_duration__acute_clinical_course:
+    - {
+        id: low_high,
+        cohort_a_bins: [short, early_stabilization],
+        cohort_b_bins: [prolonged, refractory_or_worsening],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [prolonged, delayed_improvement],
+        cohort_b_bins: [standard, early_stabilization],
+      }
+  treatment_duration__care_intensity:
+    - {
+        id: low_high,
+        cohort_a_bins: [short, ward_level],
+        cohort_b_bins: [prolonged, intensive_care],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [prolonged, monitored_or_procedural],
+        cohort_b_bins: [standard, ward_level],
+      }
+  rehab_outcome__complication_burden:
+    - {
+        id: low_high,
+        cohort_a_bins: [home_rehab, none_documented],
+        cohort_b_bins: [inpatient_rehab, major_complication],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [persistent_deficit, limited_complication],
+        cohort_b_bins: [home_rehab, none_documented],
+      }
+  rehab_outcome__acute_clinical_course:
+    - {
+        id: low_high,
+        cohort_a_bins: [home_rehab, early_stabilization],
+        cohort_b_bins: [persistent_deficit, refractory_or_worsening],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [inpatient_rehab, delayed_improvement],
+        cohort_b_bins: [home_rehab, early_stabilization],
+      }
+  rehab_outcome__care_intensity:
+    - {
+        id: low_high,
+        cohort_a_bins: [home_rehab, ward_level],
+        cohort_b_bins: [inpatient_rehab, intensive_care],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [persistent_deficit, monitored_or_procedural],
+        cohort_b_bins: [home_rehab, ward_level],
+      }
+  complication_burden__acute_clinical_course:
+    - {
+        id: low_high,
+        cohort_a_bins: [none_documented, early_stabilization],
+        cohort_b_bins: [major_complication, refractory_or_worsening],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [limited_complication, delayed_improvement],
+        cohort_b_bins: [none_documented, early_stabilization],
+      }
+  complication_burden__care_intensity:
+    - {
+        id: low_high,
+        cohort_a_bins: [none_documented, ward_level],
+        cohort_b_bins: [major_complication, intensive_care],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [limited_complication, monitored_or_procedural],
+        cohort_b_bins: [none_documented, ward_level],
+      }
+  acute_clinical_course__care_intensity:
+    - {
+        id: low_high,
+        cohort_a_bins: [early_stabilization, ward_level],
+        cohort_b_bins: [refractory_or_worsening, intensive_care],
+      }
+    - {
+        id: high_low,
+        cohort_a_bins: [delayed_improvement, monitored_or_procedural],
+        cohort_b_bins: [early_stabilization, ward_level],
+      }

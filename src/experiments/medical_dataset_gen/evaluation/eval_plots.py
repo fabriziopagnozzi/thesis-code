@@ -442,18 +442,20 @@ def plot_strategy_comparison_heatmap_html(
         visibility = [False] * total_traces
         base_idx = metric_idx * 3
         visibility[base_idx : base_idx + 3] = [True, True, True]
-        button_defs.append({
-            'label': title,
-            'method': 'update',
-            'args': [
-                {'visible': visibility},
-                {
-                    'title': (
-                        f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
-                    )
-                },
-            ],
-        })
+        button_defs.append(
+            {
+                'label': title,
+                'method': 'update',
+                'args': [
+                    {'visible': visibility},
+                    {
+                        'title': (
+                            f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
+                        )
+                    },
+                ],
+            }
+        )
 
     fig.update_layout(
         title=f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)}',
@@ -736,15 +738,17 @@ def plot_gain_over_topk_html(
                     deltas.append(delta)
                     ci_values.append(0.0 if np.isnan(ci_value) else ci_value)
                     colors.append(color_hex)
-                    customdata.append([
-                        get_style(strategy)['label'],
-                        lam,
-                        k,
-                        strat_val,
-                        ref_val,
-                        0.0 if np.isnan(ci_value) else ci_value,
-                        direction_note,
-                    ])
+                    customdata.append(
+                        [
+                            get_style(strategy)['label'],
+                            lam,
+                            k,
+                            strat_val,
+                            ref_val,
+                            0.0 if np.isnan(ci_value) else ci_value,
+                            direction_note,
+                        ]
+                    )
 
             fig.add_trace(
                 go.Bar(
@@ -1023,14 +1027,16 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
             zorder=5,
         )
         ax.set_title(
-            '\n'.join([
-                f'k={k}',
-                (
-                    f'best FacLoc λ={float(best_row["fac_loc_lam"]):.2f} | '
-                    f'MMR λ={float(best_row["mmr_lam"]):.2f}'
-                ),
-                f'{score_label}={float(best_row[score_col]):.3f}',
-            ]),
+            '\n'.join(
+                [
+                    f'k={k}',
+                    (
+                        f'best FacLoc λ={float(best_row["fac_loc_lam"]):.2f} | '
+                        f'MMR λ={float(best_row["mmr_lam"]):.2f}'
+                    ),
+                    f'{score_label}={float(best_row[score_col]):.3f}',
+                ]
+            ),
             fontsize=8.5,
         )
         ax.set_xticks(range(len(mmr_lams)))
@@ -1966,8 +1972,7 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     if topk.height == 0:
         return int(results_df['k'].max())  # type: ignore[arg-type]
     ranked = (
-        topk
-        .group_by('k')
+        topk.group_by('k')
         .agg(
             pl.col('facet_coverage').median().alias('med_fc'),
         )

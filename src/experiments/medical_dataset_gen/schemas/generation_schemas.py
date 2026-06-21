@@ -2,15 +2,26 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Literal, TypedDict, get_args
+from typing import Annotated, Literal, TypedDict, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 type ClinicalAxisKey = str
-type ClinicalAxis = Literal['treatment_duration', 'rehab_outcome']
+type ClinicalAxis = Literal[
+    'treatment_duration',
+    'rehab_outcome',
+    'complication_burden',
+    'acute_clinical_course',
+    'care_intensity',
+]
+CLINICAL_AXIS_LIST = list[ClinicalAxis](get_args(ClinicalAxis.__value__))
 
 type ClusterRole = Literal[
-    'dominant_gold', 'complementary_gold', 'hard_distractor', 'background_outlier'
+    'calibrated_primary_gold',
+    'primary_gold',
+    'secondary_gold',
+    'hard_distractor',
+    'background_outlier',
 ]
 CLUSTER_ROLE_LIST = list[ClusterRole](get_args(ClusterRole.__value__))
 
@@ -21,7 +32,7 @@ type DistractorStr = Literal[
 ]
 DISTRACTOR_TYPES = list[DistractorStr](get_args(DistractorStr.__value__))
 
-type QueryType = Literal['subgroup_comparison', 'outcome_synthesis']
+type QueryType = Literal['prioritized_subgroup_comparison']
 
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 
@@ -56,6 +67,9 @@ type ConditionKey = Literal[
 
 class QueryOutputRow(TypedDict):
     query_id: str
+    evidence_profile_id: str
+    pool_id: str
+    outcome_profile_id: str
     query_type: QueryType
     template_id: str
     condition_id: str
@@ -64,7 +78,11 @@ class QueryOutputRow(TypedDict):
     subgroup_a_label: str
     subgroup_b_id: str
     subgroup_b_label: str
-    dominant_facet_id: str
+    cohort_contrast_id: str
+    cohort_dimension_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
     split: DataSplit
     n_facets: int
     facets_json: str
@@ -74,6 +92,8 @@ class QueryOutputRow(TypedDict):
 
 class GoldAnswerOutputRow(TypedDict):
     query_id: str
+    evidence_profile_id: str
+    pool_id: str
     answer_text: str
     facet_summaries_json: str
     answer_facts_json: str
@@ -85,6 +105,59 @@ class BenchmarkModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+class TreatmentDurationPayload(BenchmarkModel):
+    axis: Literal['treatment_duration']
+    duration_days: int
+    treatment: str
+
+
+class RehabOutcomePayload(BenchmarkModel):
+    axis: Literal['rehab_outcome']
+    outcome: str
+
+
+class ComplicationBurdenPayload(BenchmarkModel):
+    axis: Literal['complication_burden']
+    detail: str
+
+
+class AcuteClinicalCoursePayload(BenchmarkModel):
+    axis: Literal['acute_clinical_course']
+    detail: str
+
+
+class CareIntensityPayload(BenchmarkModel):
+    axis: Literal['care_intensity']
+    detail: str
+
+
+type AxisFactPayload = Annotated[
+    TreatmentDurationPayload
+    | RehabOutcomePayload
+    | ComplicationBurdenPayload
+    | AcuteClinicalCoursePayload
+    | CareIntensityPayload,
+    Field(discriminator='axis'),
+]
+
+
+def parse_axis_payload(value: str) -> AxisFactPayload:
+    payload = json.loads(value)
+    axis = payload.get('axis')
+    model_by_axis = {
+        'treatment_duration': TreatmentDurationPayload,
+        'rehab_outcome': RehabOutcomePayload,
+        'complication_burden': ComplicationBurdenPayload,
+        'acute_clinical_course': AcuteClinicalCoursePayload,
+        'care_intensity': CareIntensityPayload,
+    }
+    try:
+        model = model_by_axis[axis]
+    except KeyError as exc:
+        raise ValueError(f'unsupported axis payload: {axis!r}') from exc
+    return model.model_validate(payload)
+
+
 class AnswerSourceFact(BenchmarkModel):
     model_config = ConfigDict(extra='ignore')
 
@@ -92,23 +165,15 @@ class AnswerSourceFact(BenchmarkModel):
     facet_id: str
     axis: ClinicalAxis
     value_bin: str
-    duration_days: int | None
-    treatment: str | None
-    rehab_outcome: str | None
+    axis_payload_json: str
+    facet_priority: Literal['primary', 'secondary'] | None
     fact_id: str
 
     @model_validator(mode='after')
-    def _validate_axis_fields(self) -> AnswerSourceFact:
-        if self.axis == 'treatment_duration':
-            if self.duration_days is None or self.treatment is None:
-                raise ValueError('treatment duration facts require duration_days and treatment')
-            if self.rehab_outcome is not None:
-                raise ValueError('treatment duration facts cannot include rehab_outcome')
-        else:
-            if self.rehab_outcome is None:
-                raise ValueError('rehab outcome facts require rehab_outcome')
-            if self.duration_days is not None or self.treatment is not None:
-                raise ValueError('rehab outcome facts cannot include treatment duration fields')
+    def _validate_axis_payload(self) -> AnswerSourceFact:
+        payload = parse_axis_payload(self.axis_payload_json)
+        if payload.axis != self.axis:
+            raise ValueError(f'axis payload {payload.axis!r} does not match {self.axis!r}')
         return self
 
 
@@ -127,13 +192,17 @@ class ConditionOntology(BenchmarkModel):
     duration_treatments: list[str] | None = None
     duration_days: dict[str, tuple[int, int]]
     rehab_outcomes: dict[str, list[str]]
+    new_axis_values: dict[ClinicalAxisKey, dict[str, list[str]]] = Field(default_factory=dict)
 
 
 class SubgroupOntology(BenchmarkModel):
+    dimension_id: str
+    level_id: str
     axis: SubgroupAxis
     label: str
     field: str
     value: str
+    is_reference: bool
     aliases: list[str] = Field(default_factory=list)
     surface_phrases: list[str] = Field(default_factory=list)
 
@@ -144,7 +213,23 @@ class SubgroupOntology(BenchmarkModel):
             f'{prefix}_axis': self.axis,
             f'{prefix}_field': self.field,
             f'{prefix}_value': self.value,
+            f'{prefix}_dimension_id': self.dimension_id,
+            f'{prefix}_level_id': self.level_id,
+            f'{prefix}_is_reference': self.is_reference,
         }
+
+
+class CohortContrast(BenchmarkModel):
+    id: str
+    dimension_id: str
+    cohort_a_id: str
+    cohort_b_id: str
+
+
+class AxisPairProfile(BenchmarkModel):
+    id: str
+    cohort_a_bins: tuple[str, str]
+    cohort_b_bins: tuple[str, str]
 
 
 class ClinicalAxisOntology(BenchmarkModel):
@@ -158,6 +243,8 @@ class MedicalOntology(BenchmarkModel):
     conditions: dict[ConditionKey, ConditionOntology]
     subgroups: dict[SubgroupKey, SubgroupOntology]
     clinical_axes: dict[ClinicalAxisKey, ClinicalAxisOntology]
+    cohort_contrasts: list[CohortContrast]
+    axis_pair_profiles: dict[str, list[AxisPairProfile]]
 
 
 class QueryPlanFacet(BenchmarkModel):
@@ -174,6 +261,7 @@ class QueryPlanFacet(BenchmarkModel):
     cluster_id: str
     cluster_role: ClusterRole
     target_gold_chunks: int
+    priority: Literal['primary', 'secondary']
 
 
 class QueryLogicalForm(BenchmarkModel):
@@ -182,13 +270,22 @@ class QueryLogicalForm(BenchmarkModel):
     subgroups: list[str]
     axes: list[ClinicalAxis]
     facets: list[str]
-    dominant_facet_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
 
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
 
 class QueryPlanSpec(BenchmarkModel):
-    query_type: QueryType
+    evidence_profile_id: str
+    cohort_contrast_id: str
+    cohort_dimension_id: str
+    axis_a: ClinicalAxis
+    axis_b: ClinicalAxis
+    profile_id: str
+    cohort_a_bins: tuple[str, str]
+    cohort_b_bins: tuple[str, str]
     condition_key: ConditionKey
     condition_display: str
     subgroup_a_id: str
@@ -199,6 +296,9 @@ class QueryPlanSpec(BenchmarkModel):
 
 class QueryPlan(BenchmarkModel):
     query_id: str
+    evidence_profile_id: str
+    pool_id: str
+    outcome_profile_id: str
     plan_seed: int
     split: DataSplit
     query_type: QueryType
@@ -210,17 +310,41 @@ class QueryPlan(BenchmarkModel):
     subgroup_a_axis: SubgroupAxis
     subgroup_a_field: str
     subgroup_a_value: str
+    subgroup_a_dimension_id: str
+    subgroup_a_level_id: str
+    subgroup_a_is_reference: bool
     subgroup_b_id: str
     subgroup_b_label: str
     subgroup_b_axis: SubgroupAxis
     subgroup_b_field: str
     subgroup_b_value: str
-    dominant_facet_id: str
+    subgroup_b_dimension_id: str
+    subgroup_b_level_id: str
+    subgroup_b_is_reference: bool
+    cohort_contrast_id: str
+    cohort_dimension_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
     n_facets: int
     gold_chunks_total: int
     distractor_chunks: int
     facets: list[QueryPlanFacet]
     logical_form: QueryLogicalForm
+
+    @model_validator(mode='before')
+    @classmethod
+    def _hydrate_json_columns(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        hydrated = dict(value)
+        facets_json = hydrated.pop('facets_json', None)
+        logical_form_json = hydrated.pop('logical_form_json', None)
+        if 'facets' not in hydrated and facets_json is not None:
+            hydrated['facets'] = json.loads(facets_json)
+        if 'logical_form' not in hydrated and logical_form_json is not None:
+            hydrated['logical_form'] = json.loads(logical_form_json)
+        return hydrated
 
     def _json_columns(self) -> tuple[str, str]:
         facets_json = json.dumps(
@@ -240,6 +364,9 @@ class QueryPlan(BenchmarkModel):
         facets_json, logical_form_json = self._json_columns()
         return {
             'query_id': self.query_id,
+            'evidence_profile_id': self.evidence_profile_id,
+            'pool_id': self.pool_id,
+            'outcome_profile_id': self.outcome_profile_id,
             'query_type': self.query_type,
             'template_id': self.template_id,
             'condition_id': self.condition_id,
@@ -248,7 +375,11 @@ class QueryPlan(BenchmarkModel):
             'subgroup_a_label': self.subgroup_a_label,
             'subgroup_b_id': self.subgroup_b_id,
             'subgroup_b_label': self.subgroup_b_label,
-            'dominant_facet_id': self.dominant_facet_id,
+            'cohort_contrast_id': self.cohort_contrast_id,
+            'cohort_dimension_id': self.cohort_dimension_id,
+            'primary_axis': self.primary_axis,
+            'secondary_axis': self.secondary_axis,
+            'calibrated_primary_facet_id': self.calibrated_primary_facet_id,
             'split': self.split,
             'n_facets': self.n_facets,
             'facets_json': facets_json,
@@ -266,6 +397,8 @@ class QueryPlan(BenchmarkModel):
     ) -> GoldAnswerOutputRow:
         return {
             'query_id': self.query_id,
+            'evidence_profile_id': self.evidence_profile_id,
+            'pool_id': self.pool_id,
             'answer_text': answer_text,
             'facet_summaries_json': json.dumps(facet_summaries, sort_keys=True),
             'answer_facts_json': json.dumps(
@@ -280,7 +413,11 @@ class QueryPlan(BenchmarkModel):
 
 class ClinicalFact(BenchmarkModel):
     query_id: str
-    source_query_id: str
+    evidence_profile_id: str
+    pool_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
     fact_id: str
     chunk_reuse_key: str
     facet_id: str | None
@@ -294,11 +431,13 @@ class ClinicalFact(BenchmarkModel):
     subgroup_axis: SubgroupAxis
     subgroup_field: str
     subgroup_value: str
+    subgroup_dimension_id: str
+    subgroup_level_id: str
+    subgroup_is_reference: bool
     axis: ClinicalAxis
     value_bin: str
-    duration_days: int | None
-    treatment: str | None
-    rehab_outcome: str | None
+    axis_payload_json: str
+    facet_priority: Literal['primary', 'secondary'] | None
     is_gold: bool
     distractor_type: str | None
     admission_id: str
@@ -310,6 +449,13 @@ class ClinicalFact(BenchmarkModel):
     split: DataSplit
     must_mention: list[str] = Field(default_factory=list)
     must_not_mention: list[str] = Field(default_factory=list)
+
+    @model_validator(mode='after')
+    def _validate_axis_payload(self) -> ClinicalFact:
+        payload = parse_axis_payload(self.axis_payload_json)
+        if payload.axis != self.axis:
+            raise ValueError(f'axis payload {payload.axis!r} does not match {self.axis!r}')
+        return self
 
 
 class ChunkGenerationCacheEntry(BenchmarkModel):
@@ -417,6 +563,12 @@ class ChunkTemplateUtils(BenchmarkModel):
     persistent_deficit_descriptor_terms: list[str]
     persistent_deficit_rehab_terms: list[str]
     meaningful_token_stopwords: list[str]
+    duration_focus_phrases: list[str]
+    note_style_templates: dict[str, list[str]]
+    axis_closing_sentences: dict[ClinicalAxisKey, list[str]]
+    axis_sentence_templates: dict[ClinicalAxisKey, list[str]]
+    axis_bin_terms: dict[ClinicalAxisKey, dict[str, list[str]]]
+    condition_new_axis_values: dict[str, dict[ClinicalAxisKey, dict[str, list[str]]]]
 
 
 class QueryTemplateSpec(BenchmarkModel):

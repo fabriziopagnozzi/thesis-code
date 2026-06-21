@@ -3,35 +3,36 @@
 # Copy this file into the target experiment directory as:
 #   src/experiments/medical_dataset_gen/_results/<exp>/_config.yaml
 #
+dataset_schema_version: 2
+
 global:
   seed: 42 # Random seed used by deterministic query/fact/chunk generation.
-  n_queries: 120 # Number of multi-aspect queries to generate.
-  conditions: 4 # Number of conditions from ontology.yaml to use.
+  conditions: 17 # Full v2 grid: 17 conditions x 16 contrasts x 10 axis pairs x 2 orientations.
 
   # Name of the experiment directory under:
   #   src/experiments/medical_dataset_gen/_results/<output_experiment>
   output_experiment: mvp
 
 generation:
+  query_limit: null # Optional deterministic prefix for smoke runs; null emits all 5,440 queries.
   ontology_path: null # Optional path to a custom ontology YAML.
-  query_types: # Query templates to instantiate for each condition/subgroup pair.
-    - subgroup_comparison
-    - outcome_synthesis
+  query_types: [prioritized_subgroup_comparison]
 
   dominance_mode: embedding_calibrated # "rotating" keeps the old pre-embedding dominant slot.
   dominance_probe_chunks_per_facet: 8 # Neutral probe chunks per facet used by calibrate_plans.
   calibration_min_probe_margin: null # Optional p25-vs-best-complement-p75 margin diagnostic.
-  gold_chunks_dominant: 18 # Number of gold chunks for the intentionally over-represented facet.
-  gold_chunks_complementary: 8 # Number of gold chunks for each complementary facet.
-  distractors_per_query: 30 # Number of near-miss hard negatives generated per query.
+  gold_chunks_calibrated_primary: 24
+  gold_chunks_other_primary: 20
+  gold_chunks_secondary: 14
+  distractors_per_query: 25
   background_outlier_clusters_per_query: 1 # Coherent non-gold clinical islands per query-local pool.
-  background_outlier_cluster_size: 12 # Chunks in each background outlier cluster.
+  background_outlier_cluster_size: 8
   chunk_min_words: 40
   chunk_max_words: 200
   chunk_word_tolerance: 2 # Soft tolerance around the target range to avoid crashing on a 1-word miss.
   llm_name: gemma4:12b # Ollama generation model. This pipeline passes it explicitly; no OLLAMA_MODEL env var is needed.
   llm_workers: 2 # Parallel chunk-generation workers. Match this with Ollama server OLLAMA_NUM_PARALLEL.
-  use_llm_chunk_generation: true #   false = every chunk uses deterministic clinical fallback text.
+  use_llm_chunk_generation: false
   use_llm_chunk_rewriting: false # If true and chunk generation is deterministic, rewrite fallback chunks with the LLM via the isolated global rewrite cache.
   use_llm_query_paraphrase: false # If true, generated query strings are paraphrased by LLM.
   llm_chunk_max_attempts: 3 # Maximum LLM retries per chunk before that query is dropped from the benchmark.
@@ -52,9 +53,7 @@ retrieval:
   strategies: [top_k, mmr, fac_loc]
   # Candidate-pool scope before top-N semantic retrieval:
   # - query_local: only chunks generated for the same hidden query plan. This is the current benchmark focus.
-  # - same_condition: all chunks from the same condition across different subgroup queries; harder broad-pool diagnostic.
-  # - full_corpus: all chunks across all conditions; hardest retrieval stress test.
-  pool_scope: query_local # "query_local" | "same_condition" | "full_corpus"
+  pool_scope: query_local # Schema v2 supports query_local only.
   candidate_pool_n: 300 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
   k_values: [5, 10, 20]
   lambda_values: [0.3, 0.5, 0.7] # Low lambda favors diversity/coverage; high lambda favors query similarity.
@@ -68,9 +67,11 @@ retrieval:
 geometry_filter:
   topk_dominance_k: 10 # Legacy/extra diagnostic k retained in geometry_stats.
   primary_topk_dominance_k: 20 # k used by the geometry prefilter; match the main RAG context budget.
-  min_topk_dominant_count: 5 # Minimum number of top-k results from the same dominant gold facet.
+  min_primary_axis_count: 14 # Minimum number of top-20 results from the declared primary axis.
   max_topk_retrieved_facets: 2 # Maximum distinct gold facets top-k may retrieve at primary_topk_dominance_k.
   min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
+  min_same_axis_cohort_gap: 0.03
+  min_same_cohort_axis_gap: 0.03
   min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
 
 evaluation:

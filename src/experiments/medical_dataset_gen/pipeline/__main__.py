@@ -32,6 +32,7 @@ from experiments.medical_dataset_gen.utils.global_configs import (
     paths_for,
     setup_logging,
 )
+from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
 from helpers.ollama_client import stop_model
 
 type PipelineStage = Literal[
@@ -77,8 +78,6 @@ def main() -> None:
     cfg = load_config_from_cli()
 
     paths = paths_for(cfg)
-    if not args.no_log_tee:
-        setup_logging(paths)
 
     if args.only:
         start_idx = _stage_index(args.only)
@@ -90,16 +89,22 @@ def main() -> None:
     if stop_idx < start_idx:
         raise ValueError('--to must be the same as or later than --from')
 
+    selected_stages = [name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]
+    provenance = PipelineProvenance(cfg=cfg, paths=paths, stages=selected_stages)
+    if not args.no_log_tee:
+        setup_logging(paths, provenance.run_id)
+
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
-    print(
-        f'[pipeline] running stages: {[name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]}'
-    )
+    print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
     for name, fn in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
         print(f'\n=== Stage: {name} ===')
+        input_fingerprints = provenance.before_stage(name)
         fn(cfg, paths)
+        provenance.after_stage(name, input_fingerprints)
+    provenance.finish()
 
 
 def _stage_index(name: str) -> int:

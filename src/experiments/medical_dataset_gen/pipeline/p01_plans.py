@@ -1,30 +1,22 @@
-"""Build the hidden multi-aspect query plans for the synthetic benchmark.
-
-This module exists to define the benchmark geometry before any text is
-rendered, so each query has explicit facets, conditions, and subgroup
-comparisons. It uses ontology-driven enumeration, seeded randomness, and
-balanced plan materialization to keep the query set controlled and reproducible.
-"""
+"""Build deterministic schema-v2 query plans from explicit evidence profiles."""
 
 from __future__ import annotations
 
-from random import Random
-from typing import cast
+import hashlib
+from itertools import combinations
 
 import polars as pl
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
-    get_axes_keys,
-    get_axis_bins,
+    axis_pair_key,
     get_selected_conditions,
     load_ontology,
     make_subgroup_pairs,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    CLINICAL_AXIS_LIST,
     ClinicalAxis,
-    ConditionKey,
-    ConditionOntology,
     DataSplit,
     MedicalOntology,
     QueryLogicalForm,
@@ -32,8 +24,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanFacet,
     QueryPlanSpec,
     QueryType,
-    SubgroupKey,
-    SubgroupOntology,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
@@ -41,119 +31,211 @@ from experiments.medical_dataset_gen.utils.global_configs import (
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
+QUERY_TYPE: QueryType = 'prioritized_subgroup_comparison'
+EXPECTED_FULL_PROFILE_COUNT = 2_720
+EXPECTED_FULL_QUERY_COUNT = 5_440
+
 
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    ontology: MedicalOntology = load_ontology(cfg)
-    conditions: list[tuple[ConditionKey, ConditionOntology]] = get_selected_conditions(
-        ontology, cfg.global_.conditions
-    )
-    pairs: list[
-        tuple[tuple[SubgroupKey, SubgroupOntology], tuple[SubgroupKey, SubgroupOntology]]
-    ] = make_subgroup_pairs(ontology)
-    axes_keys: list[str] = get_axes_keys(ontology)
-    if set(axes_keys) != {'treatment_duration', 'rehab_outcome'}:
-        raise ValueError(f'MVP expects treatment_duration and rehab_outcome axes, got {axes_keys}')
+    ontology = load_ontology(cfg)
+    conditions = get_selected_conditions(ontology, cfg.global_.conditions)
+    contrasts = make_subgroup_pairs(ontology)
+    axis_pairs = list(combinations(CLINICAL_AXIS_LIST, 2))
+    specs: list[QueryPlanSpec] = []
 
-    rng = Random(cfg.global_.seed)
-    rows: list[dict[str, object]] = []
-    plan_idx = 0
-    template_offsets: dict[QueryType, int] = {
-        query_type: 0 for query_type in cfg.generation.query_types
-    }
+    for condition_index, (condition_key, condition) in enumerate(conditions):
+        for contrast_index, (
+            contrast,
+            (cohort_a_id, cohort_a),
+            (cohort_b_id, cohort_b),
+        ) in enumerate(contrasts):
+            for axis_pair_index, (axis_a, axis_b) in enumerate(axis_pairs):
+                profiles = ontology.axis_pair_profiles[axis_pair_key(axis_a, axis_b)]
+                # Explicit parity rotation prevents a cohort level or clinical axis
+                # from being systematically assigned the less favorable profile.
+                profile = profiles[
+                    (
+                        cfg.global_.seed
+                        + condition_index
+                        + contrast_index
+                        + axis_pair_index
+                    )
+                    % len(profiles)
+                ]
+                evidence_profile_id = _stable_id(
+                    'epv2',
+                    cfg.dataset_schema_version,
+                    cfg.global_.seed,
+                    condition_key,
+                    contrast.id,
+                    contrast.dimension_id,
+                    cohort_a_id,
+                    cohort_b_id,
+                    axis_a,
+                    axis_b,
+                    profile.id,
+                    profile.cohort_a_bins,
+                    profile.cohort_b_bins,
+                )
+                specs.append(
+                    QueryPlanSpec(
+                        evidence_profile_id=evidence_profile_id,
+                        cohort_contrast_id=contrast.id,
+                        cohort_dimension_id=contrast.dimension_id,
+                        axis_a=axis_a,
+                        axis_b=axis_b,
+                        profile_id=profile.id,
+                        cohort_a_bins=profile.cohort_a_bins,
+                        cohort_b_bins=profile.cohort_b_bins,
+                        condition_key=condition_key,
+                        condition_display=condition.display,
+                        subgroup_a_id=cohort_a_id,
+                        subgroup_a=cohort_a,
+                        subgroup_b_id=cohort_b_id,
+                        subgroup_b=cohort_b,
+                    )
+                )
 
-    per_condition_specs: dict[ConditionKey, list[QueryPlanSpec]] = {
-        condition_key: [
-            QueryPlanSpec(
-                query_type=query_type,
-                condition_key=condition_key,
-                condition_display=condition.display,
-                subgroup_a_id=subgroup_a_id,
-                subgroup_a=subgroup_a,
-                subgroup_b_id=subgroup_b_id,
-                subgroup_b=subgroup_b,
-            )
-            for query_type in cfg.generation.query_types
-            for (subgroup_a_id, subgroup_a), (subgroup_b_id, subgroup_b) in pairs
-        ]
-        for (condition_key, condition) in conditions
-    }
+    rows = [
+        plan.to_row()
+        for spec in specs
+        for plan in (
+            _materialize_plan(cfg, ontology, spec, spec.axis_a, spec.axis_b),
+            _materialize_plan(cfg, ontology, spec, spec.axis_b, spec.axis_a),
+        )
+    ]
+    if cfg.generation.query_limit is not None:
+        rows = rows[: int(cfg.generation.query_limit)]
 
-    offsets: dict[str, int] = {condition_key: 0 for condition_key in per_condition_specs}
+    if (
+        cfg.global_.conditions == len(ontology.conditions)
+        and cfg.generation.query_limit is None
+        and (len(specs) != EXPECTED_FULL_PROFILE_COUNT or len(rows) != EXPECTED_FULL_QUERY_COUNT)
+    ):
+        raise RuntimeError(f'v2 cardinality mismatch: profiles={len(specs)}, queries={len(rows)}')
 
-    # round-robin scheduler over query plans, keyed by condition
-    # This avoids one condition dominating the whole dataset.
-    while len(rows) < cfg.global_.n_queries:
-        emitted = False
-        for condition_key, specs in per_condition_specs.items():
-            offset = offsets[condition_key]
-            if offset >= len(specs):
-                continue
-            spec = specs[offset]
-            offsets[condition_key] += 1
-            emitted = True
-            plan_idx += 1
-            template_id = _next_query_template_id(spec.query_type, template_offsets)
-            rows.append(
-                _materialize_plan_row(cfg, ontology, rng, plan_idx, spec, template_id).to_row()
-            )
-            if len(rows) >= cfg.global_.n_queries:
-                break
-        if not emitted:
-            break
-
-    df = pl.DataFrame(rows)
+    df = pl.from_dicts(rows, infer_schema_length=None)
+    if df['query_id'].n_unique() != len(df):
+        raise RuntimeError('stable v2 query IDs must be unique')
     write_parquet(paths, 'query_plans', df)
+    print(f'[plans] {len(specs):,} evidence profiles -> {len(df):,} prioritized queries')
     return df
 
 
-def _materialize_plan_row(
+def _materialize_plan(
     cfg: ExperimentCfg,
     ontology: MedicalOntology,
-    rng: Random,
-    plan_idx: int,
     spec: QueryPlanSpec,
-    template_id: str,
+    primary_axis: ClinicalAxis,
+    secondary_axis: ClinicalAxis,
 ) -> QueryPlan:
-    query_id = f'q{plan_idx:05d}'
-    dominant_slot = (plan_idx - 1) % 4
-    value_pattern_idx = (plan_idx - 1) // 4
-    facets = _facets_for_plan(
-        ontology=ontology,
-        query_id=query_id,
-        condition_id=spec.condition_key,
-        condition_display=spec.condition_display,
-        subgroup_a_id=spec.subgroup_a_id,
-        subgroup_a=spec.subgroup_a,
-        subgroup_b_id=spec.subgroup_b_id,
-        subgroup_b=spec.subgroup_b,
-        dominant_slot=dominant_slot,
-        value_pattern_idx=value_pattern_idx,
-        dominant_size=cfg.generation.gold_chunks_dominant,
-        complementary_size=cfg.generation.gold_chunks_complementary,
+    query_id = _stable_id(
+        'qv2',
+        cfg.dataset_schema_version,
+        cfg.global_.seed,
+        spec.evidence_profile_id,
+        primary_axis,
+        secondary_axis,
     )
-    dominant_facet_id = facets[dominant_slot].facet_id
+    pool_id = _stable_id(
+        'poolv2',
+        cfg.dataset_schema_version,
+        cfg.global_.seed,
+        spec.evidence_profile_id,
+        primary_axis,
+        secondary_axis,
+    )
+    split = _split_for_profile(spec.evidence_profile_id)
+    primary_candidates = [
+        (spec.subgroup_a_id, primary_axis),
+        (spec.subgroup_b_id, primary_axis),
+    ]
+    selected_subgroup_id, _ = primary_candidates[
+        _stable_int(cfg.global_.seed, query_id, 'initial_primary') % 2
+    ]
 
+    bin_by_cohort_axis = {
+        (spec.subgroup_a_id, spec.axis_a): spec.cohort_a_bins[0],
+        (spec.subgroup_a_id, spec.axis_b): spec.cohort_a_bins[1],
+        (spec.subgroup_b_id, spec.axis_a): spec.cohort_b_bins[0],
+        (spec.subgroup_b_id, spec.axis_b): spec.cohort_b_bins[1],
+    }
+    raw_facets = [
+        (spec.subgroup_a_id, spec.subgroup_a, spec.axis_a),
+        (spec.subgroup_a_id, spec.subgroup_a, spec.axis_b),
+        (spec.subgroup_b_id, spec.subgroup_b, spec.axis_a),
+        (spec.subgroup_b_id, spec.subgroup_b, spec.axis_b),
+    ]
+    facets: list[QueryPlanFacet] = []
+    for index, (cohort_id, cohort, axis) in enumerate(raw_facets, start=1):
+        facet_id = f'{query_id}_f{index}'
+        is_primary = axis == primary_axis
+        is_calibrated = is_primary and cohort_id == selected_subgroup_id
+        target = (
+            cfg.generation.gold_chunks_calibrated_primary
+            if is_calibrated
+            else cfg.generation.gold_chunks_other_primary
+            if is_primary
+            else cfg.generation.gold_chunks_secondary
+        )
+        facets.append(
+            QueryPlanFacet(
+                facet_id=facet_id,
+                condition_id=spec.condition_key,
+                condition_display=spec.condition_display,
+                subgroup_id=cohort_id,
+                subgroup_label=cohort.label,
+                subgroup_axis=cohort.axis,
+                subgroup_field=cohort.field,
+                subgroup_value=cohort.value,
+                axis=axis,
+                value_bin=bin_by_cohort_axis[(cohort_id, axis)],
+                cluster_id=f'{pool_id}_c{index}',
+                cluster_role=(
+                    'calibrated_primary_gold'
+                    if is_calibrated
+                    else 'primary_gold'
+                    if is_primary
+                    else 'secondary_gold'
+                ),
+                target_gold_chunks=target,
+                priority='primary' if is_primary else 'secondary',
+            )
+        )
+    calibrated_id = next(
+        facet.facet_id for facet in facets if facet.cluster_role == 'calibrated_primary_gold'
+    )
+    template_ids = query_template_ids(QUERY_TYPE)
+    template_id = template_ids[_stable_int(query_id, 'template') % len(template_ids)]
     logical_form = QueryLogicalForm(
-        type=spec.query_type,
+        type=QUERY_TYPE,
         condition=spec.condition_key,
         subgroups=[spec.subgroup_a_id, spec.subgroup_b_id],
-        axes=['treatment_duration', 'rehab_outcome'],
+        axes=[primary_axis, secondary_axis],
         facets=[facet.facet_id for facet in facets],
-        dominant_facet_id=dominant_facet_id,
+        primary_axis=primary_axis,
+        secondary_axis=secondary_axis,
+        calibrated_primary_facet_id=calibrated_id,
     )
-
     return QueryPlan(
         query_id=query_id,
-        plan_seed=rng.randint(0, 2**31 - 1),
-        split=_split_for_index(plan_idx),
-        query_type=spec.query_type,
+        evidence_profile_id=spec.evidence_profile_id,
+        pool_id=pool_id,
+        outcome_profile_id=spec.profile_id,
+        plan_seed=_stable_int(cfg.global_.seed, query_id) % (2**31 - 1),
+        split=split,
+        query_type=QUERY_TYPE,
         template_id=template_id,
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
-        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),  # type:ignore
-        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),  # type:ignore
-        dominant_facet_id=dominant_facet_id,
-        n_facets=len(facets),
+        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),  # type: ignore[arg-type]
+        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),  # type: ignore[arg-type]
+        cohort_contrast_id=spec.cohort_contrast_id,
+        cohort_dimension_id=spec.cohort_dimension_id,
+        primary_axis=primary_axis,
+        secondary_axis=secondary_axis,
+        calibrated_primary_facet_id=calibrated_id,
+        n_facets=4,
         gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
         distractor_chunks=(
             cfg.generation.distractors_per_query
@@ -165,101 +247,21 @@ def _materialize_plan_row(
     )
 
 
-def _next_query_template_id(query_type: QueryType, template_offsets: dict[QueryType, int]) -> str:
-    template_ids = query_template_ids(query_type)
-    if not template_ids:
-        raise ValueError(f'no query templates configured for query type: {query_type}')
-    offset = template_offsets[query_type]
-    template_offsets[query_type] = offset + 1
-    return template_ids[offset % len(template_ids)]
+def _stable_id(prefix: str, *parts: object) -> str:
+    raw = '|'.join(str(part) for part in parts)
+    return f'{prefix}_{hashlib.sha256(raw.encode()).hexdigest()[:16]}'
 
 
-def _facets_for_plan(
-    ontology: MedicalOntology,
-    query_id: str,
-    condition_id: ConditionKey,
-    condition_display: str,
-    subgroup_a_id: str,
-    subgroup_a: SubgroupOntology,
-    subgroup_b_id: str,
-    subgroup_b: SubgroupOntology,
-    dominant_slot: int,
-    value_pattern_idx: int,
-    dominant_size: int,
-    complementary_size: int,
-) -> list[QueryPlanFacet]:
-    subgroup_a_duration, subgroup_b_duration = _duration_value_pattern(ontology, value_pattern_idx)
-    subgroup_a_rehab, subgroup_b_rehab = _rehab_value_pattern(ontology, value_pattern_idx)
-    raw_facets = [
-        (subgroup_a_id, subgroup_a, 'treatment_duration', subgroup_a_duration),
-        (subgroup_a_id, subgroup_a, 'rehab_outcome', subgroup_a_rehab),
-        (subgroup_b_id, subgroup_b, 'treatment_duration', subgroup_b_duration),
-        (subgroup_b_id, subgroup_b, 'rehab_outcome', subgroup_b_rehab),
-    ]
-    facets = list[QueryPlanFacet]()
-
-    for idx, (subgroup_id, subgroup, axis, value_bin) in enumerate(raw_facets):
-        facet_id = f'{query_id}_f{idx + 1}'
-        is_dominant = idx == dominant_slot
-        facets.append(
-            QueryPlanFacet(
-                facet_id=facet_id,
-                condition_id=condition_id,
-                condition_display=condition_display,
-                subgroup_id=subgroup_id,
-                subgroup_label=subgroup.label,
-                subgroup_axis=subgroup.axis,
-                subgroup_field=subgroup.field,
-                subgroup_value=subgroup.value,
-                axis=cast(ClinicalAxis, axis),
-                value_bin=value_bin,
-                cluster_id=f'{query_id}_c{idx + 1}',
-                cluster_role='dominant_gold' if is_dominant else 'complementary_gold',
-                target_gold_chunks=dominant_size if is_dominant else complementary_size,
-            )
-        )
-    return facets
+def _stable_int(*parts: object) -> int:
+    raw = '|'.join(str(part) for part in parts)
+    return int(hashlib.sha256(raw.encode()).hexdigest()[:16], 16)
 
 
-def _duration_value_pattern(ontology: MedicalOntology, value_pattern_idx: int) -> tuple[str, str]:
-    duration_bins = get_axis_bins(ontology, 'treatment_duration')
-    if len(duration_bins) != 3:
-        raise ValueError(
-            'MVP duration pairing expects exactly three ordered treatment_duration bins'
-        )
-
-    # Keep the most severe duration bin in every comparison so the benchmark
-    # continues to emphasize coverage across strongly separated clusters.
-    patterns = [
-        (duration_bins[0], duration_bins[2]),
-        (duration_bins[2], duration_bins[0]),
-        (duration_bins[1], duration_bins[2]),
-        (duration_bins[2], duration_bins[1]),
-    ]
-    return patterns[value_pattern_idx % len(patterns)]
-
-
-def _rehab_value_pattern(ontology: MedicalOntology, value_pattern_idx: int) -> tuple[str, str]:
-    rehab_bins = get_axis_bins(ontology, 'rehab_outcome')
-    if len(rehab_bins) != 3:
-        raise ValueError('MVP rehab pairing expects exactly three ordered rehab_outcome bins')
-
-    patterns = [
-        (rehab_bins[0], rehab_bins[1]),
-        (rehab_bins[1], rehab_bins[0]),
-        (rehab_bins[2], rehab_bins[0]),
-        (rehab_bins[0], rehab_bins[2]),
-        (rehab_bins[1], rehab_bins[2]),
-        (rehab_bins[2], rehab_bins[1]),
-    ]
-    return patterns[(value_pattern_idx // 2) % len(patterns)]
-
-
-def _split_for_index(plan_idx: int) -> DataSplit:
-    bucket = plan_idx % 20
-    if bucket in {0, 1, 2}:
+def _split_for_profile(evidence_profile_id: str) -> DataSplit:
+    bucket = _stable_int(evidence_profile_id, 'split') % 20
+    if bucket < 3:
         return 'test'
-    if bucket in {3, 4, 5}:
+    if bucket < 6:
         return 'validation'
     return 'train'
 
@@ -271,7 +273,7 @@ if __name__ == '__main__':
         setup_logging,
     )
 
-    cfg = load_config_from_cli()
-    paths = paths_for(cfg)
-    setup_logging(paths)
-    run_make_query_plans(cfg, paths)
+    config = load_config_from_cli()
+    output_paths = paths_for(config)
+    setup_logging(output_paths)
+    run_make_query_plans(config, output_paths)

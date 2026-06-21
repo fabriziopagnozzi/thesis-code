@@ -4,12 +4,13 @@ import argparse
 import io
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
-from typing import Literal, NoReturn
+from typing import Literal, NoReturn, get_args
 from uuid import uuid4
 
 import yaml
-from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt
+from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkPoolScope,
@@ -30,33 +31,39 @@ type SyntheticMedicalTableName = Literal[
     'generation_rejects',
     'embeddings',
     'geometry_stats',
+    'geometry_slice_stats',
     'evaluation_results',
     'evaluation_stats',
+    'evaluation_slice_stats',
     'lambda_pair_agreement',
     'query_geometry_points',
     'query_geometry_stats',
 ]
+SYNTHETIC_TABLE_NAMES = set[str](get_args(SyntheticMedicalTableName.__value__))
 
 
 class GlobalCfg(BaseModel):
     seed: PositiveInt = 42
-    n_queries: PositiveInt = 120
     conditions: PositiveInt = 4
     output_experiment: str = 'mvp'
     result_dir_overrides: dict[SyntheticMedicalTableName, str] = Field(default_factory=dict)
 
 
 class GenerationCfg(BaseModel):
+    query_limit: PositiveInt | None = None
     ontology_path: str | None = None
-    query_types: list[QueryType] = Field(default_factory=lambda: ['subgroup_comparison'])
+    query_types: list[QueryType] = Field(
+        default_factory=lambda: ['prioritized_subgroup_comparison']
+    )
     dominance_mode: PlanCalibrationMode = 'rotating'
     dominance_probe_chunks_per_facet: PositiveInt = 8
     calibration_min_probe_margin: float | None = Field(default=None, ge=0.0)
-    gold_chunks_dominant: PositiveInt = 25
-    gold_chunks_complementary: PositiveInt = 14
-    distractors_per_query: PositiveInt = 30
+    gold_chunks_calibrated_primary: PositiveInt = 24
+    gold_chunks_other_primary: PositiveInt = 20
+    gold_chunks_secondary: PositiveInt = 14
+    distractors_per_query: PositiveInt = 25
     background_outlier_clusters_per_query: int = Field(default=1, ge=0)
-    background_outlier_cluster_size: int = Field(default=12, ge=0)
+    background_outlier_cluster_size: int = Field(default=8, ge=0)
     chunk_min_words: PositiveInt = 25
     chunk_max_words: PositiveInt = 90
     chunk_word_tolerance: PositiveInt = 2
@@ -95,9 +102,11 @@ class RetrievalCfg(BaseModel):
 class GeometryFilterCfg(BaseModel):
     topk_dominance_k: PositiveInt = 10
     primary_topk_dominance_k: PositiveInt = 20
-    min_topk_dominant_count: PositiveInt = 5
+    min_primary_axis_count: PositiveInt = 14
     max_topk_retrieved_facets: PositiveInt | None = 2
     min_in_minus_cross_similarity: PositiveFloat = 0.03
+    min_same_axis_cohort_gap: PositiveFloat = 0.03
+    min_same_cohort_axis_gap: PositiveFloat = 0.03
     min_distractors_in_pool: PositiveInt = 10
     plot_continuous_similarity: bool = True
 
@@ -150,6 +159,7 @@ class QueryGeometryCfg(BaseModel):
 
 
 class ExperimentCfg(BaseModel):
+    dataset_schema_version: Literal[2]
     global_: GlobalCfg = Field(alias='global')
     generation: GenerationCfg = Field(default_factory=GenerationCfg)
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
@@ -159,6 +169,27 @@ class ExperimentCfg(BaseModel):
     query_geometry: QueryGeometryCfg = Field(default_factory=QueryGeometryCfg)
 
     model_config = {'populate_by_name': True, 'extra': 'ignore'}
+
+    @model_validator(mode='after')
+    def _validate_v2_scope(self) -> ExperimentCfg:
+        if self.retrieval.pool_scope != 'query_local':
+            raise ValueError('dataset schema v2 supports only retrieval.pool_scope=query_local')
+        if self.generation.query_types != ['prioritized_subgroup_comparison']:
+            raise ValueError('v2 supports only prioritized_subgroup_comparison')
+        local_pool_size = (
+            self.generation.gold_chunks_calibrated_primary
+            + self.generation.gold_chunks_other_primary
+            + 2 * self.generation.gold_chunks_secondary
+            + self.generation.distractors_per_query
+            + self.generation.background_outlier_clusters_per_query
+            * self.generation.background_outlier_cluster_size
+        )
+        if self.retrieval.candidate_pool_n < local_pool_size:
+            raise ValueError(
+                'retrieval.candidate_pool_n must include the complete v2 query-local pool '
+                f'({local_pool_size} chunks)'
+            )
+        return self
 
 
 class MedicalDatasetGenPaths:
@@ -254,15 +285,16 @@ def unreachable_code(err: str) -> NoReturn:
     raise RuntimeError(err)
 
 
-def setup_logging(paths: MedicalDatasetGenPaths) -> None:
+def setup_logging(paths: MedicalDatasetGenPaths, run_id: str | None = None) -> None:
     main = sys.modules['__main__']
     script_name = Path(main.__file__ if main.__file__ else f'unknown_script_{uuid4()}').stem
-    log_path = paths.logs_dir / f'{script_name}.log'
+    suffix = run_id or datetime.now().strftime('%Y%m%dT%H%M%S_%f')
+    log_path = paths.logs_dir / f'{script_name}_{suffix}.log'
 
     class _Tee(io.TextIOBase):
         def __init__(self, filepath: Path):
             self._terminal = sys.stdout
-            self._file = open(filepath, 'a')  # noqa: SIM115
+            self._file = open(filepath, 'w')  # noqa: SIM115
 
         def write(self, msg: str) -> int:
             self._terminal.write(msg)
@@ -282,18 +314,7 @@ def _resolve_experiment_name(
     exact_dir = results_dir / exp_name
     if exact_dir.is_dir():
         return exp_name
-
-    matches = sorted(
-        path.name
-        for path in results_dir.iterdir()
-        if path.is_dir() and path.name.startswith(exp_name)
-    )
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        raise ValueError(f'exp={exp_name!r} is ambiguous in {results_dir}: {matches}')
-
     raise FileNotFoundError(
-        f'no experiment directory matching {exp_name!r} in {results_dir}. '
-        'Use the full directory name or a unique prefix.'
+        f'no experiment directory named exactly {exp_name!r} in {results_dir}. '
+        'Use the full experiment directory name.'
     )

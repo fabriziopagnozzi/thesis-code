@@ -41,7 +41,8 @@ conditions:
 
   ischemic_stroke:
     display: ischemic stroke
-    terms: [ischemic stroke, antiplatelet therapy, hemiparesis, neurologic recovery]
+    terms:
+      [ischemic stroke, antiplatelet therapy, hemiparesis, neurologic recovery]
     treatments: [aspirin, clopidogrel, statin therapy]
     duration_treatments: [aspirin, clopidogrel]
     duration_days:
@@ -61,7 +62,8 @@ conditions:
 
   heart_failure:
     display: acute decompensated heart failure
-    terms: [heart failure, diuresis, volume overload, guideline-directed therapy]
+    terms:
+      [heart failure, diuresis, volume overload, guideline-directed therapy]
     treatments: [intravenous furosemide, spironolactone, beta-blocker titration]
     duration_treatments: [intravenous furosemide, spironolactone]
     duration_days:
@@ -81,7 +83,13 @@ conditions:
 
   bacterial_meningitis:
     display: bacterial meningitis
-    terms: [bacterial meningitis, meningeal inflammation, ceftriaxone, neurologic monitoring]
+    terms:
+      [
+        bacterial meningitis,
+        meningeal inflammation,
+        ceftriaxone,
+        neurologic monitoring,
+      ]
     treatments: [ceftriaxone, vancomycin, dexamethasone]
     duration_treatments: [ceftriaxone, vancomycin]
     duration_days:
@@ -101,8 +109,15 @@ conditions:
 
   multiple_sclerosis_relapse:
     display: multiple sclerosis relapse
-    terms: [multiple sclerosis relapse, demyelinating flare, methylprednisolone, weakness]
-    treatments: [intravenous methylprednisolone, plasma exchange, physical therapy]
+    terms:
+      [
+        multiple sclerosis relapse,
+        demyelinating flare,
+        methylprednisolone,
+        weakness,
+      ]
+    treatments:
+      [intravenous methylprednisolone, plasma exchange, physical therapy]
     duration_treatments: [intravenous methylprednisolone, plasma exchange]
     duration_days:
       short: [3, 5]
@@ -121,7 +136,13 @@ conditions:
 
   spinal_epidural_abscess:
     display: spinal epidural abscess
-    terms: [spinal epidural abscess, back pain, intravenous antibiotics, cord compression]
+    terms:
+      [
+        spinal epidural abscess,
+        back pain,
+        intravenous antibiotics,
+        cord compression,
+      ]
     treatments: [vancomycin, cefepime, surgical decompression]
     duration_treatments: [vancomycin, cefepime]
     duration_days:
@@ -181,7 +202,13 @@ conditions:
 
   infective_endocarditis:
     display: infective endocarditis
-    terms: [infective endocarditis, bacteremia, intravenous antibiotics, valvular infection]
+    terms:
+      [
+        infective endocarditis,
+        bacteremia,
+        intravenous antibiotics,
+        valvular infection,
+      ]
     treatments: [ceftriaxone, nafcillin, vancomycin]
     duration_treatments: [ceftriaxone, nafcillin, vancomycin]
     duration_days:
@@ -201,7 +228,13 @@ conditions:
 
   osteomyelitis:
     display: osteomyelitis
-    terms: [osteomyelitis, bone infection, intravenous antibiotics, weight-bearing restriction]
+    terms:
+      [
+        osteomyelitis,
+        bone infection,
+        intravenous antibiotics,
+        weight-bearing restriction,
+      ]
     treatments: [vancomycin, cefazolin, daptomycin]
     duration_treatments: [vancomycin, cefazolin, daptomycin]
     duration_days:
@@ -241,7 +274,8 @@ conditions:
 
   diabetic_foot_infection:
     display: diabetic foot infection
-    terms: [diabetic foot infection, wound care, intravenous antibiotics, offloading]
+    terms:
+      [diabetic foot infection, wound care, intravenous antibiotics, offloading]
     treatments: [vancomycin, piperacillin-tazobactam, wound care]
     duration_treatments: [vancomycin, piperacillin-tazobactam]
     duration_days:
@@ -281,8 +315,15 @@ conditions:
 
   lupus_nephritis:
     display: lupus nephritis flare
-    terms: [lupus nephritis, immune-mediated kidney injury, methylprednisolone, proteinuria]
-    treatments: [intravenous methylprednisolone, mycophenolate, cyclophosphamide]
+    terms:
+      [
+        lupus nephritis,
+        immune-mediated kidney injury,
+        methylprednisolone,
+        proteinuria,
+      ]
+    treatments:
+      [intravenous methylprednisolone, mycophenolate, cyclophosphamide]
     duration_treatments: [intravenous methylprednisolone, cyclophosphamide]
     duration_days:
       short: [3, 5]
@@ -301,7 +342,13 @@ conditions:
 
   severe_cellulitis:
     display: severe cellulitis
-    terms: [cellulitis, soft tissue infection, intravenous antibiotics, limb swelling]
+    terms:
+      [
+        cellulitis,
+        soft tissue infection,
+        intravenous antibiotics,
+        limb swelling,
+      ]
     treatments: [cefazolin, vancomycin, limb elevation]
     duration_treatments: [cefazolin, vancomycin]
     duration_days:
@@ -321,7 +368,8 @@ conditions:
 
   ulcerative_colitis_flare:
     display: ulcerative colitis flare
-    terms: [ulcerative colitis flare, bloody diarrhea, methylprednisolone, colitis]
+    terms:
+      [ulcerative colitis flare, bloody diarrhea, methylprednisolone, colitis]
     treatments: [intravenous methylprednisolone, infliximab, bowel rest]
     duration_treatments: [intravenous methylprednisolone, infliximab]
     duration_days:
@@ -372,7 +420,8 @@ subgroups:
     field: comorbidity
     value: chronic_kidney_disease
     aliases: [renal disease, CKD]
-    surface_phrases: [stage 3 chronic kidney disease, baseline chronic kidney disease]
+    surface_phrases:
+      [stage 3 chronic kidney disease, baseline chronic kidney disease]
 
   copd:
     axis: comorbidity
@@ -439,7 +488,11 @@ subgroups:
     label: patients with dementia
     field: comorbidity
     value: dementia
-    aliases: [patients with baseline cognitive impairment, patients with major neurocognitive disorder]
+    aliases:
+      [
+        patients with baseline cognitive impairment,
+        patients with major neurocognitive disorder,
+      ]
     surface_phrases:
       - baseline dementia with memory impairment
       - chronic cognitive impairment from dementia
@@ -450,7 +503,11 @@ subgroups:
     field: comorbidity
     value: frailty
     aliases: [patients with frailty, patients with baseline frailty]
-    surface_phrases: [baseline frailty with reduced reserve, frailty with limited pre-hospital mobility]
+    surface_phrases:
+      [
+        baseline frailty with reduced reserve,
+        frailty with limited pre-hospital mobility,
+      ]
 
   peripheral_vascular_disease:
     axis: comorbidity
@@ -467,7 +524,11 @@ subgroups:
     label: patients with autoimmune disease
     field: comorbidity
     value: autoimmune_disease
-    aliases: [patients with systemic autoimmune disease, patients with chronic inflammatory autoimmune disease]
+    aliases:
+      [
+        patients with systemic autoimmune disease,
+        patients with chronic inflammatory autoimmune disease,
+      ]
     surface_phrases:
       - systemic autoimmune disease on chronic immunomodulatory therapy
       - chronic inflammatory autoimmune disease
@@ -481,6 +542,7 @@ clinical_axes:
 
   rehab_outcome:
     label: rehabilitation outcome
-    exact_terms: [rehabilitation outcome, rehab outcome, discharge rehabilitation]
+    exact_terms:
+      [rehabilitation outcome, rehab outcome, discharge rehabilitation]
     synonym_terms: [post-discharge therapy status, functional recovery status]
     bins: [home_rehab, inpatient_rehab, persistent_deficit]

@@ -28,8 +28,8 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
-GENERATION_CACHE_VERSION = 9
-REWRITE_CACHE_VERSION = 1
+GENERATION_CACHE_VERSION = 10
+REWRITE_CACHE_VERSION = 2
 
 
 @dataclass
@@ -109,18 +109,14 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
     }
     if cfg.generation.use_llm_chunk_generation:
-        payload.update({
-            'llm_name': cfg.generation.llm_name,
-            'llm_temperature': cfg.generation.llm_temperature,
-            'llm_num_ctx': cfg.generation.llm_num_ctx,
-        })
-    if fact.axis == 'treatment_duration':
-        payload.update({
-            'duration_days': fact.duration_days,
-            'treatment': fact.treatment,
-        })
-    else:
-        payload['rehab_outcome'] = fact.rehab_outcome
+        payload.update(
+            {
+                'llm_name': cfg.generation.llm_name,
+                'llm_temperature': cfg.generation.llm_temperature,
+                'llm_num_ctx': cfg.generation.llm_num_ctx,
+            }
+        )
+    payload['axis_payload_json'] = fact.axis_payload_json
 
     raw = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()
@@ -156,13 +152,7 @@ def chunk_rewrite_cache_key(
         'must_mention': fact.must_mention,
         'must_not_mention': fact.must_not_mention,
     }
-    if fact.axis == 'treatment_duration':
-        payload.update({
-            'duration_days': fact.duration_days,
-            'treatment': fact.treatment,
-        })
-    else:
-        payload['rehab_outcome'] = fact.rehab_outcome
+    payload['axis_payload_json'] = fact.axis_payload_json
 
     raw = json.dumps(payload, sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()

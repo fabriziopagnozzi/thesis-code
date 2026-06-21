@@ -1,10 +1,4 @@
-"""Generate the hidden clinical facts that support each benchmark query.
-
-This module exists to populate each query plan with gold evidence chunks and
-hard distractors before any natural-language rendering happens. It uses seeded
-sampling over the ontology plus per-facet cluster construction so the benchmark
-has redundant positives and plausible negatives by design.
-"""
+"""Expand schema-v2 plans into deterministic, typed clinical facts."""
 
 from __future__ import annotations
 
@@ -24,20 +18,24 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     DISTRACTOR_TYPES,
+    AcuteClinicalCoursePayload,
+    AxisFactPayload,
+    CareIntensityPayload,
     ClinicalAxis,
     ClinicalFact,
-    ClusterRole,
+    ComplicationBurdenPayload,
     ConditionKey,
     MedicalOntology,
     PatientSex,
     QueryPlan,
     QueryPlanFacet,
+    RehabOutcomePayload,
     SubgroupAxis,
+    TreatmentDurationPayload,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
-    unreachable_code,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
@@ -47,73 +45,50 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
         cfg.generation.dominance_mode == 'embedding_calibrated'
         and not paths.table_path('query_plan_calibration').exists()
     ):
-        raise FileNotFoundError(
-            'embedding_calibrated dominance requires query_plan_calibration.parquet. '
-            'Run the calibrate_plans stage before facts.'
-        )
-
+        raise FileNotFoundError('run calibrate_plans before facts in embedding-calibrated mode')
     ontology = load_ontology(cfg)
     plans = read_parquet(paths, 'query_plans')
     path = paths.table_path('clinical_facts')
     path.parent.mkdir(parents=True, exist_ok=True)
     writer: pq.ParquetWriter | None = None
-    total_rows = 0
-    last_df = pl.DataFrame()
-
+    total = 0
+    last = pl.DataFrame()
     try:
         for plan_row in plans.iter_rows(named=True):
             plan = QueryPlan.model_validate(plan_row)
             rng = Random(plan.plan_seed)
-            rows: list[dict[str, object]] = []
-
+            facts: list[ClinicalFact] = []
             for facet in plan.facets:
-                for local_idx in range(int(facet.target_gold_chunks)):
-                    rows.append(
-                        make_gold_fact(
-                            plan=plan,
-                            facet=facet,
-                            ontology=ontology,
-                            local_idx=local_idx,
-                            rng=rng,
-                        ).model_dump(mode='python')
-                    )
-
-            rows.extend(
-                fact.model_dump(mode='python')
-                for fact in make_distractor_facts(
-                    plan=plan,
-                    ontology=ontology,
-                    rng=rng,
-                    n=cfg.generation.distractors_per_query,
+                facts.extend(
+                    make_gold_fact(plan, facet, ontology, local_idx, rng)
+                    for local_idx in range(facet.target_gold_chunks)
+                )
+            facts.extend(
+                make_distractor_facts(plan, ontology, rng, cfg.generation.distractors_per_query)
+            )
+            facts.extend(
+                make_background_outlier_facts(
+                    plan,
+                    ontology,
+                    rng,
+                    cfg.generation.background_outlier_clusters_per_query,
+                    cfg.generation.background_outlier_cluster_size,
                 )
             )
-            rows.extend(
-                fact.model_dump(mode='python')
-                for fact in make_background_outlier_facts(
-                    plan=plan,
-                    ontology=ontology,
-                    rng=rng,
-                    n_clusters=cfg.generation.background_outlier_clusters_per_query,
-                    cluster_size=cfg.generation.background_outlier_cluster_size,
-                )
-            )
-
-            df = _facts_frame(rows)
-            table = df.to_arrow()
+            frame = _facts_frame([fact.model_dump(mode='python') for fact in facts])
+            table = frame.to_arrow()
             if writer is None:
                 writer = pq.ParquetWriter(path, table.schema)
             writer.write_table(table)
-
-            total_rows += len(df)
-            last_df = df
+            total += len(frame)
+            last = frame
     finally:
         if writer is not None:
             writer.close()
-
-    if total_rows == 0:
-        raise ValueError('no query plans available to generate clinical facts')
-    print(f'[write] clinical_facts: {total_rows:,} rows -> {path}')
-    return last_df
+    if total == 0:
+        raise ValueError('no query plans available to generate facts')
+    print(f'[write] clinical_facts: {total:,} rows -> {path}')
+    return last
 
 
 def _facts_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
@@ -127,6 +102,7 @@ def make_gold_fact(
     local_idx: int,
     rng: Random,
 ) -> ClinicalFact:
+    cohort = ontology.subgroups[facet.subgroup_id]
     return make_base_fact(
         plan=plan,
         facet=facet,
@@ -142,63 +118,49 @@ def make_gold_fact(
         subgroup_axis=facet.subgroup_axis,
         subgroup_field=facet.subgroup_field,
         subgroup_value=facet.subgroup_value,
+        subgroup_dimension_id=cohort.dimension_id,
+        subgroup_level_id=cohort.level_id,
+        subgroup_is_reference=cohort.is_reference,
         axis=facet.axis,
+        value_bin=facet.value_bin,
         cluster_id=facet.cluster_id,
         cluster_role=facet.cluster_role,
     )
 
 
 def make_distractor_facts(
-    plan: QueryPlan,
-    ontology: MedicalOntology,
-    rng: Random,
-    n: int,
+    plan: QueryPlan, ontology: MedicalOntology, rng: Random, n: int
 ) -> list[ClinicalFact]:
-    facets = plan.facets
-    excluded_subgroups = {plan.subgroup_a_id, plan.subgroup_b_id}
-
+    excluded = {plan.subgroup_a_id, plan.subgroup_b_id}
     rows: list[ClinicalFact] = []
     for local_idx in range(n):
+        target = plan.facets[local_idx % len(plan.facets)]
         distractor_type = DISTRACTOR_TYPES[local_idx % len(DISTRACTOR_TYPES)]
-        target_facet = facets[local_idx % len(facets)]
-
         condition_id = plan.condition_id
         condition_display = plan.condition_display
-        subgroup_id = target_facet.subgroup_id
-        subgroup_label = target_facet.subgroup_label
-        subgroup_axis = target_facet.subgroup_axis
-        subgroup_field = target_facet.subgroup_field
-        subgroup_value = target_facet.subgroup_value
-        axis = target_facet.axis
-
+        subgroup_id = target.subgroup_id
+        subgroup = ontology.subgroups[subgroup_id]
         if distractor_type == 'same_condition_wrong_subgroup':
-            choices = other_subgroups(ontology, excluded_subgroups)
-            subgroup_id, subgroup = choices[local_idx % len(choices)]
-            subgroup_label = subgroup.label
-            subgroup_axis = subgroup.axis
-            subgroup_field = subgroup.field
-            subgroup_value = subgroup.value
+            subgroup_id, subgroup = other_subgroups(ontology, excluded)[
+                local_idx % (len(ontology.subgroups) - 2)
+            ]
         elif distractor_type == 'same_subgroup_wrong_condition':
-            choices = other_conditions(ontology, condition_id)
-            condition_id, condition = choices[local_idx % len(choices)]
+            condition_id, condition = other_conditions(ontology, plan.condition_id)[
+                local_idx % (len(ontology.conditions) - 1)
+            ]
             condition_display = condition.display
-        elif distractor_type == 'same_axis_wrong_condition':
-            condition_choices = other_conditions(ontology, condition_id)
-            subgroup_choices = other_subgroups(ontology, excluded_subgroups)
-            condition_id, condition = condition_choices[(local_idx + 1) % len(condition_choices)]
-            condition_display = condition.display
-            subgroup_id, subgroup = subgroup_choices[(local_idx + 1) % len(subgroup_choices)]
-            subgroup_label = subgroup.label
-            subgroup_axis = subgroup.axis
-            subgroup_field = subgroup.field
-            subgroup_value = subgroup.value
         else:
-            unreachable_code(f'Distractor type not covered: {distractor_type}')
-
+            condition_id, condition = other_conditions(ontology, plan.condition_id)[
+                (local_idx + 1) % (len(ontology.conditions) - 1)
+            ]
+            condition_display = condition.display
+            subgroup_id, subgroup = other_subgroups(ontology, excluded)[
+                (local_idx + 1) % (len(ontology.subgroups) - 2)
+            ]
         rows.append(
             make_base_fact(
                 plan=plan,
-                facet=target_facet,
+                facet=target,
                 ontology=ontology,
                 rng=rng,
                 local_idx=local_idx,
@@ -207,12 +169,16 @@ def make_distractor_facts(
                 condition_id=condition_id,
                 condition_display=condition_display,
                 subgroup_id=subgroup_id,
-                subgroup_label=subgroup_label,
-                subgroup_axis=subgroup_axis,
-                subgroup_field=subgroup_field,
-                subgroup_value=subgroup_value,
-                axis=axis,
-                cluster_id=f'{plan.query_id}_d{local_idx + 1:02d}',
+                subgroup_label=subgroup.label,
+                subgroup_axis=subgroup.axis,
+                subgroup_field=subgroup.field,
+                subgroup_value=subgroup.value,
+                subgroup_dimension_id=subgroup.dimension_id,
+                subgroup_level_id=subgroup.level_id,
+                subgroup_is_reference=subgroup.is_reference,
+                axis=target.axis,
+                value_bin=target.value_bin,
+                cluster_id=f'{plan.pool_id}_d{local_idx + 1:02d}',
                 cluster_role='hard_distractor',
             )
         )
@@ -226,31 +192,21 @@ def make_background_outlier_facts(
     n_clusters: int,
     cluster_size: int,
 ) -> list[ClinicalFact]:
-    """Create coherent non-gold clinical islands outside the query facet structure."""
-    if n_clusters <= 0 or cluster_size <= 0:
-        return []
-
-    condition_choices = other_conditions(ontology, plan.condition_id)
-    if not condition_choices:
-        return []
-
-    excluded_subgroups = {plan.subgroup_a_id, plan.subgroup_b_id}
-    subgroup_choices = other_subgroups(ontology, excluded_subgroups)
-    if not subgroup_choices:
-        subgroup_choices = list(ontology.subgroups.items())
-
     rows: list[ClinicalFact] = []
+    excluded = {plan.subgroup_a_id, plan.subgroup_b_id}
+    conditions = other_conditions(ontology, plan.condition_id)
+    cohorts = other_subgroups(ontology, excluded)
     for cluster_idx in range(n_clusters):
-        condition_id, condition = condition_choices[
-            (plan.plan_seed + cluster_idx) % len(condition_choices)
+        condition_id, condition = conditions[
+            _stable_seed(plan.evidence_profile_id, 'background_condition', cluster_idx)
+            % len(conditions)
         ]
-        subgroup_id, subgroup = subgroup_choices[
-            (plan.plan_seed + cluster_idx * 3) % len(subgroup_choices)
+        subgroup_id, subgroup = cohorts[
+            _stable_seed(plan.evidence_profile_id, 'background_cohort', cluster_idx) % len(cohorts)
         ]
-        axis = 'treatment_duration' if cluster_idx % 2 == 0 else 'rehab_outcome'
-        value_bin = _background_value_bin(ontology, condition_id, axis, cluster_idx)
-        cluster_id = f'{plan.query_id}_bg{cluster_idx + 1:02d}'
-
+        axis = plan.secondary_axis
+        bins = get_axis_bins(ontology, axis)
+        value_bin = bins[cluster_idx % len(bins)]
         for local_idx in range(cluster_size):
             rows.append(
                 make_base_fact(
@@ -268,16 +224,20 @@ def make_background_outlier_facts(
                     subgroup_axis=subgroup.axis,
                     subgroup_field=subgroup.field,
                     subgroup_value=subgroup.value,
+                    subgroup_dimension_id=subgroup.dimension_id,
+                    subgroup_level_id=subgroup.level_id,
+                    subgroup_is_reference=subgroup.is_reference,
                     axis=axis,
-                    cluster_id=cluster_id,
+                    value_bin=value_bin,
+                    cluster_id=f'{plan.pool_id}_bg{cluster_idx + 1:02d}',
                     cluster_role='background_outlier',
-                    target_value_bin=value_bin,
                 )
             )
     return rows
 
 
 def make_base_fact(
+    *,
     plan: QueryPlan,
     facet: QueryPlanFacet | None,
     ontology: MedicalOntology,
@@ -292,84 +252,48 @@ def make_base_fact(
     subgroup_axis: SubgroupAxis,
     subgroup_field: str,
     subgroup_value: str,
+    subgroup_dimension_id: str,
+    subgroup_level_id: str,
+    subgroup_is_reference: bool,
     axis: ClinicalAxis,
+    value_bin: str,
     cluster_id: str,
-    cluster_role: ClusterRole,
-    target_value_bin: str | None = None,
+    cluster_role,
 ) -> ClinicalFact:
-    value_bin = _axis_value_bin(
-        ontology=ontology,
-        condition_id=condition_id,
-        axis=axis,
-        target_value_bin=target_value_bin
-        if target_value_bin is not None
-        else facet.value_bin
-        if facet is not None
-        else None,
-        local_idx=local_idx,
+    payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx)
+    payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
+    reuse_key = _chunk_reuse_key(
+        condition_id,
+        subgroup_id,
+        axis,
+        value_bin,
+        payload_json,
+        local_idx,
+        'gold' if is_gold else f'distractor:{distractor_type}',
     )
-    chunk_reuse_key = _chunk_reuse_key(
-        condition_id=condition_id,
-        subgroup_id=subgroup_id,
-        axis=axis,
-        value_bin=value_bin,
-        local_idx=local_idx,
-        reuse_scope=_chunk_reuse_scope(
-            is_gold=is_gold,
-            distractor_type=distractor_type,
-            cluster_role=cluster_role,
-        ),
-    )
-    surface_rng = Random(_stable_seed(chunk_reuse_key))
-    duration_days, treatment, rehab_outcome = _axis_values(
-        ontology=ontology,
-        condition_id=condition_id,
-        axis=axis,
-        value_bin=value_bin,
-        rng=surface_rng,
-    )
-    query_id = plan.query_id
+    surface_rng = Random(_stable_seed(reuse_key))
+    age = _patient_age(subgroup_id, surface_rng)
+    sex: PatientSex = _patient_sex(subgroup_id, surface_rng)
+    phrase = surface_rng.choice(ontology.subgroups[subgroup_id].surface_phrases)
     support_facet_id = facet.facet_id if is_gold and facet is not None else None
     target_facet_id = facet.facet_id if facet is not None else None
     fact_id = (
-        f'{query_id}_{"g" if is_gold else "d"}_{len(cluster_id)}_{local_idx:03d}_'
-        f'{rng.randint(0, 9999):04d}'
+        f'{plan.query_id}_{"g" if is_gold else "d"}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     )
-    admission_id = f'adm_{query_id}_{cluster_id}_{local_idx:03d}'
-    patient_id = f'pat_{query_id}_{cluster_id}_{local_idx // 2:03d}'
-    note_style = surface_rng.choice([
-        'brief_hospital_course',
-        'brief_hospital_course',
-        'discharge_diagnosis',
-    ])
-    patient_age = _patient_age(subgroup_id, surface_rng)
-    patient_sex = surface_rng.choice(['female', 'male'])
-    clinical_subgroup_phrase = _clinical_subgroup_phrase(ontology, subgroup_id, surface_rng)
-
-    must_mention = [
-        condition_display,
-        _subgroup_required_mention(
-            subgroup_id=subgroup_id,
-            subgroup_label=subgroup_label,
-            patient_age=patient_age,
-        ),
+    required_payload = _payload_required_phrase(payload)
+    must_mention = [condition_display, phrase, required_payload]
+    must_not_mention = [
+        label for label in (plan.subgroup_a_label, plan.subgroup_b_label) if label != subgroup_label
     ]
-    if axis == 'treatment_duration':
-        must_mention.extend([str(duration_days), 'treatment duration'])
-    else:
-        must_mention.extend([value_bin.replace('_', ' '), 'rehabilitation'])
-
-    must_not_mention = list[str]()
-    if subgroup_label != plan.subgroup_a_label:
-        must_not_mention.append(plan.subgroup_a_label)
-    if subgroup_label != plan.subgroup_b_label:
-        must_not_mention.append(plan.subgroup_b_label)
-
     return ClinicalFact(
-        query_id=query_id,
-        source_query_id=query_id,
+        query_id=plan.query_id,
+        evidence_profile_id=plan.evidence_profile_id,
+        pool_id=plan.pool_id,
+        primary_axis=plan.primary_axis,
+        secondary_axis=plan.secondary_axis,
+        calibrated_primary_facet_id=plan.calibrated_primary_facet_id,
         fact_id=fact_id,
-        chunk_reuse_key=chunk_reuse_key,
+        chunk_reuse_key=reuse_key,
         facet_id=support_facet_id,
         target_facet_id=target_facet_id,
         cluster_id=cluster_id,
@@ -381,158 +305,111 @@ def make_base_fact(
         subgroup_axis=subgroup_axis,
         subgroup_field=subgroup_field,
         subgroup_value=subgroup_value,
+        subgroup_dimension_id=subgroup_dimension_id,
+        subgroup_level_id=subgroup_level_id,
+        subgroup_is_reference=subgroup_is_reference,
         axis=axis,
         value_bin=value_bin,
-        duration_days=duration_days,
-        treatment=treatment,
-        rehab_outcome=rehab_outcome,
+        axis_payload_json=payload_json,
+        facet_priority=facet.priority if facet is not None else None,
         is_gold=is_gold,
         distractor_type=distractor_type,
-        admission_id=admission_id,
-        patient_id=patient_id,
-        patient_age=patient_age,
-        patient_sex=cast(PatientSex, patient_sex),
-        clinical_subgroup_phrase=clinical_subgroup_phrase,
-        note_style=note_style,
+        admission_id=f'adm_{plan.pool_id}_{cluster_id}_{local_idx:03d}',
+        patient_id=f'pat_{plan.evidence_profile_id}_{subgroup_id}_{local_idx // 2:03d}',
+        patient_age=age,
+        patient_sex=sex,
+        clinical_subgroup_phrase=phrase,
+        note_style=surface_rng.choice(['brief_hospital_course', 'discharge_diagnosis']),
         split=plan.split,
         must_mention=must_mention,
         must_not_mention=must_not_mention,
     )
 
 
-def _axis_value_bin(
-    ontology: MedicalOntology,
-    condition_id: ConditionKey,
-    axis: str,
-    target_value_bin: str | None,
-    local_idx: int,
-) -> str:
-    condition = ontology.conditions[condition_id]
-    if axis == 'treatment_duration':
-        bins = [
-            value_bin
-            for value_bin in get_axis_bins(ontology, 'treatment_duration')
-            if value_bin in condition.duration_days
-        ]
-        if target_value_bin in condition.duration_days:
-            return str(target_value_bin)
-        return bins[local_idx % len(bins)]
-
-    bins = [
-        value_bin
-        for value_bin in get_axis_bins(ontology, 'rehab_outcome')
-        if value_bin in condition.rehab_outcomes
-    ]
-
-    if target_value_bin in condition.rehab_outcomes:
-        return str(target_value_bin)
-
-    return bins[local_idx % len(bins)]
-
-
-def _axis_values(
+def _axis_payload(
     ontology: MedicalOntology,
     condition_id: ConditionKey,
     axis: ClinicalAxis,
     value_bin: str,
-    rng: Random,
-) -> tuple[int | None, str | None, str | None]:
+    local_idx: int,
+) -> AxisFactPayload:
     condition = ontology.conditions[condition_id]
+    seed = _stable_seed(condition_id, axis, value_bin, local_idx)
+    rng = Random(seed)
     if axis == 'treatment_duration':
         low, high = condition.duration_days[value_bin]
-        duration_days = rng.randint(int(low), int(high))
-        duration_treatments = condition.duration_treatments or condition.treatments
-        treatment = rng.choice(duration_treatments)
-        return duration_days, treatment, None
-
-    rehab_outcome = rng.choice(condition.rehab_outcomes[value_bin])
-    return None, None, rehab_outcome
-
-
-def _background_value_bin(
-    ontology: MedicalOntology,
-    condition_id: ConditionKey,
-    axis: str,
-    cluster_idx: int,
-) -> str:
-    condition = ontology.conditions[condition_id]
-    if axis == 'treatment_duration':
-        duration_bins = get_axis_bins(ontology, 'treatment_duration')
-        if len(duration_bins) < 2:
-            raise ValueError(
-                'treatment_duration needs at least two ontology bins for background facts'
-            )
-        preferred = [duration_bins[1], duration_bins[0], *duration_bins[2:]]
-        available = condition.duration_days
-    else:
-        preferred = get_axis_bins(ontology, 'rehab_outcome')
-        available = condition.rehab_outcomes
-
-    for value_bin in preferred[cluster_idx:] + preferred[:cluster_idx]:
-        if value_bin in available:
-            return value_bin
-    return next(iter(available))
+        treatments = condition.duration_treatments or condition.treatments
+        return TreatmentDurationPayload(
+            axis=axis,
+            duration_days=rng.randint(low, high),
+            treatment=rng.choice(treatments),
+        )
+    if axis == 'rehab_outcome':
+        return RehabOutcomePayload(
+            axis=axis,
+            outcome=rng.choice(condition.rehab_outcomes[value_bin]),
+        )
+    detail = rng.choice(condition.new_axis_values[axis][value_bin])
+    if axis == 'complication_burden':
+        return ComplicationBurdenPayload(axis=axis, detail=detail)
+    if axis == 'acute_clinical_course':
+        return AcuteClinicalCoursePayload(axis=axis, detail=detail)
+    return CareIntensityPayload(axis='care_intensity', detail=detail)
 
 
-def _chunk_reuse_key(
-    condition_id: ConditionKey,
-    subgroup_id: str,
-    axis: str,
-    value_bin: str,
-    local_idx: int,
-    reuse_scope: str,
-) -> str:
-    payload = {
-        'schema': 'medical_chunk_reuse_v2',
-        'reuse_scope': reuse_scope,
-        'condition_id': condition_id,
-        'subgroup_id': subgroup_id,
-        'axis': axis,
-        'value_bin': value_bin,
-        'local_idx': local_idx,
-    }
-    raw = json.dumps(payload, sort_keys=True)
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def _chunk_reuse_scope(
-    *,
-    is_gold: bool,
-    distractor_type: str | None,
-    cluster_role: str,
-) -> str:
-    if is_gold:
-        return 'gold'
-    if distractor_type:
-        return f'distractor:{distractor_type}'
-    return f'non_gold:{cluster_role}'
-
-
-def _stable_seed(value: str) -> int:
-    return int(hashlib.sha256(value.encode()).hexdigest()[:16], 16)
+def _payload_required_phrase(payload: AxisFactPayload) -> str:
+    if isinstance(payload, TreatmentDurationPayload):
+        return f'{payload.duration_days} days of {payload.treatment}'
+    if isinstance(payload, RehabOutcomePayload):
+        return payload.outcome
+    return payload.detail
 
 
 def _patient_age(subgroup_id: str, rng: Random) -> int:
-    if subgroup_id == 'age_over_75':
-        return rng.randint(76, 90)
     if subgroup_id == 'age_under_50':
-        return rng.randint(24, 49)
-    return rng.randint(52, 74)
+        return rng.randint(25, 49)
+    if subgroup_id == 'age_50_to_75':
+        return rng.randint(50, 75)
+    if subgroup_id == 'age_over_75':
+        return rng.randint(76, 92)
+    return rng.randint(50, 75)
 
 
-def _clinical_subgroup_phrase(ontology: MedicalOntology, subgroup_id: str, rng: Random) -> str:
-    subgroup = ontology.subgroups[subgroup_id]
-    if subgroup.surface_phrases:
-        return rng.choice(subgroup.surface_phrases)
-    if subgroup.aliases:
-        return rng.choice(subgroup.aliases)
-    return subgroup.label.removeprefix('patients with ').removeprefix('patients ').strip()
+def _patient_sex(subgroup_id: str, rng: Random) -> PatientSex:
+    if subgroup_id == 'female':
+        return 'female'
+    if subgroup_id == 'male':
+        return 'male'
+    return cast(PatientSex, rng.choice(['female', 'male']))
 
 
-def _subgroup_required_mention(subgroup_id: str, subgroup_label: str, patient_age: int) -> str:
-    if subgroup_id in {'age_over_75', 'age_under_50'}:
-        return f'{patient_age}-year-old'
-    return subgroup_label
+def _chunk_reuse_key(
+    condition_id: str,
+    subgroup_id: str,
+    axis: str,
+    value_bin: str,
+    payload_json: str,
+    local_idx: int,
+    reuse_scope: str,
+) -> str:
+    raw = json.dumps(
+        {
+            'schema': 2,
+            'condition_id': condition_id,
+            'subgroup_id': subgroup_id,
+            'axis': axis,
+            'value_bin': value_bin,
+            'payload': payload_json,
+            'local_idx': local_idx,
+            'reuse_scope': reuse_scope,
+        },
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _stable_seed(*values: object) -> int:
+    return int(hashlib.sha256('|'.join(map(str, values)).encode()).hexdigest()[:16], 16)
 
 
 if __name__ == '__main__':
@@ -542,7 +419,7 @@ if __name__ == '__main__':
         setup_logging,
     )
 
-    cfg = load_config_from_cli()
-    paths = paths_for(cfg)
-    setup_logging(paths)
-    run_make_facts(cfg, paths)
+    config = load_config_from_cli()
+    output_paths = paths_for(config)
+    setup_logging(output_paths)
+    run_make_facts(config, output_paths)
