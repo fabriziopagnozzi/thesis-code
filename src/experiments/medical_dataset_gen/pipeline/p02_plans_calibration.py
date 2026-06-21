@@ -243,7 +243,7 @@ def _with_dominant_facet(
 def _rotating_calibration_frame(plans_df: pl.DataFrame) -> pl.DataFrame:
     if plans_df.is_empty():
         return _calibration_frame([])
-    rows = [
+    rows: list[dict[str, object]] = [
         {
             'query_id': str(row['query_id']),
             'dominance_mode': 'rotating',

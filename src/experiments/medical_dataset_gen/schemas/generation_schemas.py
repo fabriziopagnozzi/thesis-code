@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal, TypedDict, get_args
 
@@ -190,7 +189,7 @@ class QueryLogicalForm(BenchmarkModel):
 
 class QueryPlanSpec(BenchmarkModel):
     query_type: QueryType
-    condition_key: str
+    condition_key: ConditionKey
     condition_display: str
     subgroup_a_id: str
     subgroup_a: SubgroupOntology
@@ -222,22 +221,6 @@ class QueryPlan(BenchmarkModel):
     distractor_chunks: int
     facets: list[QueryPlanFacet]
     logical_form: QueryLogicalForm
-
-    @model_validator(mode='before')
-    @classmethod
-    def _parse_legacy_row(cls, data: object) -> object:
-        if not isinstance(data, Mapping):
-            return data
-        row = dict(data)
-        if 'facets' not in row and 'facets_json' in row:
-            row['facets'] = [
-                QueryPlanFacet.model_validate(item) for item in json.loads(row.pop('facets_json'))
-            ]
-        if 'logical_form' not in row and 'logical_form_json' in row:
-            row['logical_form'] = QueryLogicalForm.model_validate(
-                json.loads(row.pop('logical_form_json'))
-            )
-        return row
 
     def _json_columns(self) -> tuple[str, str]:
         facets_json = json.dumps(
@@ -328,43 +311,6 @@ class ClinicalFact(BenchmarkModel):
     must_mention: list[str] = Field(default_factory=list)
     must_not_mention: list[str] = Field(default_factory=list)
 
-    @model_validator(mode='before')
-    @classmethod
-    def _parse_legacy_row(cls, data: object) -> object:
-        if not isinstance(data, Mapping):
-            return data
-        row = dict(data)
-        if 'must_mention' not in row and 'must_mention_json' in row:
-            row['must_mention'] = json.loads(row.pop('must_mention_json'))
-        if 'must_not_mention' not in row and 'must_not_mention_json' in row:
-            row['must_not_mention'] = json.loads(row.pop('must_not_mention_json'))
-        return row
-
-    @model_validator(mode='after')
-    def _validate_axis_specific_fields(self) -> ClinicalFact:
-        if self.axis == 'treatment_duration':
-            if self.duration_days is None:
-                raise ValueError('treatment duration facts require duration_days')
-            if self.treatment is None:
-                raise ValueError('treatment duration facts require treatment')
-            if self.rehab_outcome is not None:
-                raise ValueError('treatment duration facts must not include rehab_outcome')
-        elif self.axis == 'rehab_outcome':
-            if self.rehab_outcome is None:
-                raise ValueError('rehab outcome facts require rehab_outcome')
-            if self.duration_days is not None:
-                raise ValueError('rehab outcome facts must not include duration_days')
-            if self.treatment is not None:
-                raise ValueError('rehab outcome facts must not include treatment')
-        else:
-            raise ValueError(f'unsupported axis: {self.axis}')
-
-        if self.is_gold and self.facet_id is None:
-            raise ValueError('gold facts require facet_id')
-        if not self.is_gold and self.facet_id is not None:
-            raise ValueError('distractor facts must not have facet_id')
-        return self
-
 
 class ChunkGenerationCacheEntry(BenchmarkModel):
     cache_version: int
@@ -385,7 +331,7 @@ class ChunkState:
     llm_rejected: bool
     cache_hit: bool = False
     cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss'
-    validation_soft_warnings: list[str] = field(default_factory=list)
+    validation_soft_warnings: list[str] = field(default_factory=list[str])
 
 
 class ChunkRow(ClinicalFact):

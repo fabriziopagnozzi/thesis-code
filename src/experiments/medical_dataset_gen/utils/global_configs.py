@@ -112,11 +112,14 @@ class MethodsComparisonKernelMetricCfg(BaseModel):
     lower_bound_bandwidth: PositiveFloat = 0.0075
 
 
+type KernelAggregationStrategy = Literal['geometric_mean', 'arithmetic_mean', 'minimum']
+
+
 class MethodsComparisonKernelsCfg(BaseModel):
     lambda_max: NonNegativeFloat = 0.80
     agreement_alpha: PositiveFloat = 3.0
     kernel_floor: float = Field(default=0.05, gt=0, le=1)
-    pair_aggregation: Literal['geometric_mean', 'arithmetic_mean', 'minimum'] = 'geometric_mean'
+    pair_aggregation: KernelAggregationStrategy = 'geometric_mean'
     metrics: list[MethodsComparisonKernelMetricCfg] = Field(
         default_factory=lambda: [MethodsComparisonKernelMetricCfg()]
     )

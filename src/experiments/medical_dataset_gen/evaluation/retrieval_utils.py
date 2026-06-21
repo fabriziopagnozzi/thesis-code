@@ -215,16 +215,15 @@ def harmonic_mean(left: float, right: float) -> float:
 
 
 def pair_kernel_polars_expr(kernel_cfg: MethodsComparisonKernelsCfg) -> pl.Expr:
-    if kernel_cfg.pair_aggregation == 'arithmetic_mean':
-        return (pl.col('fac_loc_kernel_score') + pl.col('mmr_kernel_score')) / 2.0
-    if kernel_cfg.pair_aggregation == 'minimum':
-        return pl.min_horizontal('fac_loc_kernel_score', 'mmr_kernel_score')
-    if kernel_cfg.pair_aggregation == 'geometric_mean':
-        return (pl.col('fac_loc_kernel_score') * pl.col('mmr_kernel_score')).sqrt()
-    else:
-        unreachable_code(
-            f'Unexpected value {kernel_cfg.pair_aggregation} for kernel_cfg.pair_aggregation'
-        )
+    match kernel_cfg.pair_aggregation:
+        case 'arithmetic_mean':
+            return (pl.col('fac_loc_kernel_score') + pl.col('mmr_kernel_score')) / 2.0
+        case 'minimum':
+            return pl.min_horizontal('fac_loc_kernel_score', 'mmr_kernel_score')
+        case 'geometric_mean':
+            return (pl.col('fac_loc_kernel_score') * pl.col('mmr_kernel_score')).sqrt()
+        case _ as it:
+            unreachable_code(f'Unexpected value {it} for kernel_cfg.pair_aggregation')
 
 
 def sigmoid_polars_expr(expr: pl.Expr) -> pl.Expr:

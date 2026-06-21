@@ -58,13 +58,13 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     rows: list[dict[str, object]] = []
     plan_idx = 0
     template_offsets: dict[QueryType, int] = {
-        cast(QueryType, query_type): 0 for query_type in cfg.generation.query_types
+        query_type: 0 for query_type in cfg.generation.query_types
     }
 
     per_condition_specs: dict[ConditionKey, list[QueryPlanSpec]] = {
         condition_key: [
             QueryPlanSpec(
-                query_type=cast(QueryType, query_type),
+                query_type=query_type,
                 condition_key=condition_key,
                 condition_display=condition.display,
                 subgroup_a_id=subgroup_a_id,
@@ -177,7 +177,7 @@ def _next_query_template_id(query_type: QueryType, template_offsets: dict[QueryT
 def _facets_for_plan(
     ontology: MedicalOntology,
     query_id: str,
-    condition_id: str,
+    condition_id: ConditionKey,
     condition_display: str,
     subgroup_a_id: str,
     subgroup_a: SubgroupOntology,
@@ -196,7 +196,8 @@ def _facets_for_plan(
         (subgroup_b_id, subgroup_b, 'treatment_duration', subgroup_b_duration),
         (subgroup_b_id, subgroup_b, 'rehab_outcome', subgroup_b_rehab),
     ]
-    facets = []
+    facets = list[QueryPlanFacet]()
+
     for idx, (subgroup_id, subgroup, axis, value_bin) in enumerate(raw_facets):
         facet_id = f'{query_id}_f{idx + 1}'
         is_dominant = idx == dominant_slot

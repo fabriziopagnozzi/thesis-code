@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 import numpy as np
 import pyarrow.parquet as pq
@@ -27,10 +28,7 @@ def run_embed(
     return chunk_vectors, query_vectors
 
 
-def _embed_sentence_transformers_streaming(
-    cfg: ExperimentCfg,
-    paths: MedicalDatasetGenPaths,
-) -> tuple[NDArray[np.float32], NDArray[np.float32], dict]:
+def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths):
     from helpers.embedder import Embedder
 
     chunk_file = pq.ParquetFile(paths.table_path('chunk_documents'))
@@ -38,6 +36,12 @@ def _embed_sentence_transformers_streaming(
     n_chunks = chunk_file.metadata.num_rows
     n_queries = query_file.metadata.num_rows
     bucket_size = max(cfg.embeddings.batch_size * 32, 32768)
+
+    def embed_docs_fn(texts: list[str]) -> NDArray[np.float32]:
+        return embedder.embed_docs(texts, normalize=cfg.embeddings.normalize)
+
+    def embed_queries_fn(texts: list[str]) -> NDArray[np.float32]:
+        return embedder.embed_queries(texts, normalize=cfg.embeddings.normalize)
 
     embedder = Embedder(
         model_name=cfg.embeddings.model_name,
@@ -79,7 +83,7 @@ def _embed_sentence_transformers_streaming(
             text_column='text',
             vectors=chunk_vectors,
             ids=chunk_ids,
-            embed_fn=lambda texts: embedder.embed_docs(texts, normalize=cfg.embeddings.normalize),
+            embed_fn=embed_docs_fn,
             batch_size=bucket_size,
             desc='Embedding chunks',
         )
@@ -89,10 +93,7 @@ def _embed_sentence_transformers_streaming(
             text_column='query_text',
             vectors=query_vectors,
             ids=query_ids,
-            embed_fn=lambda texts: embedder.embed_queries(
-                texts,
-                normalize=cfg.embeddings.normalize,
-            ),
+            embed_fn=embed_queries_fn,
             batch_size=bucket_size,
             desc='Embedding queries',
         )
@@ -126,7 +127,7 @@ def _fill_embedding_memmaps(
     text_column: str,
     vectors: np.ndarray,
     ids: np.ndarray,
-    embed_fn,
+    embed_fn: Callable[..., object],
     batch_size: int,
     desc: str,
 ) -> int:
@@ -134,14 +135,14 @@ def _fill_embedding_memmaps(
 
     offset = 0
     for batch in tqdm(
-        file.iter_batches(columns=[id_column, text_column], batch_size=batch_size),
+        file.iter_batches(columns=[id_column, text_column], batch_size=batch_size),  # type: ignore
         desc=desc,
         dynamic_ncols=True,
     ):
         id_values = batch.column(0).to_pylist()
         text_values = batch.column(1).to_pylist()
         batch_vectors = embed_fn(text_values)
-        n_rows = len(id_values)
+        n_rows = len(id_values)  # type: ignore
         vectors[offset : offset + n_rows] = batch_vectors
         ids[offset : offset + n_rows] = np.asarray(id_values, dtype=ids.dtype)
         offset += n_rows

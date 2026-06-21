@@ -238,22 +238,22 @@ def _render_chunks_deterministic_parallel(
     return chunk_documents
 
 
-_DETERMINISTIC_WORKER_CFG: ExperimentCfg | None = None
-_DETERMINISTIC_WORKER_ONTOLOGY: MedicalOntology | None = None
+_deterministic_worker_cfg: ExperimentCfg | None = None
+_deterministic_worker_ontology: MedicalOntology | None = None
 
 
 def _init_deterministic_worker(
     cfg_dump: dict[str, object], ontology_dump: dict[str, object]
 ) -> None:
-    global _DETERMINISTIC_WORKER_CFG, _DETERMINISTIC_WORKER_ONTOLOGY
-    _DETERMINISTIC_WORKER_CFG = ExperimentCfg.model_validate(cfg_dump)
-    _DETERMINISTIC_WORKER_ONTOLOGY = MedicalOntology.model_validate(ontology_dump)
+    global _deterministic_worker_cfg, _deterministic_worker_ontology
+    _deterministic_worker_cfg = ExperimentCfg.model_validate(cfg_dump)
+    _deterministic_worker_ontology = MedicalOntology.model_validate(ontology_dump)
 
 
 def _render_deterministic_chunk_batch(
     batch: tuple[int, list[dict[str, object]]],
 ) -> tuple[str, list[dict[str, object]], int, int, list[dict[str, object]], str | None]:
-    if _DETERMINISTIC_WORKER_CFG is None or _DETERMINISTIC_WORKER_ONTOLOGY is None:
+    if _deterministic_worker_cfg is None or _deterministic_worker_ontology is None:
         raise RuntimeError('deterministic chunk worker was not initialized')
 
     start_index, fact_rows = batch
@@ -265,19 +265,19 @@ def _render_deterministic_chunk_batch(
 
     for offset, fact_row in enumerate(fact_rows):
         fact = ClinicalFact.model_validate(fact_row)
-        draft_text = render_canonical_chunk_text(fact, _DETERMINISTIC_WORKER_ONTOLOGY)
+        draft_text = render_canonical_chunk_text(fact, _deterministic_worker_ontology)
         state = new_chunk_state(
             draft_text,
             text_generation_source='fallback',
             llm_attempted=False,
             llm_rejected=False,
-            validation=validate_chunk_text(draft_text, fact, _DETERMINISTIC_WORKER_ONTOLOGY),
+            validation=validate_chunk_text(draft_text, fact, _deterministic_worker_ontology),
         )
         try:
             row, _ = finalize_chunk_row(
-                cfg=_DETERMINISTIC_WORKER_CFG,
+                cfg=_deterministic_worker_cfg,
                 fact=fact,
-                ontology=_DETERMINISTIC_WORKER_ONTOLOGY,
+                ontology=_deterministic_worker_ontology,
                 index=start_index + offset,
                 state=state,
                 should_cache=False,

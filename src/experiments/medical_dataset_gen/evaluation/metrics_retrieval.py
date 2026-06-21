@@ -288,7 +288,8 @@ class DiversifiedRankingIndexMetrics:
     ) -> list[str | None]:
         remaining = {facet_id: len(gold_ids) for facet_id, gold_ids in facet_to_gold.items()}
         counts: Counter[str] = Counter()
-        labels = []
+        labels = list[str | None]()
+
         for _ in range(k):
             candidates = [
                 (facet_id, (1 - alpha) ** counts[facet_id])
@@ -301,6 +302,7 @@ class DiversifiedRankingIndexMetrics:
             labels.append(facet_id)
             remaining[facet_id] -= 1
             counts[facet_id] += 1
+
         return labels
 
 

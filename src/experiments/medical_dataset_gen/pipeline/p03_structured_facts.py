@@ -294,7 +294,7 @@ def make_base_fact(
     subgroup_value: str,
     axis: ClinicalAxis,
     cluster_id: str,
-    cluster_role: str,
+    cluster_role: ClusterRole,
     target_value_bin: str | None = None,
 ) -> ClinicalFact:
     value_bin = _axis_value_bin(
@@ -359,7 +359,7 @@ def make_base_fact(
     else:
         must_mention.extend([value_bin.replace('_', ' '), 'rehabilitation'])
 
-    must_not_mention = []
+    must_not_mention = list[str]()
     if subgroup_label != plan.subgroup_a_label:
         must_not_mention.append(plan.subgroup_a_label)
     if subgroup_label != plan.subgroup_b_label:
@@ -373,7 +373,7 @@ def make_base_fact(
         facet_id=support_facet_id,
         target_facet_id=target_facet_id,
         cluster_id=cluster_id,
-        cluster_role=cast(ClusterRole, cluster_role),
+        cluster_role=cluster_role,
         condition_id=condition_id,
         condition_display=condition_display,
         subgroup_id=subgroup_id,
@@ -381,7 +381,7 @@ def make_base_fact(
         subgroup_axis=subgroup_axis,
         subgroup_field=subgroup_field,
         subgroup_value=subgroup_value,
-        axis=cast(ClinicalAxis, axis),
+        axis=axis,
         value_bin=value_bin,
         duration_days=duration_days,
         treatment=treatment,

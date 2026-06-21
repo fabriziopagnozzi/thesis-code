@@ -61,6 +61,58 @@ class GeometryArtifact(BenchmarkModel):
     selection_group: str | None = None
 
 
+class GeometryFilterStatsRow(BenchmarkModel):
+    # The filter stage adds dynamic topk_{k}_* diagnostic columns, so the
+    # stable schema is typed here and the flattened per-k fields are allowed as
+    # validated extras.
+    model_config = ConfigDict(extra='allow')
+
+    query_id: str
+    pool_scope: ChunkPoolScope
+    pool_size: int
+    topk_dominance_k: int
+    primary_topk_dominance_k: int
+    n_facets: int
+    n_facets_present: int
+    all_facets_present: bool
+    topk_dominant_count: int
+    planned_dominant_facet_id: str
+    planned_topk_dominant_count: int
+    planned_topk_dominant_fraction: float
+    n_topk_retrieved_facets: int
+    max_topk_retrieved_facets: int | None
+    rank_where_all_facets_first_covered: int | None
+    all_facets_covered_before_primary_k: bool
+    n_distractors_in_pool: int
+    n_near_miss_distractors_in_pool: int
+    mean_in_facet_similarity: float
+    mean_cross_facet_similarity: float
+    in_minus_cross_similarity: float
+    passes_filter: bool
+    fail_missing_facet: bool
+    fail_weak_topk_dominance: bool
+    fail_too_many_topk_facets: bool
+    fail_weak_facet_separation: bool
+    fail_too_few_near_miss_distractors: bool
+    fail_missing_or_malformed_background_outlier: bool
+    facets_present_json: str
+    topk_retrieved_facets_json: str
+    n_background_outliers_in_pool: int
+    n_background_outlier_clusters_in_pool: int
+    background_outlier_complete: bool
+    background_outlier_mean_in_cluster_similarity: float | None
+    query_to_background_outlier_mean: float | None
+    query_to_gold_mean: float | None
+    gold_minus_background_outlier_similarity_margin: float | None
+    background_outlier_first_rank: int | None
+    background_outlier_median_rank: float | None
+    fac_topk: float
+    fac_facloc: float
+    avg_cos_topk: float
+    avg_cos_facloc: float
+    jaccard_topk_facloc: float
+
+
 class EmbeddingGeometry2DPoint(TypedDict):
     query_id: str
     selection_group: str | None

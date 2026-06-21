@@ -111,10 +111,12 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.pyright]
 typeCheckingMode = "standard"
 reportUnnecessaryComparison = "error"
-# reportUnreachable = "warning"
+reportGeneralTypeIssues = true
 reportOptionalIterable = false
 reportOptionalMemberAccess = false
-reportGeneralTypeIssues = true
+# reportUnknownVariableType = false
+# reportUnknownMemberType = false
+# reportMissingTypeStubs = false
 exclude = [
 	"**/datasets/**",
 	"**/.venv/**",

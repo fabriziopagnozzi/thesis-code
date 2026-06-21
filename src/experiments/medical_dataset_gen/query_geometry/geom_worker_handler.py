@@ -1,7 +1,6 @@
 import os
 from collections.abc import Container
 from pathlib import Path
-from typing import cast
 
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     build_index_maps,
@@ -20,16 +19,16 @@ from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet_if_exists_else_empty_df,
 )
 
-QUERY_GEOMETRY_WORKER_STATE: EmbeddingGeometryWorkerState | None = None
+query_geometry_worker_state: EmbeddingGeometryWorkerState | None = None
 
 
 def set_geom_worker_state(target: EmbeddingGeometryWorkerState | None) -> None:
-    global QUERY_GEOMETRY_WORKER_STATE
-    QUERY_GEOMETRY_WORKER_STATE = target
+    global query_geometry_worker_state
+    query_geometry_worker_state = target
 
 
 def get_geom_worker_state() -> EmbeddingGeometryWorkerState | None:
-    return QUERY_GEOMETRY_WORKER_STATE
+    return query_geometry_worker_state
 
 
 def query_geometry_worker_count(n_queries: int) -> int:
@@ -76,7 +75,7 @@ def init_query_geometry_worker(
         'eval_results': eval_results,
         'out_dir': Path(out_dir),
         'query_group_by_id': query_group_by_id,
-        'k_values': cast(list[int], list(dict.fromkeys(cfg.retrieval.k_values))),
+        'k_values': list(dict.fromkeys(cfg.retrieval.k_values)),
         'selected_plot_names': selected_plot_names,
     }
     set_geom_worker_state(worker_state)

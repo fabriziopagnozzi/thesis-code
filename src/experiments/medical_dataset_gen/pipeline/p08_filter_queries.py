@@ -27,6 +27,9 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+    GeometryFilterStatsRow,
+)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     BackgroundOutlierDiagnostics,
     FacetIdToGoldChunks,
@@ -53,7 +56,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     qrels_by_query_chunk = get_qrels_by_query_chunk(qrels)
     primary_k = int(cfg.geometry_filter.primary_topk_dominance_k)
     diagnostic_k_values = _diagnostic_k_values(cfg)
-    rows = []
+    rows: list[dict[str, object]] = []
 
     for query_row in tqdm(
         queries.iter_rows(named=True), total=len(queries), desc='Geometry', dynamic_ncols=True
@@ -76,7 +79,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             query_vector=query_vectors[qidx],
             n=cfg.retrieval.candidate_pool_n,
         )
-        topn_chunk_ids = [chunk_ids[i] for i in topn_global]
+        topn_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
         topn_set = set(topn_chunk_ids)
 
         query_facets = facet_gold.get(qid, {})
@@ -174,7 +177,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             or missing_or_malformed_background_outlier
         )
 
-        rows.append(
+        geometry_row_data: dict[str, object] = (
             {
                 'query_id': qid,
                 'pool_scope': cfg.retrieval.pool_scope,
@@ -215,6 +218,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             | background_diagnostics
             | diagnostics
         )
+        geometry_row = GeometryFilterStatsRow.model_validate(geometry_row_data)
+        rows.append(geometry_row.model_dump(mode='python'))
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)
@@ -347,8 +352,9 @@ def _facet_separation(
     chunk_vectors: NDArray[np.float32],
 ) -> tuple[float, float]:
     _ = qid
-    gold_ids = []
-    labels = []
+    gold_ids = list[str]()
+    labels = list[str]()
+
     for facet_id, ids in query_facets.items():
         for chunk_id in ids:
             if chunk_id in chunk_id_to_idx:
@@ -442,7 +448,7 @@ def _mean_same_cluster_similarity(
         if chunk_id in chunk_id_to_idx:
             ids_by_cluster[str(query_qrels[chunk_id].cluster_id)].append(chunk_id)
 
-    values = []
+    values = list[float]()
     for cluster_ids in ids_by_cluster.values():
         if len(cluster_ids) < 2:
             continue

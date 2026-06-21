@@ -53,7 +53,7 @@ def run_make_queries_answers(
     current_query_id: str | None = None
     current_fact_rows: list[AnswerSourceFact] = []
     facts_file = pq.ParquetFile(paths.table_path('clinical_facts'))
-    for batch in facts_file.iter_batches(
+    for batch in facts_file.iter_batches(  # type: ignore
         columns=[
             'query_id',
             'is_gold',
