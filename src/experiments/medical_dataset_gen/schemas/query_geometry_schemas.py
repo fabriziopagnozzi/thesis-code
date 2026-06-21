@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Container
 from pathlib import Path
 from typing import TypedDict
 
@@ -8,6 +9,7 @@ import polars as pl
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ChunkPoolScope,
@@ -124,3 +126,4 @@ class EmbeddingGeometryWorkerState(TypedDict):
     out_dir: Path
     query_group_by_id: dict[str, str]
     k_values: list[int]
+    selected_plot_names: Container[GeomPlotFileName] | None

@@ -4,10 +4,10 @@ from typing import Literal, get_args
 
 import polars as pl
 
-type PlotCallContext = dict[str, pl.DataFrame | Path]
+type EvalPlotCallContext = dict[str, pl.DataFrame | Path]
 
 # Canonical plot output names used by the CLI selector and plot dispatch.
-type PlotFileName = Literal[
+type EvalPlotFileName = Literal[
     'strategy_comparison',
     'strategy_comparison_heatmap',
     'strategy_comparison_heatmap_html',
@@ -22,7 +22,7 @@ type PlotFileName = Literal[
     'answer_rouge_comparison',
     'answer_rouge_lambda_sensitivity',
 ]
-PLOT_FILE_NAMES: set[PlotFileName] = set(get_args(PlotFileName.__value__))
+EVAL_PLOT_FILE_NAMES = set[EvalPlotFileName](get_args(EvalPlotFileName.__value__))
 
 # Shared line colors, labels, and line styles for retrieval strategies across figures.
 STRATEGY_STYLE: dict[str, dict[str, str]] = {
@@ -69,7 +69,7 @@ class PlotGridLayout:
 # - `plot_strategy_comparison_heatmap(...)` uses a custom GridSpec/figure composition.
 # - `plot_strategy_comparison_heatmap_html(...)` & `plot_gain_over_topk_html(...)` are plotly-based.
 # - `plot_lambda_agreement(...)` depends on lambda counts and shared y-axis behavior.
-DEFAULT_PLOT_GRID_LAYOUTS: dict[PlotFileName, PlotGridLayout] = {
+DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     'strategy_comparison': PlotGridLayout(2, 3, 4.2, 3.4, 1.4),
     'lambda_sensitivity_metrics': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     'lambda_sensitivity_diagnostics': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),

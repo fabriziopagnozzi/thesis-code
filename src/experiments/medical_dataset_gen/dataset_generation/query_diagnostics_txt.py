@@ -252,7 +252,7 @@ def build_text_diagnostics(
     )
     gold_answers = _collect_query_table(paths, 'gold_answers', present_query_ids, _ANSWER_COLUMNS)
     geometry = _collect_query_table(paths, 'geometry_stats', present_query_ids)
-    plot_stats = _collect_query_table(paths, 'embedding_geometry_query_stats', present_query_ids)
+    plot_stats = _collect_query_table(paths, 'query_geometry_stats', present_query_ids)
     eval_results = _collect_query_table(paths, 'evaluation_results', present_query_ids)
     memberships = _collect_query_table(
         paths, 'chunk_memberships', present_query_ids, _MEMBERSHIP_COLUMNS
@@ -412,10 +412,13 @@ def _render_diagnostics(
             ('candidate_pool_n_used', ctx.pool_n),
             ('embedding_model', ctx.cfg.embeddings.model_name),
             ('generation.dominance_mode', ctx.cfg.generation.dominance_mode),
-            ('geometry.topk_dominance_k', ctx.cfg.geometry.topk_dominance_k),
-            ('geometry.primary_topk_dominance_k', ctx.cfg.geometry.primary_topk_dominance_k),
-            ('geometry.max_topk_retrieved_facets', ctx.cfg.geometry.max_topk_retrieved_facets),
-            ('geometry.min_topk_dominant_count', ctx.cfg.geometry.min_topk_dominant_count),
+            ('geometry.topk_dominance_k', ctx.cfg.geometry_filter.topk_dominance_k),
+            ('geometry.primary_topk_dominance_k', ctx.cfg.geometry_filter.primary_topk_dominance_k),
+            (
+                'geometry.max_topk_retrieved_facets',
+                ctx.cfg.geometry_filter.max_topk_retrieved_facets,
+            ),
+            ('geometry.min_topk_dominant_count', ctx.cfg.geometry_filter.min_topk_dominant_count),
             ('retrieval.k_values', ctx.cfg.retrieval.k_values),
             ('retrieval.lambda_values', ctx.cfg.retrieval.lambda_values),
             ('detail', ctx.detail),
@@ -1031,8 +1034,8 @@ def _render_selection_snapshot(
         value
         for value in _dedupe([
             *ctx.cfg.retrieval.k_values,
-            ctx.cfg.embedding_geometry.plot_k,
-            ctx.cfg.geometry.topk_dominance_k,
+            ctx.cfg.query_geometry.plot_k,
+            ctx.cfg.geometry_filter.topk_dominance_k,
         ])
         if value <= len(ranked_rows)
     ]
@@ -1509,8 +1512,8 @@ def _dominant_target_chunks(facets: list[dict[str, Any]], dominant_facet_id: str
 def _diagnostic_top_ks(ctx: _RenderContext, pool_size: int) -> list[int]:
     values = [
         *ctx.cfg.retrieval.k_values,
-        ctx.cfg.embedding_geometry.plot_k,
-        ctx.cfg.geometry.topk_dominance_k,
+        ctx.cfg.query_geometry.plot_k,
+        ctx.cfg.geometry_filter.topk_dominance_k,
         *ctx.extra_top_ks,
     ]
     return [value for value in sorted(set(values)) if 0 < value <= pool_size]
@@ -1627,7 +1630,7 @@ def _query_ids_from_file(path: Path) -> list[str]:
 
 
 def _query_ids_from_plot_group(paths: MedicalDatasetGenPaths, group: str) -> list[str]:
-    root = paths.figures_dir / 'embedding_geometry' / group
+    root = paths.figures_dir / 'query_geometry' / group
     if not root.exists():
         return []
     return sorted(path.name for path in root.iterdir() if path.is_dir())
@@ -1670,7 +1673,7 @@ def _parse_args() -> argparse.Namespace:
         '--from-plot-group',
         choices=['good', 'mid', 'bad', 'manual'],
         default=None,
-        help='Add query ids from _figures/embedding_geometry/<group> subdirectories.',
+        help='Add query ids from _figures/query_geometry/<group> subdirectories.',
     )
     parser.add_argument(
         '--comparison-query-id',

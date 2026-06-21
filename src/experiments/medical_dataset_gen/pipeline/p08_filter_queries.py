@@ -51,7 +51,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
     facet_gold = build_query_to_facet_gold_map(qrels)
     qrels_by_query_chunk = get_qrels_by_query_chunk(qrels)
-    primary_k = int(cfg.geometry.primary_topk_dominance_k)
+    primary_k = int(cfg.geometry_filter.primary_topk_dominance_k)
     diagnostic_k_values = _diagnostic_k_values(cfg)
     rows = []
 
@@ -150,14 +150,16 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
         )
 
         missing_facet = n_facets_present != len(query_facets)
-        weak_topk_dominance = planned_topk_dominant < cfg.geometry.min_topk_dominant_count
+        weak_topk_dominance = planned_topk_dominant < cfg.geometry_filter.min_topk_dominant_count
         too_many_topk_facets = (
-            cfg.geometry.max_topk_retrieved_facets is not None
-            and n_topk_retrieved_facets > cfg.geometry.max_topk_retrieved_facets
+            cfg.geometry_filter.max_topk_retrieved_facets is not None
+            and n_topk_retrieved_facets > cfg.geometry_filter.max_topk_retrieved_facets
         )
-        weak_facet_separation = (in_sim - cross_sim) < cfg.geometry.min_in_minus_cross_similarity
+        weak_facet_separation = (
+            in_sim - cross_sim
+        ) < cfg.geometry_filter.min_in_minus_cross_similarity
         too_few_near_miss_distractors = (
-            n_near_miss_distractors < cfg.geometry.min_distractors_in_pool
+            n_near_miss_distractors < cfg.geometry_filter.min_distractors_in_pool
         )
         missing_or_malformed_background_outlier = not bool(
             background_diagnostics['background_outlier_complete']
@@ -187,7 +189,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'planned_topk_dominant_count': planned_topk_dominant,
                 'planned_topk_dominant_fraction': primary_topk['planned_dominant_fraction'],
                 'n_topk_retrieved_facets': n_topk_retrieved_facets,
-                'max_topk_retrieved_facets': cfg.geometry.max_topk_retrieved_facets,
+                'max_topk_retrieved_facets': cfg.geometry_filter.max_topk_retrieved_facets,
                 'rank_where_all_facets_first_covered': all_facet_rank,
                 'all_facets_covered_before_primary_k': (
                     all_facet_rank is not None and all_facet_rank <= primary_k
@@ -226,8 +228,8 @@ def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
         int(k)
         for k in [
             *cfg.retrieval.k_values,
-            cfg.geometry.topk_dominance_k,
-            cfg.geometry.primary_topk_dominance_k,
+            cfg.geometry_filter.topk_dominance_k,
+            cfg.geometry_filter.primary_topk_dominance_k,
         ]
     })
 

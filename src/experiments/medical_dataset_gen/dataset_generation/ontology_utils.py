@@ -51,7 +51,7 @@ def make_subgroup_pairs(
 
 def other_subgroups(
     ontology: MedicalOntology, excluded_ids: set[str]
-) -> list[tuple[str, SubgroupOntology]]:
+) -> list[tuple[SubgroupKey, SubgroupOntology]]:
     return [
         (sid, subgroup) for sid, subgroup in ontology.subgroups.items() if sid not in excluded_ids
     ]
@@ -59,7 +59,7 @@ def other_subgroups(
 
 def other_conditions(
     ontology: MedicalOntology, excluded_id: str
-) -> list[tuple[str, ConditionOntology]]:
+) -> list[tuple[ConditionKey, ConditionOntology]]:
     return [
         (cid, condition) for cid, condition in ontology.conditions.items() if cid != excluded_id
     ]
@@ -69,7 +69,7 @@ def get_axes_keys(ontology: MedicalOntology) -> list[str]:
     return list(ontology.clinical_axes.keys())
 
 
-def axis_label(ontology: MedicalOntology, axis_id: str) -> str:
+def axis_label(ontology: MedicalOntology, axis_id: ClinicalAxis) -> str:
     return ontology.clinical_axes[axis_id].label
 
 

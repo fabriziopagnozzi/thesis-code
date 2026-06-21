@@ -128,7 +128,7 @@ def _evaluate_queries(
             rows.extend(batch_rows)
     finally:
         if worker_count != 1:
-            executor.shutdown()
+            executor.shutdown()  # type: ignore
     return rows
 
 

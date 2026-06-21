@@ -82,36 +82,36 @@ _QUERY_SELECTION_WORST_DESC = [False, False, False, False, False]
 def choose_query_ids(
     cfg: ExperimentCfg,
     queries: pl.DataFrame,
-    geometry: pl.DataFrame,
+    geometry_filter: pl.DataFrame,
     eval_results: pl.DataFrame,
 ) -> list[str]:
-    groups = choose_query_groups(cfg, queries, geometry, eval_results)
+    groups = choose_query_groups(cfg, queries, geometry_filter, eval_results)
     return [query_id for query_ids in groups.values() for query_id in query_ids]
 
 
 def choose_query_groups(
     cfg: ExperimentCfg,
     queries: pl.DataFrame,
-    geometry: pl.DataFrame,
+    geometry_filter: pl.DataFrame,
     eval_results: pl.DataFrame,
 ) -> dict[str, list[str]]:
-    if cfg.embedding_geometry.query_ids:
-        return {'manual': cfg.embedding_geometry.query_ids[: cfg.embedding_geometry.n_queries]}
+    if cfg.query_geometry.query_ids:
+        return {'manual': cfg.query_geometry.query_ids[: cfg.query_geometry.n_queries]}
 
-    ranked = ranked_queries_for_embedding_geometry(cfg, queries, geometry, eval_results)
-    if cfg.embedding_geometry.query_selection == 'best':
-        return {'good': ranked['query_id'].head(cfg.embedding_geometry.n_queries).to_list()}
-    return mixed_query_groups(ranked, cfg.embedding_geometry.n_queries)
+    ranked = ranked_queries_for_query_geometry(cfg, queries, geometry_filter, eval_results)
+    if cfg.query_geometry.query_selection == 'best':
+        return {'good': ranked['query_id'].head(cfg.query_geometry.n_queries).to_list()}
+    return mixed_query_groups(ranked, cfg.query_geometry.n_queries)
 
 
-def ranked_queries_for_embedding_geometry(
+def ranked_queries_for_query_geometry(
     cfg: ExperimentCfg,
     queries: pl.DataFrame,
-    geometry: pl.DataFrame,
+    geometry_filter: pl.DataFrame,
     eval_results: pl.DataFrame,
 ) -> pl.DataFrame:
     base = queries.select('query_id')
-    if geometry.height > 0:
+    if geometry_filter.height > 0:
         gcols = [
             col
             for col in [
@@ -121,9 +121,9 @@ def ranked_queries_for_embedding_geometry(
                 'in_minus_cross_similarity',
                 'n_distractors_in_pool',
             ]
-            if col in geometry.columns
+            if col in geometry_filter.columns
         ]
-        base = base.join(geometry.select(gcols), on='query_id', how='left')
+        base = base.join(geometry_filter.select(gcols), on='query_id', how='left')
     else:
         base = base.with_columns(
             pl.lit(True).alias('passes_filter'),
@@ -133,7 +133,7 @@ def ranked_queries_for_embedding_geometry(
         )
 
     if eval_results.height > 0:
-        gains = evaluation_gain_table(eval_results, cfg.embedding_geometry.plot_k)
+        gains = evaluation_gain_table(eval_results, cfg.query_geometry.plot_k)
         if gains.height > 0:
             base = base.join(gains, on='query_id', how='left')
 
@@ -274,7 +274,7 @@ def build_query_artifact(
 ) -> GeometryArtifact | None:
     query = QueryRecord.model_validate(queries.filter(pl.col('query_id') == qid).row(0, named=True))
     qidx = maps['query_id_to_idx'][qid]
-    pool_n = cfg.embedding_geometry.candidate_pool_n or cfg.retrieval.candidate_pool_n
+    pool_n = cfg.query_geometry.candidate_pool_n or cfg.retrieval.candidate_pool_n
 
     candidate_idx = get_candidate_pool_indices(
         query_id=qid,
@@ -296,7 +296,7 @@ def build_query_artifact(
     candidate_vectors = chunk_vectors[topn_global]
     query_vector = query_vectors[qidx]
     sim_matrix = candidate_vectors @ candidate_vectors.T
-    k = min(cfg.embedding_geometry.plot_k, len(topn_global))
+    k = min(cfg.query_geometry.plot_k, len(topn_global))
     candidate_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
     query_qrels = {
         qrel.chunk_id: qrel

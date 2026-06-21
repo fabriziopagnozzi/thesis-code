@@ -109,7 +109,9 @@ ignore = ["E501"]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pyright]
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
+reportUnnecessaryComparison = "error"
+# reportUnreachable = "warning"
 reportOptionalIterable = false
 reportOptionalMemberAccess = false
 reportGeneralTypeIssues = true

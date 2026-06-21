@@ -65,7 +65,7 @@ retrieval:
   # Set false only when diagnosing failed query/corpus generation.
   only_pass_geometry: true
 
-geometry:
+geometry_filter:
   topk_dominance_k: 10 # Legacy/extra diagnostic k retained in geometry_stats.
   primary_topk_dominance_k: 20 # k used by the geometry prefilter; match the main RAG context budget.
   min_topk_dominant_count: 5 # Minimum number of top-k results from the same dominant gold facet.
@@ -88,7 +88,8 @@ evaluation:
         target_lower_bound_vs_topk: 0.03 # Require a clearly positive paired 95% CI lower bound.
         lower_bound_bandwidth: 0.0075
 
-embedding_geometry:
+query_geometry:
+  plot_continuous_similarity: false # If true, add the continuous PCA cosine field alongside the discrete query-similarity scatter.
   random_state: 42 # Seed for PCA/UMAP figure reproducibility.
 
   # Number of query-local embedding maps to generate after evaluation.

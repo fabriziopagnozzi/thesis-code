@@ -15,42 +15,42 @@ def reduce_for_plot(
         coords[:, 0] = np.arange(len(vectors), dtype=np.float32)
         return coords, 'trivial'
 
-    features = embedding_geometry_features(cfg, vectors)
+    features = query_geometry_features(cfg, vectors)
 
-    if cfg.embedding_geometry.reduction == 'umap':
+    if cfg.query_geometry.reduction == 'umap':
         try:
             coords = umap_reduce(cfg, features, n_components=2)
             return coords, 'pca_umap' if features.shape[1] != vectors.shape[1] else 'umap'
         except Exception as exc:
-            print(f'[embedding_geometry] UMAP failed; falling back to PCA: {exc}')
+            print(f'[query_geometry] UMAP failed; falling back to PCA: {exc}')
 
-    return pca_2d(vectors, cfg.embedding_geometry.random_state), 'pca'
+    return pca_2d(vectors, cfg.query_geometry.random_state), 'pca'
 
 
-def embedding_geometry_features(
+def query_geometry_features(
     cfg: ExperimentCfg,
     vectors: NDArray[np.float32],
 ) -> NDArray[np.float32]:
-    if cfg.embedding_geometry.pca_dims is None:
+    if cfg.query_geometry.pca_dims is None:
         return vectors.astype(np.float32)
 
     return pca_preprocess(
         vectors,
-        cfg.embedding_geometry.pca_dims,
-        cfg.embedding_geometry.random_state,
+        cfg.query_geometry.pca_dims,
+        cfg.query_geometry.random_state,
     )
 
 
 def cluster_features(cfg: ExperimentCfg, vectors: NDArray[np.float32]) -> NDArray[np.float32]:
-    features = embedding_geometry_features(cfg, vectors)
+    features = query_geometry_features(cfg, vectors)
     if len(features) < 4:
         return features
 
-    n_components = min(cfg.embedding_geometry.hdbscan_umap_dims, max(1, len(features) - 2))
+    n_components = min(cfg.query_geometry.hdbscan_umap_dims, max(1, len(features) - 2))
     try:
         return umap_reduce(cfg, features, n_components=n_components)
     except Exception as exc:
-        print(f'[embedding_geometry] clustering UMAP failed; using unreduced features: {exc}')
+        print(f'[query_geometry] clustering UMAP failed; using unreduced features: {exc}')
         return features
 
 
@@ -61,13 +61,15 @@ def umap_reduce(
 ) -> NDArray[np.float32]:
     import umap
 
-    n_neighbors = min(cfg.embedding_geometry.umap_neighbors, len(features) - 1)
+    n_neighbors = min(cfg.query_geometry.umap_neighbors, len(features) - 1)
     reducer = umap.UMAP(
         n_components=n_components,
-        metric=cfg.embedding_geometry.umap_metric,
+        metric=cfg.query_geometry.umap_metric,
         n_neighbors=max(2, n_neighbors),
-        min_dist=cfg.embedding_geometry.umap_min_dist,
-        random_state=cfg.embedding_geometry.random_state,
+        min_dist=cfg.query_geometry.umap_min_dist,
+        random_state=cfg.query_geometry.random_state,
+        # Seeded UMAP is intentionally single-threaded for reproducibility.
+        n_jobs=1,
     )
     return reducer.fit_transform(features).astype(np.float32)  # type: ignore
 
@@ -104,9 +106,7 @@ def pca_2d(vectors: NDArray[np.float32], random_state: int) -> NDArray[np.float3
 
 
 def hdbscan_labels(cfg: ExperimentCfg, features: NDArray[np.float32]) -> NDArray[np.int32]:
-    min_cluster_size = min(
-        cfg.embedding_geometry.hdbscan_min_cluster_size, max(2, len(features) // 2)
-    )
+    min_cluster_size = min(cfg.query_geometry.hdbscan_min_cluster_size, max(2, len(features) // 2))
     if len(features) < max(4, min_cluster_size):
         return np.full(len(features), -1, dtype=np.int32)
     try:
@@ -114,10 +114,10 @@ def hdbscan_labels(cfg: ExperimentCfg, features: NDArray[np.float32]) -> NDArray
 
         clusterer = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
-            min_samples=cfg.embedding_geometry.hdbscan_min_samples,
+            min_samples=cfg.query_geometry.hdbscan_min_samples,
             metric='euclidean',
         )
         return np.asarray(clusterer.fit_predict(features), dtype=np.int32)
     except Exception as exc:
-        print(f'[embedding_geometry] HDBSCAN failed; marking all points as noise: {exc}')
+        print(f'[query_geometry] HDBSCAN failed; marking all points as noise: {exc}')
         return np.full(len(features), -1, dtype=np.int32)

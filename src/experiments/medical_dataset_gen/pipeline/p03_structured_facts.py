@@ -27,6 +27,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalAxis,
     ClinicalFact,
     ClusterRole,
+    ConditionKey,
     MedicalOntology,
     PatientSex,
     QueryPlan,
@@ -284,7 +285,7 @@ def make_base_fact(
     local_idx: int,
     is_gold: bool,
     distractor_type: str | None,
-    condition_id: str,
+    condition_id: ConditionKey,
     condition_display: str,
     subgroup_id: str,
     subgroup_label: str,
@@ -401,7 +402,7 @@ def make_base_fact(
 
 def _axis_value_bin(
     ontology: MedicalOntology,
-    condition_id: str,
+    condition_id: ConditionKey,
     axis: str,
     target_value_bin: str | None,
     local_idx: int,
@@ -431,7 +432,7 @@ def _axis_value_bin(
 
 def _axis_values(
     ontology: MedicalOntology,
-    condition_id: str,
+    condition_id: ConditionKey,
     axis: ClinicalAxis,
     value_bin: str,
     rng: Random,
@@ -450,7 +451,7 @@ def _axis_values(
 
 def _background_value_bin(
     ontology: MedicalOntology,
-    condition_id: str,
+    condition_id: ConditionKey,
     axis: str,
     cluster_idx: int,
 ) -> str:
@@ -474,7 +475,7 @@ def _background_value_bin(
 
 
 def _chunk_reuse_key(
-    condition_id: str,
+    condition_id: ConditionKey,
     subgroup_id: str,
     axis: str,
     value_bin: str,

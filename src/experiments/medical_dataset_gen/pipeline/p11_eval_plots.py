@@ -8,12 +8,12 @@ from typing import cast
 
 import polars as pl
 
-from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
-from experiments.medical_dataset_gen.evaluation.plots_configs import (
-    PLOT_FILE_NAMES,
-    PlotCallContext,
-    PlotFileName,
+from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
+    EVAL_PLOT_FILE_NAMES,
+    EvalPlotCallContext,
+    EvalPlotFileName,
 )
+from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
@@ -27,17 +27,8 @@ from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 def run_eval_plots(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
-    selected_plots: set[str] | None = None,
+    selected_plots: set[EvalPlotFileName] | None = None,
 ) -> None:
-    # selected_plots: user-specified subset of plots via running the current script
-    if selected_plots is not None:
-        unknown_plots = sorted(selected_plots - PLOT_FILE_NAMES)
-        if unknown_plots:
-            available = ', '.join(sorted(PLOT_FILE_NAMES))
-            unknown = ', '.join(unknown_plots)
-            raise ValueError(f'Unknown plot name(s): {unknown}. Available plots: {available}')
-
-    selected_plot_set = cast(set[PlotFileName], selected_plots)
 
     stats_path = paths.table_path('evaluation_stats')
     results_path = paths.table_path('evaluation_results')
@@ -72,25 +63,25 @@ def run_eval_plots(
         out_dir=out_dir,
     )
     selected_job_names = (
-        [name for name, _ in plot_jobs if name in selected_plot_set]
-        if selected_plot_set is not None
+        [name for name, _ in plot_jobs if name in selected_plots]
+        if selected_plots is not None
         else [
             name for name, _ in plot_jobs
         ]  # default: ALL metrics (except the ROUGE if the cfg.retrieval.compute_answer_rouge is False)
     )
 
     for plot_name, plot_callable in plot_jobs:
-        if selected_plot_set is not None and plot_name not in selected_plot_set:
+        if selected_plots is not None and plot_name not in selected_plots:
             continue
         plot_callable()
 
-    selection_note = f' ({", ".join(selected_job_names)})' if selected_plot_set is not None else ''
+    selection_note = f' ({", ".join(selected_job_names)})' if selected_plots is not None else ''
     print(f'[plots] saved evaluation figures to {out_dir}{selection_note}')
 
 
 def build_plot_callable(
-    plot_name: PlotFileName,
-    plot_context: PlotCallContext,
+    plot_name: EvalPlotFileName,
+    plot_context: EvalPlotCallContext,
 ) -> Callable[[], None]:
     plot_fn_name = f'plot_{plot_name}'
     plot_module = import_module('experiments.medical_dataset_gen.evaluation.plots')
@@ -117,15 +108,15 @@ def build_plot_jobs(
     results_df: pl.DataFrame,
     agreement_df: pl.DataFrame,
     out_dir: Path,
-) -> list[tuple[PlotFileName, Callable[[], None]]]:
-    sorted_plot_names: list[PlotFileName] = sorted(PLOT_FILE_NAMES)
+) -> list[tuple[EvalPlotFileName, Callable[[], None]]]:
+    sorted_plot_names: list[EvalPlotFileName] = sorted(EVAL_PLOT_FILE_NAMES)
 
-    available_plot_names: list[PlotFileName] = [
+    available_plot_names: list[EvalPlotFileName] = [
         plot_name
         for plot_name in sorted_plot_names
         if cfg.retrieval.compute_answer_rouge or not plot_name.startswith('answer_rouge_')
     ]
-    plot_context: PlotCallContext = {
+    plot_context: EvalPlotCallContext = {
         'stats_df': stats_df,
         'results_df': results_df,
         'agreement_df': agreement_df,
@@ -137,16 +128,25 @@ def build_plot_jobs(
     ]
 
 
-def parse_plot_names(raw_value: str | None) -> set[str] | None:
+def parse_plot_names(raw_value: str | None) -> set[EvalPlotFileName] | None:
     if raw_value is None:
         return None
+
     plot_names: set[str] = {part.strip() for part in raw_value.split(',') if part.strip()}
     if not plot_names:
         raise ValueError('--plots was provided but no plot names were specified')
-    return plot_names
+
+    if plot_names:
+        unknown_plots = sorted(plot_names - EVAL_PLOT_FILE_NAMES)
+        if unknown_plots:
+            available = ', '.join(sorted(EVAL_PLOT_FILE_NAMES))
+            unknown = ', '.join(unknown_plots)
+            raise ValueError(f'Unknown plot name(s): {unknown}. Available plots: {available}')
+
+    return cast(set[EvalPlotFileName] | None, plot_names)
 
 
-def parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[str] | None]:
+def parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[EvalPlotFileName] | None]:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         '--plots',
@@ -164,13 +164,9 @@ def parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[str] | Non
     return cfg, parse_plot_names(args.plots)
 
 
-def main(argv: list[str] | None = None) -> None:
-    cli_argv = sys.argv[1:] if argv is None else argv
+if __name__ == '__main__':
+    cli_argv = sys.argv[1:]
     cfg, selected_plots = parse_plots_cli_args(cli_argv)
     paths = paths_for(cfg)
     setup_logging(paths)
     run_eval_plots(cfg, paths, selected_plots=selected_plots)
-
-
-if __name__ == '__main__':
-    main()

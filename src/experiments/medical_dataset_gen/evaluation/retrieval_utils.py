@@ -219,7 +219,7 @@ def pair_kernel_polars_expr(kernel_cfg: MethodsComparisonKernelsCfg) -> pl.Expr:
         return (pl.col('fac_loc_kernel_score') + pl.col('mmr_kernel_score')) / 2.0
     if kernel_cfg.pair_aggregation == 'minimum':
         return pl.min_horizontal('fac_loc_kernel_score', 'mmr_kernel_score')
-    if kernel_cfg.pair_aggregation == 'harmonic_mean':
+    if kernel_cfg.pair_aggregation == 'geometric_mean':
         return (pl.col('fac_loc_kernel_score') * pl.col('mmr_kernel_score')).sqrt()
     else:
         unreachable_code(

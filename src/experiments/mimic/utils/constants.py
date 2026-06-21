@@ -69,10 +69,10 @@ type ResultTable = Literal[
 type MimicTable = HospTable | IcuTable | NoteTable | ResultTable
 
 
-HOSP_TABLES: set[HospTable] = set(get_args(HospTable.__value__))
-ICU_TABLES: set[IcuTable] = set(get_args(IcuTable.__value__))
-NOTE_TABLES: set[NoteTable] = set(get_args(NoteTable.__value__))
-RESULT_TABLES: set[ResultTable] = set(get_args(ResultTable.__value__))
+HOSP_TABLES = set[HospTable](get_args(HospTable.__value__))
+ICU_TABLES = set[IcuTable](get_args(IcuTable.__value__))
+NOTE_TABLES = set[NoteTable](get_args(NoteTable.__value__))
+RESULT_TABLES = set[ResultTable](get_args(ResultTable.__value__))
 
 ALL_TABLES = HOSP_TABLES | ICU_TABLES | NOTE_TABLES | RESULT_TABLES
 

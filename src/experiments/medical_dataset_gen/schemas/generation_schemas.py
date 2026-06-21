@@ -163,7 +163,7 @@ class MedicalOntology(BenchmarkModel):
 
 class QueryPlanFacet(BenchmarkModel):
     facet_id: str
-    condition_id: str
+    condition_id: ConditionKey
     condition_display: str
     subgroup_id: str
     subgroup_label: str
@@ -204,7 +204,7 @@ class QueryPlan(BenchmarkModel):
     split: DataSplit
     query_type: QueryType
     template_id: str
-    condition_id: str
+    condition_id: ConditionKey
     condition_display: str
     subgroup_a_id: str
     subgroup_a_label: str
@@ -304,7 +304,7 @@ class ClinicalFact(BenchmarkModel):
     target_facet_id: str | None
     cluster_id: str
     cluster_role: ClusterRole
-    condition_id: str
+    condition_id: ConditionKey
     condition_display: str
     subgroup_id: str
     subgroup_label: str

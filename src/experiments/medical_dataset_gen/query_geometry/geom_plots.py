@@ -1,33 +1,39 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 import polars as pl
+from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
+    BACKGROUND_OUTLIER_COLOR,
+    BACKGROUND_OUTLIER_LABEL,
+    BACKGROUND_OUTLIER_LABEL_ID,
+    BACKGROUND_OUTLIER_ROLE,
+    DISTRACTOR_LABELS,
+    FIXED_LABEL_COLORS,
+    UNSELECTED_BACKGROUND_COLOR,
+)
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryArtifact,
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
 
-_FIXED_LABEL_COLORS = {
-    'soft distractor: same condition, wrong subgroup': '#f3a6a6',
-    'hard distractor: wrong condition, same subgroup': '#d62728',
-    'hard distractor: wrong condition, same answer axis': '#8c1d18',
-    'background outlier: clinical cluster': '#d62728',
-    'hard distractor': '#d62728',
-    'off-query wrong-condition chunks': '#d62728',
-}
 
-_DISTRACTOR_LABELS = set(_FIXED_LABEL_COLORS)
-_BACKGROUND_OUTLIER_LABEL = 'background outlier: clinical cluster'
-_BACKGROUND_OUTLIER_LABEL_ID = 'background_clinical_cluster'
-_BACKGROUND_OUTLIER_ROLE = 'background_outlier'
-_BACKGROUND_OUTLIER_COLOR = '#d62728'
-_UNSELECTED_BACKGROUND_COLOR = '#b8b8b8'
+@dataclass(frozen=True)
+class _PcaSimilaritySurface:
+    coords: NDArray[np.float32]
+    query_coord: NDArray[np.float32]
+    grid_x: NDArray[np.float32]
+    grid_y: NDArray[np.float32]
+    grid_similarity: NDArray[np.float32]
+    vmin: float
+    vmax: float
 
 
 def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
@@ -76,7 +82,11 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
 
 
 def plot_full_strategy_selection_overlay(
-    artifact: GeometryArtifact, out_dir: Path, *, k: int | None = None
+    artifact: GeometryArtifact,
+    out_dir: Path,
+    *,
+    k: int | None = None,
+    plot_continuous_similarity: bool = True,
 ) -> None:
     import matplotlib.pyplot as plt
 
@@ -94,15 +104,15 @@ def plot_full_strategy_selection_overlay(
         )
         for strategy in rows
     }
-    n_cols = max(3, *(len(row_variants[strategy]) for strategy in rows))
+    top_row_cols = 4 if plot_continuous_similarity else 3
+    n_cols = max(top_row_cols, *(len(row_variants[strategy]) for strategy in rows))
     fig, axes = plt.subplots(
         3,
         n_cols,
         figsize=(5.1 * n_cols, 5.0 * 3),
-        sharex=True,
-        sharey=True,
         squeeze=False,
-    )
+        constrained_layout=True,
+    )  # type: ignore
 
     palette = label_palette(artifact.labels)
     topk_variants = selection_variants.get('top_k', [])
@@ -120,16 +130,32 @@ def plot_full_strategy_selection_overlay(
             ),
         )
 
-    query_points = _plot_query_similarity_map_ax(axes[0, 1], artifact, include_title_prefix=False)
-    fig.colorbar(
-        query_points,
-        ax=axes[0, 1],
-        fraction=0.046,
-        pad=0.04,
-        label='query cosine similarity',
+    similarity_points = _plot_query_similarity_map_ax(
+        axes[0, 1], artifact, include_title_prefix=False
     )
+    legend_col_idx = 3 if plot_continuous_similarity else 2
+    if plot_continuous_similarity:
+        query_surface = _plot_query_similarity_pca_surface_ax(
+            axes[0, 2], artifact, include_title_prefix=False
+        )
+        fig.colorbar(
+            query_surface,
+            ax=[axes[0, 1], axes[0, 2]],
+            fraction=0.035,
+            pad=0.04,
+            label='query cosine similarity',
+        )
+    else:
+        if similarity_points is not None:
+            fig.colorbar(
+                similarity_points,
+                ax=axes[0, 1],
+                fraction=0.05,
+                pad=0.02,
+                label='query cosine similarity',
+            )
 
-    for col_idx in range(3, n_cols):
+    for col_idx in range(top_row_cols, n_cols):
         axes[0, col_idx].axis('off')
 
     for row_idx, strategy in enumerate(rows, start=1):
@@ -152,14 +178,13 @@ def plot_full_strategy_selection_overlay(
             axes[row_idx, col_idx].axis('off')
 
     legend_handles = _selection_legend_handles([ax for ax in axes.ravel() if ax.get_visible()])
-    _draw_selection_legend_panel(axes[0, 2], legend_handles)
+    _draw_selection_legend_panel(axes[0, legend_col_idx], legend_handles)
 
     fig.suptitle(
-        f'{artifact_title_prefix(artifact)}: top-k, query cosine map, and lambda sweeps '
+        f'{artifact_title_prefix(artifact)}: top-k, query cosine maps, and lambda sweeps '
         f'at k={effective_k}' + (f' (requested {render_k})' if render_k != effective_k else ''),
         fontsize=12,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
     fig.savefig(
         out_dir / f'full_strategy_selection_overlay_k{render_k}.png',
         dpi=150,
@@ -168,26 +193,58 @@ def plot_full_strategy_selection_overlay(
     plt.close(fig)
 
 
-def plot_query_overview_4panel(artifact: GeometryArtifact, out_dir: Path) -> None:
+def plot_query_overview_4panel(
+    artifact: GeometryArtifact,
+    out_dir: Path,
+    *,
+    plot_continuous_similarity: bool = True,
+) -> None:
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 11))
-    ax_map, ax_cos, ax_rank, ax_cluster = axes.ravel()
+    if plot_continuous_similarity:
+        fig, axes = plt.subplots(2, 3, figsize=(19, 11), constrained_layout=True)  # type: ignore
+        ax_map, ax_cos, ax_cos_pca, ax_rank, ax_cluster, ax_unused = axes.ravel()
+    else:
+        fig, axes = plt.subplots(2, 2, figsize=(14.5, 11), constrained_layout=True)  # type: ignore
+        ax_map, ax_cos, ax_rank, ax_cluster = axes.ravel()
+        ax_cos_pca = None
+        ax_unused = None
 
     _plot_query_map_ax(ax_map, artifact, include_title_prefix=False)
     ax_map.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
 
-    points = _plot_query_similarity_map_ax(ax_cos, artifact, include_title_prefix=False)
-    fig.colorbar(points, ax=ax_cos, fraction=0.046, pad=0.04, label='query cosine')
+    similarity_points = _plot_query_similarity_map_ax(ax_cos, artifact, include_title_prefix=False)
+    if plot_continuous_similarity:
+        assert ax_cos_pca is not None
+        surface = _plot_query_similarity_pca_surface_ax(
+            ax_cos_pca, artifact, include_title_prefix=False
+        )
+        fig.colorbar(
+            surface,
+            ax=[ax_cos, ax_cos_pca],
+            fraction=0.035,
+            pad=0.04,
+            label='query cosine',
+        )
+    else:
+        if similarity_points is not None:
+            fig.colorbar(
+                similarity_points,
+                ax=ax_cos,
+                fraction=0.05,
+                pad=0.02,
+                label='query cosine',
+            )
 
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
     ax_rank.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
 
     _plot_discovered_clusters_ax(ax_cluster, artifact, include_title_prefix=False)
     ax_cluster.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
+    if ax_unused is not None:
+        ax_unused.axis('off')
 
     fig.suptitle(f'{artifact_title_prefix(artifact)}: embedding geometry overview', fontsize=14)
-    fig.tight_layout()
     fig.savefig(out_dir / 'query_overview_4panel.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
@@ -256,7 +313,7 @@ def _plot_selection_panel(
         ax,
         artifact,
         selected=selected,
-        label=_BACKGROUND_OUTLIER_LABEL,
+        label=BACKGROUND_OUTLIER_LABEL,
     )
     draw_query_marker(ax, artifact)
     ax.set_title(title)
@@ -419,8 +476,8 @@ def _plot_query_map_ax(
     _plot_background_outliers(
         ax,
         artifact,
-        color=_BACKGROUND_OUTLIER_COLOR,
-        label=_BACKGROUND_OUTLIER_LABEL,
+        color=BACKGROUND_OUTLIER_COLOR,
+        label=BACKGROUND_OUTLIER_LABEL,
     )
     draw_query_marker(ax, artifact)
     title = (
@@ -436,23 +493,85 @@ def _plot_query_map_ax(
 def _plot_query_similarity_map_ax(
     ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
 ) -> Any:
+    return _plot_query_similarity_points(
+        ax=ax,
+        artifact=artifact,
+        coords=artifact.coords,
+        query_coord=artifact.query_coord,
+        sim_to_query=artifact.sim_to_query,
+        title=f'Map colored by query cosine ({artifact.reduction_method}, n={len(artifact.coords)})',
+        x_label='dim 1',
+        y_label='dim 2',
+        include_title_prefix=include_title_prefix,
+    )
+
+
+def _plot_query_similarity_pca_surface_ax(
+    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
+) -> Any:
+    surface = _pca_query_similarity_surface(artifact)
+    contour = ax.contourf(
+        surface.grid_x,
+        surface.grid_y,
+        surface.grid_similarity,
+        levels=80,
+        cmap='viridis',
+        vmin=surface.vmin,
+        vmax=surface.vmax,
+        alpha=0.94,
+    )
+    ax.contour(
+        surface.grid_x,
+        surface.grid_y,
+        surface.grid_similarity,
+        levels=9,
+        colors='white',
+        linewidths=0.35,
+        alpha=0.28,
+    )
+    _plot_query_similarity_points(
+        ax=ax,
+        artifact=artifact,
+        coords=surface.coords,
+        query_coord=surface.query_coord,
+        sim_to_query=artifact.sim_to_query,
+        title=f'Continuous PCA cosine field (n={len(surface.coords)})',
+        x_label='pca dim 1',
+        y_label='pca dim 2',
+        include_title_prefix=include_title_prefix,
+    )
+    return contour
+
+
+def _plot_query_similarity_points(
+    ax: Any,
+    artifact: GeometryArtifact,
+    *,
+    coords: NDArray[np.float32],
+    query_coord: NDArray[np.float32],
+    sim_to_query: NDArray[np.float32],
+    title: str,
+    x_label: str,
+    y_label: str,
+    include_title_prefix: bool,
+) -> Any:
     order = np.arange(len(artifact.candidate_chunk_ids))
-    coords = artifact.coords[order]
-    sim_to_query = artifact.sim_to_query[order]
+    plot_coords = coords[order]
+    plot_sims = sim_to_query[order]
     is_gold = np.array([artifact.is_gold[i] for i in order], dtype=bool)
     is_background = np.array(
         [_is_background_outlier_point(artifact, int(i)) for i in order], dtype=bool
     )
     non_gold_non_background = (~is_gold) & (~is_background)
 
-    vmin = float(sim_to_query.min()) if len(sim_to_query) else 0.0
-    vmax = float(sim_to_query.max()) if len(sim_to_query) else 1.0
+    vmin = float(plot_sims.min()) if len(plot_sims) else 0.0
+    vmax = float(plot_sims.max()) if len(plot_sims) else 1.0
     points = None
     if is_gold.any():
         points = ax.scatter(
-            coords[is_gold, 0],
-            coords[is_gold, 1],
-            c=sim_to_query[is_gold],
+            plot_coords[is_gold, 0],
+            plot_coords[is_gold, 1],
+            c=plot_sims[is_gold],
             cmap='viridis',
             vmin=vmin,
             vmax=vmax,
@@ -460,12 +579,13 @@ def _plot_query_similarity_map_ax(
             alpha=0.88,
             marker='o',
             edgecolors='none',
+            zorder=4,
         )
     if non_gold_non_background.any():
         points = ax.scatter(
-            coords[non_gold_non_background, 0],
-            coords[non_gold_non_background, 1],
-            c=sim_to_query[non_gold_non_background],
+            plot_coords[non_gold_non_background, 0],
+            plot_coords[non_gold_non_background, 1],
+            c=plot_sims[non_gold_non_background],
             cmap='viridis',
             vmin=vmin,
             vmax=vmax,
@@ -473,13 +593,14 @@ def _plot_query_similarity_map_ax(
             alpha=0.92,
             marker='x',
             linewidths=1.25,
+            zorder=4,
         )
     if is_background.any():
         points = _scatter_circled_x(
             ax,
-            coords[is_background, 0],
-            coords[is_background, 1],
-            color_values=sim_to_query[is_background],
+            plot_coords[is_background, 0],
+            plot_coords[is_background, 1],
+            color_values=plot_sims[is_background],
             cmap='viridis',
             vmin=vmin,
             vmax=vmax,
@@ -490,17 +611,11 @@ def _plot_query_similarity_map_ax(
         )
     if points is None:
         points = ax.scatter([], [], c=[], cmap='viridis', vmin=vmin, vmax=vmax)
-    draw_query_marker(ax, artifact)
-    ax.set_title(
-        _axis_title(
-            artifact,
-            f'Map colored by query cosine (n={len(order)})',
-            include_title_prefix=include_title_prefix,
-        )
-    )
-    ax.set_xlabel('dim 1')
-    ax.set_ylabel('dim 2')
-    _apply_embedding_limits(ax, artifact)
+    _draw_query_marker_at(ax, query_coord)
+    ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    _apply_coord_limits(ax, coords, query_coord)
     ax.grid(alpha=0.18)
     return points
 
@@ -537,10 +652,10 @@ def _plot_query_rank_ax(
             ax,
             ranks[background_idx],
             artifact.sim_to_query[background_idx],
-            color=_BACKGROUND_OUTLIER_COLOR,
+            color=BACKGROUND_OUTLIER_COLOR,
             s=50,
             alpha=0.94,
-            label=_BACKGROUND_OUTLIER_LABEL,
+            label=BACKGROUND_OUTLIER_LABEL,
             linewidth=0.75,
             zorder=5,
         )
@@ -582,7 +697,7 @@ def _plot_discovered_clusters_ax(
         ax,
         artifact,
         color='#333333',
-        label=_BACKGROUND_OUTLIER_LABEL,
+        label=BACKGROUND_OUTLIER_LABEL,
     )
     draw_query_marker(ax, artifact)
     ax.set_title(
@@ -597,23 +712,21 @@ def _plot_discovered_clusters_ax(
 def label_palette(labels: list[str]) -> dict[str, Any]:
     import matplotlib.pyplot as plt
 
-    unique = [label for label in sorted(set(labels)) if label not in _FIXED_LABEL_COLORS]
+    unique = [label for label in sorted(set(labels)) if label not in FIXED_LABEL_COLORS]
     cmap = plt.get_cmap('tab20')  # type: ignore
     palette = {label: cmap(i % 20) for i, label in enumerate(unique)}
-    palette.update({
-        label: color for label, color in _FIXED_LABEL_COLORS.items() if label in labels
-    })
+    palette.update({label: color for label, color in FIXED_LABEL_COLORS.items() if label in labels})
     return palette
 
 
 def _label_marker(label: str) -> str:
     if _is_background_outlier_label(label):
         return 'x'
-    return 'x' if label in _DISTRACTOR_LABELS else 'o'
+    return 'x' if label in DISTRACTOR_LABELS else 'o'
 
 
 def _is_background_outlier_label(label: str) -> bool:
-    return label == _BACKGROUND_OUTLIER_LABEL
+    return label == BACKGROUND_OUTLIER_LABEL
 
 
 def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
@@ -621,9 +734,9 @@ def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
     label_id = artifact.label_ids[idx]
     role = artifact.roles[idx]
     return (
-        label == _BACKGROUND_OUTLIER_LABEL
-        or label_id == _BACKGROUND_OUTLIER_LABEL_ID
-        or role == _BACKGROUND_OUTLIER_ROLE
+        label == BACKGROUND_OUTLIER_LABEL
+        or label_id == BACKGROUND_OUTLIER_LABEL_ID
+        or role == BACKGROUND_OUTLIER_ROLE
     )
 
 
@@ -677,7 +790,7 @@ def _plot_background_outliers_for_selection(
             ax,
             coords[unselected_idx, 0],
             coords[unselected_idx, 1],
-            color=_UNSELECTED_BACKGROUND_COLOR,
+            color=UNSELECTED_BACKGROUND_COLOR,
             s=42,
             alpha=0.58,
             linewidth=0.55,
@@ -688,7 +801,7 @@ def _plot_background_outliers_for_selection(
             ax,
             coords[selected_idx, 0],
             coords[selected_idx, 1],
-            color=_BACKGROUND_OUTLIER_COLOR,
+            color=BACKGROUND_OUTLIER_COLOR,
             s=58,
             alpha=0.95,
             label=label,
@@ -750,9 +863,13 @@ def _scatter_circled_x(
 
 
 def draw_query_marker(ax: Any, artifact: GeometryArtifact) -> None:
+    _draw_query_marker_at(ax, artifact.query_coord)
+
+
+def _draw_query_marker_at(ax: Any, query_coord: NDArray[np.float32]) -> None:
     ax.scatter(
-        [artifact.query_coord[0]],
-        [artifact.query_coord[1]],
+        [query_coord[0]],
+        [query_coord[1]],
         marker='*',
         s=220,
         color='black',
@@ -775,13 +892,77 @@ def _axis_title(artifact: GeometryArtifact, title: str, *, include_title_prefix:
 
 
 def _apply_embedding_limits(ax: Any, artifact: GeometryArtifact) -> None:
-    coords = np.vstack([artifact.coords, artifact.query_coord[None, :]])
-    x_min, y_min = coords.min(axis=0)
-    x_max, y_max = coords.max(axis=0)
+    _apply_coord_limits(ax, artifact.coords, artifact.query_coord)
+
+
+def _apply_coord_limits(
+    ax: Any,
+    coords: NDArray[np.float32],
+    query_coord: NDArray[np.float32],
+) -> None:
+    x_left, x_right, y_bottom, y_top = _coord_limits(coords, query_coord)
+    ax.set_xlim(x_left, x_right)
+    ax.set_ylim(y_bottom, y_top)
+
+
+def _coord_limits(
+    coords: NDArray[np.float32],
+    query_coord: NDArray[np.float32],
+) -> tuple[float, float, float, float]:
+    coords_all = np.vstack([coords, query_coord[None, :]])
+    x_min, y_min = coords_all.min(axis=0)
+    x_max, y_max = coords_all.max(axis=0)
     x_pad = max(float(x_max - x_min) * 0.05, 0.5)
     y_pad = max(float(y_max - y_min) * 0.05, 0.5)
-    ax.set_xlim(float(x_min) - x_pad, float(x_max) + x_pad)
-    ax.set_ylim(float(y_min) - y_pad, float(y_max) + y_pad)
+    return (
+        float(coords_all[:, 0].min()) - x_pad,
+        float(coords_all[:, 0].max()) + x_pad,
+        float(coords_all[:, 1].min()) - y_pad,
+        float(coords_all[:, 1].max()) + y_pad,
+    )
+
+
+def _pca_query_similarity_surface(artifact: GeometryArtifact) -> _PcaSimilaritySurface:
+    from sklearn.decomposition import PCA
+
+    vectors = np.vstack([artifact.candidate_vectors, artifact.query_vector[None, :]]).astype(
+        np.float32
+    )
+    pca = PCA(n_components=2, random_state=42)
+    coords_all = pca.fit_transform(vectors).astype(np.float32)
+    coords = coords_all[:-1]
+    query_coord = coords_all[-1]
+    x_left, x_right, y_bottom, y_top = _coord_limits(coords, query_coord)
+    grid_x, grid_y = np.meshgrid(
+        np.linspace(x_left, x_right, 220, dtype=np.float32),
+        np.linspace(y_bottom, y_top, 220, dtype=np.float32),
+    )
+    grid_coords = np.column_stack([grid_x.ravel(), grid_y.ravel()]).astype(np.float32)
+    reconstructed = pca.inverse_transform(grid_coords).astype(np.float32)
+
+    query_unit = _unit_normalize_rows(artifact.query_vector[None, :])[0]
+    reconstructed_unit = _unit_normalize_rows(reconstructed)
+    grid_similarity = (reconstructed_unit @ query_unit).reshape(grid_x.shape).astype(np.float32)
+
+    vmin = float(artifact.sim_to_query.min()) if len(artifact.sim_to_query) else 0.0
+    vmax = float(artifact.sim_to_query.max()) if len(artifact.sim_to_query) else 1.0
+    grid_similarity = np.clip(grid_similarity, vmin, vmax)
+
+    return _PcaSimilaritySurface(
+        coords=coords,
+        query_coord=query_coord,
+        grid_x=grid_x,
+        grid_y=grid_y,
+        grid_similarity=grid_similarity,
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+
+def _unit_normalize_rows(values: NDArray[np.float32]) -> NDArray[np.float32]:
+    norms = np.linalg.norm(values, axis=1, keepdims=True)
+    safe_norms = np.where(norms > 0.0, norms, 1.0).astype(np.float32)
+    return (values / safe_norms).astype(np.float32)
 
 
 def strategy_title(strategy: str, lam: float | None) -> str:

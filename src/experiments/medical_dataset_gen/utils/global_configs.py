@@ -33,8 +33,8 @@ type SyntheticMedicalTableName = Literal[
     'evaluation_results',
     'evaluation_stats',
     'lambda_pair_agreement',
-    'embedding_geometry_points',
-    'embedding_geometry_query_stats',
+    'query_geometry_points',
+    'query_geometry_stats',
 ]
 
 
@@ -92,13 +92,14 @@ class RetrievalCfg(BaseModel):
     compute_answer_rouge: bool = True
 
 
-class GeometryCfg(BaseModel):
+class GeometryFilterCfg(BaseModel):
     topk_dominance_k: PositiveInt = 10
     primary_topk_dominance_k: PositiveInt = 20
     min_topk_dominant_count: PositiveInt = 5
     max_topk_retrieved_facets: PositiveInt | None = 2
     min_in_minus_cross_similarity: PositiveFloat = 0.03
     min_distractors_in_pool: PositiveInt = 10
+    plot_continuous_similarity: bool = True
 
 
 class MethodsComparisonKernelMetricCfg(BaseModel):
@@ -128,7 +129,7 @@ class EvaluationCfg(BaseModel):
     )
 
 
-class EmbeddingGeometryCfg(BaseModel):
+class QueryGeometryCfg(BaseModel):
     n_queries: PositiveInt = 6
     query_ids: list[str] = Field(default_factory=list)
     query_selection: Literal['mixed', 'best'] = 'mixed'
@@ -150,9 +151,9 @@ class ExperimentCfg(BaseModel):
     generation: GenerationCfg = Field(default_factory=GenerationCfg)
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
     retrieval: RetrievalCfg = Field(default_factory=RetrievalCfg)
-    geometry: GeometryCfg = Field(default_factory=GeometryCfg)
+    geometry_filter: GeometryFilterCfg = Field(default_factory=GeometryFilterCfg)
     evaluation: EvaluationCfg = Field(default_factory=EvaluationCfg)
-    embedding_geometry: EmbeddingGeometryCfg = Field(default_factory=EmbeddingGeometryCfg)
+    query_geometry: QueryGeometryCfg = Field(default_factory=QueryGeometryCfg)
 
     model_config = {'populate_by_name': True, 'extra': 'ignore'}
 

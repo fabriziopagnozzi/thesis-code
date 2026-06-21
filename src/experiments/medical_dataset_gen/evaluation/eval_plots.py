@@ -10,18 +10,7 @@ import polars as pl
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.evaluation.plots_configs import NamedPlotMetric
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
-from experiments.medical_dataset_gen.pipeline.p11_eval_plots import (
-    parse_plots_cli_args,
-    run_eval_plots,
-)
-from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
-from experiments.medical_dataset_gen.utils.global_configs import (
-    paths_for,
-)
-
-from .plots_configs import (
+from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     DEFAULT_PLOT_GRID_LAYOUTS,
     LAMBDA_POLICY_NOTE,
     PLOT_METRIC_TITLES,
@@ -31,7 +20,17 @@ from .plots_configs import (
     PRIMARY_DESC,
     PRIMARY_SORT,
     STRATEGY_STYLE,
-    PlotFileName,
+    EvalPlotFileName,
+    NamedPlotMetric,
+)
+from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
+from experiments.medical_dataset_gen.pipeline.p11_eval_plots import (
+    parse_plots_cli_args,
+    run_eval_plots,
+)
+from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
+from experiments.medical_dataset_gen.utils.global_configs import (
+    paths_for,
 )
 
 
@@ -162,7 +161,7 @@ def _plot_lambda_sensitivity(
     stats_df: pl.DataFrame,
     out_dir: Path,
     *,
-    plot_name: PlotFileName,
+    plot_name: EvalPlotFileName,
     metric_names: list[str],
     title: str,
     output_filename: str,
@@ -1420,7 +1419,7 @@ def _available_sort(df: pl.DataFrame) -> tuple[list[str], list[bool]]:
 
 
 def _grid_figure(
-    layout_name: PlotFileName,
+    layout_name: EvalPlotFileName,
     *,
     sharex: bool = False,
     rows: int | None = None,

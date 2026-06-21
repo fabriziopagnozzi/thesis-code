@@ -83,8 +83,8 @@ Key outputs written by the pipeline:
 - `evaluation_results.parquet`
 - `evaluation_stats.parquet`
 - `lambda_pair_agreement.parquet`
-- `embedding_geometry_points.parquet`
-- `embedding_geometry_query_stats.parquet`
+- `query_geometry_points.parquet`
+- `query_geometry_stats.parquet`
 
 The embedding stage also writes:
 

@@ -458,6 +458,8 @@ def _render_chunks_sequential(
             rows.append(row_from_state(i, fact, cached[0]))
             continue
 
+        cache_key: str | None = None
+
         if cfg.generation.use_llm_chunk_generation:
             final_text, attempt_errors = generate_llm_chunk(cfg=cfg, fact=fact, ontology=ontology)
             if attempt_errors:
@@ -478,7 +480,6 @@ def _render_chunks_sequential(
             )
         else:
             draft_text = render_canonical_chunk_text(fact, ontology)
-            cache_key: str | None = None
             if cfg.generation.use_llm_chunk_rewriting:
                 cached = cached_rewrite_chunk_state(
                     cfg=cfg,
