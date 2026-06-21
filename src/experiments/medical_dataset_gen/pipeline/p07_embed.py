@@ -35,7 +35,7 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
     query_file = pq.ParquetFile(paths.table_path('queries'))
     n_chunks = chunk_file.metadata.num_rows
     n_queries = query_file.metadata.num_rows
-    bucket_size = max(cfg.embeddings.batch_size * 32, 32768)
+    bucket_size = max(cfg.embeddings.batch_size * 32, 125_000)
 
     def embed_docs_fn(texts: list[str]) -> NDArray[np.float32]:
         return embedder.embed_docs(texts, normalize=cfg.embeddings.normalize)

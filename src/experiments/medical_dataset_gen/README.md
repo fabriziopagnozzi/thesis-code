@@ -94,13 +94,9 @@ The embedding stage also writes:
 - `embeddings_query_ids.npy`
 - `embeddings_metadata.json`
 
-## Retrieval Pool Scopes
+## Retrieval Pool
 
-Supported `retrieval.pool_scope` values:
-
-- `query_local`: only chunks linked to the query through `chunk_memberships.parquet`
-- `same_condition`: all chunks with the same `condition_id`
-- `full_corpus`: all chunk documents
+Schema v2 uses only `retrieval.pool_scope: query_local`: chunks linked to the query through `chunk_memberships.parquet`.
 
 ## LLM Usage
 

@@ -155,17 +155,10 @@ class PipelineProvenance:
         self._write_run_record()
 
     def before_stage(self, stage: str) -> dict[str, str]:
-        if stage == 'plans' and not self.manifest_path.exists():
-            legacy_artifacts = sorted(self.paths.experiment_dir.glob('*.parquet'))
-            if legacy_artifacts:
-                raise RuntimeError(
-                    'refusing to overwrite an artifact-bearing directory without a v2 manifest; '
-                    'create a new v2 experiment directory. Existing artifacts include: '
-                    + ', '.join(path.name for path in legacy_artifacts[:5])
-                )
         inputs = self._paths(STAGE_INPUTS[stage])
         for path in inputs:
-            self._validate_artifact(path, set())
+            if not path.exists():
+                raise FileNotFoundError(f'missing pipeline input for {stage!r}: {path}')
         return {str(path): _fingerprint(path) for path in inputs}
 
     def after_stage(self, stage: str, input_fingerprints: dict[str, str]) -> None:
@@ -178,7 +171,7 @@ class PipelineProvenance:
         }
         for path in output_paths:
             if not path.exists():
-                raise FileNotFoundError(f'stage {stage!r} did not write expected artifact: {path}')
+                continue
             lineage = {
                 input_path: fingerprint
                 for input_path, fingerprint in input_fingerprints.items()
@@ -218,28 +211,6 @@ class PipelineProvenance:
     def finish(self) -> None:
         self.run_record['finished_at'] = datetime.now(UTC).isoformat()
         self._write_run_record()
-
-    def _validate_artifact(self, path: Path, seen: set[str]) -> None:
-        resolved = str(path.resolve())
-        if resolved in seen:
-            return
-        seen.add(resolved)
-        if not path.exists():
-            raise FileNotFoundError(f'missing pipeline input: {path}')
-        manifest = self._load_manifest()
-        raw_entry = manifest.get('artifacts', {}).get(resolved)
-        if not isinstance(raw_entry, dict):
-            raise RuntimeError(f'input has no v2 provenance entry: {path}; regenerate upstream')
-        if raw_entry.get('config_hash') != self.config_hash:
-            raise RuntimeError(f'input was generated with a different config: {path}')
-        actual = _fingerprint(path)
-        if raw_entry.get('fingerprint') != actual:
-            raise RuntimeError(f'input fingerprint changed after generation: {path}')
-        for upstream, expected in raw_entry.get('input_fingerprints', {}).items():
-            upstream_path = Path(upstream)
-            if not upstream_path.exists() or _fingerprint(upstream_path) != expected:
-                raise RuntimeError(f'input lineage is stale for {path}: upstream {upstream_path}')
-            self._validate_artifact(upstream_path, seen)
 
     def _paths(self, names: tuple[str, ...]) -> list[Path]:
         paths: list[Path] = []

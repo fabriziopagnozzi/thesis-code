@@ -72,8 +72,7 @@ class GeometryFilterStatsRow(BenchmarkModel):
     pool_id: str
     pool_scope: ChunkPoolScope
     pool_size: int
-    topk_dominance_k: int
-    primary_topk_dominance_k: int
+    topk_k: int
     n_facets: int
     n_facets_present: int
     all_facets_present: bool

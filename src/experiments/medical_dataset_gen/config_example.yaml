@@ -11,16 +11,14 @@ global:
 
   # Name of the experiment directory under:
   #   src/experiments/medical_dataset_gen/_results/<output_experiment>
-  output_experiment: mvp
+  output_experiment: v2
 
 generation:
   query_limit: null # Optional deterministic prefix for smoke runs; null emits all 5,440 queries.
   ontology_path: null # Optional path to a custom ontology YAML.
-  query_types: [prioritized_subgroup_comparison]
 
-  dominance_mode: embedding_calibrated # "rotating" keeps the old pre-embedding dominant slot.
-  dominance_probe_chunks_per_facet: 8 # Neutral probe chunks per facet used by calibrate_plans.
-  calibration_min_probe_margin: null # Optional p25-vs-best-complement-p75 margin diagnostic.
+  calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.
+  calibration_probe_chunks_per_facet: 8 # Neutral probe chunks per facet used by calibrate_plans.
   gold_chunks_calibrated_primary: 24
   gold_chunks_other_primary: 20
   gold_chunks_secondary: 14
@@ -65,10 +63,9 @@ retrieval:
   only_pass_geometry: true
 
 geometry_filter:
-  topk_dominance_k: 10 # Legacy/extra diagnostic k retained in geometry_stats.
-  primary_topk_dominance_k: 20 # k used by the geometry prefilter; match the main RAG context budget.
+  topk_k: 20 # k used by the strict geometry gate; match the main RAG context budget.
   min_primary_axis_count: 14 # Minimum number of top-20 results from the declared primary axis.
-  max_topk_retrieved_facets: 2 # Maximum distinct gold facets top-k may retrieve at primary_topk_dominance_k.
+  max_topk_retrieved_facets: 2 # Maximum distinct gold facets represented in the top-k geometry window.
   min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
   min_same_axis_cohort_gap: 0.03
   min_same_cohort_axis_gap: 0.03

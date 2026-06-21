@@ -5,12 +5,10 @@ import re
 import yaml
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    AnswerTemplateSpec,
     MedicalOntology,
     QueryPlan,
     QueryTemplateData,
     QueryTemplateSpec,
-    QueryType,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     MedicalDatasetGenPaths,
@@ -30,7 +28,7 @@ QUERY_TEMPLATE_DATA = _load_query_template_data()
 
 
 def render_query_template(plan: QueryPlan, ontology: MedicalOntology) -> str:
-    template = query_template_spec(plan.query_type, plan.template_id).template
+    template = query_template_spec(plan.template_id).template
 
     context = {
         'condition': plan.condition_display,
@@ -55,7 +53,7 @@ def render_answer_template(
     subgroup_b_secondary: str,
     ontology: MedicalOntology,
 ) -> str:
-    template = answer_template_spec(plan.query_type).template
+    template = QUERY_TEMPLATE_DATA.answer_template.template
     context = {
         'condition': plan.condition_display,
         'condition_id': plan.condition_id,
@@ -73,22 +71,15 @@ def render_answer_template(
     return squash_whitespaces(template.format(**context))
 
 
-def query_template_ids(query_type: QueryType) -> list[str]:
-    return [spec.id for spec in QUERY_TEMPLATE_DATA.query_templates[query_type]]
+def query_template_ids() -> list[str]:
+    return [spec.id for spec in QUERY_TEMPLATE_DATA.query_templates]
 
 
-def query_template_spec(query_type: QueryType, template_id: str) -> QueryTemplateSpec:
-    for spec in QUERY_TEMPLATE_DATA.query_templates[query_type]:
+def query_template_spec(template_id: str) -> QueryTemplateSpec:
+    for spec in QUERY_TEMPLATE_DATA.query_templates:
         if spec.id == template_id:
             return spec
-    raise KeyError(f'unknown query template id for {query_type}: {template_id}')
-
-
-def answer_template_spec(query_type: QueryType) -> AnswerTemplateSpec:
-    try:
-        return QUERY_TEMPLATE_DATA.answer_templates[query_type]
-    except KeyError as exc:
-        raise KeyError(f'unknown answer template for query type: {query_type}') from exc
+    raise KeyError(f'unknown query template id: {template_id}')
 
 
 def squash_whitespaces(text: str) -> str:

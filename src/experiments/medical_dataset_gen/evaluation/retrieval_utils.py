@@ -54,16 +54,6 @@ def build_index_maps(
     query_by_id = {row.query_id: row for row in query_rows}
 
     chunks_by_source_query: dict[str, list[int]] = defaultdict(list)
-    chunks_by_condition: dict[str, list[int]] = defaultdict(list)
-    for row in chunk_rows:
-        chunk_id = row.chunk_id
-        if chunk_id not in chunk_id_to_idx:
-            continue
-        chunk_idx = chunk_id_to_idx[chunk_id]
-        condition_id = row.condition_id
-        if condition_id:
-            chunks_by_condition[str(condition_id)].append(chunk_idx)
-
     membership_by_query_chunk: dict[tuple[str, str], ChunkMembershipRecord] = {}
     seen_by_query: dict[str, set[int]] = defaultdict(set)
     for row in membership_rows:
@@ -84,29 +74,14 @@ def build_index_maps(
         'membership_by_query_chunk': membership_by_query_chunk,
         'query_by_id': query_by_id,
         'chunks_by_source_query': chunks_by_source_query,
-        'chunks_by_condition': chunks_by_condition,
     }
 
 
 def get_candidate_pool_indices(
     query_id: str,
-    pool_scope: ChunkPoolScope,
-    n_chunks: int,
     chunks_by_source_query: dict[str, list[int]],
-    chunks_by_condition: dict[str, list[int]],
-    query_condition_id: str | None,
 ) -> NDArray[np.intp]:
-    if pool_scope == 'full_corpus':
-        return np.arange(n_chunks, dtype=np.intp)
-    if pool_scope == 'same_condition':
-        if not query_condition_id:
-            return np.array([], dtype=np.intp)
-
-        return np.array(chunks_by_condition.get(query_condition_id, []), dtype=np.intp)
-    if pool_scope == 'query_local':
-        return np.array(chunks_by_source_query.get(query_id, []), dtype=np.intp)
-    else:
-        raise RuntimeError('Unexpected pool_scope')
+    return np.array(chunks_by_source_query.get(query_id, []), dtype=np.intp)
 
 
 def run_topn_cosine_retrieval(
@@ -252,22 +227,8 @@ def assert_pool_scope_match(
 def load_embedding_arrays(
     paths: MedicalDatasetGenPaths,
 ) -> tuple[NDArray[np.float32], NDArray[np.float32], list[str], list[str]]:
-    if (
-        paths.embeddings_meta_path.exists()
-        and paths.embeddings_chunk_vectors_path.exists()
-        and paths.embeddings_query_vectors_path.exists()
-        and paths.embeddings_chunk_ids_path.exists()
-        and paths.embeddings_query_ids_path.exists()
-    ):
-        chunk_vectors = np.load(paths.embeddings_chunk_vectors_path, mmap_mode='r')
-        query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
-        chunk_ids = np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')
-        query_ids = np.load(paths.embeddings_query_ids_path, mmap_mode='r')
-        return chunk_vectors, query_vectors, chunk_ids, query_ids
-
-    payload = np.load(paths.embeddings_npz_path)
-    chunk_vectors = np.asarray(payload['chunk_vectors'], dtype=np.float32)
-    query_vectors = np.asarray(payload['query_vectors'], dtype=np.float32)
-    chunk_ids = [str(x) for x in payload['chunk_ids'].tolist()]
-    query_ids = [str(x) for x in payload['query_ids'].tolist()]
+    chunk_vectors = np.load(paths.embeddings_chunk_vectors_path, mmap_mode='r')
+    query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
+    chunk_ids = [str(value) for value in np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')]
+    query_ids = [str(value) for value in np.load(paths.embeddings_query_ids_path, mmap_mode='r')]
     return chunk_vectors, query_vectors, chunk_ids, query_ids

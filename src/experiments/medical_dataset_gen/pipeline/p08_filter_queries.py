@@ -86,7 +86,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
     facet_gold = build_query_to_facet_gold_map(qrels)
     qrels_by_query_chunk = get_qrels_by_query_chunk(qrels)
-    primary_k = int(cfg.geometry_filter.primary_topk_dominance_k)
+    primary_k = int(cfg.geometry_filter.topk_k)
     diagnostic_k_values = _diagnostic_k_values(cfg)
     rows: list[dict[str, object]] = []
 
@@ -99,11 +99,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
         candidate_idx = get_candidate_pool_indices(
             query_id=qid,
-            pool_scope=cfg.retrieval.pool_scope,
-            n_chunks=len(chunk_ids),
             chunks_by_source_query=maps['chunks_by_source_query'],
-            chunks_by_condition=maps['chunks_by_condition'],
-            query_condition_id=query.condition_id,
         )
         topn_global, topn_sims = run_topn_cosine_retrieval(
             candidate_indices=candidate_idx,
@@ -219,8 +215,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'calibration_warning': calibration_warning_by_query.get(qid, False),
                 'pool_scope': cfg.retrieval.pool_scope,
                 'pool_size': len(topn_global),
-                'topk_dominance_k': primary_k,
-                'primary_topk_dominance_k': primary_k,
+                'topk_k': primary_k,
                 'n_facets': len(query_facets),
                 'n_facets_present': n_facets_present,
                 'all_facets_present': n_facets_present == len(query_facets),
@@ -341,8 +336,7 @@ def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
             int(k)
             for k in [
                 *cfg.retrieval.k_values,
-                cfg.geometry_filter.topk_dominance_k,
-                cfg.geometry_filter.primary_topk_dominance_k,
+                cfg.geometry_filter.topk_k,
             ]
         }
     )
@@ -389,8 +383,6 @@ def _topk_diagnostics_by_k(
         rows[k] = {
             'dominant_count': most_common_count,
             'dominant_fraction': most_common_count / denominator,
-            'planned_dominant_count': calibrated_count,
-            'planned_dominant_fraction': calibrated_count / denominator,
             'primary_axis_count': primary_axis_count,
             'primary_axis_fraction': primary_axis_count / denominator,
             'calibrated_primary_count': calibrated_count,
@@ -409,8 +401,6 @@ def _flatten_topk_diagnostics(topk_by_k: TopKDiagnosticsByK) -> dict[str, object
         prefix = f'topk_{k}'
         flat[f'{prefix}_dominant_count'] = row['dominant_count']
         flat[f'{prefix}_dominant_fraction'] = row['dominant_fraction']
-        flat[f'{prefix}_planned_dominant_count'] = row['planned_dominant_count']
-        flat[f'{prefix}_planned_dominant_fraction'] = row['planned_dominant_fraction']
         flat[f'{prefix}_primary_axis_count'] = row['primary_axis_count']
         flat[f'{prefix}_primary_axis_fraction'] = row['primary_axis_fraction']
         flat[f'{prefix}_calibrated_primary_count'] = row['calibrated_primary_count']

@@ -118,7 +118,6 @@ def _redundancy_metrics(
 
     return {
         'distractor_rate': non_gold_count / n_selected if n_selected else 0.0,
-        'any_distractor_rate': non_gold_count / n_selected if n_selected else 0.0,
         'near_miss_distractor_rate': (
             near_miss_distractor_count / n_selected if n_selected else 0.0
         ),

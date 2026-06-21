@@ -122,7 +122,6 @@ def _build_evaluation_index_maps(raw_maps: RawRetrievalIndexMaps) -> EvaluationI
         'query_id_to_idx': raw_maps['query_id_to_idx'],
         'chunk_by_id': raw_maps['chunk_by_id'],
         'chunks_by_source_query': raw_maps['chunks_by_source_query'],
-        'chunks_by_condition': raw_maps['chunks_by_condition'],
     }
 
 

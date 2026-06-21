@@ -10,12 +10,19 @@ from typing import Literal, NoReturn, get_args
 from uuid import uuid4
 
 import yaml
-from pydantic import BaseModel, Field, NonNegativeFloat, PositiveFloat, PositiveInt, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    model_validator,
+)
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkPoolScope,
     PlanCalibrationMode,
-    QueryType,
 )
 from helpers.dir_paths import ROOT_DIR
 
@@ -42,22 +49,22 @@ type SyntheticMedicalTableName = Literal[
 SYNTHETIC_TABLE_NAMES = set[str](get_args(SyntheticMedicalTableName.__value__))
 
 
-class GlobalCfg(BaseModel):
+class ConfigModel(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+
+class GlobalCfg(ConfigModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
-    output_experiment: str = 'mvp'
+    output_experiment: str = 'v2'
     result_dir_overrides: dict[SyntheticMedicalTableName, str] = Field(default_factory=dict)
 
 
-class GenerationCfg(BaseModel):
+class GenerationCfg(ConfigModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
-    query_types: list[QueryType] = Field(
-        default_factory=lambda: ['prioritized_subgroup_comparison']
-    )
-    dominance_mode: PlanCalibrationMode = 'rotating'
-    dominance_probe_chunks_per_facet: PositiveInt = 8
-    calibration_min_probe_margin: float | None = Field(default=None, ge=0.0)
+    calibration_mode: PlanCalibrationMode = 'rotating'
+    calibration_probe_chunks_per_facet: PositiveInt = 8
     gold_chunks_calibrated_primary: PositiveInt = 24
     gold_chunks_other_primary: PositiveInt = 20
     gold_chunks_secondary: PositiveInt = 14
@@ -77,7 +84,7 @@ class GenerationCfg(BaseModel):
     llm_num_ctx: PositiveInt = 4096
 
 
-class EmbeddingCfg(BaseModel):
+class EmbeddingCfg(ConfigModel):
     model_name: str = 'multi-qa-mpnet-base-cos-v1'
     batch_size: PositiveInt = 64
     device: str = 'cuda'
@@ -86,7 +93,7 @@ class EmbeddingCfg(BaseModel):
     normalize: bool = True
 
 
-class RetrievalCfg(BaseModel):
+class RetrievalCfg(ConfigModel):
     pool_scope: ChunkPoolScope = 'query_local'
     candidate_pool_n: PositiveInt = 300
     k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
@@ -99,19 +106,17 @@ class RetrievalCfg(BaseModel):
     compute_answer_rouge: bool = True
 
 
-class GeometryFilterCfg(BaseModel):
-    topk_dominance_k: PositiveInt = 10
-    primary_topk_dominance_k: PositiveInt = 20
+class GeometryFilterCfg(ConfigModel):
+    topk_k: PositiveInt = 20
     min_primary_axis_count: PositiveInt = 14
     max_topk_retrieved_facets: PositiveInt | None = 2
     min_in_minus_cross_similarity: PositiveFloat = 0.03
     min_same_axis_cohort_gap: PositiveFloat = 0.03
     min_same_cohort_axis_gap: PositiveFloat = 0.03
     min_distractors_in_pool: PositiveInt = 10
-    plot_continuous_similarity: bool = True
 
 
-class MethodsComparisonKernelMetricCfg(BaseModel):
+class MethodsComparisonKernelMetricCfg(ConfigModel):
     summary_metric: str = 'MeanFacetHitRate@k'
     enabled: bool = True
     weight: PositiveFloat = 1.0
@@ -124,7 +129,7 @@ class MethodsComparisonKernelMetricCfg(BaseModel):
 type KernelAggregationStrategy = Literal['geometric_mean', 'arithmetic_mean', 'minimum']
 
 
-class MethodsComparisonKernelsCfg(BaseModel):
+class MethodsComparisonKernelsCfg(ConfigModel):
     lambda_max: NonNegativeFloat = 0.80
     agreement_alpha: PositiveFloat = 3.0
     kernel_floor: float = Field(default=0.05, gt=0, le=1)
@@ -134,14 +139,15 @@ class MethodsComparisonKernelsCfg(BaseModel):
     )
 
 
-class EvaluationCfg(BaseModel):
+class EvaluationCfg(ConfigModel):
     workers: PositiveInt | None = None
     fac_loc_mmr_comparison_kernels: MethodsComparisonKernelsCfg = Field(
         default_factory=MethodsComparisonKernelsCfg
     )
 
 
-class QueryGeometryCfg(BaseModel):
+class QueryGeometryCfg(ConfigModel):
+    plot_continuous_similarity: bool = True
     n_queries: PositiveInt = 6
     query_ids: list[str] = Field(default_factory=list)
     query_selection: Literal['mixed', 'best'] = 'mixed'
@@ -158,7 +164,7 @@ class QueryGeometryCfg(BaseModel):
     random_state: PositiveInt = 42
 
 
-class ExperimentCfg(BaseModel):
+class ExperimentCfg(ConfigModel):
     dataset_schema_version: Literal[2]
     global_: GlobalCfg = Field(alias='global')
     generation: GenerationCfg = Field(default_factory=GenerationCfg)
@@ -168,14 +174,12 @@ class ExperimentCfg(BaseModel):
     evaluation: EvaluationCfg = Field(default_factory=EvaluationCfg)
     query_geometry: QueryGeometryCfg = Field(default_factory=QueryGeometryCfg)
 
-    model_config = {'populate_by_name': True, 'extra': 'ignore'}
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
     @model_validator(mode='after')
     def _validate_v2_scope(self) -> ExperimentCfg:
         if self.retrieval.pool_scope != 'query_local':
             raise ValueError('dataset schema v2 supports only retrieval.pool_scope=query_local')
-        if self.generation.query_types != ['prioritized_subgroup_comparison']:
-            raise ValueError('v2 supports only prioritized_subgroup_comparison')
         local_pool_size = (
             self.generation.gold_chunks_calibrated_primary
             + self.generation.gold_chunks_other_primary
@@ -208,7 +212,6 @@ class MedicalDatasetGenPaths:
         self.figures_dir = self.experiment_dir / '_figures'
         self.config_path = self.experiment_dir / '_config.yaml'
         self.result_dir_overrides = dict(result_dir_overrides or {})
-        self.embeddings_npz_path = self.experiment_dir / 'embeddings.npz'
         self.embeddings_chunk_vectors_path = self.experiment_dir / 'embeddings_chunk_vectors.npy'
         self.embeddings_query_vectors_path = self.experiment_dir / 'embeddings_query_vectors.npy'
         self.embeddings_chunk_ids_path = self.experiment_dir / 'embeddings_chunk_ids.npy'

@@ -31,6 +31,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanFacet,
     RehabOutcomePayload,
     SubgroupAxis,
+    TreatmentDurationAxisValues,
     TreatmentDurationPayload,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
@@ -42,7 +43,7 @@ from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     if (
-        cfg.generation.dominance_mode == 'embedding_calibrated'
+        cfg.generation.calibration_mode == 'embedding_calibrated'
         and not paths.table_path('query_plan_calibration').exists()
     ):
         raise FileNotFoundError('run calibrate_plans before facts in embedding-calibrated mode')
@@ -272,9 +273,10 @@ def make_base_fact(
         'gold' if is_gold else f'distractor:{distractor_type}',
     )
     surface_rng = Random(_stable_seed(reuse_key))
-    age = _patient_age(subgroup_id, surface_rng)
-    sex: PatientSex = _patient_sex(subgroup_id, surface_rng)
-    phrase = surface_rng.choice(ontology.subgroups[subgroup_id].surface_phrases)
+    subgroup = ontology.subgroups[subgroup_id]
+    age = _patient_age(subgroup.patient_age_range, ontology.patient_defaults.age_range, surface_rng)
+    sex: PatientSex = _patient_sex(subgroup.patient_sex, surface_rng)
+    phrase = surface_rng.choice(subgroup.surface_phrases)
     support_facet_id = facet.facet_id if is_gold and facet is not None else None
     target_facet_id = facet.facet_id if facet is not None else None
     fact_id = (
@@ -334,22 +336,25 @@ def _axis_payload(
     local_idx: int,
 ) -> AxisFactPayload:
     condition = ontology.conditions[condition_id]
+    axis_values = condition.axis_values[axis]
     seed = _stable_seed(condition_id, axis, value_bin, local_idx)
     rng = Random(seed)
     if axis == 'treatment_duration':
-        low, high = condition.duration_days[value_bin]
-        treatments = condition.duration_treatments or condition.treatments
+        if not isinstance(axis_values, TreatmentDurationAxisValues):
+            raise TypeError(f'{condition_id}/{axis} has the wrong axis-values payload')
+        low, high = axis_values.bins[value_bin]
         return TreatmentDurationPayload(
             axis=axis,
             duration_days=rng.randint(low, high),
-            treatment=rng.choice(treatments),
+            treatment=rng.choice(axis_values.treatments),
         )
+    values = axis_values.bins[value_bin]
     if axis == 'rehab_outcome':
         return RehabOutcomePayload(
             axis=axis,
-            outcome=rng.choice(condition.rehab_outcomes[value_bin]),
+            outcome=rng.choice(values),
         )
-    detail = rng.choice(condition.new_axis_values[axis][value_bin])
+    detail = rng.choice(values)
     if axis == 'complication_burden':
         return ComplicationBurdenPayload(axis=axis, detail=detail)
     if axis == 'acute_clinical_course':
@@ -365,21 +370,18 @@ def _payload_required_phrase(payload: AxisFactPayload) -> str:
     return payload.detail
 
 
-def _patient_age(subgroup_id: str, rng: Random) -> int:
-    if subgroup_id == 'age_under_50':
-        return rng.randint(25, 49)
-    if subgroup_id == 'age_50_to_75':
-        return rng.randint(50, 75)
-    if subgroup_id == 'age_over_75':
-        return rng.randint(76, 92)
-    return rng.randint(50, 75)
+def _patient_age(
+    cohort_range: tuple[int, int] | None,
+    default_range: tuple[int, int],
+    rng: Random,
+) -> int:
+    low, high = cohort_range or default_range
+    return rng.randint(low, high)
 
 
-def _patient_sex(subgroup_id: str, rng: Random) -> PatientSex:
-    if subgroup_id == 'female':
-        return 'female'
-    if subgroup_id == 'male':
-        return 'male'
+def _patient_sex(cohort_sex: PatientSex | None, rng: Random) -> PatientSex:
+    if cohort_sex is not None:
+        return cohort_sex
     return cast(PatientSex, rng.choice(['female', 'male']))
 
 

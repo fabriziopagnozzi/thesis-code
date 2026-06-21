@@ -29,7 +29,6 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
-    ChunkDocumentRecord,
     QrelRecord,
     QueryRecord,
     RetrievalIndexMaps,
@@ -275,11 +274,7 @@ def build_query_artifact(
 
     candidate_idx = get_candidate_pool_indices(
         query_id=qid,
-        pool_scope=cfg.retrieval.pool_scope,
-        n_chunks=len(chunk_ids),
         chunks_by_source_query=maps['chunks_by_source_query'],
-        chunks_by_condition=maps['chunks_by_condition'],
-        query_condition_id=query.condition_id,
     )
     topn_global, topn_sims = run_topn_cosine_retrieval(
         candidate_indices=candidate_idx,
@@ -300,9 +295,7 @@ def build_query_artifact(
         for row in qrels.filter(pl.col('query_id') == qid).iter_rows(named=True)
         for qrel in [QrelRecord.model_validate(row)]
     }
-    labels, label_ids, roles, is_gold = candidate_labels(
-        qid, candidate_chunk_ids, maps['chunk_by_id'], query_qrels, query
-    )
+    labels, label_ids, roles, is_gold = candidate_labels(candidate_chunk_ids, query_qrels, query)
     selection_variants = strategy_selection_variants(cfg, topn_sims, sim_matrix, k)
     selections = strategy_selections(cfg, eval_stats, eval_results, qid, selection_variants, k)
     coords, reduction_method = reduce_for_plot(
@@ -340,9 +333,7 @@ def build_query_artifact(
 
 
 def candidate_labels(
-    qid: str,
     candidate_chunk_ids: list[str],
-    chunk_by_id: dict[str, ChunkDocumentRecord],
     query_qrels: dict[str, QrelRecord],
     query: QueryRecord,
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
@@ -352,21 +343,15 @@ def candidate_labels(
     roles: list[str] = []
     gold_flags: list[bool] = []
     for chunk_id in candidate_chunk_ids:
-        row = chunk_by_id[chunk_id]
         qrel = query_qrels.get(chunk_id)
-        roles.append(str(qrel.cluster_role or 'unknown') if qrel is not None else 'unknown')
-        gold = qrel.is_gold if qrel is not None else False
-        gold_flags.append(gold)
         if qrel is None:
-            row_condition_id = row.condition_id
-            query_condition_id = query.condition_id
-            if row_condition_id != query_condition_id:
-                label_ids.append('other_condition')
-                labels.append('off-query wrong-condition chunks')
-                continue
-            label_ids.append('other_same_condition_query')
-            labels.append('other same-condition queries')
-        elif gold and qrel.facet_id:
+            raise RuntimeError(
+                f'query-local candidate {chunk_id!r} has no qrel for query {query.query_id!r}'
+            )
+        roles.append(str(qrel.cluster_role or 'unknown'))
+        gold = qrel.is_gold
+        gold_flags.append(gold)
+        if gold and qrel.facet_id:
             facet_id = qrel.facet_id
             label_ids.append(facet_id)
             labels.append(facet_labels.get(facet_id, facet_id))

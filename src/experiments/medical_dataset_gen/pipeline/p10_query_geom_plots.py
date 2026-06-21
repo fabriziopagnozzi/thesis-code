@@ -77,20 +77,14 @@ def run_query_geom_plots(
     ]
     missing = [str(path) for path in required_paths if not path.exists()]
 
-    has_memmaps = all(
-        path.exists()
-        for path in [
-            paths.embeddings_meta_path,
-            paths.embeddings_chunk_vectors_path,
-            paths.embeddings_query_vectors_path,
-            paths.embeddings_chunk_ids_path,
-            paths.embeddings_query_ids_path,
-        ]
-    )
-
-    has_legacy_npz = paths.embeddings_npz_path.exists()
-    if not has_memmaps and not has_legacy_npz:
-        missing.append(str(paths.embeddings_npz_path))
+    embedding_paths = [
+        paths.embeddings_meta_path,
+        paths.embeddings_chunk_vectors_path,
+        paths.embeddings_query_vectors_path,
+        paths.embeddings_chunk_ids_path,
+        paths.embeddings_query_ids_path,
+    ]
+    missing.extend(str(path) for path in embedding_paths if not path.exists())
     if missing:
         print(f'[query_geometry] skipping; missing required artifacts: {missing}')
         return pl.DataFrame()
@@ -228,7 +222,7 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
         plot_query_overview_4panel(
             artifact,
             query_dir,
-            plot_continuous_similarity=state['cfg'].geometry_filter.plot_continuous_similarity,
+            plot_continuous_similarity=state['cfg'].query_geometry.plot_continuous_similarity,
         )
     if _should_render_plot(selected_plot_names, 'strategy_overlay'):
         plot_strategy_overlay(artifact, query_dir)
@@ -238,7 +232,7 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
                 artifact,
                 query_dir,
                 k=k,
-                plot_continuous_similarity=state['cfg'].geometry_filter.plot_continuous_similarity,
+                plot_continuous_similarity=state['cfg'].query_geometry.plot_continuous_similarity,
             )
 
     return {

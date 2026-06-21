@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from itertools import combinations
 from typing import Annotated, Literal, TypedDict, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-type ClinicalAxisKey = str
 type ClinicalAxis = Literal[
     'treatment_duration',
     'rehab_outcome',
@@ -23,7 +23,6 @@ type ClusterRole = Literal[
     'hard_distractor',
     'background_outlier',
 ]
-CLUSTER_ROLE_LIST = list[ClusterRole](get_args(ClusterRole.__value__))
 
 type DistractorStr = Literal[
     'same_condition_wrong_subgroup',
@@ -36,7 +35,7 @@ type QueryType = Literal['prioritized_subgroup_comparison']
 
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 
-type ChunkPoolScope = Literal['query_local', 'same_condition', 'full_corpus']
+type ChunkPoolScope = Literal['query_local']
 
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
@@ -44,25 +43,7 @@ type SubgroupKey = str
 type DataSplit = Literal['train', 'validation', 'test']
 type PatientSex = Literal['female', 'male']
 
-type ConditionKey = Literal[
-    'encephalitis_myelitis',
-    'pneumonia',
-    'ischemic_stroke',
-    'heart_failure',
-    'bacterial_meningitis',
-    'multiple_sclerosis_relapse',
-    'spinal_epidural_abscess',
-    'pulmonary_embolism',
-    'copd_exacerbation',
-    'infective_endocarditis',
-    'osteomyelitis',
-    'pyelonephritis_sepsis',
-    'diabetic_foot_infection',
-    'cirrhosis_encephalopathy',
-    'lupus_nephritis',
-    'severe_cellulitis',
-    'ulcerative_colitis_flare',
-]
+type ConditionKey = str
 
 
 class QueryOutputRow(TypedDict):
@@ -185,14 +166,54 @@ class AnswerFact(BenchmarkModel):
     supporting_fact_ids: list[str]
 
 
+class TreatmentDurationAxisValues(BenchmarkModel):
+    axis: Literal['treatment_duration']
+    treatments: list[str]
+    bins: dict[str, tuple[int, int]]
+
+
+class RehabOutcomeAxisValues(BenchmarkModel):
+    axis: Literal['rehab_outcome']
+    bins: dict[str, list[str]]
+
+
+class ComplicationBurdenAxisValues(BenchmarkModel):
+    axis: Literal['complication_burden']
+    bins: dict[str, list[str]]
+
+
+class AcuteClinicalCourseAxisValues(BenchmarkModel):
+    axis: Literal['acute_clinical_course']
+    bins: dict[str, list[str]]
+
+
+class CareIntensityAxisValues(BenchmarkModel):
+    axis: Literal['care_intensity']
+    bins: dict[str, list[str]]
+
+
+type ConditionAxisValues = Annotated[
+    TreatmentDurationAxisValues
+    | RehabOutcomeAxisValues
+    | ComplicationBurdenAxisValues
+    | AcuteClinicalCourseAxisValues
+    | CareIntensityAxisValues,
+    Field(discriminator='axis'),
+]
+
+
 class ConditionOntology(BenchmarkModel):
     display: str
     terms: list[str]
-    treatments: list[str]
-    duration_treatments: list[str] | None = None
-    duration_days: dict[str, tuple[int, int]]
-    rehab_outcomes: dict[str, list[str]]
-    new_axis_values: dict[ClinicalAxisKey, dict[str, list[str]]] = Field(default_factory=dict)
+    presentations: list[str]
+    axis_values: dict[ClinicalAxis, ConditionAxisValues]
+
+    @model_validator(mode='after')
+    def _axis_keys_match_payloads(self) -> ConditionOntology:
+        for axis, values in self.axis_values.items():
+            if axis != values.axis:
+                raise ValueError(f'axis_values key {axis!r} does not match payload {values.axis!r}')
+        return self
 
 
 class SubgroupOntology(BenchmarkModel):
@@ -203,6 +224,8 @@ class SubgroupOntology(BenchmarkModel):
     field: str
     value: str
     is_reference: bool
+    patient_age_range: tuple[int, int] | None = None
+    patient_sex: PatientSex | None = None
     aliases: list[str] = Field(default_factory=list)
     surface_phrases: list[str] = Field(default_factory=list)
 
@@ -239,12 +262,55 @@ class ClinicalAxisOntology(BenchmarkModel):
     bins: list[str]
 
 
+class AxisPairOntology(BenchmarkModel):
+    axes: tuple[ClinicalAxis, ClinicalAxis]
+    profiles: list[AxisPairProfile]
+
+
+class PatientDefaults(BenchmarkModel):
+    age_range: tuple[int, int]
+
+
 class MedicalOntology(BenchmarkModel):
+    patient_defaults: PatientDefaults
     conditions: dict[ConditionKey, ConditionOntology]
     subgroups: dict[SubgroupKey, SubgroupOntology]
-    clinical_axes: dict[ClinicalAxisKey, ClinicalAxisOntology]
+    clinical_axes: dict[ClinicalAxis, ClinicalAxisOntology]
     cohort_contrasts: list[CohortContrast]
-    axis_pair_profiles: dict[str, list[AxisPairProfile]]
+    axis_pairs: list[AxisPairOntology]
+
+    @model_validator(mode='after')
+    def _validate_references(self) -> MedicalOntology:
+        declared_axes = set(self.clinical_axes)
+        for condition_id, condition in self.conditions.items():
+            if set(condition.axis_values) != declared_axes:
+                raise ValueError(f'condition {condition_id!r} must define every clinical axis')
+            for axis, values in condition.axis_values.items():
+                if set(values.bins) != set(self.clinical_axes[axis].bins):
+                    raise ValueError(f'condition {condition_id!r} has incomplete bins for {axis!r}')
+
+        for contrast in self.cohort_contrasts:
+            cohorts = [self.subgroups[contrast.cohort_a_id], self.subgroups[contrast.cohort_b_id]]
+            if any(cohort.dimension_id != contrast.dimension_id for cohort in cohorts):
+                raise ValueError(f'contrast {contrast.id!r} mixes cohort dimensions')
+
+        declared_pairs = {frozenset(pair.axes) for pair in self.axis_pairs}
+        expected_pairs = {frozenset(pair) for pair in combinations(declared_axes, 2)}
+        if declared_pairs != expected_pairs or len(declared_pairs) != len(self.axis_pairs):
+            raise ValueError('axis_pairs must contain each unordered clinical-axis pair once')
+        for pair in self.axis_pairs:
+            left, right = pair.axes
+            for profile in pair.profiles:
+                cohort_pairs = zip(profile.cohort_a_bins, profile.cohort_b_bins, strict=True)
+                if any(a == b for a, b in cohort_pairs):
+                    raise ValueError(f'profile {profile.id!r} must differ on both axes')
+                if not all(
+                    bins[index] in self.clinical_axes[axis].bins
+                    for index, axis in enumerate((left, right))
+                    for bins in (profile.cohort_a_bins, profile.cohort_b_bins)
+                ):
+                    raise ValueError(f'profile {profile.id!r} contains an unknown axis bin')
+        return self
 
 
 class QueryPlanFacet(BenchmarkModel):
@@ -537,38 +603,15 @@ class ChunkRow(ClinicalFact):
         )
 
 
-class RehabClosingSentences(BenchmarkModel):
-    home_rehab: list[str]
-    inpatient_rehab: list[str]
-    persistent_deficit: dict[str, list[str]]
-
-
 class ChunkTemplateUtils(BenchmarkModel):
-    condition_presentations: dict[str, list[str]]
-    condition_status_phrases: dict[str, list[str]]
-    duration_closing_sentences: dict[str, list[str]]
-    functional_status_phrases: dict[str, dict[str, list[str]]]
-    rehab_closing_sentences: RehabClosingSentences
     hidden_benchmark_terms: list[str]
     duration_course_nouns: list[str]
     duration_phrase_templates: list[str]
-    duration_response_verbs: list[str]
-    duration_chunk_templates: list[str]
-    rehab_transitions: list[str]
-    rehab_outcome_verbs: list[str]
-    rehab_chunk_templates: list[str]
-    subgroup_terms: dict[str, list[str]]
-    rehab_language_terms: list[str]
-    rehab_bin_terms: dict[str, list[str]]
-    persistent_deficit_descriptor_terms: list[str]
-    persistent_deficit_rehab_terms: list[str]
-    meaningful_token_stopwords: list[str]
     duration_focus_phrases: list[str]
     note_style_templates: dict[str, list[str]]
-    axis_closing_sentences: dict[ClinicalAxisKey, list[str]]
-    axis_sentence_templates: dict[ClinicalAxisKey, list[str]]
-    axis_bin_terms: dict[ClinicalAxisKey, dict[str, list[str]]]
-    condition_new_axis_values: dict[str, dict[ClinicalAxisKey, dict[str, list[str]]]]
+    axis_closing_sentences: dict[ClinicalAxis, list[str]]
+    axis_sentence_templates: dict[ClinicalAxis, list[str]]
+    axis_bin_terms: dict[ClinicalAxis, dict[str, list[str]]]
 
 
 class QueryTemplateSpec(BenchmarkModel):
@@ -581,5 +624,5 @@ class AnswerTemplateSpec(BenchmarkModel):
 
 
 class QueryTemplateData(BenchmarkModel):
-    query_templates: dict[QueryType, list[QueryTemplateSpec]]
-    answer_templates: dict[QueryType, AnswerTemplateSpec]
+    query_templates: list[QueryTemplateSpec]
+    answer_template: AnswerTemplateSpec

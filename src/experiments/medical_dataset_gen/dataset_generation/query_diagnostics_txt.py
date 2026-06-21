@@ -269,12 +269,8 @@ def build_text_diagnostics(
     query_id_to_idx = {query_id: idx for idx, query_id in enumerate(query_embedding_ids)}
 
     candidate_ids_by_query = _candidate_ids_by_query(
-        cfg=cfg,
-        paths=paths,
-        queries=queries,
         query_ids=present_query_ids,
         memberships=memberships,
-        all_chunk_ids=chunk_ids,
     )
     ranked_by_query = _rank_candidate_pools(
         queries=queries,
@@ -413,9 +409,8 @@ def _render_diagnostics(
             ('pool_scope', ctx.cfg.retrieval.pool_scope),
             ('candidate_pool_n_used', ctx.pool_n),
             ('embedding_model', ctx.cfg.embeddings.model_name),
-            ('generation.dominance_mode', ctx.cfg.generation.dominance_mode),
-            ('geometry.topk_dominance_k', ctx.cfg.geometry_filter.topk_dominance_k),
-            ('geometry.primary_topk_dominance_k', ctx.cfg.geometry_filter.primary_topk_dominance_k),
+            ('generation.calibration_mode', ctx.cfg.generation.calibration_mode),
+            ('geometry.topk_k', ctx.cfg.geometry_filter.topk_k),
             (
                 'geometry.max_topk_retrieved_facets',
                 ctx.cfg.geometry_filter.max_topk_retrieved_facets,
@@ -467,8 +462,8 @@ def _render_query(
     ranked_rows = _annotated_ranked_rows(ctx, query_id)
     facets = _facets(query)
     facet_labels = _facet_labels(facets)
-    dominant_facet_id = str(query.get('calibrated_primary_facet_id') or '')
-    dominant_target = _dominant_target_chunks(facets, dominant_facet_id)
+    calibrated_facet_id = str(query.get('calibrated_primary_facet_id') or '')
+    calibrated_target = _calibrated_target_chunks(facets, calibrated_facet_id)
 
     _h1(lines, f'{heading_prefix} QUERY {query_id}')
     lines.append('')
@@ -487,8 +482,8 @@ def _render_query(
             ('subgroup_b', query.get('subgroup_b_label')),
             ('primary_axis', query.get('primary_axis')),
             ('secondary_axis', query.get('secondary_axis')),
-            ('calibrated_primary_facet_id', dominant_facet_id),
-            ('calibrated_primary_target_gold_chunks', dominant_target),
+            ('calibrated_primary_facet_id', calibrated_facet_id),
+            ('calibrated_primary_target_gold_chunks', calibrated_target),
         ],
     )
 
@@ -584,18 +579,18 @@ def _render_query(
         _kv(lines, _plot_stat_items(plot_stats, compact=ctx.detail == 'compact'))
 
     _h2(lines, 'Recomputed Top-K Coverage')
-    coverage_rows = _topk_coverage_rows(ctx, query_id, ranked_rows, facets, dominant_facet_id)
+    coverage_rows = _topk_coverage_rows(ctx, query_id, ranked_rows, facets, calibrated_facet_id)
     _table(
         lines,
         coverage_rows,
         [
             'k',
-            'k_lt_dominant_target',
+            'k_lt_calibrated_target',
             'gold',
             'non_gold',
             'facets_hit',
             'n_facets_hit',
-            'dominant_count',
+            'calibrated_facet_count',
             'top_facet',
             'facet_counts',
             'distractor_counts',
@@ -608,8 +603,11 @@ def _render_query(
         lines,
         [
             ('rank_where_all_gold_facets_first_covered', all_facet_rank),
-            ('dominant_target_gold_chunks', dominant_target),
-            ('all_facets_covered_before_dominant_exhausted', _lt(all_facet_rank, dominant_target)),
+            ('calibrated_target_gold_chunks', calibrated_target),
+            (
+                'all_facets_covered_before_calibrated_exhausted',
+                _lt(all_facet_rank, calibrated_target),
+            ),
         ],
     )
 
@@ -699,7 +697,7 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         preferred = [
             'passes_filter',
             'pool_size',
-            'primary_topk_dominance_k',
+            'topk_k',
             'n_facets_present',
             'topk_dominant_count',
             'calibrated_primary_facet_id',
@@ -730,8 +728,7 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'passes_filter',
         'pool_scope',
         'pool_size',
-        'topk_dominance_k',
-        'primary_topk_dominance_k',
+        'topk_k',
         'n_facets',
         'n_facets_present',
         'all_facets_present',
@@ -835,11 +832,11 @@ def _topk_coverage_rows(
     query_id: str,
     ranked_rows: list[dict[str, Any]],
     facets: list[dict[str, Any]],
-    dominant_facet_id: str,
+    calibrated_facet_id: str,
 ) -> list[dict[str, Any]]:
     del query_id
     top_ks = _diagnostic_top_ks(ctx, len(ranked_rows))
-    dominant_target = _dominant_target_chunks(facets, dominant_facet_id)
+    calibrated_target = _calibrated_target_chunks(facets, calibrated_facet_id)
     rows = []
     for k in top_ks:
         selected = ranked_rows[:k]
@@ -855,12 +852,12 @@ def _topk_coverage_rows(
         rows.append(
             {
                 'k': k,
-                'k_lt_dominant_target': _lt(k, dominant_target),
+                'k_lt_calibrated_target': _lt(k, calibrated_target),
                 'gold': sum(1 for row in selected if row.get('is_gold')),
                 'non_gold': sum(1 for row in selected if not row.get('is_gold')),
                 'facets_hit': ', '.join(sorted(facet_counts)),
                 'n_facets_hit': len(facet_counts),
-                'dominant_count': facet_counts.get(dominant_facet_id, 0),
+                'calibrated_facet_count': facet_counts.get(calibrated_facet_id, 0),
                 'top_facet': top_facet,
                 'facet_counts': _json(dict(sorted(facet_counts.items()))),
                 'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
@@ -1054,7 +1051,7 @@ def _render_selection_snapshot(
             [
                 *ctx.cfg.retrieval.k_values,
                 ctx.cfg.query_geometry.plot_k,
-                ctx.cfg.geometry_filter.topk_dominance_k,
+                ctx.cfg.geometry_filter.topk_k,
             ]
         )
         if value <= len(ranked_rows)
@@ -1287,7 +1284,6 @@ def _rank_trace_row(row: dict[str, Any], facet_labels: dict[str, str]) -> dict[s
 
 
 def _annotated_ranked_rows(ctx: _RenderContext, query_id: str) -> list[dict[str, Any]]:
-    query = ctx.queries_by_id[query_id]
     rows = []
     for rank_row in ctx.ranked_by_query.get(query_id, []):
         chunk_id = str(rank_row['chunk_id'])
@@ -1311,21 +1307,19 @@ def _annotated_ranked_rows(ctx: _RenderContext, query_id: str) -> list[dict[str,
             'must_mention': fact.get('must_mention'),
             'must_not_mention': fact.get('must_not_mention'),
         }
-        row['label_id'] = _label_id(row, query)
+        row['label_id'] = _label_id(row)
         rows.append(row)
     return rows
 
 
-def _label_id(row: dict[str, Any], query: dict[str, Any]) -> str:
+def _label_id(row: dict[str, Any]) -> str:
     if row.get('is_gold') and row.get('facet_id'):
         return str(row['facet_id'])
     if row.get('distractor_type'):
         return str(row['distractor_type'])
     if row.get('cluster_role'):
         return str(row['cluster_role'])
-    if row.get('condition_id') == query.get('condition_id'):
-        return 'off_query_same_condition'
-    return 'off_query_wrong_condition'
+    return 'unlabeled_query_local_chunk'
 
 
 def _label_for_row(row: dict[str, Any], facet_labels: dict[str, str]) -> str:
@@ -1360,42 +1354,15 @@ def _composition_frame(ranked_rows: list[dict[str, Any]]) -> pl.DataFrame:
 
 def _candidate_ids_by_query(
     *,
-    cfg: ExperimentCfg,
-    paths: MedicalDatasetGenPaths,
-    queries: pl.DataFrame,
     query_ids: list[str],
     memberships: pl.DataFrame,
-    all_chunk_ids: list[str],
 ) -> dict[str, list[str]]:
-    if cfg.retrieval.pool_scope == 'full_corpus':
-        return {query_id: all_chunk_ids for query_id in query_ids}
-
-    if cfg.retrieval.pool_scope == 'query_local':
-        result: dict[str, list[str]] = {query_id: [] for query_id in query_ids}
-        if memberships.is_empty() or not {'query_id', 'chunk_id'}.issubset(memberships.columns):
-            return result
-        for row in memberships.select('query_id', 'chunk_id').iter_rows(named=True):
-            result.setdefault(str(row['query_id']), []).append(str(row['chunk_id']))
-        return {query_id: _dedupe(result.get(query_id, [])) for query_id in query_ids}
-
-    if cfg.retrieval.pool_scope != 'same_condition':
-        raise ValueError(f'Unsupported pool_scope: {cfg.retrieval.pool_scope}')
-
-    query_condition = {
-        str(row['query_id']): str(row['condition_id'])
-        for row in queries.select('query_id', 'condition_id').iter_rows(named=True)
-    }
-    condition_ids = sorted(set(query_condition.values()))
-    chunks = _collect_chunk_documents_by_condition(
-        paths, condition_ids, ['chunk_id', 'condition_id']
-    )
-    ids_by_condition: dict[str, list[str]] = defaultdict(list)
-    for row in chunks.iter_rows(named=True):
-        ids_by_condition[str(row['condition_id'])].append(str(row['chunk_id']))
-    return {
-        query_id: ids_by_condition.get(query_condition.get(query_id, ''), [])
-        for query_id in query_ids
-    }
+    result: dict[str, list[str]] = {query_id: [] for query_id in query_ids}
+    if memberships.is_empty() or not {'query_id', 'chunk_id'}.issubset(memberships.columns):
+        return result
+    for row in memberships.select('query_id', 'chunk_id').iter_rows(named=True):
+        result.setdefault(str(row['query_id']), []).append(str(row['chunk_id']))
+    return {query_id: _dedupe(result.get(query_id, [])) for query_id in query_ids}
 
 
 def _rank_candidate_pools(
@@ -1474,18 +1441,6 @@ def _collect_chunk_documents(paths: MedicalDatasetGenPaths, chunk_ids: set[str])
     return lf.filter(pl.col('chunk_id').is_in(sorted(chunk_ids))).select(selected).collect()
 
 
-def _collect_chunk_documents_by_condition(
-    paths: MedicalDatasetGenPaths, condition_ids: list[str], columns: list[str]
-) -> pl.DataFrame:
-    path = paths.table_path('chunk_documents')
-    if not path.exists() or not condition_ids:
-        return pl.DataFrame()
-    lf = pl.scan_parquet(path)
-    schema = lf.collect_schema()
-    selected = _available_columns(schema, columns)
-    return lf.filter(pl.col('condition_id').is_in(condition_ids)).select(selected).collect()
-
-
 def _available_columns(schema: pl.Schema, columns: list[str] | None) -> list[str]:
     if columns is None:
         return list(schema.names())
@@ -1523,9 +1478,11 @@ def _facet_label(facet: dict[str, Any]) -> str:
     return f'{subgroup} / {axis} / {value_bin}'
 
 
-def _dominant_target_chunks(facets: list[dict[str, Any]], dominant_facet_id: str) -> int | None:
+def _calibrated_target_chunks(
+    facets: list[dict[str, Any]], calibrated_facet_id: str
+) -> int | None:
     for facet in facets:
-        if facet.get('facet_id') == dominant_facet_id:
+        if facet.get('facet_id') == calibrated_facet_id:
             value = facet.get('target_gold_chunks')
             return int(value) if value is not None else None
     return None
@@ -1535,7 +1492,7 @@ def _diagnostic_top_ks(ctx: _RenderContext, pool_size: int) -> list[int]:
     values = [
         *ctx.cfg.retrieval.k_values,
         ctx.cfg.query_geometry.plot_k,
-        ctx.cfg.geometry_filter.topk_dominance_k,
+        ctx.cfg.geometry_filter.topk_k,
         *ctx.extra_top_ks,
     ]
     return [value for value in sorted(set(values)) if 0 < value <= pool_size]

@@ -201,11 +201,7 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
 
     candidate_idx = get_candidate_pool_indices(
         query_id=qid,
-        pool_scope=cfg.retrieval.pool_scope,
-        n_chunks=len(chunk_ids),
         chunks_by_source_query=maps['chunks_by_source_query'],
-        chunks_by_condition=maps['chunks_by_condition'],
-        query_condition_id=query.condition_id,
     )
     topn_global, topn_sims = run_topn_cosine_retrieval(
         candidate_indices=candidate_idx,
@@ -347,12 +343,10 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('gold_f1').mean().alias('F1@k'),
         pl.col('average_precision_at_k').mean().alias('MAP@k'),
         pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
-        pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
         pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
         pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
         pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
         pl.col('distractor_rate').mean().alias('DistractorRate'),
-        pl.col('any_distractor_rate').mean().alias('AnyDistractorRate'),
         pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
         pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
@@ -387,7 +381,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'F1@k',
         'MAP@k',
         'MeanFacetHitRate@k',
-        'FacetCoverage@k',
         'MeanFacetRecall@k',
         'FacetMRR@k',
         'alpha-nDCG@k',
@@ -398,7 +391,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'DistractorRate',
         'NearMissDistractorRate',
         'BackgroundOutlierRate',
-        'AnyDistractorRate',
         'PrimaryAxisRate',
         'CalibratedFacetRate',
         'RedundantGoldRate',

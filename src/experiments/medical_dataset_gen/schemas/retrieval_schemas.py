@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, TypedDict, get_args
+from typing import Literal, TypedDict
 
 from pydantic import ConfigDict
 
@@ -14,7 +14,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
 type ChunkSupport = Literal['positive', 'background_outlier', 'hard_negative']
-CHUNK_SUPPORT_LIST: list[ChunkSupport] = list(get_args(ChunkSupport.__value__))
 
 type QueryIdToQrels = dict[str, QrelRecord]
 type QrelsByQueryChunk = dict[str, QueryIdToQrels]
@@ -27,11 +26,11 @@ type TopKDiagnosticsByK = dict[int, TopKDiagnostics]
 
 class QrelRecord(BenchmarkModel):
     query_id: str
-    evidence_profile_id: str = ''
-    pool_id: str = ''
-    primary_axis: ClinicalAxis | None = None
-    secondary_axis: ClinicalAxis | None = None
-    calibrated_primary_facet_id: str | None = None
+    evidence_profile_id: str
+    pool_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
     chunk_id: str
     fact_id: str | None = None
     facet_id: str | None = None
@@ -81,16 +80,14 @@ class ChunkMembershipRecord(BenchmarkModel):
     chunk_id: str
     query_id: str
     pool_id: str
-    primary_axis: ClinicalAxis | None = None
-    secondary_axis: ClinicalAxis | None = None
-    calibrated_primary_facet_id: str | None = None
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    calibrated_primary_facet_id: str
 
 
 class TopKDiagnostics(TypedDict):
     dominant_count: int
     dominant_fraction: float
-    planned_dominant_count: int
-    planned_dominant_fraction: float
     primary_axis_count: int
     primary_axis_fraction: float
     calibrated_primary_count: int
@@ -120,4 +117,3 @@ class RetrievalIndexMaps(TypedDict):
     membership_by_query_chunk: dict[tuple[str, str], ChunkMembershipRecord]
     query_by_id: dict[str, QueryRecord]
     chunks_by_source_query: dict[str, list[int]]
-    chunks_by_condition: dict[str, list[int]]

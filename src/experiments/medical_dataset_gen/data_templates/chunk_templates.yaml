@@ -1,0 +1,123 @@
+duration_focus_phrases:
+    - for treatment duration
+    - for total therapy-course length
+    - for the active treatment interval
+note_style_templates:
+    brief_hospital_course:
+        - "{patient} was hospitalized for {condition} after {presentation}. {axis_sentence} {close}"
+        - During admission for {condition}, {patient_lower} had {presentation}. {axis_sentence} {close}
+    discharge_diagnosis:
+        - "{condition} was treated after {patient_lower} presented with {presentation}. {axis_sentence} {close}"
+axis_closing_sentences:
+    treatment_duration:
+        - The medication record confirmed the stated course without describing another outcome domain.
+        - The documented regimen ended after the stated treatment interval.
+    rehab_outcome:
+        - The therapy record confirmed this discharge rehabilitation plan.
+        - Functional planning at discharge matched this rehabilitation outcome.
+    complication_burden:
+        - The safety review recorded this as the complication burden for the admission.
+        - No other event changed the documented complication category.
+    acute_clinical_course:
+        - Serial clinical assessments supported this response trajectory.
+        - The inpatient progress record consistently described this clinical course.
+    care_intensity:
+        - Bed assignment and monitoring records supported this level of care.
+        - The documented resource use matched this care-intensity category.
+axis_sentence_templates:
+    complication_burden:
+        - The complication assessment documented {axis_value}.
+        - For in-hospital safety outcomes, the record described {axis_value}.
+        - The admission's complication burden was characterized by {axis_value}.
+    acute_clinical_course:
+        - The acute clinical course showed {axis_value}.
+        - For response trajectory, serial assessments documented {axis_value}.
+        - The inpatient response pattern was characterized by {axis_value}.
+    care_intensity:
+        - The highest care intensity was {axis_value}.
+        - For care setting and monitoring needs, the record documented {axis_value}.
+        - Resource-use notes described {axis_value}.
+axis_bin_terms:
+    treatment_duration:
+        short:
+            - short course
+            - brief treatment interval
+        standard:
+            - standard course
+            - usual treatment interval
+        prolonged:
+            - prolonged course
+            - extended treatment interval
+    rehab_outcome:
+        home_rehab:
+            - home rehabilitation
+            - home therapy
+        inpatient_rehab:
+            - inpatient rehabilitation
+            - supervised rehabilitation
+        persistent_deficit:
+            - persistent functional deficit
+            - residual mobility limitation
+    complication_burden:
+        none_documented:
+            - no major in-hospital complication
+            - uncomplicated safety course
+        limited_complication:
+            - limited complication
+            - manageable adverse event
+        major_complication:
+            - major complication
+            - treatment-limiting adverse event
+    acute_clinical_course:
+        early_stabilization:
+            - early clinical stabilization
+            - prompt improvement
+        delayed_improvement:
+            - delayed clinical improvement
+            - slow response trajectory
+        refractory_or_worsening:
+            - refractory clinical course
+            - worsening despite initial management
+    care_intensity:
+        ward_level:
+            - ward-level care
+            - routine inpatient monitoring
+        monitored_or_procedural:
+            - monitored care with procedural support
+            - step-down or procedural care
+        intensive_care:
+            - intensive care
+            - ICU-level organ support
+duration_course_nouns:
+    - active treatment course
+    - active therapy interval
+    - inpatient treatment course
+    - documented therapy course
+    - hospital treatment interval
+    - monitored inpatient regimen
+    - recorded treatment plan
+    - treatment-duration plan
+duration_phrase_templates:
+    - "{treatment} was continued for {duration_days} days"
+    - therapy-course length was {duration_days} days on {treatment}
+    - total treatment duration was {duration_days} days with {treatment}
+    - the active therapy interval lasted {duration_days} days on {treatment}
+    - the {course_noun} included {treatment} for {duration_days} days
+    - clinicians completed {duration_days} days of {treatment}
+    - the team documented a {duration_days}-day treatment course of {treatment}
+    - records showed {duration_days} days of treatment with {treatment}
+    - "{treatment} remained in place across a {duration_days}-day course"
+hidden_benchmark_terms:
+    - admission adm_
+    - benchmark
+    - chunk
+    - cohort descriptor
+    - distractor
+    - facet
+    - gold
+    - index terms
+    - qrel
+    - source query
+    - structured cohort
+    - synthetic
+    - target query

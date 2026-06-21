@@ -22,13 +22,7 @@ from experiments.medical_dataset_gen.utils.global_configs import (
 )
 
 _TEMPLATE_DATA_DIR = MedicalDatasetGenPaths.root / 'data_templates'
-_TEMPLATE_DATA_FILES = (
-    'chunk_condition_context.yaml',
-    'chunk_duration_templates.yaml',
-    'chunk_rehab_templates.yaml',
-    'validation_terms.yaml',
-    'chunk_v2_axis_templates.yaml',
-)
+_TEMPLATE_DATA_PATH = _TEMPLATE_DATA_DIR / 'chunk_templates.yaml'
 
 _DURATION_RE = re.compile(r'\b\d+\s*[- ]?(?:day|days)\b', re.IGNORECASE)
 _AGE_RE = re.compile(r'\b(\d{2,3})\s*[- ]year[- ]old\b', re.IGNORECASE)
@@ -46,18 +40,8 @@ class ChunkValidation:
 
 
 def _load_template_utils() -> ChunkTemplateUtils:
-    merged: dict[str, object] = {}
-    for filename in _TEMPLATE_DATA_FILES:
-        path = _TEMPLATE_DATA_DIR / filename
-        with open(path) as f:
-            data = yaml.safe_load(f) or {}
-        duplicate_keys = set(merged).intersection(data)
-        if duplicate_keys:
-            duplicates = ', '.join(sorted(duplicate_keys))
-            raise ValueError(f'duplicate template data keys in {path}: {duplicates}')
-        merged.update(data)
-
-    return ChunkTemplateUtils.model_validate(merged)
+    with open(_TEMPLATE_DATA_PATH) as file:
+        return ChunkTemplateUtils.model_validate(yaml.safe_load(file) or {})
 
 
 TEMPLATE_DATA = _load_template_utils()
@@ -70,7 +54,7 @@ def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rn
         'patient': _sentence_start(patient_lower),
         'patient_lower': patient_lower,
         'condition': fact.condition_display,
-        'presentation': rng.choice(TEMPLATE_DATA.condition_presentations[fact.condition_id]),
+        'presentation': rng.choice(ontology.conditions[fact.condition_id].presentations),
         'axis_sentence': _axis_sentence(fact, payload, rng),
         'close': rng.choice(TEMPLATE_DATA.axis_closing_sentences[fact.axis]),
     }
@@ -185,29 +169,19 @@ def _contains_condition(text: str, fact: ClinicalFact, ontology: MedicalOntology
 def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: MedicalOntology) -> bool:
     lower = text.lower()
     subgroup_id = fact.subgroup_id
+    subgroup = ontology.subgroups.get(subgroup_id)
 
-    if subgroup_id == 'age_over_75':
-        return (
-            _has_age_in_range(text, 76, 120) or 'older than 75' in lower or 'above age 75' in lower
-        )
-    if subgroup_id == 'age_under_50':
-        return (
-            _has_age_in_range(text, 18, 49) or 'younger than 50' in lower or 'below age 50' in lower
-        )
-    if subgroup_id == 'age_50_to_75':
-        return _has_age_in_range(text, 50, 75)
+    if subgroup is not None and subgroup.patient_age_range is not None:
+        low, high = subgroup.patient_age_range
+        if _has_age_in_range(text, low, high):
+            return True
 
     phrase = str(fact.clinical_subgroup_phrase).lower()
     if phrase and phrase in lower:
         return True
 
-    subgroup = ontology.subgroups.get(subgroup_id)
     aliases = [str(alias).lower() for alias in (subgroup.aliases if subgroup else [])]
-    if any(alias in lower for alias in aliases):
-        return True
-
-    subgroup_terms = TEMPLATE_DATA.subgroup_terms.get(subgroup_id, [])
-    return any(term in lower for term in subgroup_terms)
+    return any(alias in lower for alias in aliases)
 
 
 def _has_age_in_range(text: str, low: int, high: int) -> bool:

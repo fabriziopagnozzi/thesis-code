@@ -8,7 +8,7 @@ from itertools import combinations
 import polars as pl
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
-    axis_pair_key,
+    get_axis_pair_profiles,
     get_selected_conditions,
     load_ontology,
     make_subgroup_pairs,
@@ -50,7 +50,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
             (cohort_b_id, cohort_b),
         ) in enumerate(contrasts):
             for axis_pair_index, (axis_a, axis_b) in enumerate(axis_pairs):
-                profiles = ontology.axis_pair_profiles[axis_pair_key(axis_a, axis_b)]
+                profiles = get_axis_pair_profiles(ontology, axis_a, axis_b)
                 # Explicit parity rotation prevents a cohort level or clinical axis
                 # from being systematically assigned the less favorable profile.
                 profile = profiles[
@@ -205,7 +205,7 @@ def _materialize_plan(
     calibrated_id = next(
         facet.facet_id for facet in facets if facet.cluster_role == 'calibrated_primary_gold'
     )
-    template_ids = query_template_ids(QUERY_TYPE)
+    template_ids = query_template_ids()
     template_id = template_ids[_stable_int(query_id, 'template') % len(template_ids)]
     logical_form = QueryLogicalForm(
         type=QUERY_TYPE,

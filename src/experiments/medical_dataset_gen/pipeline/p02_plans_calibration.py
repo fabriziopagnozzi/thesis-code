@@ -36,7 +36,7 @@ class PrimaryFacetProbe(TypedDict):
 def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     plans_df = read_parquet(paths, 'query_plans')
     plans = [QueryPlan.model_validate(row) for row in plans_df.iter_rows(named=True)]
-    if cfg.generation.dominance_mode == 'rotating':
+    if cfg.generation.calibration_mode == 'rotating':
         rows = [_calibration_row_without_embeddings(plan) for plan in plans]
         write_parquet(paths, 'query_plan_calibration', pl.from_dicts(rows))
         return plans_df
@@ -53,7 +53,7 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
     )
     updated: list[QueryPlan] = []
     calibration_rows: list[dict[str, object]] = []
-    probe_n = int(cfg.generation.dominance_probe_chunks_per_facet)
+    probe_n = int(cfg.generation.calibration_probe_chunks_per_facet)
     plans_per_batch = max(1, min(128, 4096 // max(1, probe_n * 2)))
     try:
         for start in tqdm(

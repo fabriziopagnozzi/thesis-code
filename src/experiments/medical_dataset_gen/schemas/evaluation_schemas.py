@@ -36,7 +36,6 @@ class EvaluationIndexMaps(TypedDict):
     query_id_to_idx: dict[str, int]
     chunk_by_id: dict[str, ChunkDocumentRecord]
     chunks_by_source_query: dict[str, list[int]]
-    chunks_by_condition: dict[str, list[int]]
 
 
 class AnswerReferenceTexts(TypedDict):
