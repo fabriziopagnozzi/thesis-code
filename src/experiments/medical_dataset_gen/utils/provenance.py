@@ -301,7 +301,10 @@ def _git_state() -> tuple[str | None, bool | None]:
             ).stdout.strip()
         )
         return commit, dirty
-    except OSError, subprocess.CalledProcessError:
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+    ):
         return None, None
 
 
