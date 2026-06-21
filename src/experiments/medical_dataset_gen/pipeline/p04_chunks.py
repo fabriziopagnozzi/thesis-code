@@ -34,7 +34,9 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     rewrite_llm_chunk,
     row_from_state,
 )
-from experiments.medical_dataset_gen.dataset_generation.chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
+    validate_chunk_text,
+)
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkRow,
@@ -136,7 +138,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             cache_version=REWRITE_CACHE_VERSION,
         )
     else:
-        rows, rejects, failed_queries = _render_chunks_sequential(
+        rows, rejects, failed_queries = render_chunks_sequential(
             cfg=cfg,
             facts=fact_rows,
             ontology=ontology,
@@ -165,6 +167,147 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             f'kept {len(chunk_memberships):,}/{len(facts):,} chunk membership rows'
         )
     return chunk_documents
+
+
+def render_chunks_sequential(
+    cfg: ExperimentCfg,
+    facts: list[ClinicalFact],
+    ontology: MedicalOntology,
+    generation_cache: GenerationCache,
+    generation_cache_path: Path,
+    rewrite_cache: GenerationCache,
+    rewrite_cache_path: Path,
+) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
+    rows: list[ChunkRow] = []
+    rejects: list[dict[str, object]] = []
+    failed_queries: set[str] = set()
+
+    for i, fact in tqdm(
+        enumerate(facts),
+        total=len(facts),
+        desc='Rendering chunks',
+        dynamic_ncols=True,
+    ):
+        if fact.query_id in failed_queries:
+            continue
+        cached = cached_chunk_state(cfg, fact, ontology, generation_cache)
+        if cached is not None:
+            rows.append(row_from_state(i, fact, cached[0]))
+            continue
+
+        cache_key: str | None = None
+
+        if cfg.generation.use_llm_chunk_generation:
+            final_text, attempt_errors = generate_llm_chunk(cfg=cfg, fact=fact, ontology=ontology)
+            if attempt_errors:
+                rejects.append(reject_row(fact, '; '.join(attempt_errors), final_text))
+                failed_queries.add(fact.query_id)
+                print(
+                    f'[chunks] dropping query {fact.query_id} after failed chunk {fact.fact_id}: '
+                    + '; '.join(attempt_errors)
+                )
+                continue
+            validation = validate_chunk_text(final_text, fact, ontology)
+            state = new_chunk_state(
+                final_text,
+                text_generation_source='llm',
+                llm_attempted=True,
+                llm_rejected=False,
+                validation=validation,
+            )
+        else:
+            draft_text = render_canonical_chunk_text(fact, ontology)
+            if cfg.generation.use_llm_chunk_rewriting:
+                cached = cached_rewrite_chunk_state(
+                    cfg=cfg,
+                    fact=fact,
+                    ontology=ontology,
+                    cache=rewrite_cache,
+                    draft_text=draft_text,
+                )
+                if cached is not None:
+                    rows.append(row_from_state(i, fact, cached[0]))
+                    continue
+
+                rewrite_key = chunk_rewrite_cache_key(cfg, fact, draft_text)
+                rewritten_text, attempt_errors = rewrite_llm_chunk(
+                    cfg=cfg,
+                    fact=fact,
+                    ontology=ontology,
+                    draft_text=draft_text,
+                )
+                if attempt_errors:
+                    print(
+                        f'[chunks] keeping deterministic template for {fact.query_id} after rewrite '
+                        f'failure in {fact.fact_id}: ' + '; '.join(attempt_errors)
+                    )
+                    final_text = draft_text
+                    state = new_chunk_state(
+                        final_text,
+                        text_generation_source='fallback',
+                        llm_attempted=True,
+                        llm_rejected=True,
+                        validation=validate_chunk_text(final_text, fact, ontology),
+                    )
+                    cache_key = None
+                else:
+                    final_text = rewritten_text
+                    state = new_chunk_state(
+                        final_text,
+                        text_generation_source='llm',
+                        llm_attempted=True,
+                        llm_rejected=False,
+                        validation=validate_chunk_text(final_text, fact, ontology),
+                    )
+                    cache_key = rewrite_key
+            else:
+                final_text = draft_text
+                state = new_chunk_state(
+                    final_text,
+                    text_generation_source='fallback',
+                    llm_attempted=False,
+                    llm_rejected=False,
+                    validation=validate_chunk_text(final_text, fact, ontology),
+                )
+
+        try:
+            row, cache_entry = finalize_chunk_row(
+                cfg=cfg,
+                fact=fact,
+                ontology=ontology,
+                index=i,
+                state=state,
+                should_cache=cfg.generation.use_llm_chunk_generation
+                or (
+                    cfg.generation.use_llm_chunk_rewriting and state.text_generation_source == 'llm'
+                ),
+                cache_key=cache_key if not cfg.generation.use_llm_chunk_generation else None,
+                cache_version=(
+                    GENERATION_CACHE_VERSION
+                    if cfg.generation.use_llm_chunk_generation
+                    else REWRITE_CACHE_VERSION
+                ),
+                cache_key_fn=chunk_generation_cache_key,
+            )
+        except RuntimeError as exc:
+            rejects.append(reject_row(fact, str(exc), state.final_text))
+            failed_queries.add(fact.query_id)
+            print(
+                f'[chunks] dropping query {fact.query_id} after final validation failure in {fact.fact_id}: {exc}'
+            )
+            continue
+
+        if cache_entry is not None:
+            if cfg.generation.use_llm_chunk_generation:
+                append_generation_cache(generation_cache_path, cache_entry)
+                remember_cache_entry(generation_cache, cache_entry)
+            else:
+                append_generation_cache(rewrite_cache_path, cache_entry)
+                remember_cache_entry(rewrite_cache, cache_entry)
+        rows.append(row)
+
+    kept_rows = [row for row in rows if row.query_id not in failed_queries]
+    return kept_rows, rejects, failed_queries
 
 
 def _render_chunks_deterministic_parallel(
@@ -430,147 +573,6 @@ def _write_normalized_chunks(
         f'{len(chunk_memberships):,} query membership(s)'
     )
     return chunk_documents, chunk_memberships
-
-
-def _render_chunks_sequential(
-    cfg: ExperimentCfg,
-    facts: list[ClinicalFact],
-    ontology: MedicalOntology,
-    generation_cache: GenerationCache,
-    generation_cache_path: Path,
-    rewrite_cache: GenerationCache,
-    rewrite_cache_path: Path,
-) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
-    rows: list[ChunkRow] = []
-    rejects: list[dict[str, object]] = []
-    failed_queries: set[str] = set()
-
-    for i, fact in tqdm(
-        enumerate(facts),
-        total=len(facts),
-        desc='Rendering chunks',
-        dynamic_ncols=True,
-    ):
-        if fact.query_id in failed_queries:
-            continue
-        cached = cached_chunk_state(cfg, fact, ontology, generation_cache)
-        if cached is not None:
-            rows.append(row_from_state(i, fact, cached[0]))
-            continue
-
-        cache_key: str | None = None
-
-        if cfg.generation.use_llm_chunk_generation:
-            final_text, attempt_errors = generate_llm_chunk(cfg=cfg, fact=fact, ontology=ontology)
-            if attempt_errors:
-                rejects.append(reject_row(fact, '; '.join(attempt_errors), final_text))
-                failed_queries.add(fact.query_id)
-                print(
-                    f'[chunks] dropping query {fact.query_id} after failed chunk {fact.fact_id}: '
-                    + '; '.join(attempt_errors)
-                )
-                continue
-            validation = validate_chunk_text(final_text, fact, ontology)
-            state = new_chunk_state(
-                final_text,
-                text_generation_source='llm',
-                llm_attempted=True,
-                llm_rejected=False,
-                validation=validation,
-            )
-        else:
-            draft_text = render_canonical_chunk_text(fact, ontology)
-            if cfg.generation.use_llm_chunk_rewriting:
-                cached = cached_rewrite_chunk_state(
-                    cfg=cfg,
-                    fact=fact,
-                    ontology=ontology,
-                    cache=rewrite_cache,
-                    draft_text=draft_text,
-                )
-                if cached is not None:
-                    rows.append(row_from_state(i, fact, cached[0]))
-                    continue
-
-                rewrite_key = chunk_rewrite_cache_key(cfg, fact, draft_text)
-                rewritten_text, attempt_errors = rewrite_llm_chunk(
-                    cfg=cfg,
-                    fact=fact,
-                    ontology=ontology,
-                    draft_text=draft_text,
-                )
-                if attempt_errors:
-                    print(
-                        f'[chunks] keeping deterministic template for {fact.query_id} after rewrite '
-                        f'failure in {fact.fact_id}: ' + '; '.join(attempt_errors)
-                    )
-                    final_text = draft_text
-                    state = new_chunk_state(
-                        final_text,
-                        text_generation_source='fallback',
-                        llm_attempted=True,
-                        llm_rejected=True,
-                        validation=validate_chunk_text(final_text, fact, ontology),
-                    )
-                    cache_key = None
-                else:
-                    final_text = rewritten_text
-                    state = new_chunk_state(
-                        final_text,
-                        text_generation_source='llm',
-                        llm_attempted=True,
-                        llm_rejected=False,
-                        validation=validate_chunk_text(final_text, fact, ontology),
-                    )
-                    cache_key = rewrite_key
-            else:
-                final_text = draft_text
-                state = new_chunk_state(
-                    final_text,
-                    text_generation_source='fallback',
-                    llm_attempted=False,
-                    llm_rejected=False,
-                    validation=validate_chunk_text(final_text, fact, ontology),
-                )
-
-        try:
-            row, cache_entry = finalize_chunk_row(
-                cfg=cfg,
-                fact=fact,
-                ontology=ontology,
-                index=i,
-                state=state,
-                should_cache=cfg.generation.use_llm_chunk_generation
-                or (
-                    cfg.generation.use_llm_chunk_rewriting and state.text_generation_source == 'llm'
-                ),
-                cache_key=cache_key if not cfg.generation.use_llm_chunk_generation else None,
-                cache_version=(
-                    GENERATION_CACHE_VERSION
-                    if cfg.generation.use_llm_chunk_generation
-                    else REWRITE_CACHE_VERSION
-                ),
-                cache_key_fn=chunk_generation_cache_key,
-            )
-        except RuntimeError as exc:
-            rejects.append(reject_row(fact, str(exc), state.final_text))
-            failed_queries.add(fact.query_id)
-            print(
-                f'[chunks] dropping query {fact.query_id} after final validation failure in {fact.fact_id}: {exc}'
-            )
-            continue
-
-        if cache_entry is not None:
-            if cfg.generation.use_llm_chunk_generation:
-                append_generation_cache(generation_cache_path, cache_entry)
-                remember_cache_entry(generation_cache, cache_entry)
-            else:
-                append_generation_cache(rewrite_cache_path, cache_entry)
-                remember_cache_entry(rewrite_cache, cache_entry)
-        rows.append(row)
-
-    kept_rows = [row for row in rows if row.query_id not in failed_queries]
-    return kept_rows, rejects, failed_queries
 
 
 if __name__ == '__main__':

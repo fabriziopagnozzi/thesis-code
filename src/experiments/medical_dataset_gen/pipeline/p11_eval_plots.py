@@ -84,7 +84,7 @@ def build_plot_callable(
     plot_context: EvalPlotCallContext,
 ) -> Callable[[], None]:
     plot_fn_name = f'plot_{plot_name}'
-    plot_module = import_module('experiments.medical_dataset_gen.evaluation.plots')
+    plot_module = import_module('experiments.medical_dataset_gen.evaluation.eval_plots')
     plot_fn = getattr(plot_module, plot_fn_name, None)
     if plot_fn is None or not callable(plot_fn):
         raise ValueError(f'Missing plot function: {plot_fn_name}')

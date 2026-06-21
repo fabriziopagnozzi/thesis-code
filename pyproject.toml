@@ -43,14 +43,12 @@ dev = [
 
 
 [tool.taskipy.tasks]
-# -----------------------------------------------------------------------------------------------
-# Synthetic Medical Dataset Generation
+# -- Synthetic Medical Dataset Generation ---------------------------------------------------------
 synth_pipeline = "python -m experiments.medical_dataset_gen.pipeline"
 synth_eval_plots = "python -m experiments.medical_dataset_gen.pipeline.p11_eval_plots"
 synth_geom_plots = "python -m experiments.medical_dataset_gen.pipeline.p10_query_geom_plots"
 
-# -----------------------------------------------------------------------------------------------
-# MIMIC Experiments
+# -- MIMIC Experiments ----------------------------------------------------------------------------
 # Chunking
 mimic_chunking_full = "python -m experiments.mimic.chunking.run_chunking_steps"
 mimic_conditions_stats = "python -m experiments.mimic.chunking.a_conditions_stats"
