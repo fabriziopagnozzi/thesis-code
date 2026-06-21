@@ -121,13 +121,13 @@ def run_query_geom_plots(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
             query_group_by_id=selected_query_group_by_id,
         )
         results = map(_render_embedding_geometry_query, selected_query_ids)
-        progress = tqdm(
+
+        for result in tqdm(
             results,
             total=len(selected_query_ids),
             desc='Embedding geometry',
             dynamic_ncols=True,
-        )
-        for result in progress:
+        ):
             if result is None:
                 continue
             all_point_rows.extend(result['point_rows'])

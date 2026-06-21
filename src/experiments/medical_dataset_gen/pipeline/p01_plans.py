@@ -15,6 +15,7 @@ import polars as pl
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axes_keys,
+    get_axis_bins,
     get_selected_conditions,
     load_ontology,
     make_subgroup_pairs,
@@ -92,7 +93,9 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
             emitted = True
             plan_idx += 1
             template_id = _next_query_template_id(spec.query_type, template_offsets)
-            rows.append(_materialize_plan_row(cfg, rng, plan_idx, spec, template_id).to_row())
+            rows.append(
+                _materialize_plan_row(cfg, ontology, rng, plan_idx, spec, template_id).to_row()
+            )
             if len(rows) >= cfg.global_.n_queries:
                 break
         if not emitted:
@@ -104,12 +107,18 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
 
 
 def _materialize_plan_row(
-    cfg: ExperimentCfg, rng: Random, plan_idx: int, spec: QueryPlanSpec, template_id: str
+    cfg: ExperimentCfg,
+    ontology: MedicalOntology,
+    rng: Random,
+    plan_idx: int,
+    spec: QueryPlanSpec,
+    template_id: str,
 ) -> QueryPlan:
     query_id = f'q{plan_idx:05d}'
     dominant_slot = (plan_idx - 1) % 4
     value_pattern_idx = (plan_idx - 1) // 4
     facets = _facets_for_plan(
+        ontology=ontology,
         query_id=query_id,
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
@@ -166,6 +175,7 @@ def _next_query_template_id(query_type: QueryType, template_offsets: dict[QueryT
 
 
 def _facets_for_plan(
+    ontology: MedicalOntology,
     query_id: str,
     condition_id: str,
     condition_display: str,
@@ -178,8 +188,8 @@ def _facets_for_plan(
     dominant_size: int,
     complementary_size: int,
 ) -> list[QueryPlanFacet]:
-    subgroup_a_duration, subgroup_b_duration = _duration_value_pattern(value_pattern_idx)
-    subgroup_a_rehab, subgroup_b_rehab = _rehab_value_pattern(value_pattern_idx)
+    subgroup_a_duration, subgroup_b_duration = _duration_value_pattern(ontology, value_pattern_idx)
+    subgroup_a_rehab, subgroup_b_rehab = _rehab_value_pattern(ontology, value_pattern_idx)
     raw_facets = [
         (subgroup_a_id, subgroup_a, 'treatment_duration', subgroup_a_duration),
         (subgroup_a_id, subgroup_a, 'rehab_outcome', subgroup_a_rehab),
@@ -210,24 +220,36 @@ def _facets_for_plan(
     return facets
 
 
-def _duration_value_pattern(value_pattern_idx: int) -> tuple[str, str]:
+def _duration_value_pattern(ontology: MedicalOntology, value_pattern_idx: int) -> tuple[str, str]:
+    duration_bins = get_axis_bins(ontology, 'treatment_duration')
+    if len(duration_bins) != 3:
+        raise ValueError(
+            'MVP duration pairing expects exactly three ordered treatment_duration bins'
+        )
+
+    # Keep the most severe duration bin in every comparison so the benchmark
+    # continues to emphasize coverage across strongly separated clusters.
     patterns = [
-        ('short', 'prolonged'),
-        ('prolonged', 'short'),
-        ('standard', 'prolonged'),
-        ('prolonged', 'standard'),
+        (duration_bins[0], duration_bins[2]),
+        (duration_bins[2], duration_bins[0]),
+        (duration_bins[1], duration_bins[2]),
+        (duration_bins[2], duration_bins[1]),
     ]
     return patterns[value_pattern_idx % len(patterns)]
 
 
-def _rehab_value_pattern(value_pattern_idx: int) -> tuple[str, str]:
+def _rehab_value_pattern(ontology: MedicalOntology, value_pattern_idx: int) -> tuple[str, str]:
+    rehab_bins = get_axis_bins(ontology, 'rehab_outcome')
+    if len(rehab_bins) != 3:
+        raise ValueError('MVP rehab pairing expects exactly three ordered rehab_outcome bins')
+
     patterns = [
-        ('home_rehab', 'inpatient_rehab'),
-        ('inpatient_rehab', 'home_rehab'),
-        ('persistent_deficit', 'home_rehab'),
-        ('home_rehab', 'persistent_deficit'),
-        ('inpatient_rehab', 'persistent_deficit'),
-        ('persistent_deficit', 'inpatient_rehab'),
+        (rehab_bins[0], rehab_bins[1]),
+        (rehab_bins[1], rehab_bins[0]),
+        (rehab_bins[2], rehab_bins[0]),
+        (rehab_bins[0], rehab_bins[2]),
+        (rehab_bins[1], rehab_bins[2]),
+        (rehab_bins[2], rehab_bins[1]),
     ]
     return patterns[(value_pattern_idx // 2) % len(patterns)]
 

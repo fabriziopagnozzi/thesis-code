@@ -17,6 +17,7 @@ import polars as pl
 import pyarrow.parquet as pq
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
+    get_axis_bins,
     load_ontology,
     other_conditions,
     other_subgroups,
@@ -407,14 +408,24 @@ def _axis_value_bin(
 ) -> str:
     condition = ontology.conditions[condition_id]
     if axis == 'treatment_duration':
-        bins: list[str] = list(condition.duration_days)
+        bins = [
+            value_bin
+            for value_bin in get_axis_bins(ontology, 'treatment_duration')
+            if value_bin in condition.duration_days
+        ]
         if target_value_bin in condition.duration_days:
             return str(target_value_bin)
         return bins[local_idx % len(bins)]
 
-    bins = list(condition.rehab_outcomes)
+    bins = [
+        value_bin
+        for value_bin in get_axis_bins(ontology, 'rehab_outcome')
+        if value_bin in condition.rehab_outcomes
+    ]
+
     if target_value_bin in condition.rehab_outcomes:
         return str(target_value_bin)
+
     return bins[local_idx % len(bins)]
 
 
@@ -445,10 +456,15 @@ def _background_value_bin(
 ) -> str:
     condition = ontology.conditions[condition_id]
     if axis == 'treatment_duration':
-        preferred = ['standard', 'short', 'prolonged']
+        duration_bins = get_axis_bins(ontology, 'treatment_duration')
+        if len(duration_bins) < 2:
+            raise ValueError(
+                'treatment_duration needs at least two ontology bins for background facts'
+            )
+        preferred = [duration_bins[1], duration_bins[0], *duration_bins[2:]]
         available = condition.duration_days
     else:
-        preferred = ['home_rehab', 'inpatient_rehab', 'persistent_deficit']
+        preferred = get_axis_bins(ontology, 'rehab_outcome')
         available = condition.rehab_outcomes
 
     for value_bin in preferred[cluster_idx:] + preferred[:cluster_idx]:

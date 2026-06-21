@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ClinicalAxis,
     ConditionOntology,
     MedicalOntology,
     SubgroupKey,
@@ -69,6 +70,16 @@ def get_axes_keys(ontology: MedicalOntology) -> list[str]:
 
 def axis_label(ontology: MedicalOntology, axis_id: str) -> str:
     return ontology.clinical_axes[axis_id].label
+
+
+def get_axis_bins(ontology: MedicalOntology, axis: ClinicalAxis) -> list[str]:
+    try:
+        bins = ontology.clinical_axes[axis].bins
+    except KeyError as exc:
+        raise ValueError(f'Ontology is missing clinical axis metadata for {axis}') from exc
+    if not bins:
+        raise ValueError(f'Ontology axis {axis} must declare at least one value bin')
+    return bins
 
 
 def _ontology_path(cfg: ExperimentCfg) -> Path:

@@ -61,6 +61,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
         query = QueryRecord.model_validate(query_row)
         qid = query.query_id
         qidx = maps['query_id_to_idx'][qid]
+
         candidate_idx = get_candidate_pool_indices(
             query_id=qid,
             pool_scope=cfg.retrieval.pool_scope,

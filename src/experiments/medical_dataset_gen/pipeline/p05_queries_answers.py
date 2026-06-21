@@ -136,7 +136,7 @@ def _finalize_query(
     )
 
     facet_summaries, facet_answer_objects = _facet_summaries(plan.facets, fact_rows)
-    answer_text = canonical_answer(plan, facet_summaries)
+    answer_text = _canonical_answer(plan, facet_summaries)
 
     query_rows.append(plan.to_query_row(query_text))
     answer_rows.append(
@@ -187,7 +187,7 @@ def _contains_axis_language(lower_text: str, axis: ClinicalAxisOntology) -> bool
     return any(str(term).lower() in lower_text for term in terms)
 
 
-def canonical_answer(plan: QueryPlan, facet_summaries: dict[str, str]) -> str:
+def _canonical_answer(plan: QueryPlan, facet_summaries: dict[str, str]) -> str:
     subgroup_a_duration = facet_summaries[
         facets_by(plan, plan.subgroup_a_label, 'treatment_duration')
     ]
