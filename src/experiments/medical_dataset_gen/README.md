@@ -1,158 +1,147 @@
-# Synthetic Medical RAG Benchmark MVP
+## Main Entrypoint
 
-Run the MVP with local-Ollama chunk generation:
-
+Run the full pipeline with:
 ```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline --exp mvp_full
+uv run python -m experiments.medical_dataset_gen.pipeline --exp <experiment_name>
+```
+The experiment config must already exist at:
+```text
+src/experiments/medical_dataset_gen/_results/<experiment_name>/_config.yaml
+```
+Outputs are written under:
+```text
+src/experiments/medical_dataset_gen/_results/<experiment_name>/
 ```
 
-Fast smoke run:
+## Stage Selection
+
+The orchestrator in [pipeline/__main__.py](./src/experiments/medical_dataset_gen/pipeline/__main__.py) supports:
+
+- `--to <stage>`
+- `--from <stage>`
+- `--only <stage>`
+- `--release-llm <bool>`
+- `--no-log-tee`
+
+Example: rerun only the evaluation and plotting tail of a completed experiment:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline --exp mvp_smoke --max-queries 8
+uv run python -m experiments.medical_dataset_gen.pipeline \
+  --exp <experiment_name> \
+  --from eval \
+  --to eval_plots
 ```
 
-Fast deterministic smoke run without LLM chunk calls:
+Example: regenerate only geometry plots from existing artifacts:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline \
-  --exp mvp_smoke_fast \
-  --max-queries 8 \
-  --no-llm-chunks
+uv run python -m experiments.medical_dataset_gen.pipeline \
+  --exp <experiment_name> \
+  --only geom_plots
 ```
 
-Full Qwen 8B embedding run with LLM-generated chunks:
+## Stage Order
 
-```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline \
-  --exp llm_chunks_qwen8b \
-  --llm-name gemma4:12b \
-  --llm-workers 2 \
-  --embedding-model Qwen/Qwen3-Embedding-8B \
-  --device cuda \
-  --batch-size 8
-```
+The current pipeline stages are:
 
-With the default config, every chunk is generated with the local Ollama model.
-The default retrieval scope is `query_local`, which means each query retrieves from its own generated gold and distractor pool.
-Use `--no-llm-chunks` only for deterministic smoke tests.
+1. `plans`
+2. `calibrate_plans`
+3. `facts`
+4. `chunks`
+5. `queries_answers`
+6. `qrels`
+7. `embed`
+8. `filter_queries`
+9. `eval`
+10. `geom_plots`
+11. `eval_plots`
 
-Use a different SentenceTransformers model:
+## Package Layout
 
-```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline \
-  --exp mvp_st \
-  --embedding-model Qwen/Qwen3-Embedding-8B
-```
+- [pipeline](./src/experiments/medical_dataset_gen/pipeline): runnable stage entrypoints and the pipeline orchestrator
+- [dataset_generation](./src/experiments/medical_dataset_gen/dataset_generation): ontology loading, plan helpers, fact construction, chunk rendering, caches, and query/answer templating
+- [query_geometry](./src/experiments/medical_dataset_gen/query_geometry): geometry artifact building, dimensionality reduction, diagnostics, and plot helpers
+- [evaluation](./src/experiments/medical_dataset_gen/evaluation): retrieval metrics, answer metrics, lambda agreement, worker setup, and plotting
+- [schemas](./src/experiments/medical_dataset_gen/schemas): typed models shared across the pipeline
+- [utils](./src/experiments/medical_dataset_gen/utils): config loading, paths, I/O, and shared retrieval helpers
+- [data_templates](./src/experiments/medical_dataset_gen/data_templates): ontology and template YAML resources
 
-The config must already exist at `_results/<exp>/_config.yaml` before you run the pipeline.
-The pipeline no longer copies a source-level `_config.yaml`; the default ontology is `ontology.yaml`.
-Outputs are written under `_results/<exp>/`.
+## Main Artifacts
 
-## Stages
+Key outputs written by the pipeline:
 
-1. `generation/query_plans.py`: creates `query_plans.parquet`.
-2. `generation/facts.py`: creates hidden structured `clinical_facts.parquet`.
-3. `generation/chunks.py`: generates realistic note chunks with Ollama when LLM mode is enabled, or deterministic clinical prose when disabled; writes unique `chunk_documents.parquet` plus query-local `chunk_memberships.parquet`.
-4. `generation/queries_answers.py`: creates `queries.parquet` and `gold_answers.parquet`.
-5. `generation/qrels.py`: creates `qrels.parquet` from query/chunk memberships.
-6. `retrieval/embed.py`: creates the embedding memmaps and metadata files.
-7. `retrieval/filter_geometry.py`: creates `geometry_stats.parquet`.
-8. `evaluation/evaluate.py`: creates `evaluation_results.parquet`, `evaluation_stats.parquet`, and `lambda_pair_agreement.parquet`.
-9. `embedding_geometry/run.py`: creates embedding geometry figures and diagnostics for the configured candidate-pool scope.
-10. `evaluation/plots.py`: creates evaluation figures under `_results/<exp>/_figures/evaluation/`.
-
-The optional `evaluation.fac_loc_mmr_comparison_kernels` config block controls
-how `lambda_pair_agreement.parquet` downweights uninteresting FacLoc/MMR lambda pairs.
-By default it:
-
-- excludes lambda pairs above `0.80`
-- applies sharp gain and paired-confidence-bound gates to `MeanFacetHitRate@k`
-- penalizes weak pairs with an inverse-power kernel and plots the weighted score on a log scale
-
-Each stage can run as a module with the same flags as the full pipeline.
-
-Regenerate plots from existing evaluation tables:
-
-```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline \
-  --exp llm_chunks_qwen8b \
-  --start-at plots
-```
-
-Generate embedding-geometry figures from existing embeddings/evaluation artifacts:
-
-```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline \
-  --exp llm_chunks_qwen8b \
-  --start-at embedding_geometry \
-  --stop-after embedding_geometry
-```
-
-Useful overrides:
-
-```bash
-uv run python -m experiments.medical_dataset_gen.run_pipeline \
-  --exp llm_chunks_qwen8b \
-  --start-at embedding_geometry \
-  --stop-after embedding_geometry \
-  --embedding-geometry-queries 10 \
-  --embedding-geometry-k 20 \
-  --embedding-geometry-reduction umap
-```
-
-Pool-scope options:
-
-- `query_local`: only the chunks generated from the same hidden query plan. Good for debugging generation quality, too easy for the real benchmark.
-- `same_condition`: all chunks whose `condition_id` matches the query condition. This is the main evaluation setting.
-- `full_corpus`: all chunks across all conditions. This is a harder retrieval stress test and can blur the intended coverage effect if condition separation dominates the error mode.
-
-The embedding-geometry stage writes:
-
-- `_figures/embedding_geometry/<selection_group>/<query_id>/query_overview_4panel.png`
-- `_figures/embedding_geometry/<selection_group>/<query_id>/candidate_pool_map.png`
-- `_figures/embedding_geometry/<selection_group>/<query_id>/strategy_selection_overlay.png`
-- `_figures/embedding_geometry/<selection_group>/<query_id>/full_strategy_selection_overlay_k<K>.png`
-- `_figures/embedding_geometry/<selection_group>/<query_id>/query_cosine_similarity_map.png`
-- `_figures/embedding_geometry/<selection_group>/<query_id>/query_similarity_rank.png`
-- `_figures/embedding_geometry/<selection_group>/<query_id>/hdbscan_cluster_map.png`
-- `_figures/embedding_geometry/cluster_quality_overview.png`
+- `query_plans.parquet`
+- `query_plan_calibration.parquet`
+- `clinical_facts.parquet`
+- `chunk_documents.parquet`
+- `chunk_memberships.parquet`
+- `generation_rejects.parquet`
+- `queries.parquet`
+- `gold_answers.parquet`
+- `qrels.parquet`
+- `geometry_stats.parquet`
+- `evaluation_results.parquet`
+- `evaluation_stats.parquet`
+- `lambda_pair_agreement.parquet`
 - `embedding_geometry_points.parquet`
 - `embedding_geometry_query_stats.parquet`
 
-`selection_group` is `good`, `mid`, or `bad` for automatic mixed query selection, `good` for best-only selection, and `manual` when `embedding_geometry.query_ids` is set.
+The embedding stage also writes:
 
-`full_strategy_selection_overlay_k<K>.png` collapses consecutive MMR and facility-location lambda panels when the retrieved candidate set is unchanged. Different rank orders of the same set are treated as the same panel.
+- `embeddings_chunk_vectors.npy`
+- `embeddings_query_vectors.npy`
+- `embeddings_chunk_ids.npy`
+- `embeddings_query_ids.npy`
+- `embeddings_metadata.json`
 
-The plotting stage writes:
+## Retrieval Pool Scopes
 
-- `strategy_comparison.png`
-- `lambda_sensitivity.png`
-- `per_query_distributions.png`
-- `gain_over_topk.png`
-- `gain_over_topk.html`
-- `gain_over_topk_similar_lambda.png`
-- `coverage_precision_tradeoff.png`
-- `selection_diagnostics.png`
+Supported `retrieval.pool_scope` values:
+
+- `query_local`: only chunks linked to the query through `chunk_memberships.parquet`
+- `same_condition`: all chunks with the same `condition_id`
+- `full_corpus`: all chunk documents
 
 ## LLM Usage
 
-LLM chunk generation is on by default and uses `generation.llm_name` from the experiment config. You can also override it with `--llm-name`.
-Parallel chunk generation is controlled by `generation.llm_workers` or `--llm-workers`.
-To get actual concurrent decoding, start the Ollama server with `OLLAMA_NUM_PARALLEL` at least as large as `llm_workers`.
-Generated LLM chunks are cached incrementally in `_results/<exp>/chunk_generation_cache.jsonl`, so interrupted chunk generation can be restarted without repeating accepted rows. If you enable deterministic template rewriting, rewritten chunks are stored in the isolated global cache at `src/experiments/medical_dataset_gen/_cache/chunk_rewrite_cache.jsonl`.
-Chunk generation is binary: either all chunks are LLM-generated, or all chunks are deterministic fallback chunks.
+Chunk generation behavior is controlled from the experiment config:
 
-To disable LLM chunks for fast debugging, use `--no-llm-chunks` or set:
+- `generation.use_llm_chunk_generation`
+- `generation.use_llm_chunk_rewriting`
+- `generation.use_llm_query_paraphrase`
+- `generation.llm_name`
+- `generation.llm_workers`
 
-```yaml
-generation:
-  use_llm_chunk_generation: false
+If LLM chunk generation is enabled, accepted generations are cached in:
+
+- `_results/<exp>/chunk_generation_cache.jsonl`
+- `src/experiments/medical_dataset_gen/_cache/chunk_generation_cache.jsonl`
+
+If LLM rewrite is enabled, rewrite cache entries are stored in:
+
+- `src/experiments/medical_dataset_gen/_cache/chunk_rewrite_cache.jsonl`
+
+When `--release-llm true` is passed to the pipeline orchestrator, the configured Ollama model is released just before the `embed` stage.
+
+## Direct Stage Execution
+
+Some stages can also be run directly as modules when you want to rerun only one piece of the pipeline:
+
+```bash
+uv run python -m experiments.medical_dataset_gen.pipeline.p04_chunks --exp <experiment_name>
+uv run python -m experiments.medical_dataset_gen.pipeline.p09_evaluate --exp <experiment_name>
+uv run python -m experiments.medical_dataset_gen.pipeline.p10_query_geom_plots --exp <experiment_name>
 ```
 
-Query paraphrasing is still off by default. To enable it:
+Evaluation figures are normally generated through the orchestrator, but selective plot generation is supported by [pipeline/p11_eval_plots.py](./src/experiments/medical_dataset_gen/pipeline/p11_eval_plots.py) through its `--plots` parser.
 
-```yaml
-generation:
-  use_llm_query_paraphrase: true
-```
+## Documentation
+
+The main code documentation lives in [docs/code_docs](./src/experiments/medical_dataset_gen/docs/code_docs):
+
+- [pipeline_overview.md](./src/experiments/medical_dataset_gen/docs/code_docs/pipeline_overview.md)
+- [configuration_and_artifacts.md](./src/experiments/medical_dataset_gen/docs/code_docs/configuration_and_artifacts.md)
+- [generation_stages.md](./src/experiments/medical_dataset_gen/docs/code_docs/generation_stages.md)
+- [deterministic_construction.md](./src/experiments/medical_dataset_gen/docs/code_docs/deterministic_construction.md)
+- [retrieval_and_geometry.md](./src/experiments/medical_dataset_gen/docs/code_docs/retrieval_and_geometry.md)
+- [evaluation_and_plots.md](./src/experiments/medical_dataset_gen/docs/code_docs/evaluation_and_plots.md)
