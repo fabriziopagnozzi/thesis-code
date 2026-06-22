@@ -28,15 +28,15 @@ axis_sentence_templates:
     complication_burden:
         - "The in-hospital complication burden included {axis_value}. Overall, this reflected {axis_bin_term}."
         - "Across the admission, the in-hospital complication burden involved {axis_value}. Overall, this reflected {axis_bin_term}."
-        - "Complication review showed {axis_value}, indicating {axis_bin_term} for the admission."
+        - "Complication burden review showed {axis_value}, indicating {axis_bin_term} for the admission."
     acute_clinical_course:
         - "The acute clinical course involved {axis_value}. Overall, this reflected {axis_bin_term}."
         - "Across the hospitalization, {axis_value} defined the acute clinical course. Overall, this reflected {axis_bin_term}."
-        - "Early inpatient progression showed {axis_value}. Overall, this reflected {axis_bin_term}."
+        - "Early inpatient progression in the acute clinical course showed {axis_value}. Overall, this reflected {axis_bin_term}."
     care_intensity:
         - "Care intensity reached {axis_value}. Overall, this required {axis_bin_term}."
         - "The highest care intensity involved {axis_value}. Overall, this reflected {axis_bin_term}."
-        - "Hospital care escalated to {axis_value}. Overall, this reflected {axis_bin_term}."
+        - "Hospital care escalated and care intensity reached {axis_value}. Overall, this reflected {axis_bin_term}."
 duration_phrase_templates:
     - "{duration_days} days of {treatment}"
     - "{duration_days} days of therapy with {treatment}"
