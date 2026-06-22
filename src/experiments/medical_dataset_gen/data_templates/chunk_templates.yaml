@@ -1,75 +1,46 @@
 note_style_templates:
     brief_hospital_course:
-        - "{patient} was hospitalized for {condition} after {presentation}. {cohort_sentence} {axis_sentence} {close}"
-        - During admission for {condition}, {patient_lower} had {presentation}. {cohort_sentence} {axis_sentence} {close}
-    discharge_diagnosis:
-        - "{condition} was treated after {patient_lower} presented with {presentation}. {cohort_sentence} {axis_sentence} {close}"
+        - "{patient} was admitted with {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
+        - "{patient} was hospitalized for {condition} after presenting with {presentation}. {cohort_sentence} {axis_sentence}"
+    progress_note:
+        - During admission for {condition}, {patient_lower} was treated after presenting with {presentation}. {cohort_sentence} {axis_sentence}
+        - "{patient} presented with {presentation} and was treated for {condition}. {cohort_sentence} {axis_sentence}"
+    discharge_summary:
+        - "{patient} was treated for {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
+        - Following presentation with {presentation}, {patient_lower} was managed for {condition}. {cohort_sentence} {axis_sentence}
 cohort_evidence_templates:
-    demographic:
-        - Demographic documentation identified the patient as {subgroup_phrase}.
-        - Age and sex documentation consistently described {subgroup_phrase}.
+    sex:
+        - "{pronoun_cap} was {subgroup_phrase}."
     comorbidity_present:
-        - The active medical history confirmed {subgroup_phrase}.
-        - Baseline comorbidity review documented {subgroup_phrase}.
+        - "{possessive_cap} history included {subgroup_phrase}."
+        - Background history was notable for {subgroup_phrase}.
+        - "{pronoun_cap} had {subgroup_phrase}."
     comorbidity_reference:
-        - Baseline history explicitly documented {subgroup_phrase}.
-        - Comorbidity review consistently confirmed {subgroup_phrase}.
-axis_closing_sentences:
-    treatment_duration:
-        - The medication record confirmed the stated course without describing another outcome domain.
-        - The documented regimen ended after the stated treatment interval.
-    rehab_outcome:
-        - The therapy record confirmed this discharge rehabilitation plan.
-        - Functional planning at discharge matched this rehabilitation outcome.
-    complication_burden:
-        - The safety review recorded this as the complication burden for the admission.
-        - No other event changed the documented complication category.
-    acute_clinical_course:
-        - Serial clinical assessments supported this response trajectory.
-        - The inpatient progress record consistently described this clinical course.
-    care_intensity:
-        - Bed assignment and monitoring records supported this level of care.
-        - The documented resource use matched this care-intensity category.
+        - "{pronoun_cap} had {subgroup_phrase}."
 axis_sentence_templates:
     treatment_duration:
-        - For {axis_term}, the record documented {axis_value}, representing a {axis_bin_term}.
-        - "The {axis_term} was classified as a {axis_bin_term}: {axis_value}."
-        - Regarding {axis_term}, clinicians recorded {axis_value}, consistent with a {axis_bin_term}.
+        - "Treatment duration consisted of {axis_value}. This amounted to a {axis_bin_term}."
+        - "The treatment duration was {axis_value}. Overall, this was a {axis_bin_term}."
+        - "Treatment duration totaled {axis_value}. Overall, this was a {axis_bin_term}."
     rehab_outcome:
-        - For {axis_term}, the record documented {axis_value}, representing {axis_bin_term}.
-        - "The {axis_term} was classified as {axis_bin_term}: {axis_value}."
-        - Regarding {axis_term}, therapists recorded {axis_value}, consistent with {axis_bin_term}.
+        - "The rehabilitation outcome was {axis_value}. This was most consistent with {axis_bin_term}."
+        - "By discharge, the rehabilitation outcome was {axis_value}. Overall, this indicated {axis_bin_term}."
     complication_burden:
-        - The {axis_term} assessment documented {axis_value}, representing {axis_bin_term}.
-        - For {axis_term}, the record described {axis_value}, consistent with {axis_bin_term}.
-        - "The admission's {axis_term} was classified as {axis_bin_term}: {axis_value}."
+        - "The in-hospital complication burden included {axis_value}. Overall, this reflected {axis_bin_term}."
+        - "Across the admission, the in-hospital complication burden involved {axis_value}. Overall, this reflected {axis_bin_term}."
+        - "Complication review showed {axis_value}, indicating {axis_bin_term} for the admission."
     acute_clinical_course:
-        - The {axis_term} showed {axis_value}, representing {axis_bin_term}.
-        - For {axis_term}, serial assessments documented {axis_value}, consistent with {axis_bin_term}.
-        - "The inpatient {axis_term} was classified as {axis_bin_term}: {axis_value}."
+        - "The acute clinical course involved {axis_value}. Overall, this reflected {axis_bin_term}."
+        - "Across the hospitalization, {axis_value} defined the acute clinical course. Overall, this reflected {axis_bin_term}."
+        - "Early inpatient progression showed {axis_value}. Overall, this reflected {axis_bin_term}."
     care_intensity:
-        - The highest {axis_term} was {axis_value}, representing {axis_bin_term}.
-        - For {axis_term}, the record documented {axis_value}, consistent with {axis_bin_term}.
-        - "Resource-use notes classified the {axis_term} as {axis_bin_term}: {axis_value}."
-duration_course_nouns:
-    - active treatment course
-    - active therapy interval
-    - inpatient treatment course
-    - documented therapy course
-    - hospital treatment interval
-    - monitored inpatient regimen
-    - recorded treatment plan
-    - treatment-duration plan
+        - "Care intensity reached {axis_value}. Overall, this required {axis_bin_term}."
+        - "The highest care intensity involved {axis_value}. Overall, this reflected {axis_bin_term}."
+        - "Hospital care escalated to {axis_value}. Overall, this reflected {axis_bin_term}."
 duration_phrase_templates:
-    - "{treatment} was continued for {duration_days} days"
-    - therapy-course length was {duration_days} days on {treatment}
-    - total treatment duration was {duration_days} days with {treatment}
-    - the active therapy interval lasted {duration_days} days on {treatment}
-    - the {course_noun} included {treatment} for {duration_days} days
-    - clinicians completed {duration_days} days of {treatment}
-    - the team documented a {duration_days}-day treatment course of {treatment}
-    - records showed {duration_days} days of treatment with {treatment}
-    - "{treatment} remained in place across a {duration_days}-day course"
+    - "{duration_days} days of {treatment}"
+    - "{duration_days} days of therapy with {treatment}"
+    - "a {duration_days}-day course of {treatment}"
 hidden_benchmark_terms:
     - admission adm_
     - benchmark

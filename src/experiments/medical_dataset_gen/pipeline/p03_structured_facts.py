@@ -10,6 +10,9 @@ from typing import cast
 import polars as pl
 import pyarrow.parquet as pq
 
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
+    available_note_styles,
+)
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axis_bins,
     load_ontology,
@@ -90,6 +93,9 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
         raise ValueError('no query plans available to generate facts')
     print(f'[write] clinical_facts: {total:,} rows -> {path}')
     return last
+
+
+NOTE_STYLE_IDS = available_note_styles()
 
 
 def _facts_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
@@ -286,13 +292,9 @@ def make_base_fact(
         f'{plan.query_id}_{"g" if is_gold else "d"}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     )
     required_payload = _payload_required_phrase(payload)
-    must_mention = [
-        condition_display,
-        phrase,
-        ontology.clinical_axes[axis].label,
-        axis_bin_term,
-        required_payload,
-    ]
+    must_mention = [condition_display, ontology.clinical_axes[axis].label, axis_bin_term, required_payload]
+    if subgroup_dimension_id != 'age_band':
+        must_mention.insert(1, phrase)
     must_not_mention = [
         label for label in (plan.subgroup_a_label, plan.subgroup_b_label) if label != subgroup_label
     ]
@@ -331,7 +333,7 @@ def make_base_fact(
         patient_age=age,
         patient_sex=sex,
         clinical_subgroup_phrase=phrase,
-        note_style=surface_rng.choice(['brief_hospital_course', 'discharge_diagnosis']),
+        note_style=surface_rng.choice(NOTE_STYLE_IDS),
         split=plan.split,
         must_mention=must_mention,
         must_not_mention=must_not_mention,

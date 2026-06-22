@@ -31,23 +31,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient neurorehabilitation
+                        - outpatient neurorehabilitation after discharge
                         - home therapy with improving gait stability
                     inpatient_rehab:
-                        - transferred to inpatient rehabilitation for persistent weakness
-                        - required acute rehabilitation for mobility and cognitive deficits
+                        - inpatient rehabilitation for persistent weakness
+                        - acute rehabilitation for mobility and cognitive deficits
                     persistent_deficit:
                         - persistent focal deficits requiring close neurologic follow-up
-                        - ongoing weakness and impaired balance at discharge
+                        - ongoing weakness and impaired balance
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no seizure, aspiration event, or treatment-limiting toxicity
                     limited_complication:
-                        - a transient medication-related laboratory abnormality that resolved
+                        - a transient acyclovir-related creatinine rise that resolved
                     major_complication:
-                        - a major seizure-related complication requiring additional management
+                        - a breakthrough seizure requiring escalation of management
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -67,9 +67,9 @@ conditions:
                     intensive_care:
                         - ICU-level neurologic monitoring and organ support
         presentations:
-            - fever, confusion, and gait change
+            - several days of fever, confusion, and gait instability
             - headache, altered mental status, and lower-extremity weakness
-            - new neurologic deficits and inflammatory cerebrospinal fluid findings
+            - new focal neurologic deficits and inflammatory cerebrospinal fluid findings
 
     pneumonia:
         display: pneumonia
@@ -98,23 +98,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with breathing exercises and visiting nursing
+                        - home discharge with breathing exercises and visiting nursing
                         - home physical therapy after oxygen needs improved
                     inpatient_rehab:
-                        - transferred to rehabilitation because of deconditioning
-                        - required inpatient therapy for weakness after respiratory illness
+                        - rehabilitation for deconditioning
+                        - inpatient therapy for weakness after respiratory illness
                     persistent_deficit:
-                        - continued exertional limitation at discharge
+                        - continued exertional limitation
                         - persistent oxygen requirement with reduced exercise tolerance
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major respiratory or treatment-related complication
+                        - no pleural complication, sustained hypoxemic deterioration, or antibiotic-limiting adverse effect
                     limited_complication:
-                        - a transient kidney injury that resolved with supportive care
+                        - a brief antibiotic-associated kidney injury that improved with supportive care
                     major_complication:
-                        - respiratory failure requiring escalation of support
+                        - respiratory failure requiring high-level ventilatory support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -134,9 +134,9 @@ conditions:
                     intensive_care:
                         - ICU-level respiratory support
         presentations:
-            - hypoxemia, fever, and productive cough
-            - new oxygen requirement and bibasilar infiltrates
-            - dyspnea, leukocytosis, and radiographic consolidation
+            - fever, productive cough, and worsening hypoxemia
+            - a new oxygen requirement and bibasilar infiltrates
+            - dyspnea, leukocytosis, and lobar consolidation on imaging
 
     ischemic_stroke:
         display: ischemic stroke
@@ -165,23 +165,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient stroke therapy
+                        - outpatient stroke therapy after discharge
                         - home therapy after mild residual dysarthria
                     inpatient_rehab:
-                        - transferred to acute stroke rehabilitation
-                        - required inpatient rehabilitation for hemiparesis
+                        - acute stroke rehabilitation
+                        - inpatient rehabilitation for hemiparesis
                     persistent_deficit:
-                        - persistent hemiparesis remained at discharge
-                        - ongoing aphasia and mobility impairment required follow-up
+                        - persistent hemiparesis
+                        - ongoing aphasia and mobility impairment
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no hemorrhagic transformation or aspiration complication
+                        - no hemorrhagic transformation, aspiration event, or early recurrent ischemia
                     limited_complication:
-                        - a treatable swallowing-related complication without lasting instability
+                        - transient aspiration risk from dysphagia requiring diet modification
                     major_complication:
-                        - hemorrhagic transformation requiring major management changes
+                        - hemorrhagic transformation requiring urgent management changes
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -201,9 +201,9 @@ conditions:
                     intensive_care:
                         - neurocritical care with ICU-level monitoring
         presentations:
-            - acute dysarthria and unilateral weakness
-            - new focal neurologic deficits on arrival
-            - hemiparesis with imaging consistent with acute infarct
+            - acute dysarthria with unilateral weakness
+            - new focal neurologic deficits at presentation
+            - hemiparesis and imaging evidence of acute infarction
 
     heart_failure:
         display: acute decompensated heart failure
@@ -232,23 +232,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with cardiac rehabilitation referral
+                        - home discharge with cardiac rehabilitation referral
                         - home nursing and gradual activity advancement
                     inpatient_rehab:
-                        - transferred to rehabilitation after marked deconditioning
-                        - required inpatient therapy before safe return home
+                        - rehabilitation after marked deconditioning
+                        - inpatient therapy before safe return home
                     persistent_deficit:
                         - persistent exertional dyspnea limited discharge function
-                        - ongoing fatigue and mobility limitation were documented
+                        - ongoing fatigue and mobility limitation
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major arrhythmia, kidney injury, or treatment-limiting hypotension
+                        - no sustained arrhythmia, worsening kidney injury, or diuretic-limiting hypotension
                     limited_complication:
-                        - a transient creatinine rise managed without stopping decongestion
+                        - a brief creatinine rise during diuresis that improved with monitoring
                     major_complication:
-                        - hemodynamic instability requiring major escalation
+                        - worsening low-output hypotension requiring vasopressor support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -268,9 +268,9 @@ conditions:
                     intensive_care:
                         - cardiac intensive care with hemodynamic support
         presentations:
-            - volume overload, edema, and exertional dyspnea
-            - pulmonary congestion and elevated filling pressures
-            - worsening orthopnea with lower-extremity edema
+            - progressive volume overload with edema and exertional dyspnea
+            - pulmonary congestion with elevated filling pressures
+            - worsening orthopnea with increasing lower-extremity edema
 
     bacterial_meningitis:
         display: bacterial meningitis
@@ -299,23 +299,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient neurorehabilitation after improved cognition
+                        - outpatient neurorehabilitation after improved cognition
                         - home therapy after headache and confusion improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation for residual weakness and slowed processing
-                        - transferred to rehabilitation because balance and cognition remained impaired
+                        - inpatient rehabilitation for residual weakness and slowed processing
+                        - rehabilitation for impaired balance and cognition
                     persistent_deficit:
-                        - persistent cognitive slowing and gait instability were documented at discharge
-                        - ongoing neurologic deficits required close outpatient follow-up
+                        - persistent cognitive slowing and gait instability
+                        - ongoing neurologic deficits
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no seizure, hearing complication, or antimicrobial toxicity
+                        - no seizure, hearing loss, or antimicrobial-limiting toxicity
                     limited_complication:
-                        - a transient electrolyte disturbance managed during therapy
+                        - transient hyponatremia corrected during therapy
                     major_complication:
-                        - a major neurologic complication requiring escalation
+                        - cerebral edema or recurrent seizure requiring escalation
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -336,7 +336,7 @@ conditions:
                         - ICU-level neurologic and sepsis support
         presentations:
             - fever, headache, neck stiffness, and photophobia
-            - meningeal signs with confusion and inflammatory cerebrospinal fluid findings
+            - meningeal signs, confusion, and inflammatory cerebrospinal fluid findings
             - sepsis physiology with meningismus and altered mental status
     multiple_sclerosis_relapse:
         display: multiple sclerosis relapse
@@ -365,23 +365,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient neurorehabilitation for residual weakness
+                        - outpatient neurorehabilitation for residual weakness
                         - home therapy after gait and fatigue improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation for persistent mobility deficits
-                        - transferred to rehabilitation because weakness still limited transfers
+                        - inpatient rehabilitation for persistent mobility deficits
+                        - rehabilitation for weakness that still limited transfers
                     persistent_deficit:
-                        - persistent lower-extremity weakness and imbalance remained at discharge
-                        - ongoing sensory and gait deficits required close neurologic follow-up
+                        - persistent lower-extremity weakness and imbalance
+                        - ongoing sensory and gait deficits
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major steroid or plasma-exchange complication
+                        - no major steroid-related or plasma-exchange complication
                     limited_complication:
-                        - a manageable steroid-related glucose disturbance
+                        - steroid-related hyperglycemia controlled during treatment
                     major_complication:
-                        - a major treatment-related complication requiring cessation
+                        - a catheter-related complication forcing cessation of plasma exchange
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -402,8 +402,8 @@ conditions:
                         - ICU-level support for severe neurologic deterioration
         presentations:
             - new weakness, sensory change, and gait instability
-            - demyelinating flare with leg weakness and urinary urgency
-            - worsening neurologic symptoms without evidence of acute infection
+            - a demyelinating flare causing leg weakness and urinary urgency
+            - worsening neurologic symptoms without signs of acute infection
     spinal_epidural_abscess:
         display: spinal epidural abscess
         terms:
@@ -431,23 +431,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient therapy after improved leg strength
+                        - outpatient therapy after improved leg strength
                         - home physical therapy after pain control and safer ambulation
                     inpatient_rehab:
-                        - required inpatient rehabilitation for persistent weakness after decompression
-                        - transferred to rehabilitation because gait remained unsafe
+                        - inpatient rehabilitation for persistent weakness after decompression
+                        - rehabilitation for unsafe gait after decompression
                     persistent_deficit:
-                        - persistent lower-extremity weakness and sensory loss remained at discharge
+                        - persistent lower-extremity weakness and sensory loss
                         - ongoing neurologic deficits limited independent mobility
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no new neurologic or operative complication
+                        - no new neurologic decline, wound complication, or operative adverse event
                     limited_complication:
-                        - a manageable wound or medication complication
+                        - mild postoperative wound drainage managed locally
                     major_complication:
-                        - major cord-compression progression requiring urgent intervention
+                        - progressive cord compression requiring urgent repeat intervention
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -467,9 +467,9 @@ conditions:
                     intensive_care:
                         - ICU-level support for severe neurologic compromise
         presentations:
-            - severe back pain, fever, and evolving leg weakness
-            - epidural infection with canal narrowing and concern for cord compression
-            - back pain with neurologic symptoms and elevated inflammatory markers
+            - severe back pain, fever, and progressive leg weakness
+            - an epidural infection with canal narrowing and concern for cord compression
+            - back pain with neurologic deficits and elevated inflammatory markers
     pulmonary_embolism:
         display: pulmonary embolism
         terms:
@@ -497,23 +497,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with gradual activity advancement and outpatient therapy
+                        - gradual activity advancement with outpatient therapy
                         - home physical therapy after dyspnea improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation for severe deconditioning after hypoxemia
-                        - transferred to rehabilitation because mobility remained limited after pulmonary embolism
+                        - inpatient rehabilitation for severe deconditioning after hypoxemia
+                        - rehabilitation for limited mobility after pulmonary embolism
                     persistent_deficit:
                         - persistent exertional dyspnea limited discharge function
-                        - continued oxygen requirement reduced walking tolerance at discharge
+                        - continued oxygen requirement with reduced walking tolerance
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major bleeding or recurrent embolic complication
+                        - no major bleeding, recurrent embolic event, or infarction-related complication
                     limited_complication:
-                        - a manageable anticoagulation-related bleeding event
+                        - a brief anticoagulation-related mucosal bleed managed without stopping therapy
                     major_complication:
-                        - major bleeding or hemodynamic collapse requiring escalation
+                        - obstructive shock or major bleeding requiring escalation
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -534,8 +534,8 @@ conditions:
                         - ICU-level cardiopulmonary support
         presentations:
             - acute dyspnea, pleuritic chest pain, and hypoxemia
-            - tachycardia with pulmonary emboli and concern for right heart strain
-            - new oxygen requirement after imaging confirmed pulmonary embolism
+            - tachycardia, imaging-confirmed pulmonary emboli, and concern for right-heart strain
+            - a new oxygen requirement and imaging-confirmed pulmonary embolism
     copd_exacerbation:
         display: acute COPD exacerbation
         terms:
@@ -563,23 +563,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with pulmonary rehabilitation referral and inhaler teaching
+                        - pulmonary rehabilitation referral with inhaler teaching
                         - home therapy after breathing and endurance improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation because deconditioning limited safe ambulation
-                        - transferred to rehabilitation for weakness after prolonged respiratory failure
+                        - inpatient rehabilitation for deconditioning limiting safe ambulation
+                        - rehabilitation for weakness after prolonged respiratory failure
                     persistent_deficit:
-                        - persistent exertional limitation and dyspnea remained at discharge
+                        - persistent exertional limitation and dyspnea
                         - ongoing oxygen need and poor endurance reduced baseline activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major ventilatory or treatment-related complication
+                        - no pneumothorax, treatment-limiting arrhythmia, or infectious complication
                     limited_complication:
-                        - a manageable steroid-related glucose disturbance
+                        - steroid-related hyperglycemia controlled with short-term insulin
                     major_complication:
-                        - respiratory failure requiring invasive support
+                        - hypercapnic respiratory failure requiring invasive ventilation
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -599,9 +599,9 @@ conditions:
                     intensive_care:
                         - ICU-level ventilatory support
         presentations:
-            - wheezing, increased sputum, and worsening dyspnea
+            - worsening dyspnea, wheezing, and increased sputum production
             - hypercapnia with increased work of breathing
-            - acute bronchospasm and hypoxemia above baseline oxygen needs
+            - acute bronchospasm with hypoxemia above baseline oxygen needs
     infective_endocarditis:
         display: infective endocarditis
         terms:
@@ -630,23 +630,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with home infusion support and outpatient therapy
-                        - home rehabilitation was arranged after strength improved
+                        - home infusion support with outpatient therapy
+                        - home rehabilitation after strength improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation for marked deconditioning during prolonged antibiotic therapy
-                        - transferred to rehabilitation because endurance and mobility remained limited
+                        - inpatient rehabilitation for marked deconditioning during prolonged antibiotic therapy
+                        - inpatient rehabilitation for limited endurance and mobility
                     persistent_deficit:
-                        - persistent fatigue and reduced mobility were still documented at discharge
-                        - ongoing functional limitation required close follow-up during antibiotic completion
+                        - persistent fatigue and reduced mobility
+                        - ongoing functional limitation during antibiotic completion
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no embolic, valvular, or antimicrobial complication
+                        - no embolic stroke, worsening valvular dysfunction, or antibiotic-limiting toxicity
                     limited_complication:
-                        - a manageable medication-related laboratory abnormality
+                        - a transient antibiotic-related kidney injury that improved with monitoring
                     major_complication:
-                        - a major embolic or valvular complication requiring intervention
+                        - an embolic event or acute valvular deterioration requiring intervention
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -667,8 +667,8 @@ conditions:
                         - ICU-level support for valvular or septic instability
         presentations:
             - persistent bacteremia, fever, and concern for valvular infection
-            - new murmur with bloodstream infection and embolic risk
-            - positive blood cultures with echocardiographic concern for endocarditis
+            - a new murmur, bloodstream infection, and embolic risk
+            - positive blood cultures and echocardiographic findings concerning for endocarditis
     osteomyelitis:
         display: osteomyelitis
         terms:
@@ -697,23 +697,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient therapy and protected weight bearing
+                        - outpatient therapy with protected weight bearing
                         - home physical therapy after pain and swelling improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation for transfers and gait training with weight-bearing limits
-                        - transferred to rehabilitation because weakness and offloading needs limited independence
+                        - inpatient rehabilitation for transfers and gait training with weight-bearing limits
+                        - rehabilitation for weakness and offloading needs that limited independence
                     persistent_deficit:
-                        - persistent pain and impaired mobility remained at discharge
-                        - ongoing difficulty with ambulation required close follow-up
+                        - persistent pain and impaired mobility
+                        - ongoing difficulty with ambulation
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major wound, access, or antimicrobial complication
+                        - no wound-breakdown, catheter, or antimicrobial complication
                     limited_complication:
-                        - a manageable line or medication complication
+                        - brief line-associated irritation managed without changing therapy
                     major_complication:
-                        - progressive infection requiring major surgical management
+                        - progressive bone or soft-tissue destruction requiring surgical debridement
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -733,8 +733,8 @@ conditions:
                     intensive_care:
                         - ICU-level support for severe infectious instability
         presentations:
-            - focal bone pain, inflammatory markers, and imaging concerning for infection
-            - chronic wound changes with contiguous bone infection
+            - focal bone pain, elevated inflammatory markers, and imaging concerning for infection
+            - chronic wound changes with contiguous bone involvement
             - localized swelling and tenderness with suspected osteomyelitis
     pyelonephritis_sepsis:
         display: pyelonephritis with sepsis
@@ -763,23 +763,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with visiting nursing after strength improved
+                        - visiting nursing after strength improved
                         - home physical therapy after sepsis-related weakness improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation for deconditioning after septic illness
-                        - transferred to rehabilitation because mobility remained below baseline
+                        - inpatient rehabilitation for deconditioning after septic illness
+                        - rehabilitation for mobility below baseline after sepsis
                     persistent_deficit:
-                        - persistent weakness and limited endurance remained at discharge
+                        - persistent weakness and limited endurance
                         - ongoing fatigue after sepsis reduced safe activity tolerance
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major renal, hemodynamic, or treatment complication
+                        - no persistent hypotension, renal deterioration, or antibiotic-limiting adverse effect
                     limited_complication:
-                        - a transient kidney injury that resolved
+                        - a brief acute kidney injury that resolved with fluids
                     major_complication:
-                        - septic shock with major organ dysfunction
+                        - septic shock with ongoing organ dysfunction
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -799,8 +799,8 @@ conditions:
                     intensive_care:
                         - ICU-level sepsis and organ support
         presentations:
-            - fever, flank pain, hypotension, and urinary infection
-            - urosepsis with leukocytosis and acute kidney stress
+            - fever, flank pain, hypotension, and urinary tract infection
+            - urosepsis with leukocytosis and acute kidney injury
             - pyelonephritis complicated by bacteremia and systemic inflammatory response
     diabetic_foot_infection:
         display: diabetic foot infection
@@ -829,23 +829,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with wound care support and outpatient gait therapy
+                        - wound care support with outpatient gait therapy
                         - home therapy after pain improved and protected ambulation was feasible
                     inpatient_rehab:
-                        - required inpatient rehabilitation for transfers and gait training with offloading precautions
-                        - transferred to rehabilitation because mobility remained unsafe with wound-care restrictions
+                        - inpatient rehabilitation for transfers and gait training with offloading precautions
+                        - rehabilitation for unsafe mobility with wound-care restrictions
                     persistent_deficit:
-                        - persistent gait limitation and wound-related pain remained at discharge
-                        - ongoing difficulty with mobility required close podiatry and therapy follow-up
+                        - persistent gait limitation and wound-related pain
+                        - ongoing difficulty with mobility
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major wound, vascular, or antimicrobial complication
+                        - no progressive tissue loss, vascular compromise, or antimicrobial complication
                     limited_complication:
-                        - a manageable wound-care complication
+                        - localized wound-edge maceration managed with dressing changes
                     major_complication:
-                        - progressive tissue loss requiring major intervention
+                        - progressive tissue necrosis requiring major surgical intervention
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -865,8 +865,8 @@ conditions:
                     intensive_care:
                         - ICU-level support for severe infection
         presentations:
-            - plantar ulceration, cellulitis, and concern for deep soft-tissue infection
-            - infected diabetic foot wound with drainage and offloading needs
+            - plantar ulceration with cellulitis and concern for deep soft-tissue infection
+            - an infected diabetic foot wound with drainage and offloading needs
             - progressive foot erythema, pain, and wound-care complexity
     cirrhosis_encephalopathy:
         display: cirrhosis with hepatic encephalopathy
@@ -895,23 +895,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with visiting nursing after mentation improved
+                        - visiting nursing after mentation improved
                         - home therapy after balance and orientation improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation because weakness and cognitive slowing limited safe mobility
-                        - transferred to rehabilitation after recurrent falls and deconditioning
+                        - inpatient rehabilitation for weakness and cognitive slowing limiting safe mobility
+                        - rehabilitation after recurrent falls and deconditioning
                     persistent_deficit:
-                        - persistent cognitive slowing and poor balance remained at discharge
-                        - ongoing fatigue and impaired mobility required close follow-up
+                        - persistent cognitive slowing and poor balance
+                        - ongoing fatigue and impaired mobility
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major bleeding, renal, or medication complication
+                        - no gastrointestinal bleeding, kidney injury, or lactulose-related dehydration
                     limited_complication:
-                        - a manageable electrolyte disturbance
+                        - transient hypokalemia corrected during bowel-regimen titration
                     major_complication:
-                        - major bleeding or organ dysfunction requiring escalation
+                        - variceal bleeding or hepatorenal deterioration requiring escalation
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -961,23 +961,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with outpatient therapy after edema and weakness improved
+                        - outpatient therapy after edema and weakness improved
                         - home physical therapy after renal function stabilized
                     inpatient_rehab:
-                        - required inpatient rehabilitation for deconditioning after prolonged immunosuppressive therapy
-                        - transferred to rehabilitation because weakness and edema still limited mobility
+                        - inpatient rehabilitation for deconditioning after prolonged immunosuppressive therapy
+                        - rehabilitation for weakness and edema still limiting mobility
                     persistent_deficit:
-                        - persistent fatigue and reduced mobility remained at discharge
-                        - ongoing weakness required close nephrology follow-up and functional support
+                        - persistent fatigue and reduced mobility
+                        - ongoing weakness with need for functional support
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major renal or immunosuppressive complication
+                        - no major renal deterioration or immunosuppressive toxicity
                     limited_complication:
-                        - a manageable treatment-related cytopenia
+                        - treatment-related leukopenia that improved with monitoring
                     major_complication:
-                        - major renal deterioration or treatment toxicity
+                        - rapidly worsening kidney injury or severe immunosuppressive toxicity
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -998,7 +998,7 @@ conditions:
                         - ICU-level support for severe renal or systemic instability
         presentations:
             - proteinuria, edema, and immune-mediated kidney injury
-            - active lupus serologies with worsening renal function
+            - worsening renal function and active lupus serologies
             - nephritic urine findings and volume overload during lupus flare
     severe_cellulitis:
         display: severe cellulitis
@@ -1027,23 +1027,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with visiting nursing after pain and swelling improved
+                        - visiting nursing after pain and swelling improved
                         - home therapy after safer ambulation was achieved
                     inpatient_rehab:
-                        - required inpatient rehabilitation because pain and weakness limited transfers
-                        - transferred to rehabilitation for mobility recovery after prolonged infection
+                        - inpatient rehabilitation for pain and weakness limiting transfers
+                        - rehabilitation for mobility recovery after prolonged infection
                     persistent_deficit:
-                        - persistent pain and limited walking tolerance remained at discharge
+                        - persistent pain and limited walking tolerance
                         - ongoing swelling and weakness continued to impair mobility
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major tissue, vascular, or antimicrobial complication
+                        - no abscess extension, vascular compromise, or antibiotic-limiting adverse effect
                     limited_complication:
-                        - a manageable medication or wound complication
+                        - a transient drug rash or mild wound complication that resolved
                     major_complication:
-                        - progressive soft-tissue injury requiring major intervention
+                        - progressive soft-tissue necrosis requiring major intervention
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -1064,7 +1064,7 @@ conditions:
                         - ICU-level support for severe soft-tissue infection
         presentations:
             - limb erythema, swelling, pain, and systemic inflammatory signs
-            - rapidly progressive soft-tissue infection without drainable abscess
+            - rapidly progressive soft-tissue infection without a drainable abscess
             - cellulitis with fever, leukocytosis, and impaired ambulation
     ulcerative_colitis_flare:
         display: ulcerative colitis flare
@@ -1093,23 +1093,23 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - discharged home with nutritional support and outpatient therapy after strength improved
+                        - nutritional support with outpatient therapy after strength improved
                         - home physical therapy after abdominal pain and diarrhea improved
                     inpatient_rehab:
-                        - required inpatient rehabilitation because prolonged illness led to marked deconditioning
-                        - transferred to rehabilitation as weakness still limited self-care
+                        - inpatient rehabilitation for marked deconditioning after prolonged illness
+                        - rehabilitation for weakness still limiting self-care
                     persistent_deficit:
-                        - persistent fatigue and poor endurance remained at discharge
+                        - persistent fatigue and poor endurance
                         - ongoing weakness limited return to baseline activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
-                        - no major bleeding, thrombotic, or treatment complication
+                        - no major bleeding, thrombosis, or steroid-limiting adverse effect
                     limited_complication:
-                        - a manageable electrolyte or medication complication
+                        - transient hypokalemia or dehydration corrected during treatment
                     major_complication:
-                        - major bleeding or toxic colitis requiring escalation
+                        - severe bleeding or toxic colitis requiring escalation
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -1130,8 +1130,8 @@ conditions:
                         - ICU-level support for severe colitis complications
         presentations:
             - bloody diarrhea, abdominal pain, and elevated inflammatory markers
-            - severe colitis symptoms with dehydration and poor oral intake
-            - frequent stools, cramping, and worsening inflammatory bowel disease activity
+            - severe colitis with dehydration and poor oral intake
+            - frequent bloody stools, cramping, and worsening inflammatory bowel disease activity
 subgroups:
     age_under_50:
         dimension_id: age_band
@@ -1145,8 +1145,8 @@ subgroups:
             - younger adults
             - adults below 50
         surface_phrases:
-            - younger adult below age 50
-            - adult younger than 50
+            - younger than 50 years old
+            - under 50 years old
         patient_age_range:
             - 25
             - 49
@@ -1161,8 +1161,8 @@ subgroups:
         aliases:
             - middle-aged and early older adults
         surface_phrases:
-            - adult between 50 and 75 years old
-            - patient aged 50 to 75
+            - between 50 and 75 years old
+            - 50 to 75 years old
         patient_age_range:
             - 50
             - 75
@@ -1178,8 +1178,8 @@ subgroups:
             - elderly patients
             - older adults above 75
         surface_phrases:
-            - older adult above age 75
-            - elderly patient older than 75
+            - older than 75 years old
+            - over 75 years old
         patient_age_range:
             - 76
             - 92
@@ -1194,8 +1194,7 @@ subgroups:
         aliases:
             - women
         surface_phrases:
-            - female patient
-            - woman
+            - female
         patient_sex: female
     male:
         dimension_id: sex
@@ -1208,8 +1207,7 @@ subgroups:
         aliases:
             - men
         surface_phrases:
-            - male patient
-            - man
+            - male
         patient_sex: male
     uncomplicated_diabetes:
         dimension_id: diabetes_status
@@ -1223,7 +1221,7 @@ subgroups:
             - diabetes without end-organ complications
         surface_phrases:
             - uncomplicated type 2 diabetes
-            - diabetes without documented end-organ complications
+            - diabetes without end-organ complications
     no_uncomplicated_diabetes:
         dimension_id: diabetes_status
         level_id: absent
@@ -1235,8 +1233,8 @@ subgroups:
         aliases:
             - no documented diabetes
         surface_phrases:
-            - no documented diabetes
-            - without a diabetes diagnosis
+            - no history of diabetes
+            - no diagnosis of diabetes
     chronic_kidney_disease:
         dimension_id: kidney_disease_status
         level_id: present
@@ -1250,7 +1248,7 @@ subgroups:
             - CKD
         surface_phrases:
             - stage 3 chronic kidney disease
-            - baseline chronic kidney disease
+            - chronic kidney disease
     no_chronic_kidney_disease:
         dimension_id: kidney_disease_status
         level_id: absent
@@ -1262,7 +1260,7 @@ subgroups:
         aliases:
             - preserved baseline renal function
         surface_phrases:
-            - no documented chronic kidney disease
+            - no chronic kidney disease
             - preserved baseline renal function
     copd:
         dimension_id: copd_status
@@ -1275,7 +1273,7 @@ subgroups:
         aliases:
             - chronic obstructive pulmonary disease
         surface_phrases:
-            - COPD treated with maintenance inhalers
+            - COPD requiring maintenance inhalers
             - chronic obstructive pulmonary disease
     no_copd:
         dimension_id: copd_status
@@ -1288,7 +1286,7 @@ subgroups:
         aliases:
             - no chronic obstructive lung disease
         surface_phrases:
-            - no documented COPD
+            - no COPD
             - no chronic obstructive lung disease
     immunosuppression:
         dimension_id: immune_status
@@ -1314,8 +1312,8 @@ subgroups:
         aliases:
             - immunocompetent patients
         surface_phrases:
-            - no documented immunosuppression
-            - immunocompetent baseline status
+            - no immunosuppression
+            - an immunocompetent baseline status
     obesity:
         dimension_id: obesity_status
         level_id: present
@@ -1328,7 +1326,7 @@ subgroups:
             - obese patients
         surface_phrases:
             - obesity with elevated body mass index
-            - documented obesity
+            - obesity
     no_obesity:
         dimension_id: obesity_status
         level_id: absent
@@ -1340,8 +1338,8 @@ subgroups:
         aliases:
             - patients without elevated body mass index
         surface_phrases:
-            - no documented obesity
-            - body mass index below the obesity range
+            - no obesity
+            - a body mass index below the obesity range
     malignancy:
         dimension_id: malignancy_status
         level_id: present
@@ -1366,7 +1364,7 @@ subgroups:
         aliases:
             - no active cancer
         surface_phrases:
-            - no documented active malignancy
+            - no active malignancy
             - no ongoing cancer treatment
     atrial_fibrillation:
         dimension_id: atrial_fibrillation_status
@@ -1392,8 +1390,8 @@ subgroups:
         aliases:
             - no AF
         surface_phrases:
-            - no documented atrial fibrillation
-            - sinus rhythm without a history of AF
+            - no atrial fibrillation
+            - sinus rhythm without prior AF
     chronic_liver_disease:
         dimension_id: liver_disease_status
         level_id: present
@@ -1418,7 +1416,7 @@ subgroups:
         aliases:
             - no chronic hepatic disease
         surface_phrases:
-            - no documented chronic liver disease
+            - no chronic liver disease
             - no baseline hepatic dysfunction
     dementia:
         dimension_id: dementia_status
@@ -1444,7 +1442,7 @@ subgroups:
         aliases:
             - cognitively intact baseline
         surface_phrases:
-            - no documented dementia
+            - no dementia
             - cognitively intact baseline
     frailty:
         dimension_id: frailty_status
@@ -1470,7 +1468,7 @@ subgroups:
         aliases:
             - robust baseline status
         surface_phrases:
-            - no documented frailty
+            - no frailty
             - robust pre-hospital functional status
     peripheral_vascular_disease:
         dimension_id: peripheral_vascular_status
@@ -1496,7 +1494,7 @@ subgroups:
         aliases:
             - no peripheral artery disease
         surface_phrases:
-            - no documented peripheral vascular disease
+            - no peripheral vascular disease
             - no baseline peripheral artery disease
     autoimmune_disease:
         dimension_id: autoimmune_status
@@ -1522,7 +1520,7 @@ subgroups:
         aliases:
             - no systemic autoimmune disease
         surface_phrases:
-            - no documented autoimmune disease
+            - no autoimmune disease
             - no chronic inflammatory autoimmune condition
 clinical_axes:
     treatment_duration:
@@ -1598,9 +1596,9 @@ clinical_axes:
             - major_complication
         bin_terms:
             none_documented:
-                - no documented major complication
-                - uncomplicated in-hospital course
                 - no major in-hospital complication
+                - uncomplicated in-hospital course
+                - no documented major complication
                 - uncomplicated safety course
             limited_complication:
                 - limited complication burden

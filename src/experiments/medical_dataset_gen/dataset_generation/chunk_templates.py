@@ -39,6 +39,25 @@ class ChunkValidation:
     soft_warnings: list[str]
 
 
+@dataclass(frozen=True)
+class PatientNarrative:
+    subject: str
+    pronoun: str
+    possessive: str
+
+    @property
+    def subject_cap(self) -> str:
+        return _sentence_start(self.subject)
+
+    @property
+    def pronoun_cap(self) -> str:
+        return _sentence_start(self.pronoun)
+
+    @property
+    def possessive_cap(self) -> str:
+        return _sentence_start(self.possessive)
+
+
 def _load_template_utils() -> ChunkTemplateUtils:
     with open(_TEMPLATE_DATA_PATH) as file:
         return ChunkTemplateUtils.model_validate(yaml.safe_load(file) or {})
@@ -47,23 +66,26 @@ def _load_template_utils() -> ChunkTemplateUtils:
 TEMPLATE_DATA = _load_template_utils()
 
 
+def available_note_styles() -> list[str]:
+    return list(TEMPLATE_DATA.note_style_templates)
+
+
 def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rng: Random) -> str:
     payload = parse_axis_payload(fact.axis_payload_json)
-    patient_lower = patient_descriptor(fact)
+    patient = patient_narrative(fact)
     axis = ontology.clinical_axes[fact.axis]
     context = {
-        'patient': _sentence_start(patient_lower),
-        'patient_lower': patient_lower,
-        'condition': fact.condition_display,
+        'patient': patient.subject_cap,
+        'patient_lower': patient.subject,
+        'pronoun': patient.pronoun,
+        'pronoun_cap': patient.pronoun_cap,
+        'possessive': patient.possessive,
+        'possessive_cap': patient.possessive_cap,
+        'age': fact.patient_age,
+        'condition': fact.condition_display.lower(),
         'presentation': rng.choice(ontology.conditions[fact.condition_id].presentations),
-        'cohort_sentence': _cohort_sentence(fact, rng),
-        'axis_sentence': _axis_sentence(
-            fact,
-            payload,
-            axis_term=axis.label,
-            rng=rng,
-        ),
-        'close': rng.choice(TEMPLATE_DATA.axis_closing_sentences[fact.axis]),
+        'cohort_sentence': _cohort_sentence(fact, patient, rng),
+        'axis_sentence': _axis_sentence(fact, payload, axis_term=axis.label, rng=rng),
     }
     templates = TEMPLATE_DATA.note_style_templates.get(
         fact.note_style, TEMPLATE_DATA.note_style_templates['brief_hospital_course']
@@ -72,26 +94,30 @@ def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rn
 
 
 def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
-    course_noun = rng.choice(TEMPLATE_DATA.duration_course_nouns)
-    return rng.choice([
-        template.format(
-            treatment=payload.treatment,
-            duration_days=payload.duration_days,
-            course_noun=course_noun,
-        )
-        for template in TEMPLATE_DATA.duration_phrase_templates
-    ])
+    return rng.choice(TEMPLATE_DATA.duration_phrase_templates).format(
+        treatment=payload.treatment,
+        duration_days=payload.duration_days,
+    )
 
 
-def _cohort_sentence(fact: ClinicalFact, rng: Random) -> str:
+def _cohort_sentence(fact: ClinicalFact, patient: PatientNarrative, rng: Random) -> str:
     templates = TEMPLATE_DATA.cohort_evidence_templates
-    if fact.subgroup_axis == 'demographic':
-        choices = templates.demographic
+    if fact.subgroup_dimension_id == 'age_band':
+        return ''
+    if fact.subgroup_dimension_id == 'sex':
+        choices = templates.sex
     elif fact.subgroup_is_reference:
         choices = templates.comorbidity_reference
     else:
         choices = templates.comorbidity_present
-    return rng.choice(choices).format(subgroup_phrase=fact.clinical_subgroup_phrase)
+    return rng.choice(choices).format(
+        subgroup_phrase=fact.clinical_subgroup_phrase,
+        age=fact.patient_age,
+        pronoun=patient.pronoun,
+        pronoun_cap=patient.pronoun_cap,
+        possessive=patient.possessive,
+        possessive_cap=patient.possessive_cap,
+    )
 
 
 def _axis_sentence(
@@ -165,14 +191,19 @@ def validate_chunk_text(
 
 
 def patient_descriptor(fact: ClinicalFact) -> str:
+    return patient_narrative(fact).subject
+
+
+def patient_narrative(fact: ClinicalFact) -> PatientNarrative:
     age = int(fact.patient_age)
     noun = 'woman' if fact.patient_sex == 'female' else 'man'
-    phrase = fact.clinical_subgroup_phrase
-    if fact.subgroup_dimension_id == 'age_band':
-        return f'the {age}-year-old {noun}, {phrase}'
-    if fact.subgroup_dimension_id == 'sex':
-        return f'the {age}-year-old {noun}, described as a {phrase}'
-    return f'the {age}-year-old {noun} with {phrase}'
+    pronoun = 'she' if fact.patient_sex == 'female' else 'he'
+    possessive = 'her' if fact.patient_sex == 'female' else 'his'
+    return PatientNarrative(
+        subject=f'the {age}-year-old {noun}',
+        pronoun=pronoun,
+        possessive=possessive,
+    )
 
 
 def _sentence_start(text: str) -> str:
@@ -201,8 +232,10 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
     if phrase and phrase in lower:
         return True
 
-    aliases = [str(alias).lower() for alias in (subgroup.aliases if subgroup else [])]
-    return any(alias in lower for alias in aliases)
+    lexical_forms = [
+        str(alias).lower() for alias in (subgroup.aliases if subgroup else [])
+    ] + [str(surface).lower() for surface in (subgroup.surface_phrases if subgroup else [])]
+    return any(form in lower for form in lexical_forms)
 
 
 def _contains_axis_evidence(

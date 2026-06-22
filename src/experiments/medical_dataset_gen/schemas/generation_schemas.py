@@ -613,18 +613,16 @@ class ChunkRow(ClinicalFact):
 
 
 class CohortEvidenceTemplates(BenchmarkModel):
-    demographic: list[str]
+    sex: list[str]
     comorbidity_present: list[str]
     comorbidity_reference: list[str]
 
 
 class ChunkTemplateUtils(BenchmarkModel):
     hidden_benchmark_terms: list[str]
-    duration_course_nouns: list[str]
     duration_phrase_templates: list[str]
     note_style_templates: dict[str, list[str]]
     cohort_evidence_templates: CohortEvidenceTemplates
-    axis_closing_sentences: dict[ClinicalAxis, list[str]]
     axis_sentence_templates: dict[ClinicalAxis, list[str]]
 
 

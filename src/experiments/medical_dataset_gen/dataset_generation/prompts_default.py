@@ -189,9 +189,13 @@ def _chunk_style_directive(fact: ClinicalFact) -> str:
             'Write as a hospital-course sentence set: admission reason, relevant course detail, '
             'and status near discharge.'
         ),
-        'discharge_diagnosis': (
-            'Write as a problem-focused discharge diagnosis note: compact diagnosis statement, '
-            'supporting course evidence, and final clinical status.'
+        'progress_note': (
+            'Write as a concise inpatient progress note: active problem, salient interval course, '
+            'and the requested evidence.'
+        ),
+        'discharge_summary': (
+            'Write as a problem-focused discharge summary: compact diagnosis statement, '
+            'supporting course evidence, and discharge-relevant status.'
         ),
     }
     return directives.get(
