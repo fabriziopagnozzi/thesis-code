@@ -27,8 +27,14 @@ def _load_query_template_data() -> QueryTemplateData:
 QUERY_TEMPLATE_DATA = _load_query_template_data()
 
 
-def render_query_template(plan: QueryPlan, ontology: MedicalOntology) -> str:
-    template = query_template_spec(plan.template_id).template
+def render_query_template(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    *,
+    template_id: str | None = None,
+) -> str:
+    template = query_template_spec(template_id or plan.template_id).template
+    primary_axis = ontology.clinical_axes[plan.primary_axis]
 
     context = {
         'condition': plan.condition_display,
@@ -37,7 +43,8 @@ def render_query_template(plan: QueryPlan, ontology: MedicalOntology) -> str:
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'primary_axis_label': ontology.clinical_axes[plan.primary_axis].label,
+        'primary_axis_label': primary_axis.label,
+        'primary_axis_focus': primary_axis.query_focus,
         'secondary_axis_label': ontology.clinical_axes[plan.secondary_axis].label,
     }
 

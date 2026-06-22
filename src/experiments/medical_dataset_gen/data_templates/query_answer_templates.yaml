@@ -1,10 +1,10 @@
 query_templates:
-  - id: prioritized_comparison
-    template: "For patients with {condition}, primarily compare {primary_axis_label} between {subgroup_a} and {subgroup_b}; also compare {secondary_axis_label} for both cohorts."
-  - id: prioritized_comparison_assess
-    template: "Among patients with {condition}, assess {primary_axis_label} as the primary endpoint for {subgroup_a} versus {subgroup_b}, and include {secondary_axis_label} as a secondary endpoint."
-  - id: prioritized_comparison_contrast
-    template: "In {condition}, how does {primary_axis_label} differ between {subgroup_a} and {subgroup_b}, and what secondary difference is seen in {secondary_axis_label}?"
+  - id: primary_evidence_comparison
+    template: "For patients with {condition}, make {primary_axis_label} the principal evidence target: compare {primary_axis_focus} between {subgroup_a} and {subgroup_b}. After that primary comparison, briefly report the secondary difference in {secondary_axis_label}."
+  - id: primary_endpoint_assessment
+    template: "Among patients with {condition}, first determine the primary endpoint of {primary_axis_label} for {subgroup_a} versus {subgroup_b}, focusing on {primary_axis_focus}. Then include {secondary_axis_label} as a subordinate secondary endpoint."
+  - id: primary_clinical_contrast
+    template: "In {condition}, the main question is how {subgroup_a} and {subgroup_b} differ in {primary_axis_label}, specifically {primary_axis_focus}. Once that is established, add a concise comparison of {secondary_axis_label}."
 
 answer_template:
   template: "Primary endpoint ({primary_axis_label}): {subgroup_a}, {subgroup_a_primary}; {subgroup_b}, {subgroup_b_primary}. Secondary endpoint ({secondary_axis_label}): {subgroup_a}, {subgroup_a_secondary}; {subgroup_b}, {subgroup_b_secondary}."

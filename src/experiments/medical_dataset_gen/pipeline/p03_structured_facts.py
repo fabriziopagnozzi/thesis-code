@@ -277,13 +277,22 @@ def make_base_fact(
     age = _patient_age(subgroup.patient_age_range, ontology.patient_defaults.age_range, surface_rng)
     sex: PatientSex = _patient_sex(subgroup.patient_sex, surface_rng)
     phrase = surface_rng.choice(subgroup.surface_phrases)
+    # A shared human-readable anchor keeps documents from the same semantic bin
+    # cohesive while their condition-specific payloads and note styles still vary.
+    axis_bin_term = ontology.clinical_axes[axis].bin_terms[value_bin][0]
     support_facet_id = facet.facet_id if is_gold and facet is not None else None
     target_facet_id = facet.facet_id if facet is not None else None
     fact_id = (
         f'{plan.query_id}_{"g" if is_gold else "d"}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     )
     required_payload = _payload_required_phrase(payload)
-    must_mention = [condition_display, phrase, required_payload]
+    must_mention = [
+        condition_display,
+        phrase,
+        ontology.clinical_axes[axis].label,
+        axis_bin_term,
+        required_payload,
+    ]
     must_not_mention = [
         label for label in (plan.subgroup_a_label, plan.subgroup_b_label) if label != subgroup_label
     ]
@@ -312,6 +321,7 @@ def make_base_fact(
         subgroup_is_reference=subgroup_is_reference,
         axis=axis,
         value_bin=value_bin,
+        axis_bin_term=axis_bin_term,
         axis_payload_json=payload_json,
         facet_priority=facet.priority if facet is not None else None,
         is_gold=is_gold,

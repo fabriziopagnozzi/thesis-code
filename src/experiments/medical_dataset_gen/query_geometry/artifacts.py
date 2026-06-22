@@ -373,7 +373,7 @@ def facet_label_map(query: QueryRecord) -> dict[str, str]:
     result = {}
     for facet in facets:
         subgroup = str(facet['subgroup_label']).replace('patients ', '')
-        axis = 'duration' if facet['axis'] == 'treatment_duration' else 'rehab'
+        axis = str(facet['axis']).replace('_', ' ')
         result[facet['facet_id']] = f'{subgroup} / {axis}'
     return result
 

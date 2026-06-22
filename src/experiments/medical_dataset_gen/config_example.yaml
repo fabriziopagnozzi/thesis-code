@@ -18,7 +18,7 @@ generation:
   ontology_path: null # Optional path to a custom ontology YAML.
 
   calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.
-  calibration_probe_chunks_per_facet: 8 # Neutral probe chunks per facet used by calibrate_plans.
+  calibration_probe_chunks_per_facet: 8 # Per-facet probes used to select query emphasis and the 24-chunk primary cohort.
   gold_chunks_calibrated_primary: 24
   gold_chunks_other_primary: 20
   gold_chunks_secondary: 14
@@ -87,7 +87,6 @@ evaluation:
         lower_bound_bandwidth: 0.0075
 
 query_geometry:
-  plot_continuous_similarity: false # If true, add the continuous PCA cosine field alongside the discrete query-similarity scatter.
   random_state: 42 # Seed for PCA/UMAP figure reproducibility.
 
   # Number of query-local embedding maps to generate after evaluation.

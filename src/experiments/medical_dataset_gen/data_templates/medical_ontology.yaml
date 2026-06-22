@@ -2,6 +2,7 @@ patient_defaults:
     age_range:
         - 50
         - 75
+
 conditions:
     encephalitis_myelitis:
         display: encephalitis or myelitis
@@ -69,6 +70,7 @@ conditions:
             - fever, confusion, and gait change
             - headache, altered mental status, and lower-extremity weakness
             - new neurologic deficits and inflammatory cerebrospinal fluid findings
+
     pneumonia:
         display: pneumonia
         terms:
@@ -135,6 +137,7 @@ conditions:
             - hypoxemia, fever, and productive cough
             - new oxygen requirement and bibasilar infiltrates
             - dyspnea, leukocytosis, and radiographic consolidation
+
     ischemic_stroke:
         display: ischemic stroke
         terms:
@@ -201,6 +204,7 @@ conditions:
             - acute dysarthria and unilateral weakness
             - new focal neurologic deficits on arrival
             - hemiparesis with imaging consistent with acute infarct
+
     heart_failure:
         display: acute decompensated heart failure
         terms:
@@ -267,6 +271,7 @@ conditions:
             - volume overload, edema, and exertional dyspnea
             - pulmonary congestion and elevated filling pressures
             - worsening orthopnea with lower-extremity edema
+
     bacterial_meningitis:
         display: bacterial meningitis
         terms:
@@ -1522,6 +1527,7 @@ subgroups:
 clinical_axes:
     treatment_duration:
         label: treatment duration
+        query_focus: total treatment days, therapy-course length, and whether active treatment was brief or prolonged
         exact_terms:
             - treatment duration
             - therapy duration
@@ -1533,8 +1539,25 @@ clinical_axes:
             - short
             - standard
             - prolonged
+        bin_terms:
+            short:
+                - short treatment course
+                - brief therapy interval
+                - short course
+                - brief treatment interval
+            standard:
+                - standard treatment course
+                - usual therapy interval
+                - standard course
+                - usual treatment interval
+            prolonged:
+                - prolonged treatment course
+                - extended therapy interval
+                - prolonged course
+                - extended treatment interval
     rehab_outcome:
         label: rehabilitation outcome
+        query_focus: discharge rehabilitation destination, therapy requirements, and residual functional limitations
         exact_terms:
             - rehabilitation outcome
             - rehab outcome
@@ -1546,8 +1569,23 @@ clinical_axes:
             - home_rehab
             - inpatient_rehab
             - persistent_deficit
+        bin_terms:
+            home_rehab:
+                - home-based rehabilitation
+                - outpatient or home therapy
+                - home rehabilitation
+                - home therapy
+            inpatient_rehab:
+                - inpatient rehabilitation
+                - supervised facility-based rehabilitation
+                - supervised rehabilitation
+            persistent_deficit:
+                - persistent functional deficit
+                - residual functional limitation
+                - residual mobility limitation
     complication_burden:
         label: in-hospital complication burden
+        query_focus: absence, limited occurrence, or major occurrence of treatment-related and disease-related complications
         exact_terms:
             - complication burden
             - in-hospital complications
@@ -1558,8 +1596,23 @@ clinical_axes:
             - none_documented
             - limited_complication
             - major_complication
+        bin_terms:
+            none_documented:
+                - no documented major complication
+                - uncomplicated in-hospital course
+                - no major in-hospital complication
+                - uncomplicated safety course
+            limited_complication:
+                - limited complication burden
+                - manageable adverse event
+                - limited complication
+            major_complication:
+                - major complication burden
+                - treatment-limiting adverse event
+                - major complication
     acute_clinical_course:
         label: acute clinical course
+        query_focus: speed of stabilization, delayed response, or worsening despite initial management
         exact_terms:
             - acute clinical course
             - clinical response trajectory
@@ -1570,8 +1623,22 @@ clinical_axes:
             - early_stabilization
             - delayed_improvement
             - refractory_or_worsening
+        bin_terms:
+            early_stabilization:
+                - early clinical stabilization
+                - prompt response trajectory
+                - prompt improvement
+            delayed_improvement:
+                - delayed clinical improvement
+                - slow response trajectory
+                - slow improvement
+            refractory_or_worsening:
+                - refractory clinical course
+                - worsening response trajectory
+                - worsening despite initial management
     care_intensity:
         label: care intensity
+        query_focus: ward, monitored or procedural, versus intensive-care resource and monitoring requirements
         exact_terms:
             - care intensity
             - level of care
@@ -1582,6 +1649,19 @@ clinical_axes:
             - ward_level
             - monitored_or_procedural
             - intensive_care
+        bin_terms:
+            ward_level:
+                - ward-level care
+                - routine inpatient monitoring
+            monitored_or_procedural:
+                - monitored or procedural care
+                - step-down or procedure-supported care
+                - monitored care with procedural support
+                - step-down or procedural care
+            intensive_care:
+                - intensive care
+                - ICU-level support
+                - ICU-level organ support
 cohort_contrasts:
     - id: age_under_50_vs_50_to_75
       dimension_id: age_band

@@ -147,7 +147,6 @@ class EvaluationCfg(ConfigModel):
 
 
 class QueryGeometryCfg(ConfigModel):
-    plot_continuous_similarity: bool = True
     n_queries: PositiveInt = 6
     query_ids: list[str] = Field(default_factory=list)
     query_selection: Literal['mixed', 'best'] = 'mixed'

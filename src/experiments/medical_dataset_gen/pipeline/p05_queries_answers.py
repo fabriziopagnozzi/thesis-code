@@ -20,7 +20,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerSourceFact,
     CareIntensityPayload,
     ClinicalAxis,
-    ClinicalAxisOntology,
     ComplicationBurdenPayload,
     GoldAnswerOutputRow,
     MedicalOntology,
@@ -163,8 +162,10 @@ def _finalize_query(
 def render_query(
     plan: QueryPlan,
     ontology: MedicalOntology,
+    *,
+    template_id: str | None = None,
 ) -> str:
-    return render_query_template(plan, ontology)
+    return render_query_template(plan, ontology, template_id=template_id)
 
 
 def maybe_paraphrase_query(
@@ -179,23 +180,23 @@ def maybe_paraphrase_query(
     if not use_llm:
         return query_text
 
-    prompt = MedicalDatasetGenDefaultPrompts.query_paraphrase_prompt(query_text, plan)
+    prompt = MedicalDatasetGenDefaultPrompts.query_paraphrase_prompt(query_text, plan, ontology)
     paraphrase = generate(prompt, model=llm_name, temperature=temperature, num_ctx=num_ctx).strip()
     required = [plan.condition_display, plan.subgroup_a_label, plan.subgroup_b_label]
     lower = paraphrase.lower()
     has_required_entities = all(label.lower() in lower for label in required)
-    has_balanced_axes = all(
-        _contains_axis_language(lower, ontology.clinical_axes[axis_id])
-        for axis_id in (plan.primary_axis, plan.secondary_axis)
+    primary_label = ontology.clinical_axes[plan.primary_axis].label.lower()
+    secondary_label = ontology.clinical_axes[plan.secondary_axis].label.lower()
+    has_ordered_axes = (
+        primary_label in lower
+        and secondary_label in lower
+        and lower.index(primary_label) < lower.index(secondary_label)
+        and 'primary' in lower
+        and 'secondary' in lower
     )
-    if paraphrase and has_required_entities and has_balanced_axes:
+    if paraphrase and has_required_entities and has_ordered_axes:
         return paraphrase
     return query_text
-
-
-def _contains_axis_language(lower_text: str, axis: ClinicalAxisOntology) -> bool:
-    terms = [axis.label, *axis.exact_terms, *axis.synonym_terms]
-    return any(str(term).lower() in lower_text for term in terms)
 
 
 def _canonical_answer(

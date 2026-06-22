@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -23,17 +22,6 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
-
-
-@dataclass(frozen=True)
-class _PcaSimilaritySurface:
-    coords: NDArray[np.float32]
-    query_coord: NDArray[np.float32]
-    grid_x: NDArray[np.float32]
-    grid_y: NDArray[np.float32]
-    grid_similarity: NDArray[np.float32]
-    vmin: float
-    vmax: float
 
 
 def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
@@ -86,7 +74,6 @@ def plot_full_strategy_selection_overlay(
     out_dir: Path,
     *,
     k: int | None = None,
-    plot_continuous_similarity: bool = True,
 ) -> None:
     import matplotlib.pyplot as plt
 
@@ -104,7 +91,7 @@ def plot_full_strategy_selection_overlay(
         )
         for strategy in rows
     }
-    top_row_cols = 4 if plot_continuous_similarity else 3
+    top_row_cols = 3
     n_cols = max(top_row_cols, *(len(row_variants[strategy]) for strategy in rows))
     fig, axes = plt.subplots(
         3,
@@ -133,27 +120,15 @@ def plot_full_strategy_selection_overlay(
     similarity_points = _plot_query_similarity_map_ax(
         axes[0, 1], artifact, include_title_prefix=False
     )
-    legend_col_idx = 3 if plot_continuous_similarity else 2
-    if plot_continuous_similarity:
-        query_surface = _plot_query_similarity_pca_surface_ax(
-            axes[0, 2], artifact, include_title_prefix=False
-        )
+    legend_col_idx = 2
+    if similarity_points is not None:
         fig.colorbar(
-            query_surface,
-            ax=[axes[0, 1], axes[0, 2]],
-            fraction=0.035,
-            pad=0.04,
+            similarity_points,
+            ax=axes[0, 1],
+            fraction=0.05,
+            pad=0.02,
             label='query cosine similarity',
         )
-    else:
-        if similarity_points is not None:
-            fig.colorbar(
-                similarity_points,
-                ax=axes[0, 1],
-                fraction=0.05,
-                pad=0.02,
-                label='query cosine similarity',
-            )
 
     for col_idx in range(top_row_cols, n_cols):
         axes[0, col_idx].axis('off')
@@ -196,54 +171,30 @@ def plot_full_strategy_selection_overlay(
 def plot_query_overview_4panel(
     artifact: GeometryArtifact,
     out_dir: Path,
-    *,
-    plot_continuous_similarity: bool = True,
 ) -> None:
     import matplotlib.pyplot as plt
 
-    if plot_continuous_similarity:
-        fig, axes = plt.subplots(2, 3, figsize=(19, 11), constrained_layout=True)  # type: ignore
-        ax_map, ax_cos, ax_cos_pca, ax_rank, ax_cluster, ax_unused = axes.ravel()
-    else:
-        fig, axes = plt.subplots(2, 2, figsize=(14.5, 11), constrained_layout=True)  # type: ignore
-        ax_map, ax_cos, ax_rank, ax_cluster = axes.ravel()
-        ax_cos_pca = None
-        ax_unused = None
+    fig, axes = plt.subplots(2, 2, figsize=(14.5, 11), constrained_layout=True)  # type: ignore
+    ax_map, ax_cos, ax_rank, ax_cluster = axes.ravel()
 
     _plot_query_map_ax(ax_map, artifact, include_title_prefix=False)
     ax_map.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
 
     similarity_points = _plot_query_similarity_map_ax(ax_cos, artifact, include_title_prefix=False)
-    if plot_continuous_similarity:
-        assert ax_cos_pca is not None
-        surface = _plot_query_similarity_pca_surface_ax(
-            ax_cos_pca, artifact, include_title_prefix=False
-        )
+    if similarity_points is not None:
         fig.colorbar(
-            surface,
-            ax=[ax_cos, ax_cos_pca],
-            fraction=0.035,
-            pad=0.04,
+            similarity_points,
+            ax=ax_cos,
+            fraction=0.05,
+            pad=0.02,
             label='query cosine',
         )
-    else:
-        if similarity_points is not None:
-            fig.colorbar(
-                similarity_points,
-                ax=ax_cos,
-                fraction=0.05,
-                pad=0.02,
-                label='query cosine',
-            )
 
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
     ax_rank.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
 
     _plot_discovered_clusters_ax(ax_cluster, artifact, include_title_prefix=False)
     ax_cluster.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
-    if ax_unused is not None:
-        ax_unused.axis('off')
-
     fig.suptitle(f'{artifact_title_prefix(artifact)}: embedding geometry overview', fontsize=14)
     fig.savefig(out_dir / 'query_overview_4panel.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
@@ -504,43 +455,6 @@ def _plot_query_similarity_map_ax(
         y_label='dim 2',
         include_title_prefix=include_title_prefix,
     )
-
-
-def _plot_query_similarity_pca_surface_ax(
-    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
-) -> Any:
-    surface = _pca_query_similarity_surface(artifact)
-    contour = ax.contourf(
-        surface.grid_x,
-        surface.grid_y,
-        surface.grid_similarity,
-        levels=80,
-        cmap='viridis',
-        vmin=surface.vmin,
-        vmax=surface.vmax,
-        alpha=0.94,
-    )
-    ax.contour(
-        surface.grid_x,
-        surface.grid_y,
-        surface.grid_similarity,
-        levels=9,
-        colors='white',
-        linewidths=0.35,
-        alpha=0.28,
-    )
-    _plot_query_similarity_points(
-        ax=ax,
-        artifact=artifact,
-        coords=surface.coords,
-        query_coord=surface.query_coord,
-        sim_to_query=artifact.sim_to_query,
-        title=f'Continuous PCA cosine field (n={len(surface.coords)})',
-        x_label='pca dim 1',
-        y_label='pca dim 2',
-        include_title_prefix=include_title_prefix,
-    )
-    return contour
 
 
 def _plot_query_similarity_points(
@@ -920,49 +834,6 @@ def _coord_limits(
         float(coords_all[:, 1].min()) - y_pad,
         float(coords_all[:, 1].max()) + y_pad,
     )
-
-
-def _pca_query_similarity_surface(artifact: GeometryArtifact) -> _PcaSimilaritySurface:
-    from sklearn.decomposition import PCA
-
-    vectors = np.vstack([artifact.candidate_vectors, artifact.query_vector[None, :]]).astype(
-        np.float32
-    )
-    pca = PCA(n_components=2, random_state=42)
-    coords_all = pca.fit_transform(vectors).astype(np.float32)
-    coords = coords_all[:-1]
-    query_coord = coords_all[-1]
-    x_left, x_right, y_bottom, y_top = _coord_limits(coords, query_coord)
-    grid_x, grid_y = np.meshgrid(
-        np.linspace(x_left, x_right, 220, dtype=np.float32),
-        np.linspace(y_bottom, y_top, 220, dtype=np.float32),
-    )
-    grid_coords = np.column_stack([grid_x.ravel(), grid_y.ravel()]).astype(np.float32)
-    reconstructed = pca.inverse_transform(grid_coords).astype(np.float32)
-
-    query_unit = _unit_normalize_rows(artifact.query_vector[None, :])[0]
-    reconstructed_unit = _unit_normalize_rows(reconstructed)
-    grid_similarity = (reconstructed_unit @ query_unit).reshape(grid_x.shape).astype(np.float32)
-
-    vmin = float(artifact.sim_to_query.min()) if len(artifact.sim_to_query) else 0.0
-    vmax = float(artifact.sim_to_query.max()) if len(artifact.sim_to_query) else 1.0
-    grid_similarity = np.clip(grid_similarity, vmin, vmax)
-
-    return _PcaSimilaritySurface(
-        coords=coords,
-        query_coord=query_coord,
-        grid_x=grid_x,
-        grid_y=grid_y,
-        grid_similarity=grid_similarity,
-        vmin=vmin,
-        vmax=vmax,
-    )
-
-
-def _unit_normalize_rows(values: NDArray[np.float32]) -> NDArray[np.float32]:
-    norms = np.linalg.norm(values, axis=1, keepdims=True)
-    safe_norms = np.where(norms > 0.0, norms, 1.0).astype(np.float32)
-    return (values / safe_norms).astype(np.float32)
 
 
 def strategy_title(strategy: str, lam: float | None) -> str:

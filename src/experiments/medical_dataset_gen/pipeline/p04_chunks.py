@@ -517,6 +517,7 @@ def _write_normalized_chunks(
         'subgroup_value',
         'axis',
         'value_bin',
+        'axis_bin_term',
         'axis_payload_json',
         'subgroup_dimension_id',
         'subgroup_level_id',

@@ -50,12 +50,19 @@ TEMPLATE_DATA = _load_template_utils()
 def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rng: Random) -> str:
     payload = parse_axis_payload(fact.axis_payload_json)
     patient_lower = patient_descriptor(fact)
+    axis = ontology.clinical_axes[fact.axis]
     context = {
         'patient': _sentence_start(patient_lower),
         'patient_lower': patient_lower,
         'condition': fact.condition_display,
         'presentation': rng.choice(ontology.conditions[fact.condition_id].presentations),
-        'axis_sentence': _axis_sentence(fact, payload, rng),
+        'cohort_sentence': _cohort_sentence(fact, rng),
+        'axis_sentence': _axis_sentence(
+            fact,
+            payload,
+            axis_term=axis.label,
+            rng=rng,
+        ),
         'close': rng.choice(TEMPLATE_DATA.axis_closing_sentences[fact.axis]),
     }
     templates = TEMPLATE_DATA.note_style_templates.get(
@@ -64,12 +71,9 @@ def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rn
     return squash_whitespaces(rng.choice(templates).format(**context))
 
 
-def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
-    payload = parse_axis_payload(fact.axis_payload_json)
-    if not isinstance(payload, TreatmentDurationPayload):
-        raise TypeError('duration renderer requires TreatmentDurationPayload')
+def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
     course_noun = rng.choice(TEMPLATE_DATA.duration_course_nouns)
-    duration_phrase = rng.choice([
+    return rng.choice([
         template.format(
             treatment=payload.treatment,
             duration_days=payload.duration_days,
@@ -77,30 +81,43 @@ def render_duration_chunk(fact: ClinicalFact, rng: Random) -> str:
         )
         for template in TEMPLATE_DATA.duration_phrase_templates
     ])
-    return _sentence_start(
-        f'{rng.choice(TEMPLATE_DATA.duration_focus_phrases)}, {duration_phrase}.'
-    )
 
 
-def render_rehab_chunk(fact: ClinicalFact, rng: Random) -> str:
-    payload = parse_axis_payload(fact.axis_payload_json)
-    if not isinstance(payload, RehabOutcomePayload):
-        raise TypeError('rehab renderer requires RehabOutcomePayload')
-    return f'The rehabilitation outcome was {payload.outcome}.'
+def _cohort_sentence(fact: ClinicalFact, rng: Random) -> str:
+    templates = TEMPLATE_DATA.cohort_evidence_templates
+    if fact.subgroup_axis == 'demographic':
+        choices = templates.demographic
+    elif fact.subgroup_is_reference:
+        choices = templates.comorbidity_reference
+    else:
+        choices = templates.comorbidity_present
+    return rng.choice(choices).format(subgroup_phrase=fact.clinical_subgroup_phrase)
 
 
-def _axis_sentence(fact: ClinicalFact, payload, rng: Random) -> str:
+def _axis_sentence(
+    fact: ClinicalFact,
+    payload,
+    *,
+    axis_term: str,
+    rng: Random,
+) -> str:
     if isinstance(payload, TreatmentDurationPayload):
-        return render_duration_chunk(fact, rng)
-    if isinstance(payload, RehabOutcomePayload):
-        return render_rehab_chunk(fact, rng)
-    if not isinstance(
+        axis_value = _duration_axis_value(payload, rng)
+    elif isinstance(payload, RehabOutcomePayload):
+        axis_value = payload.outcome
+    elif isinstance(
         payload,
         (ComplicationBurdenPayload, AcuteClinicalCoursePayload, CareIntensityPayload),
     ):
+        axis_value = payload.detail
+    else:
         raise TypeError(type(payload))
     template = rng.choice(TEMPLATE_DATA.axis_sentence_templates[fact.axis])
-    return template.format(axis_value=payload.detail)
+    return template.format(
+        axis_term=axis_term,
+        axis_bin_term=fact.axis_bin_term,
+        axis_value=axis_value,
+    )
 
 
 def validate_chunk_text(
@@ -120,6 +137,10 @@ def validate_chunk_text(
         hard_errors.append(f'missing condition evidence: {fact.condition_display}')
     if not _contains_subgroup_evidence(text, fact, ontology):
         hard_errors.append(f'missing subgroup evidence: {fact.subgroup_label}')
+    if not _contains_axis_evidence(text, fact, ontology):
+        hard_errors.append(f'missing target-axis evidence: {fact.axis}')
+    if fact.axis_bin_term.lower() not in lower:
+        hard_errors.append(f'missing value-bin evidence: {fact.axis_bin_term}')
 
     payload = parse_axis_payload(fact.axis_payload_json)
     required = (
@@ -133,10 +154,10 @@ def validate_chunk_text(
         if phrase.lower() not in lower:
             hard_errors.append(f'missing axis payload evidence: {phrase}')
 
-    for other_axis, bins in TEMPLATE_DATA.axis_bin_terms.items():
+    for other_axis, axis in ontology.clinical_axes.items():
         if other_axis == fact.axis:
             continue
-        foreign_terms = [term for terms in bins.values() for term in terms]
+        foreign_terms = [axis.label, *[term for terms in axis.bin_terms.values() for term in terms]]
         if any(term.lower() in lower for term in foreign_terms):
             hard_errors.append(f'contains explicit foreign-axis evidence: {other_axis}')
 
@@ -182,6 +203,16 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
 
     aliases = [str(alias).lower() for alias in (subgroup.aliases if subgroup else [])]
     return any(alias in lower for alias in aliases)
+
+
+def _contains_axis_evidence(
+    text: str, fact: ClinicalFact, ontology: MedicalOntology
+) -> bool:
+    lower = text.lower()
+    axis = ontology.clinical_axes[fact.axis]
+    return any(
+        term.lower() in lower for term in [axis.label, *axis.exact_terms, *axis.synonym_terms]
+    )
 
 
 def _has_age_in_range(text: str, low: int, high: int) -> bool:

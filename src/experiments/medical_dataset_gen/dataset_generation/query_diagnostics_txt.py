@@ -76,14 +76,21 @@ _CALIBRATION_COLUMNS = [
     'query_id',
     'evidence_profile_id',
     'primary_axis',
+    'secondary_axis',
+    'previous_template_id',
+    'selected_template_id',
     'previous_calibrated_primary_facet_id',
     'calibrated_primary_facet_id',
     'calibrated_primary_subgroup_id',
     'probe_chunks_per_facet',
     'selected_mean_query_sim',
     'selected_probe_margin',
+    'primary_axis_probe_margin',
+    'primary_cohort_mean_gap',
+    'secondary_mean_query_sim',
     'calibration_warning',
     'facet_stats_json',
+    'template_stats_json',
 ]
 _ANSWER_COLUMNS = [
     'query_id',
@@ -507,11 +514,14 @@ def _render_query(
 
     calibration = ctx.calibration_by_id.get(query_id)
     if calibration:
-        _h2(lines, 'Primary-facet Calibration')
+        _h2(lines, 'Query-emphasis Calibration')
         _kv(
             lines,
             [
                 ('primary_axis', calibration.get('primary_axis')),
+                ('secondary_axis', calibration.get('secondary_axis')),
+                ('previous_template_id', calibration.get('previous_template_id')),
+                ('selected_template_id', calibration.get('selected_template_id')),
                 (
                     'previous_calibrated_primary_facet_id',
                     calibration.get('previous_calibrated_primary_facet_id'),
@@ -527,6 +537,9 @@ def _render_query(
                 ('probe_chunks_per_facet', calibration.get('probe_chunks_per_facet')),
                 ('selected_mean_query_sim', calibration.get('selected_mean_query_sim')),
                 ('selected_probe_margin', calibration.get('selected_probe_margin')),
+                ('primary_axis_probe_margin', calibration.get('primary_axis_probe_margin')),
+                ('primary_cohort_mean_gap', calibration.get('primary_cohort_mean_gap')),
+                ('secondary_mean_query_sim', calibration.get('secondary_mean_query_sim')),
                 ('calibration_warning', calibration.get('calibration_warning')),
             ],
         )
@@ -545,6 +558,18 @@ def _render_query(
                         'p25_query_sim',
                         'p75_query_sim',
                         'probe_margin_p25_gt_best_complement_p75',
+                    ],
+                )
+            template_stats = _json_loads(calibration.get('template_stats_json'), [])
+            if template_stats:
+                _table(
+                    lines,
+                    template_stats,
+                    [
+                        'template_id',
+                        'primary_axis_probe_margin',
+                        'primary_cohort_mean_gap',
+                        'secondary_mean_query_sim',
                     ],
                 )
 

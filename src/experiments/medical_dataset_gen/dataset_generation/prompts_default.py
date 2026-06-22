@@ -38,7 +38,6 @@ class MedicalDatasetGenDefaultPrompts:
         style_label = fact.note_style.replace('_', ' ')
         structure_variant = _chunk_structure_variant(fact)
         style_directive = _chunk_style_directive(fact)
-        clinical_detail = _chunk_clinical_detail(fact)
 
         payload = parse_axis_payload(fact.axis_payload_json)
         required_lines = '\n'.join(f'- {item}' for item in fact.must_mention)
@@ -53,8 +52,6 @@ class MedicalDatasetGenDefaultPrompts:
             Excluded content:
             - Do not add evidence from any other clinical axis.
 
-            Required clinical texture:
-            - Keep all detail tied directly to the requested axis: {clinical_detail}
         """)
 
         revision_block = ''
@@ -101,7 +98,7 @@ class MedicalDatasetGenDefaultPrompts:
             - Avoid these overused words and phrases unless they are part of a required fact: stable, significant, transition of care, admitted for management, received a course.
             - Do not use these words or phrases: {forbidden}.
             - Do not mention qrels, clusters, facets, labels, benchmark design, or document IDs.
-            - Do not add facts beyond the required condition, patient descriptor, treatment duration, or rehab status.
+            - Do not add facts beyond the required condition, patient descriptor, target-axis category, and typed target-axis payload.
 
             {revision_block}
         """)
@@ -164,6 +161,7 @@ class MedicalDatasetGenDefaultPrompts:
     def query_paraphrase_prompt(
         query_text: str,
         plan: QueryPlan,
+        ontology: MedicalOntology,
     ) -> str:
         return inspect.cleandoc(f"""
             Paraphrase this synthetic clinical benchmark query in one sentence.
@@ -171,6 +169,11 @@ class MedicalDatasetGenDefaultPrompts:
             - {plan.condition_display}
             - {plan.subgroup_a_label}
             - {plan.subgroup_b_label}
+            - Primary endpoint: {ontology.clinical_axes[plan.primary_axis].label}
+            - Secondary endpoint: {ontology.clinical_axes[plan.secondary_axis].label}
+
+            Preserve the hierarchy: discuss the primary endpoint first and with more emphasis.
+            Keep the secondary endpoint explicit but subordinate. Do not reverse or equalize them.
 
             Query:
             {query_text}
@@ -209,80 +212,3 @@ def _chunk_structure_variant(fact: ClinicalFact) -> str:
     seed_source = str(fact.chunk_reuse_key or fact.fact_id)
     idx = int(hashlib.sha256(seed_source.encode()).hexdigest()[:8], 16) % len(variants)
     return variants[idx]
-
-
-def _chunk_clinical_detail(fact: ClinicalFact) -> str:
-    if fact.axis not in {'treatment_duration', 'rehab_outcome'}:
-        return fact.must_mention[-1]
-    condition_id = str(fact.condition_id)
-    if fact.axis == 'treatment_duration':
-        details = {
-            'encephalitis_myelitis': [
-                'fever curve improved',
-                'orientation became more consistent',
-                'headache and neck discomfort lessened',
-                'limb strength was documented as improving on serial exams',
-            ],
-            'pneumonia': [
-                'oxygen requirement decreased',
-                'work of breathing eased',
-                'cough became less productive',
-                'repeat lung exam showed fewer crackles',
-            ],
-            'ischemic_stroke': [
-                'speech clarity improved during neurologic checks',
-                'swallow evaluation allowed diet advancement',
-                'right-sided drift was less pronounced',
-                'blood pressure was controlled during neurologic monitoring',
-            ],
-            'heart_failure': [
-                'leg edema decreased with diuresis',
-                'orthopnea improved',
-                'daily weights trended down',
-                'lung exam showed less congestion',
-            ],
-        }
-        fallback = [
-            'vital-sign abnormalities improved',
-            'symptom burden decreased on serial exams',
-            'repeat bedside assessment showed clinical improvement',
-            'laboratory markers moved toward baseline',
-        ]
-    else:
-        details = {
-            'encephalitis_myelitis': [
-                'gait testing showed residual imbalance',
-                'transfer safety required therapist cueing',
-                'cognitive endurance limited independent activity',
-                'lower-extremity weakness affected stair training',
-            ],
-            'pneumonia': [
-                'walking distance remained below baseline',
-                'exertional dyspnea limited hallway ambulation',
-                'stair tolerance was reduced after the respiratory illness',
-                'fatigue limited independent self-care',
-            ],
-            'ischemic_stroke': [
-                'hemiparesis limited dressing and transfers',
-                'dysarthria persisted during therapy assessment',
-                'balance testing showed fall risk',
-                'fine-motor weakness affected activities of daily living',
-            ],
-            'heart_failure': [
-                'deconditioning limited hallway ambulation',
-                'fatigue restricted transfer independence',
-                'exertional dyspnea limited therapy tolerance',
-                'volume-related weakness slowed mobility recovery',
-            ],
-        }
-        fallback = [
-            'therapy assessment documented reduced endurance',
-            'mobility remained below pre-hospital baseline',
-            'transfer safety required additional support',
-            'fatigue limited independent activity',
-        ]
-
-    choices = details.get(condition_id, fallback)
-    seed_source = f'{fact.chunk_reuse_key or fact.fact_id}:clinical_detail'
-    idx = int(hashlib.sha256(seed_source.encode()).hexdigest()[:8], 16) % len(choices)
-    return choices[idx]

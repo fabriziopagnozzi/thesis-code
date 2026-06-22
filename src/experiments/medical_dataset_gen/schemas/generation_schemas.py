@@ -257,9 +257,17 @@ class AxisPairProfile(BenchmarkModel):
 
 class ClinicalAxisOntology(BenchmarkModel):
     label: str
+    query_focus: str
     exact_terms: list[str]
     synonym_terms: list[str]
     bins: list[str]
+    bin_terms: dict[str, list[str]]
+
+    @model_validator(mode='after')
+    def _validate_bin_terms(self) -> ClinicalAxisOntology:
+        if set(self.bin_terms) != set(self.bins):
+            raise ValueError('bin_terms must define every declared clinical-axis bin')
+        return self
 
 
 class AxisPairOntology(BenchmarkModel):
@@ -502,6 +510,7 @@ class ClinicalFact(BenchmarkModel):
     subgroup_is_reference: bool
     axis: ClinicalAxis
     value_bin: str
+    axis_bin_term: str
     axis_payload_json: str
     facet_priority: Literal['primary', 'secondary'] | None
     is_gold: bool
@@ -603,15 +612,20 @@ class ChunkRow(ClinicalFact):
         )
 
 
+class CohortEvidenceTemplates(BenchmarkModel):
+    demographic: list[str]
+    comorbidity_present: list[str]
+    comorbidity_reference: list[str]
+
+
 class ChunkTemplateUtils(BenchmarkModel):
     hidden_benchmark_terms: list[str]
     duration_course_nouns: list[str]
     duration_phrase_templates: list[str]
-    duration_focus_phrases: list[str]
     note_style_templates: dict[str, list[str]]
+    cohort_evidence_templates: CohortEvidenceTemplates
     axis_closing_sentences: dict[ClinicalAxis, list[str]]
     axis_sentence_templates: dict[ClinicalAxis, list[str]]
-    axis_bin_terms: dict[ClinicalAxis, dict[str, list[str]]]
 
 
 class QueryTemplateSpec(BenchmarkModel):

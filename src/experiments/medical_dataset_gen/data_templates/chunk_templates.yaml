@@ -1,13 +1,19 @@
-duration_focus_phrases:
-    - for treatment duration
-    - for total therapy-course length
-    - for the active treatment interval
 note_style_templates:
     brief_hospital_course:
-        - "{patient} was hospitalized for {condition} after {presentation}. {axis_sentence} {close}"
-        - During admission for {condition}, {patient_lower} had {presentation}. {axis_sentence} {close}
+        - "{patient} was hospitalized for {condition} after {presentation}. {cohort_sentence} {axis_sentence} {close}"
+        - During admission for {condition}, {patient_lower} had {presentation}. {cohort_sentence} {axis_sentence} {close}
     discharge_diagnosis:
-        - "{condition} was treated after {patient_lower} presented with {presentation}. {axis_sentence} {close}"
+        - "{condition} was treated after {patient_lower} presented with {presentation}. {cohort_sentence} {axis_sentence} {close}"
+cohort_evidence_templates:
+    demographic:
+        - Demographic documentation identified the patient as {subgroup_phrase}.
+        - Age and sex documentation consistently described {subgroup_phrase}.
+    comorbidity_present:
+        - The active medical history confirmed {subgroup_phrase}.
+        - Baseline comorbidity review documented {subgroup_phrase}.
+    comorbidity_reference:
+        - Baseline history explicitly documented {subgroup_phrase}.
+        - Comorbidity review consistently confirmed {subgroup_phrase}.
 axis_closing_sentences:
     treatment_duration:
         - The medication record confirmed the stated course without describing another outcome domain.
@@ -25,69 +31,26 @@ axis_closing_sentences:
         - Bed assignment and monitoring records supported this level of care.
         - The documented resource use matched this care-intensity category.
 axis_sentence_templates:
-    complication_burden:
-        - The complication assessment documented {axis_value}.
-        - For in-hospital safety outcomes, the record described {axis_value}.
-        - The admission's complication burden was characterized by {axis_value}.
-    acute_clinical_course:
-        - The acute clinical course showed {axis_value}.
-        - For response trajectory, serial assessments documented {axis_value}.
-        - The inpatient response pattern was characterized by {axis_value}.
-    care_intensity:
-        - The highest care intensity was {axis_value}.
-        - For care setting and monitoring needs, the record documented {axis_value}.
-        - Resource-use notes described {axis_value}.
-axis_bin_terms:
     treatment_duration:
-        short:
-            - short course
-            - brief treatment interval
-        standard:
-            - standard course
-            - usual treatment interval
-        prolonged:
-            - prolonged course
-            - extended treatment interval
+        - For {axis_term}, the record documented {axis_value}, representing a {axis_bin_term}.
+        - "The {axis_term} was classified as a {axis_bin_term}: {axis_value}."
+        - Regarding {axis_term}, clinicians recorded {axis_value}, consistent with a {axis_bin_term}.
     rehab_outcome:
-        home_rehab:
-            - home rehabilitation
-            - home therapy
-        inpatient_rehab:
-            - inpatient rehabilitation
-            - supervised rehabilitation
-        persistent_deficit:
-            - persistent functional deficit
-            - residual mobility limitation
+        - For {axis_term}, the record documented {axis_value}, representing {axis_bin_term}.
+        - "The {axis_term} was classified as {axis_bin_term}: {axis_value}."
+        - Regarding {axis_term}, therapists recorded {axis_value}, consistent with {axis_bin_term}.
     complication_burden:
-        none_documented:
-            - no major in-hospital complication
-            - uncomplicated safety course
-        limited_complication:
-            - limited complication
-            - manageable adverse event
-        major_complication:
-            - major complication
-            - treatment-limiting adverse event
+        - The {axis_term} assessment documented {axis_value}, representing {axis_bin_term}.
+        - For {axis_term}, the record described {axis_value}, consistent with {axis_bin_term}.
+        - "The admission's {axis_term} was classified as {axis_bin_term}: {axis_value}."
     acute_clinical_course:
-        early_stabilization:
-            - early clinical stabilization
-            - prompt improvement
-        delayed_improvement:
-            - delayed clinical improvement
-            - slow response trajectory
-        refractory_or_worsening:
-            - refractory clinical course
-            - worsening despite initial management
+        - The {axis_term} showed {axis_value}, representing {axis_bin_term}.
+        - For {axis_term}, serial assessments documented {axis_value}, consistent with {axis_bin_term}.
+        - "The inpatient {axis_term} was classified as {axis_bin_term}: {axis_value}."
     care_intensity:
-        ward_level:
-            - ward-level care
-            - routine inpatient monitoring
-        monitored_or_procedural:
-            - monitored care with procedural support
-            - step-down or procedural care
-        intensive_care:
-            - intensive care
-            - ICU-level organ support
+        - The highest {axis_term} was {axis_value}, representing {axis_bin_term}.
+        - For {axis_term}, the record documented {axis_value}, consistent with {axis_bin_term}.
+        - "Resource-use notes classified the {axis_term} as {axis_bin_term}: {axis_value}."
 duration_course_nouns:
     - active treatment course
     - active therapy interval

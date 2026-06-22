@@ -219,11 +219,7 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
     query_dir.mkdir(parents=True, exist_ok=True)
     selected_plot_names: Container[str] | None = state['selected_plot_names']
     if _should_render_plot(selected_plot_names, 'query_overview_4panel'):
-        plot_query_overview_4panel(
-            artifact,
-            query_dir,
-            plot_continuous_similarity=state['cfg'].query_geometry.plot_continuous_similarity,
-        )
+        plot_query_overview_4panel(artifact, query_dir)
     if _should_render_plot(selected_plot_names, 'strategy_overlay'):
         plot_strategy_overlay(artifact, query_dir)
     if _should_render_plot(selected_plot_names, 'full_strategy_selection_overlay'):
@@ -232,7 +228,6 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
                 artifact,
                 query_dir,
                 k=k,
-                plot_continuous_similarity=state['cfg'].query_geometry.plot_continuous_similarity,
             )
 
     return {
