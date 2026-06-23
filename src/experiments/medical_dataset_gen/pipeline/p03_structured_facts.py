@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from random import Random
-from typing import cast
+from typing import Any, cast
 
 import polars as pl
 import pyarrow.parquet as pq
@@ -86,6 +86,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     cfg.generation.distractor_config.background_outlier.cluster_size,
                 )
             )
+            _assert_query_local_chunk_reuse_keys(plan.query_id, facts)
             frame = _facts_frame([fact.model_dump(mode='python') for fact in facts])
             table = frame.to_arrow()
             if writer is None:
@@ -107,6 +108,34 @@ NOTE_STYLE_IDS = available_note_styles()
 
 def _facts_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
     return pl.from_dicts(rows, infer_schema_length=None)
+
+
+def _assert_query_local_chunk_reuse_keys(query_id: str, facts: list[ClinicalFact]) -> None:
+    seen_by_reuse_key: dict[str, ClinicalFact] = {}
+    duplicate_examples: list[dict[str, str]] = []
+    duplicate_count = 0
+
+    for fact in facts:
+        previous = seen_by_reuse_key.get(fact.chunk_reuse_key)
+        if previous is None:
+            seen_by_reuse_key[fact.chunk_reuse_key] = fact
+            continue
+        duplicate_count += 1
+        if len(duplicate_examples) < 5:
+            duplicate_examples.append({
+                'chunk_reuse_key': fact.chunk_reuse_key,
+                'previous_fact_id': previous.fact_id,
+                'previous_cluster_id': previous.cluster_id,
+                'fact_id': fact.fact_id,
+                'cluster_id': fact.cluster_id,
+            })
+
+    if duplicate_count:
+        raise RuntimeError(
+            'query-local chunk_reuse_key collision in structured facts; '
+            f'query_id={query_id!r}, duplicates={duplicate_count:,}, '
+            f'examples={duplicate_examples}'
+        )
 
 
 def make_gold_fact(
@@ -230,6 +259,8 @@ def make_background_outlier_facts(
         bins = get_axis_bins(ontology, axis)
         value_bin = bins[cluster_idx % len(bins)]
         for local_idx in range(cluster_size):
+            # Background clusters reset local_idx, so the reuse scope must also
+            # encode the cluster slot to keep query-local documents distinct.
             rows.append(
                 make_base_fact(
                     plan=plan,
@@ -239,6 +270,9 @@ def make_background_outlier_facts(
                     local_idx=local_idx,
                     is_gold=False,
                     distractor_type='background_clinical_cluster',
+                    reuse_scope=(
+                        f'distractor:background_clinical_cluster:cluster_{cluster_idx + 1:02d}'
+                    ),
                     condition_id=condition_id,
                     condition_display=condition.display,
                     subgroup_id=subgroup_id,
@@ -282,7 +316,7 @@ def make_same_condition_wrong_axis_fact(
         (facet for facet in plan.facets if facet.priority == 'primary'),
         key=lambda facet: (-facet.target_gold_chunks, facet.facet_id),
     )
-    non_query_axes = [
+    non_query_axes: list[ClinicalAxis] = [
         axis for axis in CLINICAL_AXIS_LIST if axis not in {plan.primary_axis, plan.secondary_axis}
     ]
     if not non_query_axes:
@@ -353,9 +387,11 @@ def make_base_fact(
     value_bin: str,
     cluster_id: str,
     cluster_role,
+    reuse_scope: str | None = None,
 ) -> ClinicalFact:
     payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx)
     payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
+    resolved_reuse_scope = reuse_scope or ('gold' if is_gold else f'distractor:{distractor_type}')
     reuse_key = _chunk_reuse_key(
         condition_id,
         subgroup_id,
@@ -363,7 +399,7 @@ def make_base_fact(
         value_bin,
         payload_json,
         local_idx,
-        'gold' if is_gold else f'distractor:{distractor_type}',
+        resolved_reuse_scope,
     )
     surface_rng = Random(_stable_seed(reuse_key))
     subgroup = ontology.subgroups[subgroup_id]
@@ -452,7 +488,7 @@ def _axis_payload(
             duration_days=rng.randint(low, high),
             treatment=rng.choice(axis_values.treatments),
         )
-    values = axis_values.bins[value_bin]
+    values: tuple[Any, Any] | list[str] = axis_values.bins[value_bin]
     if axis == 'rehab_outcome':
         return RehabOutcomePayload(
             axis=axis,
