@@ -16,7 +16,9 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
+    AxisPairProfile,
     ClinicalAxis,
+    ConditionKey,
     DataSplit,
     MedicalOntology,
     QueryLogicalForm,
@@ -24,6 +26,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanFacet,
     QueryPlanSpec,
     QueryType,
+    SubgroupOntology,
 )
 from experiments.medical_dataset_gen.utils.global_configs import (
     ExperimentCfg,
@@ -32,7 +35,6 @@ from experiments.medical_dataset_gen.utils.global_configs import (
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
 QUERY_TYPE: QueryType = 'prioritized_subgroup_comparison'
-EXPECTED_FULL_PROFILE_COUNT = 2_720
 EXPECTED_FULL_QUERY_COUNT = 5_440
 
 
@@ -41,7 +43,16 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     conditions = get_selected_conditions(ontology, cfg.global_.conditions)
     contrasts = make_subgroup_pairs(ontology)
     axis_pairs = list(combinations(CLINICAL_AXIS_LIST, 2))
+    expected_profiles_per_condition_contrast = sum(
+        (
+            1
+            if all(ontology.clinical_axes[axis].allow_as_primary for axis in axes)
+            else len(get_axis_pair_profiles(ontology, *axes))
+        )
+        for axes in axis_pairs
+    )
     specs: list[QueryPlanSpec] = []
+    plans: list[QueryPlan] = []
 
     for condition_index, (condition_key, condition) in enumerate(conditions):
         for contrast_index, (
@@ -51,66 +62,88 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
         ) in enumerate(contrasts):
             for axis_pair_index, (axis_a, axis_b) in enumerate(axis_pairs):
                 profiles = get_axis_pair_profiles(ontology, axis_a, axis_b)
-                # Explicit parity rotation prevents a cohort level or clinical axis
-                # from being systematically assigned the less favorable profile.
-                profile = profiles[
-                    (
-                        cfg.global_.seed
-                        + condition_index
-                        + contrast_index
-                        + axis_pair_index
-                    )
-                    % len(profiles)
+                primary_axes = [
+                    axis
+                    for axis in (axis_a, axis_b)
+                    if ontology.clinical_axes[axis].allow_as_primary
                 ]
-                evidence_profile_id = _stable_id(
-                    'epv2',
-                    cfg.dataset_schema_version,
-                    cfg.global_.seed,
-                    condition_key,
-                    contrast.id,
-                    contrast.dimension_id,
-                    cohort_a_id,
-                    cohort_b_id,
-                    axis_a,
-                    axis_b,
-                    profile.id,
-                    profile.cohort_a_bins,
-                    profile.cohort_b_bins,
-                )
-                specs.append(
-                    QueryPlanSpec(
-                        evidence_profile_id=evidence_profile_id,
-                        cohort_contrast_id=contrast.id,
-                        cohort_dimension_id=contrast.dimension_id,
-                        axis_a=axis_a,
-                        axis_b=axis_b,
-                        profile_id=profile.id,
-                        cohort_a_bins=profile.cohort_a_bins,
-                        cohort_b_bins=profile.cohort_b_bins,
+                if len(primary_axes) == 2:
+                    # Rotate profile direction while preserving both query orientations.
+                    profile = profiles[
+                        (
+                            cfg.global_.seed
+                            + condition_index
+                            + contrast_index
+                            + axis_pair_index
+                        )
+                        % len(profiles)
+                    ]
+                    spec = _make_plan_spec(
+                        cfg=cfg,
                         condition_key=condition_key,
                         condition_display=condition.display,
-                        subgroup_a_id=cohort_a_id,
-                        subgroup_a=cohort_a,
-                        subgroup_b_id=cohort_b_id,
-                        subgroup_b=cohort_b,
+                        contrast_id=contrast.id,
+                        contrast_dimension_id=contrast.dimension_id,
+                        cohort_a_id=cohort_a_id,
+                        cohort_a=cohort_a,
+                        cohort_b_id=cohort_b_id,
+                        cohort_b=cohort_b,
+                        axis_a=axis_a,
+                        axis_b=axis_b,
+                        profile=profile,
                     )
-                )
+                    specs.append(spec)
+                    plans.extend(
+                        (
+                            _materialize_plan(cfg, ontology, spec, axis_a, axis_b),
+                            _materialize_plan(cfg, ontology, spec, axis_b, axis_a),
+                        )
+                    )
+                    continue
 
-    rows = [
-        plan.to_row()
-        for spec in specs
-        for plan in (
-            _materialize_plan(cfg, ontology, spec, spec.axis_a, spec.axis_b),
-            _materialize_plan(cfg, ontology, spec, spec.axis_b, spec.axis_a),
-        )
-    ]
+                # If one axis is unsuitable as the dominant retrieval target, use
+                # both YAML joint profiles with the valid axis primary. This retains
+                # two distinct queries per grid cell without duplicating a weak orientation.
+                primary_axis = primary_axes[0]
+                secondary_axis = axis_b if primary_axis == axis_a else axis_a
+                for profile in profiles:
+                    spec = _make_plan_spec(
+                        cfg=cfg,
+                        condition_key=condition_key,
+                        condition_display=condition.display,
+                        contrast_id=contrast.id,
+                        contrast_dimension_id=contrast.dimension_id,
+                        cohort_a_id=cohort_a_id,
+                        cohort_a=cohort_a,
+                        cohort_b_id=cohort_b_id,
+                        cohort_b=cohort_b,
+                        axis_a=axis_a,
+                        axis_b=axis_b,
+                        profile=profile,
+                    )
+                    specs.append(spec)
+                    plans.append(
+                        _materialize_plan(
+                            cfg,
+                            ontology,
+                            spec,
+                            primary_axis,
+                            secondary_axis,
+                        )
+                    )
+
+    rows = [plan.to_row() for plan in plans]
     if cfg.generation.query_limit is not None:
         rows = rows[: int(cfg.generation.query_limit)]
 
     if (
         cfg.global_.conditions == len(ontology.conditions)
         and cfg.generation.query_limit is None
-        and (len(specs) != EXPECTED_FULL_PROFILE_COUNT or len(rows) != EXPECTED_FULL_QUERY_COUNT)
+        and (
+            len(specs)
+            != len(conditions) * len(contrasts) * expected_profiles_per_condition_contrast
+            or len(rows) != EXPECTED_FULL_QUERY_COUNT
+        )
     ):
         raise RuntimeError(f'v2 cardinality mismatch: profiles={len(specs)}, queries={len(rows)}')
 
@@ -120,6 +153,54 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     write_parquet(paths, 'query_plans', df)
     print(f'[plans] {len(specs):,} evidence profiles -> {len(df):,} prioritized queries')
     return df
+
+
+def _make_plan_spec(
+    *,
+    cfg: ExperimentCfg,
+    condition_key: ConditionKey,
+    condition_display: str,
+    contrast_id: str,
+    contrast_dimension_id: str,
+    cohort_a_id: str,
+    cohort_a: SubgroupOntology,
+    cohort_b_id: str,
+    cohort_b: SubgroupOntology,
+    axis_a: ClinicalAxis,
+    axis_b: ClinicalAxis,
+    profile: AxisPairProfile,
+) -> QueryPlanSpec:
+    evidence_profile_id = _stable_id(
+        'epv2',
+        cfg.dataset_schema_version,
+        cfg.global_.seed,
+        condition_key,
+        contrast_id,
+        contrast_dimension_id,
+        cohort_a_id,
+        cohort_b_id,
+        axis_a,
+        axis_b,
+        profile.id,
+        profile.cohort_a_bins,
+        profile.cohort_b_bins,
+    )
+    return QueryPlanSpec(
+        evidence_profile_id=evidence_profile_id,
+        cohort_contrast_id=contrast_id,
+        cohort_dimension_id=contrast_dimension_id,
+        axis_a=axis_a,
+        axis_b=axis_b,
+        profile_id=profile.id,
+        cohort_a_bins=profile.cohort_a_bins,
+        cohort_b_bins=profile.cohort_b_bins,
+        condition_key=condition_key,
+        condition_display=condition_display,
+        subgroup_a_id=cohort_a_id,
+        subgroup_a=cohort_a,
+        subgroup_b_id=cohort_b_id,
+        subgroup_b=cohort_b,
+    )
 
 
 def _materialize_plan(
@@ -166,16 +247,31 @@ def _materialize_plan(
         (spec.subgroup_b_id, spec.subgroup_b, spec.axis_a),
         (spec.subgroup_b_id, spec.subgroup_b, spec.axis_b),
     ]
+    secondary_indices = [
+        index
+        for index, (_, _, axis) in enumerate(raw_facets, start=1)
+        if axis == secondary_axis
+    ]
+    # Rotate which complementary facet is niche without introducing sampling state.
+    niche_indices = set(
+        sorted(
+            secondary_indices,
+            key=lambda index: _stable_int(query_id, 'niche_gold', index),
+        )[: cfg.generation.niche_gold_clusters_per_query]
+    )
     facets: list[QueryPlanFacet] = []
     for index, (cohort_id, cohort, axis) in enumerate(raw_facets, start=1):
         facet_id = f'{query_id}_f{index}'
         is_primary = axis == primary_axis
         is_calibrated = is_primary and cohort_id == selected_subgroup_id
+        is_niche = index in niche_indices
         target = (
             cfg.generation.gold_chunks_calibrated_primary
             if is_calibrated
             else cfg.generation.gold_chunks_other_primary
             if is_primary
+            else cfg.generation.gold_chunks_niche
+            if is_niche
             else cfg.generation.gold_chunks_secondary
         )
         facets.append(
@@ -196,6 +292,8 @@ def _materialize_plan(
                     if is_calibrated
                     else 'primary_gold'
                     if is_primary
+                    else 'niche_gold'
+                    if is_niche
                     else 'secondary_gold'
                 ),
                 target_gold_chunks=target,
@@ -241,6 +339,7 @@ def _materialize_plan(
             cfg.generation.distractors_per_query
             + cfg.generation.background_outlier_clusters_per_query
             * cfg.generation.background_outlier_cluster_size
+            + cfg.generation.single_isolated_outliers_per_query
         ),
         facets=facets,
         logical_form=logical_form,

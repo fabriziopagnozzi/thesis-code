@@ -64,6 +64,7 @@ _DISTRACTOR_LABELS = {
     'same_condition_wrong_subgroup': 'soft distractor: same condition, wrong subgroup',
     'same_subgroup_wrong_condition': 'hard distractor: wrong condition, same subgroup',
     'same_axis_wrong_condition': 'hard distractor: wrong condition, same answer axis',
+    'single_isolated_outlier': 'single isolated outlier',
     'background_clinical_cluster': 'background outlier: clinical cluster',
     'hard_distractor': 'hard distractor',
 }

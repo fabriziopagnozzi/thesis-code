@@ -20,8 +20,10 @@ type ClusterRole = Literal[
     'calibrated_primary_gold',
     'primary_gold',
     'secondary_gold',
+    'niche_gold',
     'hard_distractor',
     'background_outlier',
+    'single_isolated_outlier',
 ]
 
 type DistractorStr = Literal[
@@ -257,6 +259,7 @@ class AxisPairProfile(BenchmarkModel):
 
 class ClinicalAxisOntology(BenchmarkModel):
     label: str
+    allow_as_primary: bool
     query_focus: str
     exact_terms: list[str]
     synonym_terms: list[str]
@@ -307,7 +310,11 @@ class MedicalOntology(BenchmarkModel):
         if declared_pairs != expected_pairs or len(declared_pairs) != len(self.axis_pairs):
             raise ValueError('axis_pairs must contain each unordered clinical-axis pair once')
         for pair in self.axis_pairs:
+            if len(pair.profiles) != 2:
+                raise ValueError('each axis pair must define exactly two joint profiles')
             left, right = pair.axes
+            if not any(self.clinical_axes[axis].allow_as_primary for axis in pair.axes):
+                raise ValueError(f'axis pair {left!r}/{right!r} has no permitted primary axis')
             for profile in pair.profiles:
                 cohort_pairs = zip(profile.cohort_a_bins, profile.cohort_b_bins, strict=True)
                 if any(a == b for a, b in cohort_pairs):
@@ -613,7 +620,6 @@ class ChunkRow(ClinicalFact):
 
 
 class CohortEvidenceTemplates(BenchmarkModel):
-    sex: list[str]
     comorbidity_present: list[str]
     comorbidity_reference: list[str]
 
@@ -623,7 +629,7 @@ class ChunkTemplateUtils(BenchmarkModel):
     duration_phrase_templates: list[str]
     note_style_templates: dict[str, list[str]]
     cohort_evidence_templates: CohortEvidenceTemplates
-    axis_sentence_templates: dict[ClinicalAxis, list[str]]
+    axis_sentence_templates: dict[ClinicalAxis, dict[str, list[str]]]
 
 
 class QueryTemplateSpec(BenchmarkModel):

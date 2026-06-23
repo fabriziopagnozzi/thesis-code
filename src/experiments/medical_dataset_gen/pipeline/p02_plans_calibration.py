@@ -259,14 +259,14 @@ def _with_calibrated_query(
                         if selected
                         else 'primary_gold'
                         if primary
-                        else 'secondary_gold'
+                        else facet.cluster_role
                     ),
                     'target_gold_chunks': (
                         cfg.generation.gold_chunks_calibrated_primary
                         if selected
                         else cfg.generation.gold_chunks_other_primary
                         if primary
-                        else cfg.generation.gold_chunks_secondary
+                        else facet.target_gold_chunks
                     ),
                 }
             )

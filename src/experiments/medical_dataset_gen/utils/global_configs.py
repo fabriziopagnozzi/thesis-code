@@ -68,9 +68,12 @@ class GenerationCfg(ConfigModel):
     gold_chunks_calibrated_primary: PositiveInt = 24
     gold_chunks_other_primary: PositiveInt = 20
     gold_chunks_secondary: PositiveInt = 14
+    niche_gold_clusters_per_query: int = Field(default=0, ge=0, le=2)
+    gold_chunks_niche: PositiveInt = 4
     distractors_per_query: PositiveInt = 25
     background_outlier_clusters_per_query: int = Field(default=1, ge=0)
     background_outlier_cluster_size: int = Field(default=8, ge=0)
+    single_isolated_outliers_per_query: int = Field(default=0, ge=0)
     chunk_min_words: PositiveInt = 25
     chunk_max_words: PositiveInt = 90
     chunk_word_tolerance: PositiveInt = 2
@@ -82,6 +85,15 @@ class GenerationCfg(ConfigModel):
     llm_chunk_max_attempts: PositiveInt = 3
     llm_temperature: PositiveFloat = 0.1
     llm_num_ctx: PositiveInt = 4096
+
+    @model_validator(mode='after')
+    def _validate_niche_cluster_size(self) -> GenerationCfg:
+        if self.niche_gold_clusters_per_query and self.gold_chunks_niche >= self.gold_chunks_secondary:
+            raise ValueError(
+                'generation.gold_chunks_niche must be smaller than gold_chunks_secondary '
+                'when niche gold clusters are enabled'
+            )
+        return self
 
 
 class EmbeddingCfg(ConfigModel):
@@ -182,10 +194,16 @@ class ExperimentCfg(ConfigModel):
         local_pool_size = (
             self.generation.gold_chunks_calibrated_primary
             + self.generation.gold_chunks_other_primary
-            + 2 * self.generation.gold_chunks_secondary
+            + (
+                2 - self.generation.niche_gold_clusters_per_query
+            )
+            * self.generation.gold_chunks_secondary
+            + self.generation.niche_gold_clusters_per_query
+            * self.generation.gold_chunks_niche
             + self.generation.distractors_per_query
             + self.generation.background_outlier_clusters_per_query
             * self.generation.background_outlier_cluster_size
+            + self.generation.single_isolated_outliers_per_query
         )
         if self.retrieval.candidate_pool_n < local_pool_size:
             raise ValueError(

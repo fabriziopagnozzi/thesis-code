@@ -82,10 +82,16 @@ def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rn
         'possessive': patient.possessive,
         'possessive_cap': patient.possessive_cap,
         'age': fact.patient_age,
-        'condition': fact.condition_display.lower(),
+        'condition': fact.condition_display,
         'presentation': rng.choice(ontology.conditions[fact.condition_id].presentations),
         'cohort_sentence': _cohort_sentence(fact, patient, rng),
-        'axis_sentence': _axis_sentence(fact, payload, axis_term=axis.label, rng=rng),
+        'axis_sentence': _axis_sentence(
+            fact,
+            payload,
+            patient=patient,
+            axis_term=axis.label,
+            rng=rng,
+        ),
     }
     templates = TEMPLATE_DATA.note_style_templates.get(
         fact.note_style, TEMPLATE_DATA.note_style_templates['brief_hospital_course']
@@ -102,11 +108,11 @@ def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
 
 def _cohort_sentence(fact: ClinicalFact, patient: PatientNarrative, rng: Random) -> str:
     templates = TEMPLATE_DATA.cohort_evidence_templates
-    if fact.subgroup_dimension_id == 'age_band':
+    # Age and sex are already expressed by the patient descriptor. Repeating
+    # them as a separate sentence produces unnatural prose without adding evidence.
+    if fact.subgroup_dimension_id in {'age_band', 'sex'}:
         return ''
-    if fact.subgroup_dimension_id == 'sex':
-        choices = templates.sex
-    elif fact.subgroup_is_reference:
+    if fact.subgroup_is_reference:
         choices = templates.comorbidity_reference
     else:
         choices = templates.comorbidity_present
@@ -124,6 +130,7 @@ def _axis_sentence(
     fact: ClinicalFact,
     payload,
     *,
+    patient: PatientNarrative,
     axis_term: str,
     rng: Random,
 ) -> str:
@@ -138,11 +145,15 @@ def _axis_sentence(
         axis_value = payload.detail
     else:
         raise TypeError(type(payload))
-    template = rng.choice(TEMPLATE_DATA.axis_sentence_templates[fact.axis])
+    template = rng.choice(TEMPLATE_DATA.axis_sentence_templates[fact.axis][fact.value_bin])
     return template.format(
         axis_term=axis_term,
         axis_bin_term=fact.axis_bin_term,
         axis_value=axis_value,
+        pronoun=patient.pronoun,
+        pronoun_cap=patient.pronoun_cap,
+        possessive=patient.possessive,
+        possessive_cap=patient.possessive_cap,
     )
 
 
@@ -223,6 +234,11 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
     subgroup_id = fact.subgroup_id
     subgroup = ontology.subgroups.get(subgroup_id)
 
+    if subgroup is not None and subgroup.patient_sex is not None:
+        sex_nouns = ('woman', 'female') if subgroup.patient_sex == 'female' else ('man', 'male')
+        if any(re.search(rf'\b{term}\b', lower) for term in sex_nouns):
+            return True
+
     if subgroup is not None and subgroup.patient_age_range is not None:
         low, high = subgroup.patient_age_range
         if _has_age_in_range(text, low, high):
@@ -244,7 +260,13 @@ def _contains_axis_evidence(
     lower = text.lower()
     axis = ontology.clinical_axes[fact.axis]
     return any(
-        term.lower() in lower for term in [axis.label, *axis.exact_terms, *axis.synonym_terms]
+        term.lower() in lower
+        for term in [
+            axis.label,
+            *axis.exact_terms,
+            *axis.synonym_terms,
+            *axis.bin_terms[fact.value_bin],
+        ]
     )
 
 

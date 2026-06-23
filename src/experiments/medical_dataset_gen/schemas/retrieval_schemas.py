@@ -13,7 +13,9 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
-type ChunkSupport = Literal['positive', 'background_outlier', 'hard_negative']
+type ChunkSupport = Literal[
+    'positive', 'background_outlier', 'single_isolated_outlier', 'hard_negative'
+]
 
 type QueryIdToQrels = dict[str, QrelRecord]
 type QrelsByQueryChunk = dict[str, QueryIdToQrels]

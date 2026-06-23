@@ -31,7 +31,7 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - outpatient neurorehabilitation after discharge
+                        - outpatient neurorehabilitation
                         - home therapy with improving gait stability
                     inpatient_rehab:
                         - inpatient rehabilitation for persistent weakness
@@ -165,7 +165,7 @@ conditions:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
-                        - outpatient stroke therapy after discharge
+                        - outpatient stroke therapy
                         - home therapy after mild residual dysarthria
                     inpatient_rehab:
                         - acute stroke rehabilitation
@@ -238,7 +238,7 @@ conditions:
                         - rehabilitation after marked deconditioning
                         - inpatient therapy before safe return home
                     persistent_deficit:
-                        - persistent exertional dyspnea limited discharge function
+                        - persistent exertional dyspnea with reduced exercise tolerance
                         - ongoing fatigue and mobility limitation
             complication_burden:
                 axis: complication_burden
@@ -438,7 +438,7 @@ conditions:
                         - rehabilitation for unsafe gait after decompression
                     persistent_deficit:
                         - persistent lower-extremity weakness and sensory loss
-                        - ongoing neurologic deficits limited independent mobility
+                        - ongoing neurologic deficits with limited independent mobility
             complication_burden:
                 axis: complication_burden
                 bins:
@@ -503,7 +503,7 @@ conditions:
                         - inpatient rehabilitation for severe deconditioning after hypoxemia
                         - rehabilitation for limited mobility after pulmonary embolism
                     persistent_deficit:
-                        - persistent exertional dyspnea limited discharge function
+                        - persistent exertional dyspnea with reduced exercise tolerance
                         - continued oxygen requirement with reduced walking tolerance
             complication_burden:
                 axis: complication_burden
@@ -567,7 +567,7 @@ conditions:
                         - home therapy after breathing and endurance improved
                     inpatient_rehab:
                         - inpatient rehabilitation for deconditioning limiting safe ambulation
-                        - rehabilitation for weakness after prolonged respiratory failure
+                        - rehabilitation for weakness after severe respiratory decompensation
                     persistent_deficit:
                         - persistent exertional limitation and dyspnea
                         - ongoing oxygen need and poor endurance reduced baseline activity
@@ -633,11 +633,11 @@ conditions:
                         - home infusion support with outpatient therapy
                         - home rehabilitation after strength improved
                     inpatient_rehab:
-                        - inpatient rehabilitation for marked deconditioning during prolonged antibiotic therapy
+                        - inpatient rehabilitation for marked infection-related deconditioning
                         - inpatient rehabilitation for limited endurance and mobility
                     persistent_deficit:
                         - persistent fatigue and reduced mobility
-                        - ongoing functional limitation during antibiotic completion
+                        - persistent fatigue and reduced mobility at discharge
             complication_burden:
                 axis: complication_burden
                 bins:
@@ -770,7 +770,7 @@ conditions:
                         - rehabilitation for mobility below baseline after sepsis
                     persistent_deficit:
                         - persistent weakness and limited endurance
-                        - ongoing fatigue after sepsis reduced safe activity tolerance
+                        - ongoing fatigue with reduced activity tolerance after sepsis
             complication_burden:
                 axis: complication_burden
                 bins:
@@ -964,7 +964,7 @@ conditions:
                         - outpatient therapy after edema and weakness improved
                         - home physical therapy after renal function stabilized
                     inpatient_rehab:
-                        - inpatient rehabilitation for deconditioning after prolonged immunosuppressive therapy
+                        - inpatient rehabilitation for severe flare-related deconditioning
                         - rehabilitation for weakness and edema still limiting mobility
                     persistent_deficit:
                         - persistent fatigue and reduced mobility
@@ -1031,10 +1031,10 @@ conditions:
                         - home therapy after safer ambulation was achieved
                     inpatient_rehab:
                         - inpatient rehabilitation for pain and weakness limiting transfers
-                        - rehabilitation for mobility recovery after prolonged infection
+                        - rehabilitation for mobility recovery after severe infection
                     persistent_deficit:
                         - persistent pain and limited walking tolerance
-                        - ongoing swelling and weakness continued to impair mobility
+                        - ongoing swelling and weakness with impaired mobility
             complication_burden:
                 axis: complication_burden
                 bins:
@@ -1096,11 +1096,11 @@ conditions:
                         - nutritional support with outpatient therapy after strength improved
                         - home physical therapy after abdominal pain and diarrhea improved
                     inpatient_rehab:
-                        - inpatient rehabilitation for marked deconditioning after prolonged illness
+                        - inpatient rehabilitation for marked flare-related deconditioning
                         - rehabilitation for weakness still limiting self-care
                     persistent_deficit:
                         - persistent fatigue and poor endurance
-                        - ongoing weakness limited return to baseline activity
+                        - ongoing weakness with inability to return to baseline activity
             complication_burden:
                 axis: complication_burden
                 bins:
@@ -1525,7 +1525,8 @@ subgroups:
 clinical_axes:
     treatment_duration:
         label: treatment duration
-        query_focus: total treatment days, therapy-course length, and whether active treatment was brief or prolonged
+        allow_as_primary: false
+        query_focus: total treatment days, length of active therapy, and whether the treatment course was short, standard, or prolonged
         exact_terms:
             - treatment duration
             - therapy duration
@@ -1555,7 +1556,8 @@ clinical_axes:
                 - extended treatment interval
     rehab_outcome:
         label: rehabilitation outcome
-        query_focus: discharge rehabilitation destination, therapy requirements, and residual functional limitations
+        allow_as_primary: true
+        query_focus: discharge rehabilitation destination and whether recovery involved home rehabilitation, inpatient rehabilitation, or a persistent functional deficit
         exact_terms:
             - rehabilitation outcome
             - rehab outcome
@@ -1583,7 +1585,8 @@ clinical_axes:
                 - residual mobility limitation
     complication_burden:
         label: in-hospital complication burden
-        query_focus: absence, limited occurrence, or major occurrence of treatment-related and disease-related complications
+        allow_as_primary: true
+        query_focus: whether the admission had no major complication, a limited complication, or a major complication
         exact_terms:
             - complication burden
             - in-hospital complications
@@ -1610,7 +1613,8 @@ clinical_axes:
                 - major complication
     acute_clinical_course:
         label: acute clinical course
-        query_focus: speed of stabilization, delayed response, or worsening despite initial management
+        allow_as_primary: true
+        query_focus: whether the patient had early stabilization, delayed improvement, or a refractory or worsening course
         exact_terms:
             - acute clinical course
             - clinical response trajectory
@@ -1636,7 +1640,8 @@ clinical_axes:
                 - worsening despite initial management
     care_intensity:
         label: care intensity
-        query_focus: ward, monitored or procedural, versus intensive-care resource and monitoring requirements
+        allow_as_primary: true
+        query_focus: whether the patient required ward-level care, monitored or procedural care, or intensive care
         exact_terms:
             - care intensity
             - level of care

@@ -45,6 +45,8 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             .then(pl.lit('positive'))
             .when(pl.col('cluster_role') == 'background_outlier')
             .then(pl.lit('background_outlier'))
+            .when(pl.col('cluster_role') == 'single_isolated_outlier')
+            .then(pl.lit('single_isolated_outlier'))
             .otherwise(pl.lit('hard_negative'))
             .alias('support_type'),
         )

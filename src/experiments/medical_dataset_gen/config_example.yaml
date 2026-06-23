@@ -7,7 +7,7 @@ dataset_schema_version: 2
 
 global:
   seed: 42 # Random seed used by deterministic query/fact/chunk generation.
-  conditions: 17 # Full v2 grid: 17 conditions x 16 contrasts x 10 axis pairs x 2 orientations.
+  conditions: 17 # Full v2 grid: 17 conditions x 16 contrasts x 10 axis pairs x 2 valid queries.
 
   # Name of the experiment directory under:
   #   src/experiments/medical_dataset_gen/_results/<output_experiment>
@@ -22,12 +22,15 @@ generation:
   gold_chunks_calibrated_primary: 24
   gold_chunks_other_primary: 20
   gold_chunks_secondary: 14
+  niche_gold_clusters_per_query: 1 # Number (0-2) of complementary facets made deliberately sparse.
+  gold_chunks_niche: 4 # Gold documents in each niche facet; must be below gold_chunks_secondary.
   distractors_per_query: 25
   background_outlier_clusters_per_query: 1 # Coherent non-gold clinical islands per query-local pool.
   background_outlier_cluster_size: 8
-  chunk_min_words: 40
+  single_isolated_outliers_per_query: 1 # Same-condition singleton on an off-query clinical axis; farther than hard distractors but not a full cluster.
+  chunk_min_words: 25
   chunk_max_words: 200
-  chunk_word_tolerance: 2 # Soft tolerance around the target range to avoid crashing on a 1-word miss.
+  chunk_word_tolerance: 5 # Soft tolerance around the target range for concise deterministic prose.
   llm_name: gemma4:12b # Ollama generation model. This pipeline passes it explicitly; no OLLAMA_MODEL env var is needed.
   llm_workers: 2 # Parallel chunk-generation workers. Match this with Ollama server OLLAMA_NUM_PARALLEL.
   use_llm_chunk_generation: false

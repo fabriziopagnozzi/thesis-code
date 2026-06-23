@@ -15,6 +15,9 @@ from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     BACKGROUND_OUTLIER_ROLE,
     DISTRACTOR_LABELS,
     FIXED_LABEL_COLORS,
+    SINGLE_ISOLATED_OUTLIER_LABEL,
+    SINGLE_ISOLATED_OUTLIER_LABEL_ID,
+    SINGLE_ISOLATED_OUTLIER_ROLE,
     UNSELECTED_BACKGROUND_COLOR,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
@@ -189,6 +192,7 @@ def plot_query_overview_4panel(
             pad=0.02,
             label='query cosine',
         )
+    ax_cos.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
 
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
     ax_rank.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
@@ -476,7 +480,10 @@ def _plot_query_similarity_points(
     is_background = np.array(
         [_is_background_outlier_point(artifact, int(i)) for i in order], dtype=bool
     )
-    non_gold_non_background = (~is_gold) & (~is_background)
+    is_single_isolated = np.array(
+        [_is_single_isolated_outlier_point(artifact, int(i)) for i in order], dtype=bool
+    )
+    near_miss = (~is_gold) & (~is_background) & (~is_single_isolated)
 
     vmin = float(plot_sims.min()) if len(plot_sims) else 0.0
     vmax = float(plot_sims.max()) if len(plot_sims) else 1.0
@@ -494,12 +501,13 @@ def _plot_query_similarity_points(
             marker='o',
             edgecolors='none',
             zorder=4,
+            label='gold facets',
         )
-    if non_gold_non_background.any():
+    if near_miss.any():
         points = ax.scatter(
-            plot_coords[non_gold_non_background, 0],
-            plot_coords[non_gold_non_background, 1],
-            c=plot_sims[non_gold_non_background],
+            plot_coords[near_miss, 0],
+            plot_coords[near_miss, 1],
+            c=plot_sims[near_miss],
             cmap='viridis',
             vmin=vmin,
             vmax=vmax,
@@ -508,6 +516,23 @@ def _plot_query_similarity_points(
             marker='x',
             linewidths=1.25,
             zorder=4,
+            label='near-miss distractor',
+        )
+    if is_single_isolated.any():
+        points = ax.scatter(
+            plot_coords[is_single_isolated, 0],
+            plot_coords[is_single_isolated, 1],
+            c=plot_sims[is_single_isolated],
+            cmap='viridis',
+            vmin=vmin,
+            vmax=vmax,
+            s=52,
+            alpha=0.95,
+            marker='D',
+            edgecolors='black',
+            linewidths=0.6,
+            zorder=5,
+            label=SINGLE_ISOLATED_OUTLIER_LABEL,
         )
     if is_background.any():
         points = _scatter_circled_x(
@@ -522,6 +547,7 @@ def _plot_query_similarity_points(
             alpha=0.96,
             linewidth=0.75,
             zorder=5,
+            label=BACKGROUND_OUTLIER_LABEL,
         )
     if points is None:
         points = ax.scatter([], [], c=[], cmap='viridis', vmin=vmin, vmax=vmax)
@@ -636,11 +662,17 @@ def label_palette(labels: list[str]) -> dict[str, Any]:
 def _label_marker(label: str) -> str:
     if _is_background_outlier_label(label):
         return 'x'
+    if _is_single_isolated_outlier_label(label):
+        return 'D'
     return 'x' if label in DISTRACTOR_LABELS else 'o'
 
 
 def _is_background_outlier_label(label: str) -> bool:
     return label == BACKGROUND_OUTLIER_LABEL
+
+
+def _is_single_isolated_outlier_label(label: str) -> bool:
+    return label == SINGLE_ISOLATED_OUTLIER_LABEL
 
 
 def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
@@ -651,6 +683,17 @@ def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
         label == BACKGROUND_OUTLIER_LABEL
         or label_id == BACKGROUND_OUTLIER_LABEL_ID
         or role == BACKGROUND_OUTLIER_ROLE
+    )
+
+
+def _is_single_isolated_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
+    label = artifact.labels[idx]
+    label_id = artifact.label_ids[idx]
+    role = artifact.roles[idx]
+    return (
+        label == SINGLE_ISOLATED_OUTLIER_LABEL
+        or label_id == SINGLE_ISOLATED_OUTLIER_LABEL_ID
+        or role == SINGLE_ISOLATED_OUTLIER_ROLE
     )
 
 

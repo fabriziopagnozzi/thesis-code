@@ -1,10 +1,10 @@
 query_templates:
   - id: primary_evidence_comparison
-    template: "For patients with {condition}, make {primary_axis_label} the principal evidence target: compare {primary_axis_focus} between {subgroup_a} and {subgroup_b}. After that primary comparison, briefly report the secondary difference in {secondary_axis_label}."
+    template: "For patients with {condition}, compare {subgroup_a} with {subgroup_b} primarily by {primary_axis_label}. For each cohort, determine {primary_axis_focus}. Base the main comparison on this {primary_axis_label} evidence. Briefly add {secondary_axis_label} as a secondary endpoint."
   - id: primary_endpoint_assessment
-    template: "Among patients with {condition}, first determine the primary endpoint of {primary_axis_label} for {subgroup_a} versus {subgroup_b}, focusing on {primary_axis_focus}. Then include {secondary_axis_label} as a subordinate secondary endpoint."
+    template: "In {condition}, the primary comparison between {subgroup_a} and {subgroup_b} is {primary_axis_label}. For each cohort, identify {primary_axis_focus}. The {primary_axis_label} evidence should drive the comparison; {secondary_axis_label} is supplementary context."
   - id: primary_clinical_contrast
-    template: "In {condition}, the main question is how {subgroup_a} and {subgroup_b} differ in {primary_axis_label}, specifically {primary_axis_focus}. Once that is established, add a concise comparison of {secondary_axis_label}."
+    template: "Compare {subgroup_a} and {subgroup_b} with {condition} primarily by {primary_axis_label}: identify {primary_axis_focus}. Report this {primary_axis_label} comparison first and in detail. Add only a brief secondary note about {secondary_axis_label}."
 
 answer_template:
   template: "Primary endpoint ({primary_axis_label}): {subgroup_a}, {subgroup_a_primary}; {subgroup_b}, {subgroup_b_primary}. Secondary endpoint ({secondary_axis_label}): {subgroup_a}, {subgroup_a_secondary}; {subgroup_b}, {subgroup_b_secondary}."

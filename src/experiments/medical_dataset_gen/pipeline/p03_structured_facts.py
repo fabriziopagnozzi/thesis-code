@@ -20,6 +20,7 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     other_subgroups,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    CLINICAL_AXIS_LIST,
     DISTRACTOR_TYPES,
     AcuteClinicalCoursePayload,
     AxisFactPayload,
@@ -77,6 +78,14 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     rng,
                     cfg.generation.background_outlier_clusters_per_query,
                     cfg.generation.background_outlier_cluster_size,
+                )
+            )
+            facts.extend(
+                make_single_isolated_outlier_facts(
+                    plan,
+                    ontology,
+                    rng,
+                    cfg.generation.single_isolated_outliers_per_query,
                 )
             )
             frame = _facts_frame([fact.model_dump(mode='python') for fact in facts])
@@ -240,6 +249,69 @@ def make_background_outlier_facts(
                     cluster_role='background_outlier',
                 )
             )
+    return rows
+
+
+def make_single_isolated_outlier_facts(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    rng: Random,
+    n: int,
+) -> list[ClinicalFact]:
+    """Create singleton satellites on the query manifold but off the answer axes.
+
+    Each point retains the target facet's condition and cohort anchor but swaps to
+    a clinical axis that the query never asks about. That makes the point a true
+    singleton outlier relative to the answer-focused facets without turning it into
+    the same wrong-condition/wrong-subgroup near miss used for hard distractors.
+    """
+    dense_facets = sorted(
+        (facet for facet in plan.facets if facet.priority == 'primary'),
+        key=lambda facet: (-facet.target_gold_chunks, facet.facet_id),
+    )
+    non_query_axes = [
+        axis for axis in CLINICAL_AXIS_LIST if axis not in {plan.primary_axis, plan.secondary_axis}
+    ]
+    if not non_query_axes:
+        raise ValueError('single isolated outliers require at least one clinical axis outside query')
+    rows: list[ClinicalFact] = []
+    for local_idx in range(n):
+        target = dense_facets[local_idx % len(dense_facets)]
+        axis = non_query_axes[
+            _stable_seed(plan.query_id, 'single_isolated_axis', target.facet_id, local_idx)
+            % len(non_query_axes)
+        ]
+        bins = get_axis_bins(ontology, axis)
+        value_bin = bins[
+            _stable_seed(plan.query_id, 'single_isolated_value_bin', target.facet_id, local_idx)
+            % len(bins)
+        ]
+        cohort = ontology.subgroups[target.subgroup_id]
+        rows.append(
+            make_base_fact(
+                plan=plan,
+                facet=target,
+                ontology=ontology,
+                rng=rng,
+                local_idx=local_idx,
+                is_gold=False,
+                distractor_type='single_isolated_outlier',
+                condition_id=target.condition_id,
+                condition_display=target.condition_display,
+                subgroup_id=target.subgroup_id,
+                subgroup_label=target.subgroup_label,
+                subgroup_axis=target.subgroup_axis,
+                subgroup_field=target.subgroup_field,
+                subgroup_value=target.subgroup_value,
+                subgroup_dimension_id=cohort.dimension_id,
+                subgroup_level_id=cohort.level_id,
+                subgroup_is_reference=cohort.is_reference,
+                axis=axis,
+                value_bin=value_bin,
+                cluster_id=f'{plan.pool_id}_iso{local_idx + 1:02d}',
+                cluster_role='single_isolated_outlier',
+            )
+        )
     return rows
 
 

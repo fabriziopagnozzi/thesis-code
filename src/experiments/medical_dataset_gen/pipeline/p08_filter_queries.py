@@ -596,7 +596,11 @@ def _is_background_outlier(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
 
 def _is_query_near_miss_distractor(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
-    return row is not None and not row.is_gold and row.cluster_role != 'background_outlier'
+    return (
+        row is not None
+        and not row.is_gold
+        and row.cluster_role not in {'background_outlier', 'single_isolated_outlier'}
+    )
 
 
 def _mean_same_cluster_similarity(
