@@ -29,6 +29,11 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    GeometryFilterCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryFilterStatsRow,
 )
@@ -38,11 +43,6 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QueryIdToQrels,
     QueryRecord,
     TopKDiagnosticsByK,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    GeometryFilterCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     json_dumps,
@@ -175,8 +175,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
             expected_background_chunks=(
-                cfg.generation.background_outlier_clusters_per_query
-                * cfg.generation.background_outlier_cluster_size
+                cfg.generation.distractor_config.background_outlier.clusters_per_query
+                * cfg.generation.distractor_config.background_outlier.cluster_size
             ),
         )
 
@@ -197,9 +197,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             same_axis_cohort_gap=separation['same_axis_cohort_gap'],
             same_cohort_axis_gap=separation['same_cohort_axis_gap'],
             n_near_miss_distractors=n_near_miss_distractors,
-            background_outlier_complete=bool(
-                background_diagnostics['background_outlier_complete']
-            ),
+            background_outlier_complete=bool(background_diagnostics['background_outlier_complete']),
         )
         passes = not any(failures.values())
 
@@ -308,9 +306,7 @@ def _strict_gate_failures(
     max_facets = cfg.max_topk_retrieved_facets
     return {
         'fail_missing_facet': n_facets_present != n_facets,
-        'fail_weak_primary_axis_dominance': (
-            primary_axis_topk_count < cfg.min_primary_axis_count
-        ),
+        'fail_weak_primary_axis_dominance': (primary_axis_topk_count < cfg.min_primary_axis_count),
         'fail_too_many_topk_facets': (
             max_facets is not None and n_topk_retrieved_facets > max_facets
         ),
@@ -599,7 +595,7 @@ def _is_query_near_miss_distractor(query_qrels: QueryIdToQrels, chunk_id: str) -
     return (
         row is not None
         and not row.is_gold
-        and row.cluster_role not in {'background_outlier', 'single_isolated_outlier'}
+        and row.cluster_role not in {'background_outlier', 'same_condition_wrong_axis'}
     )
 
 
@@ -658,7 +654,7 @@ def _topk_vs_facloc_diagnostics(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

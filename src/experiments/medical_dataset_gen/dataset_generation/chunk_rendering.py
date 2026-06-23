@@ -19,6 +19,7 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
 from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
+from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkRow,
@@ -26,7 +27,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 from helpers.ollama_client import generate
 
 _SECTION_HEADER_RE = re.compile(
@@ -60,13 +60,13 @@ def generate_llm_chunk(
     last_errors = ['empty LLM generation']
     feedback: str | None = None
 
-    for attempt in range(1, max(1, cfg.generation.llm_chunk_max_attempts) + 1):
+    for attempt in range(1, max(1, cfg.generation.llm_config.max_attempts) + 1):
         candidate_text = generate_chunk_text_with_llm(
             fact=fact,
             ontology=ontology,
-            llm_name=cfg.generation.llm_name,
-            temperature=cfg.generation.llm_temperature,
-            num_ctx=cfg.generation.llm_num_ctx,
+            llm_name=cfg.generation.llm_config.model_name,
+            temperature=cfg.generation.llm_config.temperature,
+            num_ctx=cfg.generation.llm_config.num_ctx,
             chunk_min_words=cfg.generation.chunk_min_words,
             chunk_max_words=cfg.generation.chunk_max_words,
             revision_feedback=feedback,
@@ -100,14 +100,14 @@ def rewrite_llm_chunk(
     last_errors = ['empty LLM rewrite']
     feedback: str | None = None
 
-    for attempt in range(1, max(1, cfg.generation.llm_chunk_max_attempts) + 1):
+    for attempt in range(1, max(1, cfg.generation.llm_config.max_attempts) + 1):
         candidate_text = rewrite_chunk_text_with_llm(
             draft_text=draft_text,
             fact=fact,
             ontology=ontology,
-            llm_name=cfg.generation.llm_name,
-            temperature=cfg.generation.llm_temperature,
-            num_ctx=cfg.generation.llm_num_ctx,
+            llm_name=cfg.generation.llm_config.model_name,
+            temperature=cfg.generation.llm_config.temperature,
+            num_ctx=cfg.generation.llm_config.num_ctx,
             chunk_min_words=cfg.generation.chunk_min_words,
             chunk_max_words=cfg.generation.chunk_max_words,
             revision_feedback=feedback,

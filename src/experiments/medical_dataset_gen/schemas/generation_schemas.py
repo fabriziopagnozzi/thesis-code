@@ -23,13 +23,14 @@ type ClusterRole = Literal[
     'niche_gold',
     'hard_distractor',
     'background_outlier',
-    'single_isolated_outlier',
+    'same_condition_wrong_axis',
 ]
 
 type DistractorStr = Literal[
     'same_condition_wrong_subgroup',
     'same_subgroup_wrong_condition',
     'same_axis_wrong_condition',
+    'same_condition_wrong_axis',
 ]
 DISTRACTOR_TYPES = list[DistractorStr](get_args(DistractorStr.__value__))
 

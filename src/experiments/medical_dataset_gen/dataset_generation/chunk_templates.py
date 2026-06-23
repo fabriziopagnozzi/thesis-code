@@ -6,6 +6,9 @@ from random import Random
 
 import yaml
 
+from experiments.medical_dataset_gen.global_config import (
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
     CareIntensityPayload,
@@ -16,9 +19,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    MedicalDatasetGenPaths,
 )
 
 _TEMPLATE_DATA_DIR = MedicalDatasetGenPaths.root / 'data_templates'
@@ -248,15 +248,13 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
     if phrase and phrase in lower:
         return True
 
-    lexical_forms = [
-        str(alias).lower() for alias in (subgroup.aliases if subgroup else [])
-    ] + [str(surface).lower() for surface in (subgroup.surface_phrases if subgroup else [])]
+    lexical_forms = [str(alias).lower() for alias in (subgroup.aliases if subgroup else [])] + [
+        str(surface).lower() for surface in (subgroup.surface_phrases if subgroup else [])
+    ]
     return any(form in lower for form in lexical_forms)
 
 
-def _contains_axis_evidence(
-    text: str, fact: ClinicalFact, ontology: MedicalOntology
-) -> bool:
+def _contains_axis_evidence(text: str, fact: ClinicalFact, ontology: MedicalOntology) -> bool:
     lower = text.lower()
     axis = ontology.clinical_axes[fact.axis]
     return any(

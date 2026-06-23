@@ -21,9 +21,17 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     build_index_maps,
     load_embedding_arrays,
 )
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
+    setup_logging,
+)
 from experiments.medical_dataset_gen.query_geometry.artifacts import (
     build_query_artifact,
     choose_query_groups,
+    query_directory_names_for_groups,
 )
 from experiments.medical_dataset_gen.query_geometry.diagnostics import (
     build_geometry_points_row,
@@ -49,13 +57,6 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometryQueryStats,
     EmbeddingGeometryWorkerState,
     RenderedGeometryResult,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
-    setup_logging,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
@@ -103,6 +104,13 @@ def run_query_geom_plots(
 
     selected_query_ids: list[str] = []
     selected_query_group_by_id: dict[str, str] = {}
+    selected_query_dir_name_by_id = query_directory_names_for_groups(
+        cfg,
+        queries,
+        geometry,
+        eval_results,
+        selected_query_groups,
+    )
     for group, group_query_ids in selected_query_groups.items():
         for qid in group_query_ids:
             if qid not in maps['query_id_to_idx']:
@@ -126,6 +134,7 @@ def run_query_geom_plots(
             exp_name=paths.exp_name,
             out_dir=str(out_dir),
             query_group_by_id=selected_query_group_by_id,
+            query_dir_name_by_id=selected_query_dir_name_by_id,
             selected_plot_names=selected_plots,
         )
         results = map(_render_query_geometry_query, selected_query_ids)
@@ -154,6 +163,7 @@ def run_query_geom_plots(
                 paths.exp_name,
                 str(out_dir),
                 selected_query_group_by_id,
+                selected_query_dir_name_by_id,
                 selected_plots,
             ),
         ) as executor:
@@ -215,7 +225,8 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
 
     query_group = state['query_group_by_id'].get(qid, 'manual')
     artifact.selection_group = query_group
-    query_dir = state['out_dir'] / query_group / qid
+    query_dir_name = state['query_dir_name_by_id'].get(qid, qid)
+    query_dir = state['out_dir'] / query_group / query_dir_name
     query_dir.mkdir(parents=True, exist_ok=True)
     selected_plot_names: Container[str] | None = state['selected_plot_names']
     if _should_render_plot(selected_plot_names, 'query_overview_4panel'):

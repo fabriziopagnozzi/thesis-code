@@ -6,13 +6,13 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     build_index_maps,
     load_embedding_arrays,
 )
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometryWorkerState,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
@@ -48,6 +48,7 @@ def init_query_geometry_worker(
     exp_name: str,
     out_dir: str,
     query_group_by_id: dict[str, str],
+    query_dir_name_by_id: dict[str, str],
     selected_plot_names: Container[GeomPlotFileName] | None,
 ) -> None:
     os.environ.setdefault('MPLBACKEND', 'Agg')
@@ -75,6 +76,7 @@ def init_query_geometry_worker(
         'eval_results': eval_results,
         'out_dir': Path(out_dir),
         'query_group_by_id': query_group_by_id,
+        'query_dir_name_by_id': query_dir_name_by_id,
         'k_values': list(dict.fromkeys(cfg.retrieval.k_values)),
         'selected_plot_names': selected_plot_names,
     }

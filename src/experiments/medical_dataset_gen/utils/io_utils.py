@@ -4,9 +4,9 @@ from typing import Any
 
 import polars as pl
 
-from experiments.medical_dataset_gen.utils.global_configs import (
+from experiments.medical_dataset_gen.global_config import (
     MedicalDatasetGenPaths,
-    SyntheticMedicalTableName,
+    SyntheticMedicalDatasetTableName,
 )
 
 
@@ -30,7 +30,7 @@ def write_json(paths: MedicalDatasetGenPaths, name: str, payload: Any) -> Path:
 
 
 def write_parquet(
-    paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName, df: pl.DataFrame
+    paths: MedicalDatasetGenPaths, table: SyntheticMedicalDatasetTableName, df: pl.DataFrame
 ) -> Path:
     path = paths.table_path(table)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,12 +39,14 @@ def write_parquet(
     return path
 
 
-def read_parquet(paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName) -> pl.DataFrame:
+def read_parquet(
+    paths: MedicalDatasetGenPaths, table: SyntheticMedicalDatasetTableName
+) -> pl.DataFrame:
     return pl.read_parquet(paths.table_path(table))
 
 
 def read_parquet_if_exists_else_empty_df(
-    paths: MedicalDatasetGenPaths, table: SyntheticMedicalTableName
+    paths: MedicalDatasetGenPaths, table: SyntheticMedicalDatasetTableName
 ) -> pl.DataFrame:
     if paths.table_path(table).exists():
         return read_parquet(paths, table)

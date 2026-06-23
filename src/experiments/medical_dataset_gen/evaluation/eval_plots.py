@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,14 +23,7 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     NamedPlotMetric,
 )
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
-from experiments.medical_dataset_gen.pipeline.p11_eval_plots import (
-    parse_plots_cli_args,
-    run_eval_plots,
-)
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
-from experiments.medical_dataset_gen.utils.global_configs import (
-    paths_for,
-)
 
 
 def plot_strategy_comparison(
@@ -199,6 +191,12 @@ def _plot_lambda_sensitivity(
     )
 
     for row_idx, (metric, title) in enumerate(metric_cols):
+        row_ylim = _shared_lambda_sensitivity_ylim(
+            stats_df,
+            metric=metric,
+            strategies=diversity_strategies,
+            k_values=k_values,
+        )
         for col_idx, strategy in enumerate(diversity_strategies):
             style = get_style(strategy)
             sub = stats_df.filter(pl.col('strategy') == strategy)
@@ -228,6 +226,7 @@ def _plot_lambda_sensitivity(
             if row_idx == len(metric_cols) - 1:
                 ax.set_xlabel('lambda', fontsize=9)
             _set_lambda_tick_labels(ax, sampled_lambda_values)
+            ax.set_ylim(*row_ylim)
             ax.tick_params(labelbottom=True)
             ax.grid(alpha=0.3)
 
@@ -1462,6 +1461,39 @@ def _custom_grid_figure(
     return fig, axes
 
 
+def _shared_lambda_sensitivity_ylim(
+    stats_df: pl.DataFrame,
+    *,
+    metric: str,
+    strategies: list[str],
+    k_values: list[int],
+) -> tuple[float, float]:
+    values: list[float] = []
+    for strategy in strategies:
+        strategy_df = stats_df.filter(pl.col('strategy') == strategy)
+        for value in strategy_df[metric].drop_nulls().to_list():
+            values.append(float(value))
+
+    topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
+    for k in k_values:
+        ref_df = topk_df.filter(pl.col('k') == k)
+        if ref_df.height == 0:
+            continue
+        values.append(float(ref_df[metric][0]))
+
+    if not values:
+        return (0.0, 1.0)
+
+    lower = min(values)
+    upper = max(values)
+    if lower == upper:
+        padding = abs(lower) * 0.05 if lower != 0.0 else 0.05
+        return (lower - padding, upper + padding)
+
+    padding = (upper - lower) * 0.05
+    return (lower - padding, upper + padding)
+
+
 def _best_lambda_note(
     stats_df: pl.DataFrame,
     strategies: list[str],
@@ -2126,9 +2158,3 @@ def _figure_legend(fig: Figure, axes: NDArray[Any]) -> None:
             frameon=False,
             bbox_to_anchor=(0.5, -0.005),
         )
-
-
-if __name__ == '__main__':
-    cfg, selected_plots = parse_plots_cli_args(sys.argv[1:])
-    paths = paths_for(cfg)
-    run_eval_plots(cfg, paths, selected_plots=selected_plots)

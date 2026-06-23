@@ -4,6 +4,13 @@ import argparse
 from collections.abc import Callable
 from typing import Literal, get_args
 
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
+    setup_logging,
+)
 from experiments.medical_dataset_gen.pipeline.p01_plans import (
     run_make_query_plans,
 )
@@ -25,13 +32,6 @@ from experiments.medical_dataset_gen.pipeline.p10_query_geom_plots import (
     run_query_geom_plots,
 )
 from experiments.medical_dataset_gen.pipeline.p11_eval_plots import run_eval_plots
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
-    setup_logging,
-)
 from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
 from helpers.ollama_client import stop_model
 
@@ -115,12 +115,17 @@ def _stage_index(name: str) -> int:
 
 
 def _release_ollama(cfg: ExperimentCfg) -> None:
-    llm_used = cfg.generation.use_llm_chunk_generation or cfg.generation.use_llm_query_paraphrase
+    llm_used = (
+        cfg.generation.llm_config.use_llm_chunk_generation
+        or cfg.generation.llm_config.use_llm_query_paraphrase
+    )
     if not llm_used:
         return
 
-    print(f'[pipeline] releasing Ollama model before embeddings: {cfg.generation.llm_name}')
-    stop_model(cfg.generation.llm_name)
+    print(
+        f'[pipeline] releasing Ollama model before embeddings: {cfg.generation.llm_config.model_name}'
+    )
+    stop_model(cfg.generation.llm_config.model_name)
 
 
 if __name__ == '__main__':

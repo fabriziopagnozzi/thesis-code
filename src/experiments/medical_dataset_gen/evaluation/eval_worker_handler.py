@@ -9,6 +9,10 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     get_qrels_by_query_chunk,
     load_embedding_arrays,
 )
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     EvaluationIndexMaps,
@@ -18,10 +22,6 @@ from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     RetrievalIndexMaps as RawRetrievalIndexMaps,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 

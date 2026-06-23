@@ -16,7 +16,7 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     load_embedding_arrays,
     select_indices,
 )
-from experiments.medical_dataset_gen.utils.global_configs import (
+from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     load_config,
@@ -1141,8 +1141,8 @@ def _render_selection_snapshot(
                         'facet_coverage',
                         'weighted_facet_coverage',
                         'distractor_rate',
-                    'primary_axis_rate',
-                    'calibrated_facet_rate',
+                        'primary_axis_rate',
+                        'calibrated_facet_rate',
                         'max_facet_concentration',
                         'redundant_gold_rate',
                         'avg_cos',
@@ -1503,9 +1503,7 @@ def _facet_label(facet: dict[str, Any]) -> str:
     return f'{subgroup} / {axis} / {value_bin}'
 
 
-def _calibrated_target_chunks(
-    facets: list[dict[str, Any]], calibrated_facet_id: str
-) -> int | None:
+def _calibrated_target_chunks(facets: list[dict[str, Any]], calibrated_facet_id: str) -> int | None:
     for facet in facets:
         if facet.get('facet_id') == calibrated_facet_id:
             value = facet.get('target_gold_chunks')
@@ -1637,7 +1635,15 @@ def _query_ids_from_plot_group(paths: MedicalDatasetGenPaths, group: str) -> lis
     root = paths.figures_dir / 'query_geometry' / group
     if not root.exists():
         return []
-    return sorted(path.name for path in root.iterdir() if path.is_dir())
+    dir_names = sorted(path.name for path in root.iterdir() if path.is_dir())
+    return [_query_id_from_plot_dir_name(dir_name) for dir_name in dir_names]
+
+
+def _query_id_from_plot_dir_name(dir_name: str) -> str:
+    rank_prefix, separator, query_id = dir_name.partition('_')
+    if separator and rank_prefix.isdigit():
+        return query_id
+    return dir_name
 
 
 def _parse_top_ks(args: argparse.Namespace) -> list[int]:

@@ -15,9 +15,9 @@ from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     BACKGROUND_OUTLIER_ROLE,
     DISTRACTOR_LABELS,
     FIXED_LABEL_COLORS,
-    SINGLE_ISOLATED_OUTLIER_LABEL,
-    SINGLE_ISOLATED_OUTLIER_LABEL_ID,
-    SINGLE_ISOLATED_OUTLIER_ROLE,
+    SAME_CONDITION_WRONG_AXIS_LABEL,
+    SAME_CONDITION_WRONG_AXIS_LABEL_ID,
+    SAME_CONDITION_WRONG_AXIS_ROLE,
     UNSELECTED_BACKGROUND_COLOR,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
@@ -480,10 +480,10 @@ def _plot_query_similarity_points(
     is_background = np.array(
         [_is_background_outlier_point(artifact, int(i)) for i in order], dtype=bool
     )
-    is_single_isolated = np.array(
-        [_is_single_isolated_outlier_point(artifact, int(i)) for i in order], dtype=bool
+    is_same_condition_wrong_axis = np.array(
+        [_is_same_condition_wrong_axis_point(artifact, int(i)) for i in order], dtype=bool
     )
-    near_miss = (~is_gold) & (~is_background) & (~is_single_isolated)
+    near_miss = (~is_gold) & (~is_background) & (~is_same_condition_wrong_axis)
 
     vmin = float(plot_sims.min()) if len(plot_sims) else 0.0
     vmax = float(plot_sims.max()) if len(plot_sims) else 1.0
@@ -518,11 +518,11 @@ def _plot_query_similarity_points(
             zorder=4,
             label='near-miss distractor',
         )
-    if is_single_isolated.any():
+    if is_same_condition_wrong_axis.any():
         points = ax.scatter(
-            plot_coords[is_single_isolated, 0],
-            plot_coords[is_single_isolated, 1],
-            c=plot_sims[is_single_isolated],
+            plot_coords[is_same_condition_wrong_axis, 0],
+            plot_coords[is_same_condition_wrong_axis, 1],
+            c=plot_sims[is_same_condition_wrong_axis],
             cmap='viridis',
             vmin=vmin,
             vmax=vmax,
@@ -532,7 +532,7 @@ def _plot_query_similarity_points(
             edgecolors='black',
             linewidths=0.6,
             zorder=5,
-            label=SINGLE_ISOLATED_OUTLIER_LABEL,
+            label=SAME_CONDITION_WRONG_AXIS_LABEL,
         )
     if is_background.any():
         points = _scatter_circled_x(
@@ -662,7 +662,7 @@ def label_palette(labels: list[str]) -> dict[str, Any]:
 def _label_marker(label: str) -> str:
     if _is_background_outlier_label(label):
         return 'x'
-    if _is_single_isolated_outlier_label(label):
+    if _is_same_condition_wrong_axis_label(label):
         return 'D'
     return 'x' if label in DISTRACTOR_LABELS else 'o'
 
@@ -671,8 +671,8 @@ def _is_background_outlier_label(label: str) -> bool:
     return label == BACKGROUND_OUTLIER_LABEL
 
 
-def _is_single_isolated_outlier_label(label: str) -> bool:
-    return label == SINGLE_ISOLATED_OUTLIER_LABEL
+def _is_same_condition_wrong_axis_label(label: str) -> bool:
+    return label == SAME_CONDITION_WRONG_AXIS_LABEL
 
 
 def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
@@ -686,14 +686,14 @@ def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
     )
 
 
-def _is_single_isolated_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
+def _is_same_condition_wrong_axis_point(artifact: GeometryArtifact, idx: int) -> bool:
     label = artifact.labels[idx]
     label_id = artifact.label_ids[idx]
     role = artifact.roles[idx]
     return (
-        label == SINGLE_ISOLATED_OUTLIER_LABEL
-        or label_id == SINGLE_ISOLATED_OUTLIER_LABEL_ID
-        or role == SINGLE_ISOLATED_OUTLIER_ROLE
+        label == SAME_CONDITION_WRONG_AXIS_LABEL
+        or label_id == SAME_CONDITION_WRONG_AXIS_LABEL_ID
+        or role == SAME_CONDITION_WRONG_AXIS_ROLE
     )
 
 

@@ -4,14 +4,14 @@ import re
 
 import yaml
 
+from experiments.medical_dataset_gen.global_config import (
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,
     QueryPlan,
     QueryTemplateData,
     QueryTemplateSpec,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    MedicalDatasetGenPaths,
 )
 
 _QUERY_TEMPLATE_PATH = (

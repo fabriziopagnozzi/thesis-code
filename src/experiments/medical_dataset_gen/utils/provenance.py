@@ -12,11 +12,11 @@ from pathlib import Path
 from typing import TypedDict, cast
 from uuid import uuid4
 
-from experiments.medical_dataset_gen.utils.global_configs import (
-    SYNTHETIC_TABLE_NAMES,
+from experiments.medical_dataset_gen.global_config import (
+    SYNTH_MEDICAL_DATASET_TABLE_NAMES,
     ExperimentCfg,
     MedicalDatasetGenPaths,
-    SyntheticMedicalTableName,
+    SyntheticMedicalDatasetTableName,
 )
 
 
@@ -130,11 +130,13 @@ class PipelineProvenance:
             else _hash_json(self.cfg.model_dump(mode='json', by_alias=True))
         )
         self.template_hash = _directory_fingerprint(self.paths.root / 'data_templates')
-        self.config_hash = _hash_json({
-            'config_hash': raw_config_hash,
-            'template_hash': self.template_hash,
-            'dataset_schema_version': self.cfg.dataset_schema_version,
-        })
+        self.config_hash = _hash_json(
+            {
+                'config_hash': raw_config_hash,
+                'template_hash': self.template_hash,
+                'dataset_schema_version': self.cfg.dataset_schema_version,
+            }
+        )
         self.manifest_path = self.paths.experiment_dir / '_artifact_manifest.json'
         self.run_path = self.paths.experiment_dir / '_runs' / f'{self.run_id}.json'
         self.run_path.parent.mkdir(parents=True, exist_ok=True)
@@ -190,22 +192,26 @@ class PipelineProvenance:
                 'input_fingerprints': lineage,
                 'created_at': datetime.now(UTC).isoformat(),
             }
-            artifacts[str(path.resolve())] = entry
+            artifacts[str(path.resolve())] = entry  # type: ignore
             output_records.append({'path': str(path), **entry})
-        manifest.update({
-            'dataset_schema_version': self.cfg.dataset_schema_version,
-            'experiment': self.paths.exp_name,
-            'config_hash': self.config_hash,
-        })
+        manifest.update(
+            {
+                'dataset_schema_version': self.cfg.dataset_schema_version,
+                'experiment': self.paths.exp_name,
+                'config_hash': self.config_hash,
+            }
+        )
         _write_json(self.manifest_path, manifest)
         stage_records = self.run_record['stage_records']
         assert isinstance(stage_records, list)
-        stage_records.append({
-            'stage': stage,
-            'inputs': input_fingerprints,
-            'outputs': output_records,
-            'finished_at': datetime.now(UTC).isoformat(),
-        })
+        stage_records.append(
+            {
+                'stage': stage,
+                'inputs': input_fingerprints,
+                'outputs': output_records,
+                'finished_at': datetime.now(UTC).isoformat(),
+            }
+        )
         self._write_run_record()
 
     def finish(self) -> None:
@@ -216,8 +222,8 @@ class PipelineProvenance:
         paths: list[Path] = []
         for name in names:
             relative = Path(name)
-            if relative.suffix == '.parquet' and relative.stem in SYNTHETIC_TABLE_NAMES:
-                table = cast(SyntheticMedicalTableName, relative.stem)
+            if relative.suffix == '.parquet' and relative.stem in SYNTH_MEDICAL_DATASET_TABLE_NAMES:
+                table = cast(SyntheticMedicalDatasetTableName, relative.stem)
                 paths.append(self.paths.table_path(table))
             else:
                 paths.append(self.paths.experiment_dir / relative)

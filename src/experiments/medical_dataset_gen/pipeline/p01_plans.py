@@ -14,6 +14,10 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     make_subgroup_pairs,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
     AxisPairProfile,
@@ -27,10 +31,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanSpec,
     QueryType,
     SubgroupOntology,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
@@ -70,12 +70,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                 if len(primary_axes) == 2:
                     # Rotate profile direction while preserving both query orientations.
                     profile = profiles[
-                        (
-                            cfg.global_.seed
-                            + condition_index
-                            + contrast_index
-                            + axis_pair_index
-                        )
+                        (cfg.global_.seed + condition_index + contrast_index + axis_pair_index)
                         % len(profiles)
                     ]
                     spec = _make_plan_spec(
@@ -248,16 +243,14 @@ def _materialize_plan(
         (spec.subgroup_b_id, spec.subgroup_b, spec.axis_b),
     ]
     secondary_indices = [
-        index
-        for index, (_, _, axis) in enumerate(raw_facets, start=1)
-        if axis == secondary_axis
+        index for index, (_, _, axis) in enumerate(raw_facets, start=1) if axis == secondary_axis
     ]
     # Rotate which complementary facet is niche without introducing sampling state.
     niche_indices = set(
         sorted(
             secondary_indices,
             key=lambda index: _stable_int(query_id, 'niche_gold', index),
-        )[: cfg.generation.niche_gold_clusters_per_query]
+        )[: cfg.generation.chunk_pool_config.niche_gold_clusters_per_query]
     )
     facets: list[QueryPlanFacet] = []
     for index, (cohort_id, cohort, axis) in enumerate(raw_facets, start=1):
@@ -266,13 +259,13 @@ def _materialize_plan(
         is_calibrated = is_primary and cohort_id == selected_subgroup_id
         is_niche = index in niche_indices
         target = (
-            cfg.generation.gold_chunks_calibrated_primary
+            cfg.generation.chunk_pool_config.gold_chunks_calibrated_primary
             if is_calibrated
-            else cfg.generation.gold_chunks_other_primary
+            else cfg.generation.chunk_pool_config.gold_chunks_other_primary
             if is_primary
-            else cfg.generation.gold_chunks_niche
+            else cfg.generation.chunk_pool_config.gold_chunks_niche
             if is_niche
-            else cfg.generation.gold_chunks_secondary
+            else cfg.generation.chunk_pool_config.gold_chunks_secondary
         )
         facets.append(
             QueryPlanFacet(
@@ -335,12 +328,7 @@ def _materialize_plan(
         calibrated_primary_facet_id=calibrated_id,
         n_facets=4,
         gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
-        distractor_chunks=(
-            cfg.generation.distractors_per_query
-            + cfg.generation.background_outlier_clusters_per_query
-            * cfg.generation.background_outlier_cluster_size
-            + cfg.generation.single_isolated_outliers_per_query
-        ),
+        distractor_chunks=cfg.generation.total_distractor_chunks(),
         facets=facets,
         logical_form=logical_form,
     )
@@ -366,7 +354,7 @@ def _split_for_profile(evidence_profile_id: str) -> DataSplit:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

@@ -14,6 +14,10 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     render_answer_template,
     render_query_template,
 )
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
     AnswerFact,
@@ -29,10 +33,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 from helpers.ollama_client import generate
@@ -139,10 +139,10 @@ def _finalize_query(
         query_text=query_text,
         plan=plan,
         ontology=ontology,
-        llm_name=cfg.generation.llm_name,
-        use_llm=cfg.generation.use_llm_query_paraphrase,
-        temperature=cfg.generation.llm_temperature,
-        num_ctx=cfg.generation.llm_num_ctx,
+        llm_name=cfg.generation.llm_config.model_name,
+        use_llm=cfg.generation.llm_config.use_llm_query_paraphrase,
+        temperature=cfg.generation.llm_config.temperature,
+        num_ctx=cfg.generation.llm_config.num_ctx,
     )
 
     facet_summaries, facet_answer_objects = _facet_summaries(plan.facets, fact_rows)
@@ -239,9 +239,7 @@ def _facet_summaries(
         facet_id = facet.facet_id
         rows = by_facet[facet_id]
         if not rows:
-            summaries[_profile_facet_key(facet.subgroup_id, facet.axis)] = (
-                'no generated evidence'
-            )
+            summaries[_profile_facet_key(facet.subgroup_id, facet.axis)] = 'no generated evidence'
             continue
 
         if any(row.axis != facet.axis for row in rows):
@@ -296,7 +294,7 @@ def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

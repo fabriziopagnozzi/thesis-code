@@ -19,6 +19,7 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.query_geometry.dim_reduction import (
     cluster_features,
     hdbscan_labels,
@@ -34,7 +35,6 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     RetrievalIndexMaps,
     RetrievalStrategy,
 )
-from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [
@@ -64,7 +64,7 @@ _DISTRACTOR_LABELS = {
     'same_condition_wrong_subgroup': 'soft distractor: same condition, wrong subgroup',
     'same_subgroup_wrong_condition': 'hard distractor: wrong condition, same subgroup',
     'same_axis_wrong_condition': 'hard distractor: wrong condition, same answer axis',
-    'single_isolated_outlier': 'single isolated outlier',
+    'same_condition_wrong_axis': 'same condition, wrong axis',
     'background_clinical_cluster': 'background outlier: clinical cluster',
     'hard_distractor': 'hard distractor',
 }
@@ -102,6 +102,29 @@ def choose_query_groups(
     if cfg.query_geometry.query_selection == 'best':
         return {'good': ranked['query_id'].head(cfg.query_geometry.n_queries).to_list()}
     return mixed_query_groups(ranked, cfg.query_geometry.n_queries)
+
+
+def query_directory_names_for_groups(
+    cfg: ExperimentCfg,
+    queries: pl.DataFrame,
+    geometry_filter: pl.DataFrame,
+    eval_results: pl.DataFrame,
+    groups: dict[str, list[str]],
+) -> dict[str, str]:
+    ranked = ranked_queries_for_query_geometry(cfg, queries, geometry_filter, eval_results)
+    best_rank_by_qid = _rank_position_map(ranked['query_id'].to_list())
+    worst_rank_by_qid = _rank_position_map(
+        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)[
+            'query_id'
+        ].to_list()
+    )
+    query_dir_name_by_id: dict[str, str] = {}
+    for group, query_ids in groups.items():
+        rank_by_qid = worst_rank_by_qid if group == 'bad' else best_rank_by_qid
+        for fallback_rank, qid in enumerate(query_ids, start=1):
+            rank = rank_by_qid.get(qid, fallback_rank)
+            query_dir_name_by_id[qid] = f'{rank:04d}_{qid}'
+    return query_dir_name_by_id
 
 
 def ranked_queries_for_query_geometry(
@@ -203,6 +226,10 @@ def mixed_group_sizes(n_queries: int) -> tuple[int, int, int]:
     n_mid = base + int(remainder >= 2)
     n_bad = base
     return n_good, n_mid, n_bad
+
+
+def _rank_position_map(query_ids: list[str]) -> dict[str, int]:
+    return {qid: rank for rank, qid in enumerate(query_ids, start=1)}
 
 
 def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:

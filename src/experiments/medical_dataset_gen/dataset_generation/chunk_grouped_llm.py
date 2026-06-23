@@ -31,12 +31,12 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     row_from_state,
 )
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkRow,
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 
 def render_chunks_grouped_llm(
@@ -81,7 +81,7 @@ def render_chunks_grouped_llm(
     with tqdm(total=len(facts), desc='Rendering chunks', dynamic_ncols=True) as pbar:
         if cache_hits:
             pbar.update(cache_hits)
-        if cfg.generation.llm_workers > 1:
+        if cfg.generation.llm_config.num_workers > 1:
             _generate_missing_groups_parallel(
                 cfg=cfg,
                 ontology=ontology,
@@ -133,11 +133,13 @@ def render_chunks_grouped_rewrite(
     duplicate_jobs_saved = 0
     next_idx = 0
 
-    print(f'[chunks] grouped rewrite enabled with {cfg.generation.llm_workers} parallel workers')
+    print(
+        f'[chunks] grouped rewrite enabled with {cfg.generation.llm_config.num_workers} parallel workers'
+    )
 
     with (
         ThreadPoolExecutor(
-            max_workers=cfg.generation.llm_workers,
+            max_workers=cfg.generation.llm_config.num_workers,
             thread_name_prefix='mdg-rewrite',
         ) as executor,
         tqdm(total=len(facts), desc='Rendering chunks', dynamic_ncols=True) as pbar,
@@ -244,9 +246,11 @@ def _generate_missing_groups_parallel(
         tuple[str, list[tuple[int, ClinicalFact]]],
     ] = {}
     next_idx = 0
-    max_in_flight = max(cfg.generation.llm_workers * 2, cfg.generation.llm_workers)
+    max_in_flight = max(
+        cfg.generation.llm_config.num_workers * 2, cfg.generation.llm_config.num_workers
+    )
     executor = ThreadPoolExecutor(
-        max_workers=cfg.generation.llm_workers, thread_name_prefix='mdg-llm'
+        max_workers=cfg.generation.llm_config.num_workers, thread_name_prefix='mdg-llm'
     )
 
     try:

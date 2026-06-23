@@ -13,7 +13,7 @@ FIXED_LABEL_COLORS = {
     'soft distractor: same condition, wrong subgroup': '#f3a6a6',
     'hard distractor: wrong condition, same subgroup': '#d62728',
     'hard distractor: wrong condition, same answer axis': '#8c1d18',
-    'single isolated outlier': '#ff7f0e',
+    'same condition, wrong axis': '#ff7f0e',
     'background outlier: clinical cluster': '#d62728',
     'hard distractor': '#d62728',
     'off-query wrong-condition chunks': '#d62728',
@@ -23,8 +23,8 @@ BACKGROUND_OUTLIER_LABEL = 'background outlier: clinical cluster'
 BACKGROUND_OUTLIER_LABEL_ID = 'background_clinical_cluster'
 BACKGROUND_OUTLIER_ROLE = 'background_outlier'
 BACKGROUND_OUTLIER_COLOR = '#d62728'
-SINGLE_ISOLATED_OUTLIER_LABEL = 'single isolated outlier'
-SINGLE_ISOLATED_OUTLIER_LABEL_ID = 'single_isolated_outlier'
-SINGLE_ISOLATED_OUTLIER_ROLE = 'single_isolated_outlier'
-SINGLE_ISOLATED_OUTLIER_COLOR = '#ff7f0e'
+SAME_CONDITION_WRONG_AXIS_LABEL = 'same condition, wrong axis'
+SAME_CONDITION_WRONG_AXIS_LABEL_ID = 'same_condition_wrong_axis'
+SAME_CONDITION_WRONG_AXIS_ROLE = 'same_condition_wrong_axis'
+SAME_CONDITION_WRONG_AXIS_COLOR = '#ff7f0e'
 UNSELECTED_BACKGROUND_COLOR = '#b8b8b8'

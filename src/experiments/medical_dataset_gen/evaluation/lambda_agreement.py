@@ -4,11 +4,11 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     pair_kernel_polars_expr,
     sigmoid_polars_expr,
 )
-from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
-from experiments.medical_dataset_gen.utils.global_configs import (
+from experiments.medical_dataset_gen.global_config import (
     MethodsComparisonKernelMetricCfg,
     MethodsComparisonKernelsCfg,
 )
+from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
 _LAMBDA_PAIR_AGREEMENT_METRICS = [
     'Precision@k',

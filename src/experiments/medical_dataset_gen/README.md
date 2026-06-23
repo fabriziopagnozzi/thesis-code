@@ -102,11 +102,11 @@ Schema v2 uses only `retrieval.pool_scope: query_local`: chunks linked to the qu
 
 Chunk generation behavior is controlled from the experiment config:
 
-- `generation.use_llm_chunk_generation`
-- `generation.use_llm_chunk_rewriting`
-- `generation.use_llm_query_paraphrase`
-- `generation.llm_name`
-- `generation.llm_workers`
+- `generation.llm_config.use_llm_chunk_generation`
+- `generation.llm_config.use_llm_chunk_rewriting`
+- `generation.llm_config.use_llm_query_paraphrase`
+- `generation.llm_config.model_name`
+- `generation.llm_config.num_workers`
 
 If LLM chunk generation is enabled, accepted generations are cached in:
 

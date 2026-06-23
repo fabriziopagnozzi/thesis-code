@@ -15,16 +15,16 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.pipeline.p03_structured_facts import make_gold_fact
 from experiments.medical_dataset_gen.pipeline.p05_queries_answers import render_query
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,
     QueryPlan,
     QueryPlanFacet,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
@@ -115,9 +115,7 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
     return updated_df
 
 
-def _prepare_probe(
-    plan: QueryPlan, ontology: MedicalOntology, probe_n: int
-) -> FacetProbe:
+def _prepare_probe(plan: QueryPlan, ontology: MedicalOntology, probe_n: int) -> FacetProbe:
     if len(plan.facets) != plan.n_facets:
         raise ValueError(
             f'query {plan.query_id} declares {plan.n_facets} facets but contains {len(plan.facets)}'
@@ -180,8 +178,7 @@ def _select_calibration(
             float(row['p75_query_sim']) for row in secondary_stats
         )
         primary_cohort_mean_gap = abs(
-            float(primary_stats[0]['mean_query_sim'])
-            - float(primary_stats[1]['mean_query_sim'])
+            float(primary_stats[0]['mean_query_sim']) - float(primary_stats[1]['mean_query_sim'])
         )
         candidate_rows.append(
             {
@@ -207,9 +204,7 @@ def _select_calibration(
     selected_candidate = candidate_rows[selected_index]
     selected_stats = candidate_facet_stats[selected_index]
     selected_primary_stats = [row for row in selected_stats if row['priority'] == 'primary']
-    selected_facet = max(
-        selected_primary_stats, key=lambda item: float(item['mean_query_sim'])
-    )
+    selected_facet = max(selected_primary_stats, key=lambda item: float(item['mean_query_sim']))
     other_primary = next(
         item for item in selected_primary_stats if item['facet_id'] != selected_facet['facet_id']
     )
@@ -218,26 +213,30 @@ def _select_calibration(
     )
     primary_axis_margin = float(selected_candidate['primary_axis_probe_margin'])
     warning = primary_axis_margin < 0.0 or primary_cohort_margin < 0.0
-    return str(selected_facet['facet_id']), str(selected_candidate['template_id']), {
-        'query_id': plan.query_id,
-        'evidence_profile_id': plan.evidence_profile_id,
-        'primary_axis': plan.primary_axis,
-        'secondary_axis': plan.secondary_axis,
-        'previous_template_id': plan.template_id,
-        'selected_template_id': str(selected_candidate['template_id']),
-        'previous_calibrated_primary_facet_id': plan.calibrated_primary_facet_id,
-        'calibrated_primary_facet_id': str(selected_facet['facet_id']),
-        'calibrated_primary_subgroup_id': str(selected_facet['subgroup_id']),
-        'probe_chunks_per_facet': probe_n,
-        'selected_mean_query_sim': float(selected_facet['mean_query_sim']),
-        'selected_probe_margin': primary_cohort_margin,
-        'primary_axis_probe_margin': primary_axis_margin,
-        'primary_cohort_mean_gap': float(selected_candidate['primary_cohort_mean_gap']),
-        'secondary_mean_query_sim': float(selected_candidate['secondary_mean_query_sim']),
-        'calibration_warning': warning,
-        'facet_stats_json': json.dumps(selected_stats, sort_keys=True),
-        'template_stats_json': json.dumps(candidate_rows, sort_keys=True),
-    }
+    return (
+        str(selected_facet['facet_id']),
+        str(selected_candidate['template_id']),
+        {
+            'query_id': plan.query_id,
+            'evidence_profile_id': plan.evidence_profile_id,
+            'primary_axis': plan.primary_axis,
+            'secondary_axis': plan.secondary_axis,
+            'previous_template_id': plan.template_id,
+            'selected_template_id': str(selected_candidate['template_id']),
+            'previous_calibrated_primary_facet_id': plan.calibrated_primary_facet_id,
+            'calibrated_primary_facet_id': str(selected_facet['facet_id']),
+            'calibrated_primary_subgroup_id': str(selected_facet['subgroup_id']),
+            'probe_chunks_per_facet': probe_n,
+            'selected_mean_query_sim': float(selected_facet['mean_query_sim']),
+            'selected_probe_margin': primary_cohort_margin,
+            'primary_axis_probe_margin': primary_axis_margin,
+            'primary_cohort_mean_gap': float(selected_candidate['primary_cohort_mean_gap']),
+            'secondary_mean_query_sim': float(selected_candidate['secondary_mean_query_sim']),
+            'calibration_warning': warning,
+            'facet_stats_json': json.dumps(selected_stats, sort_keys=True),
+            'template_stats_json': json.dumps(candidate_rows, sort_keys=True),
+        },
+    )
 
 
 def _with_calibrated_query(
@@ -262,9 +261,9 @@ def _with_calibrated_query(
                         else facet.cluster_role
                     ),
                     'target_gold_chunks': (
-                        cfg.generation.gold_chunks_calibrated_primary
+                        cfg.generation.chunk_pool_config.gold_chunks_calibrated_primary
                         if selected
-                        else cfg.generation.gold_chunks_other_primary
+                        else cfg.generation.chunk_pool_config.gold_chunks_other_primary
                         if primary
                         else facet.target_gold_chunks
                     ),
@@ -311,7 +310,7 @@ def _calibration_row_without_embeddings(plan: QueryPlan) -> dict[str, object]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

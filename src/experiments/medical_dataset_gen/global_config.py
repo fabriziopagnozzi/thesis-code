@@ -22,11 +22,12 @@ from pydantic import (
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkPoolScope,
+    DistractorStr,
     PlanCalibrationMode,
 )
 from helpers.dir_paths import ROOT_DIR
 
-type SyntheticMedicalTableName = Literal[
+type SyntheticMedicalDatasetTableName = Literal[
     'query_plans',
     'query_plan_calibration',
     'clinical_facts',
@@ -46,7 +47,7 @@ type SyntheticMedicalTableName = Literal[
     'query_geometry_points',
     'query_geometry_stats',
 ]
-SYNTHETIC_TABLE_NAMES = set[str](get_args(SyntheticMedicalTableName.__value__))
+SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTableName.__value__))
 
 
 class ConfigModel(BaseModel):
@@ -57,43 +58,90 @@ class GlobalCfg(ConfigModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
     output_experiment: str = 'v2'
-    result_dir_overrides: dict[SyntheticMedicalTableName, str] = Field(default_factory=dict)
+    result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] = Field(default_factory=dict)
+
+
+class BackgroundOutlierCfg(ConfigModel):
+    clusters_per_query: int = Field(default=1, ge=0)
+    cluster_size: int = Field(default=8, ge=0)
+
+    def total_chunks(self) -> int:
+        return self.clusters_per_query * self.cluster_size
+
+
+class DistractorConfigCfg(ConfigModel):
+    same_condition_wrong_subgroup: int = Field(default=9, ge=0)
+    same_subgroup_wrong_condition: int = Field(default=8, ge=0)
+    same_axis_wrong_condition: int = Field(default=8, ge=0)
+    same_condition_wrong_axis: int = Field(default=0, ge=0)
+    background_outlier: BackgroundOutlierCfg = Field(default_factory=BackgroundOutlierCfg)
+
+    def point_distractor_counts(self) -> dict[DistractorStr, int]:
+        return {
+            'same_condition_wrong_subgroup': self.same_condition_wrong_subgroup,
+            'same_subgroup_wrong_condition': self.same_subgroup_wrong_condition,
+            'same_axis_wrong_condition': self.same_axis_wrong_condition,
+            'same_condition_wrong_axis': self.same_condition_wrong_axis,
+        }
+
+    def total_point_distractors(self) -> int:
+        return sum(self.point_distractor_counts().values())
+
+    def total_chunks(self) -> int:
+        return self.total_point_distractors() + self.background_outlier.total_chunks()
+
+
+class ChunkPoolConfig(ConfigModel):
+    gold_chunks_calibrated_primary: PositiveInt = 24
+    gold_chunks_other_primary: PositiveInt = 20
+    gold_chunks_secondary: PositiveInt = 14
+
+    niche_gold_clusters_per_query: int = Field(default=0, ge=0, le=2)
+    gold_chunks_niche: PositiveInt = 4
+
+
+class GenerationLlmConfig(ConfigModel):
+    use_llm_chunk_generation: bool = False
+    use_llm_chunk_rewriting: bool = False
+    use_llm_query_paraphrase: bool = False
+    model_name: str = 'gemma4:12b-ud_q8_xl'
+    num_workers: PositiveInt = 4
+    max_attempts: PositiveInt = 3
+    temperature: PositiveFloat = 0.1
+    num_ctx: PositiveInt = 4096
 
 
 class GenerationCfg(ConfigModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
+
     calibration_mode: PlanCalibrationMode = 'rotating'
     calibration_probe_chunks_per_facet: PositiveInt = 8
-    gold_chunks_calibrated_primary: PositiveInt = 24
-    gold_chunks_other_primary: PositiveInt = 20
-    gold_chunks_secondary: PositiveInt = 14
-    niche_gold_clusters_per_query: int = Field(default=0, ge=0, le=2)
-    gold_chunks_niche: PositiveInt = 4
-    distractors_per_query: PositiveInt = 25
-    background_outlier_clusters_per_query: int = Field(default=1, ge=0)
-    background_outlier_cluster_size: int = Field(default=8, ge=0)
-    single_isolated_outliers_per_query: int = Field(default=0, ge=0)
+
+    chunk_pool_config: ChunkPoolConfig = Field(default_factory=ChunkPoolConfig)
+    distractor_config: DistractorConfigCfg = Field(default_factory=DistractorConfigCfg)
+
     chunk_min_words: PositiveInt = 25
     chunk_max_words: PositiveInt = 90
     chunk_word_tolerance: PositiveInt = 2
-    llm_name: str = 'gemma4:12b-ud_q8_xl'
-    llm_workers: PositiveInt = 1
-    use_llm_chunk_generation: bool = True
-    use_llm_chunk_rewriting: bool = False
-    use_llm_query_paraphrase: bool = False
-    llm_chunk_max_attempts: PositiveInt = 3
-    llm_temperature: PositiveFloat = 0.1
-    llm_num_ctx: PositiveInt = 4096
+
+    llm_config: GenerationLlmConfig = Field(default_factory=GenerationLlmConfig)
 
     @model_validator(mode='after')
     def _validate_niche_cluster_size(self) -> GenerationCfg:
-        if self.niche_gold_clusters_per_query and self.gold_chunks_niche >= self.gold_chunks_secondary:
+        if (
+            self.chunk_pool_config.niche_gold_clusters_per_query
+            and self.chunk_pool_config.gold_chunks_niche
+            >= self.chunk_pool_config.gold_chunks_secondary
+        ):
             raise ValueError(
-                'generation.gold_chunks_niche must be smaller than gold_chunks_secondary '
+                'generation.chunk_pool_config.gold_chunks_niche must be smaller than gold_chunks_secondary '
                 'when niche gold clusters are enabled'
             )
         return self
+
+    def total_distractor_chunks(self) -> int:
+        return self.distractor_config.total_chunks()
 
 
 class EmbeddingCfg(ConfigModel):
@@ -192,18 +240,13 @@ class ExperimentCfg(ConfigModel):
         if self.retrieval.pool_scope != 'query_local':
             raise ValueError('dataset schema v2 supports only retrieval.pool_scope=query_local')
         local_pool_size = (
-            self.generation.gold_chunks_calibrated_primary
-            + self.generation.gold_chunks_other_primary
-            + (
-                2 - self.generation.niche_gold_clusters_per_query
-            )
-            * self.generation.gold_chunks_secondary
-            + self.generation.niche_gold_clusters_per_query
-            * self.generation.gold_chunks_niche
-            + self.generation.distractors_per_query
-            + self.generation.background_outlier_clusters_per_query
-            * self.generation.background_outlier_cluster_size
-            + self.generation.single_isolated_outliers_per_query
+            self.generation.chunk_pool_config.gold_chunks_calibrated_primary
+            + self.generation.chunk_pool_config.gold_chunks_other_primary
+            + (2 - self.generation.chunk_pool_config.niche_gold_clusters_per_query)
+            * self.generation.chunk_pool_config.gold_chunks_secondary
+            + self.generation.chunk_pool_config.niche_gold_clusters_per_query
+            * self.generation.chunk_pool_config.gold_chunks_niche
+            + self.generation.total_distractor_chunks()
         )
         if self.retrieval.candidate_pool_n < local_pool_size:
             raise ValueError(
@@ -221,7 +264,7 @@ class MedicalDatasetGenPaths:
     def __init__(
         self,
         exp_name: str,
-        result_dir_overrides: dict[SyntheticMedicalTableName, str] | None = None,
+        result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] | None = None,
     ):
         self.exp_name = exp_name
         self.experiment_dir = self.results_dir / exp_name
@@ -241,7 +284,7 @@ class MedicalDatasetGenPaths:
 
     def table_path(
         self,
-        table: SyntheticMedicalTableName,
+        table: SyntheticMedicalDatasetTableName,
         ext: Literal['parquet', 'json', 'jsonl', 'csv'] = 'parquet',
     ) -> Path:
         override = self.result_dir_overrides.get(table)
@@ -258,7 +301,7 @@ class MedicalDatasetGenPaths:
             return override_path / f'{table}.{ext}'
         return self.results_dir / override_path / f'{table}.{ext}'
 
-    def get_result_dir(self, table: SyntheticMedicalTableName) -> Path:
+    def get_result_dir(self, table: SyntheticMedicalDatasetTableName) -> Path:
         return self.table_path(table).parent
 
 

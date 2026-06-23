@@ -38,14 +38,14 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_text,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkRow,
     ClinicalFact,
     MedicalOntology,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
@@ -53,28 +53,31 @@ from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_p
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     facts = read_parquet(paths, 'clinical_facts')
-    if cfg.generation.use_llm_chunk_generation:
+    if cfg.generation.llm_config.use_llm_chunk_generation:
         print(f'[chunks] LLM generation enabled for all {len(facts):,} facts')
-        if cfg.generation.llm_workers > 1:
+        if cfg.generation.llm_config.num_workers > 1:
             print(
-                f'[chunks] using {cfg.generation.llm_workers} parallel workers; '
-                f'configure the Ollama server with OLLAMA_NUM_PARALLEL>={cfg.generation.llm_workers} '
+                f'[chunks] using {cfg.generation.llm_config.num_workers} parallel workers; '
+                f'configure the Ollama server with OLLAMA_NUM_PARALLEL>={cfg.generation.llm_config.num_workers} '
                 'for actual concurrent decoding'
             )
     else:
         print('[chunks] LLM generation disabled; using deterministic clinical fallback')
-        if cfg.generation.use_llm_chunk_rewriting:
+        if cfg.generation.llm_config.use_llm_chunk_rewriting:
             print(
                 '[chunks] deterministic chunks will be LLM-rewritten with the isolated global '
                 'rewrite cache'
             )
-            if cfg.generation.llm_workers > 1:
+            if cfg.generation.llm_config.num_workers > 1:
                 print(
-                    f'[chunks] using {cfg.generation.llm_workers} parallel workers for rewrite '
+                    f'[chunks] using {cfg.generation.llm_config.num_workers} parallel workers for rewrite '
                     'calls; configure the Ollama server with '
-                    f'OLLAMA_NUM_PARALLEL>={cfg.generation.llm_workers} for actual concurrent decoding'
+                    f'OLLAMA_NUM_PARALLEL>={cfg.generation.llm_config.num_workers} for actual concurrent decoding'
                 )
-    if cfg.generation.use_llm_chunk_generation and cfg.generation.use_llm_chunk_rewriting:
+    if (
+        cfg.generation.llm_config.use_llm_chunk_generation
+        and cfg.generation.llm_config.use_llm_chunk_rewriting
+    ):
         print(
             '[chunks] use_llm_chunk_rewriting is ignored when use_llm_chunk_generation is enabled'
         )
@@ -87,7 +90,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             [shared_cache_path, local_cache_path],
             cache_version=GENERATION_CACHE_VERSION,
         )
-        if cfg.generation.use_llm_chunk_generation
+        if cfg.generation.llm_config.use_llm_chunk_generation
         else GenerationCache(by_fact_id={}, by_reuse_key={})
     )
     if generation_cache.loaded_rows:
@@ -98,7 +101,10 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
         )
     rewrite_cache = (
         load_generation_cache([rewrite_cache_path], cache_version=REWRITE_CACHE_VERSION)
-        if (not cfg.generation.use_llm_chunk_generation and cfg.generation.use_llm_chunk_rewriting)
+        if (
+            not cfg.generation.llm_config.use_llm_chunk_generation
+            and cfg.generation.llm_config.use_llm_chunk_rewriting
+        )
         else GenerationCache(by_fact_id={}, by_reuse_key={})
     )
     if rewrite_cache.loaded_rows:
@@ -108,7 +114,10 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             f'{len(rewrite_cache.by_reuse_key):,} reusable keys)'
         )
 
-    if not cfg.generation.use_llm_chunk_generation and not cfg.generation.use_llm_chunk_rewriting:
+    if (
+        not cfg.generation.llm_config.use_llm_chunk_generation
+        and not cfg.generation.llm_config.use_llm_chunk_rewriting
+    ):
         return _render_chunks_deterministic_parallel(
             cfg=cfg,
             paths=paths,
@@ -118,7 +127,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
 
     fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
 
-    if cfg.generation.use_llm_chunk_generation:
+    if cfg.generation.llm_config.use_llm_chunk_generation:
         rows, rejects, failed_queries = render_chunks_grouped_llm(
             cfg=cfg,
             facts=fact_rows,
@@ -128,7 +137,10 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             shared_cache_path=shared_cache_path,
             cache_version=GENERATION_CACHE_VERSION,
         )
-    elif cfg.generation.use_llm_chunk_rewriting and cfg.generation.llm_workers > 1:
+    elif (
+        cfg.generation.llm_config.use_llm_chunk_rewriting
+        and cfg.generation.llm_config.num_workers > 1
+    ):
         rows, rejects, failed_queries = render_chunks_grouped_rewrite(
             cfg=cfg,
             facts=fact_rows,
@@ -197,7 +209,7 @@ def render_chunks_sequential(
 
         cache_key: str | None = None
 
-        if cfg.generation.use_llm_chunk_generation:
+        if cfg.generation.llm_config.use_llm_chunk_generation:
             final_text, attempt_errors = generate_llm_chunk(cfg=cfg, fact=fact, ontology=ontology)
             if attempt_errors:
                 rejects.append(reject_row(fact, '; '.join(attempt_errors), final_text))
@@ -217,7 +229,7 @@ def render_chunks_sequential(
             )
         else:
             draft_text = render_canonical_chunk_text(fact, ontology)
-            if cfg.generation.use_llm_chunk_rewriting:
+            if cfg.generation.llm_config.use_llm_chunk_rewriting:
                 cached = cached_rewrite_chunk_state(
                     cfg=cfg,
                     fact=fact,
@@ -277,14 +289,17 @@ def render_chunks_sequential(
                 ontology=ontology,
                 index=i,
                 state=state,
-                should_cache=cfg.generation.use_llm_chunk_generation
+                should_cache=cfg.generation.llm_config.use_llm_chunk_generation
                 or (
-                    cfg.generation.use_llm_chunk_rewriting and state.text_generation_source == 'llm'
+                    cfg.generation.llm_config.use_llm_chunk_rewriting
+                    and state.text_generation_source == 'llm'
                 ),
-                cache_key=cache_key if not cfg.generation.use_llm_chunk_generation else None,
+                cache_key=cache_key
+                if not cfg.generation.llm_config.use_llm_chunk_generation
+                else None,
                 cache_version=(
                     GENERATION_CACHE_VERSION
-                    if cfg.generation.use_llm_chunk_generation
+                    if cfg.generation.llm_config.use_llm_chunk_generation
                     else REWRITE_CACHE_VERSION
                 ),
                 cache_key_fn=chunk_generation_cache_key,
@@ -298,7 +313,7 @@ def render_chunks_sequential(
             continue
 
         if cache_entry is not None:
-            if cfg.generation.use_llm_chunk_generation:
+            if cfg.generation.llm_config.use_llm_chunk_generation:
                 append_generation_cache(generation_cache_path, cache_entry)
                 remember_cache_entry(generation_cache, cache_entry)
             else:
@@ -475,8 +490,7 @@ def _write_normalized_chunks(
         return chunk_documents, chunk_memberships
 
     duplicate_text_keys = (
-        chunk_rows
-        .group_by('chunk_reuse_key')
+        chunk_rows.group_by('chunk_reuse_key')
         .agg(pl.col('text').n_unique().alias('n_texts'))
         .filter(pl.col('n_texts') > 1)
     )
@@ -493,8 +507,7 @@ def _write_normalized_chunks(
     }
 
     with_doc_id = chunk_rows.with_columns(
-        pl
-        .col('chunk_reuse_key')
+        pl.col('chunk_reuse_key')
         .replace_strict(doc_key_to_id, return_dtype=pl.String)
         .alias('chunk_id'),
         pl.col('chunk_id').alias('membership_id'),
@@ -551,18 +564,16 @@ def _write_normalized_chunks(
     ]
 
     chunk_documents = (
-        with_doc_id
-        .select([col for col in doc_cols if col in with_doc_id.columns])
+        with_doc_id.select([col for col in doc_cols if col in with_doc_id.columns])
         .unique(subset=['chunk_id'], keep='first', maintain_order=True)
         .sort('chunk_id')
     )
-    chunk_memberships = with_doc_id.select([
-        col for col in membership_cols if col in with_doc_id.columns
-    ])
+    chunk_memberships = with_doc_id.select(
+        [col for col in membership_cols if col in with_doc_id.columns]
+    )
 
     duplicate_memberships = (
-        chunk_memberships
-        .group_by('query_id', 'chunk_id')
+        chunk_memberships.group_by('query_id', 'chunk_id')
         .agg(pl.len().alias('n'))
         .filter(pl.col('n') > 1)
     )
@@ -584,7 +595,7 @@ def _write_normalized_chunks(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

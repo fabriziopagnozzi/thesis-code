@@ -9,6 +9,7 @@ import polars as pl
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
+from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
@@ -21,7 +22,6 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     RetrievalIndexMaps,
     RetrievalStrategy,
 )
-from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 
 class GeometrySelection(BenchmarkModel):
@@ -189,5 +189,6 @@ class EmbeddingGeometryWorkerState(TypedDict):
     eval_results: pl.DataFrame
     out_dir: Path
     query_group_by_id: dict[str, str]
+    query_dir_name_by_id: dict[str, str]
     k_values: list[int]
     selected_plot_names: Container[GeomPlotFileName] | None

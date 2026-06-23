@@ -18,7 +18,7 @@ def _serialize_temporal(obj):
 
 def _serialize_pyarrow_scalar(obj):
     """Convert PyArrow scalar types to JSON-serializable format."""
-    if not getattr(obj, "is_valid", True):
+    if not getattr(obj, 'is_valid', True):
         return None
 
     if pa.types.is_binary(obj.type) or pa.types.is_large_binary(obj.type):
@@ -28,9 +28,9 @@ def _serialize_pyarrow_scalar(obj):
         if isinstance(raw, str):
             return raw
         try:
-            return raw.decode("utf-8")
+            return raw.decode('utf-8')
         except UnicodeDecodeError:
-            return base64.b64encode(raw).decode("utf-8")
+            return base64.b64encode(raw).decode('utf-8')
 
     if pa.types.is_temporal(obj.type):
         return _serialize_temporal(obj.as_py())
@@ -72,9 +72,9 @@ def _serialize_basic_types(obj):
     """Convert basic Python types to JSON-serializable format."""
     if isinstance(obj, bytes):
         try:
-            return obj.decode("utf-8")
+            return obj.decode('utf-8')
         except UnicodeDecodeError:
-            return base64.b64encode(obj).decode("utf-8")
+            return base64.b64encode(obj).decode('utf-8')
     if isinstance(obj, pa.BinaryScalar):
         raw = obj.as_py()
         if raw is None:
@@ -82,9 +82,9 @@ def _serialize_basic_types(obj):
         if isinstance(raw, str):
             return raw
         try:
-            return raw.decode("utf-8")
+            return raw.decode('utf-8')
         except UnicodeDecodeError:
-            return base64.b64encode(raw).decode("utf-8")
+            return base64.b64encode(raw).decode('utf-8')
     if isinstance(obj, (datetime, date, time)):
         return obj.isoformat()
     if isinstance(obj, timedelta):

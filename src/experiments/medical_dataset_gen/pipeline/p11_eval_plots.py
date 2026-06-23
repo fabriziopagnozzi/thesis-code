@@ -14,7 +14,7 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     EvalPlotFileName,
 )
 from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
-from experiments.medical_dataset_gen.utils.global_configs import (
+from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
     load_config_from_cli,

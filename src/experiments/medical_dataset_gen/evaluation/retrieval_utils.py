@@ -15,6 +15,11 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
+from experiments.medical_dataset_gen.global_config import (
+    MedicalDatasetGenPaths,
+    MethodsComparisonKernelsCfg,
+    unreachable_code,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import ChunkPoolScope
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
@@ -25,11 +30,6 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QueryRecord,
     RetrievalIndexMaps,
     RetrievalStrategy,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    MedicalDatasetGenPaths,
-    MethodsComparisonKernelsCfg,
-    unreachable_code,
 )
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import fac_loc_lazy_greedy, mmr, top_k

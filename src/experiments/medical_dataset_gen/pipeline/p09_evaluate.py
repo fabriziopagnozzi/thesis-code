@@ -36,13 +36,13 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     EvaluationResultRow,
     QueryRecord,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
@@ -130,7 +130,7 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
             pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
             pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
             pl.col('gold_precision').mean().alias('Precision@k'),
-            pl.col('single_isolated_outlier_rate').mean().alias('SingleIsolatedOutlierRate'),
+            pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
             pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
             pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
         )
@@ -350,7 +350,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('distractor_rate').mean().alias('DistractorRate'),
         pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
         pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
-        pl.col('single_isolated_outlier_rate').mean().alias('SingleIsolatedOutlierRate'),
+        pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
         pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
         pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
@@ -393,7 +393,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'DistractorRate',
         'NearMissDistractorRate',
         'BackgroundOutlierRate',
-        'SingleIsolatedOutlierRate',
+        'SameConditionWrongAxisRate',
         'PrimaryAxisRate',
         'CalibratedFacetRate',
         'RedundantGoldRate',
@@ -406,7 +406,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

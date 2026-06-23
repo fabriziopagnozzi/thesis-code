@@ -4,6 +4,10 @@ from pathlib import Path
 
 import yaml
 
+from experiments.medical_dataset_gen.global_config import (
+    ExperimentCfg,
+    MedicalDatasetGenPaths,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AxisPairProfile,
     ClinicalAxis,
@@ -13,10 +17,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,
     SubgroupKey,
     SubgroupOntology,
-)
-from experiments.medical_dataset_gen.utils.global_configs import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
 )
 
 

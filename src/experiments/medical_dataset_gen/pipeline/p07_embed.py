@@ -7,7 +7,7 @@ import numpy as np
 import pyarrow.parquet as pq
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.utils.global_configs import (
+from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
 )
@@ -153,7 +153,7 @@ def _fill_embedding_memmaps(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

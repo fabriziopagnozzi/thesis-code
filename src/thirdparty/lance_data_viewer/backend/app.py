@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-import json
 
 import lancedb
 import pyarrow as pa
-from packaging.version import parse as parse_version
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from packaging.version import parse as parse_version
 from serialize_value import serialize_value
 
 logging.basicConfig(level=logging.INFO)
@@ -21,77 +18,93 @@ logger = logging.getLogger(__name__)
 
 def _read_app_version() -> str:
     here = Path(__file__).resolve().parent
-    for candidate in (here / "VERSION", here.parent / "VERSION"):
+    for candidate in (here / 'VERSION', here.parent / 'VERSION'):
         if candidate.exists():
             return candidate.read_text().strip()
-    return "0.0.0-dev"
+    return '0.0.0-dev'
 
 
 APP_VERSION = _read_app_version()
 
 app = FastAPI(
-    title="Lance Data Viewer",
-    description="Read-only web viewer for Lance datasets",
+    title='Lance Data Viewer',
+    description='Read-only web viewer for Lance datasets',
     version=APP_VERSION,
 )
 
-@app.on_event("startup")
+
+@app.on_event('startup')
 async def startup_event():
     """Log version information on startup"""
-    logger.info(f"Lance Data Viewer v{APP_VERSION}")
-    logger.info(f"LanceDB: {lancedb.__version__}, PyArrow: {pa.__version__}")
-    logger.info(f"Data path: {DATA_PATH}")
+    logger.info(f'Lance Data Viewer v{APP_VERSION}')
+    logger.info(f'LanceDB: {lancedb.__version__}, PyArrow: {pa.__version__}')
+    logger.info(f'Data path: {DATA_PATH}')
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=['*'],
     allow_credentials=True,
-    allow_methods=["GET"],
-    allow_headers=["*"],
+    allow_methods=['GET'],
+    allow_headers=['*'],
 )
 
-DATA_PATH = Path(os.getenv("DATA_PATH", "/data"))
+DATA_PATH = Path(os.getenv('DATA_PATH', '/data'))
 MAX_LIMIT = 200
+
 
 def validate_dataset_name(name: str) -> bool:
     return (
-        name.replace("_", "").replace("-", "").isalnum()
-        and not name.startswith(".")
+        name.replace('_', '').replace('-', '').isalnum()
+        and not name.startswith('.')
         and len(name) <= 100
     )
 
+
 def get_lance_connection():
     if not DATA_PATH.exists():
-        raise HTTPException(status_code=500, detail="Data path not found")
+        raise HTTPException(status_code=500, detail='Data path not found')
     return lancedb.connect(str(DATA_PATH))
+
 
 def serialize_arrow_value(value):
     try:
         # Stop immediately if the Arrow scalar is null
-        if value is None or not getattr(value, "is_valid", True):
+        if value is None or not getattr(value, 'is_valid', True):
             return None
 
         # 1. Handle Vector columns (Top-level OR nested)
-        if (pa.types.is_list(value.type) or pa.types.is_fixed_size_list(value.type)) and getattr(value.type, "value_type", None) and pa.types.is_floating(value.type.value_type):
+        if (
+            (pa.types.is_list(value.type) or pa.types.is_fixed_size_list(value.type))
+            and getattr(value.type, 'value_type', None)
+            and pa.types.is_floating(value.type.value_type)
+        ):
             try:
                 vec = value.as_py()
                 if vec is None:
                     return None
 
                 if not isinstance(vec, (list, tuple)) or len(vec) == 0:
-                    return {"type": "vector", "error": "Invalid vector data"}
+                    return {'type': 'vector', 'error': 'Invalid vector data'}
 
                 valid_values = []
                 for v in vec:
-                    if v is not None and isinstance(v, (int, float)) and not (isinstance(v, float) and (v != v or v == float('inf') or v == float('-inf'))):
+                    if (
+                        v is not None
+                        and isinstance(v, (int, float))
+                        and not (
+                            isinstance(v, float)
+                            and (v != v or v == float('inf') or v == float('-inf'))
+                        )
+                    ):
                         valid_values.append(float(v))
                     else:
                         valid_values.append(0.0)
 
                 if not valid_values:
-                    return {"type": "vector", "error": "No valid numeric values in vector"}
+                    return {'type': 'vector', 'error': 'No valid numeric values in vector'}
 
-                norm = float(sum(x*x for x in valid_values) ** 0.5) if valid_values else 0.0
+                norm = float(sum(x * x for x in valid_values) ** 0.5) if valid_values else 0.0
                 vec_min = float(min(valid_values)) if valid_values else 0.0
                 vec_max = float(max(valid_values)) if valid_values else 0.0
                 vec_mean = float(sum(valid_values) / len(valid_values)) if valid_values else 0.0
@@ -99,27 +112,28 @@ def serialize_arrow_value(value):
                 is_clip_vector = len(valid_values) == 512
 
                 result = {
-                    "type": "vector",
-                    "dim": len(valid_values),
-                    "norm": norm,
-                    "min": vec_min,
-                    "max": vec_max,
-                    "mean": vec_mean,
-                    "preview": valid_values[:32],
+                    'type': 'vector',
+                    'dim': len(valid_values),
+                    'norm': norm,
+                    'min': vec_min,
+                    'max': vec_max,
+                    'mean': vec_mean,
+                    'preview': valid_values[:32],
                 }
 
                 if is_clip_vector:
-                    result["model"] = "likely_clip"
-                    result["description"] = "512-dimensional CLIP embedding"
-                    result["stats"] = {
-                        "normalized": abs(norm - 1.0) < 0.01,
-                        "sparsity": sum(1 for x in valid_values if abs(x) < 0.01) / len(valid_values),
-                        "positive_ratio": sum(1 for x in valid_values if x > 0) / len(valid_values)
+                    result['model'] = 'likely_clip'
+                    result['description'] = '512-dimensional CLIP embedding'
+                    result['stats'] = {
+                        'normalized': abs(norm - 1.0) < 0.01,
+                        'sparsity': sum(1 for x in valid_values if abs(x) < 0.01)
+                        / len(valid_values),
+                        'positive_ratio': sum(1 for x in valid_values if x > 0) / len(valid_values),
                     }
                 return result
             except Exception as vec_error:
-                logger.warning(f"Error processing vector data: {vec_error}")
-                return {"type": "vector", "error": f"Vector processing failed: {str(vec_error)}"}
+                logger.warning(f'Error processing vector data: {vec_error}')
+                return {'type': 'vector', 'error': f'Vector processing failed: {vec_error!s}'}
 
         # 2. Handle Structs recursively to catch vectors hidden inside objects
         if pa.types.is_struct(value.type):
@@ -130,7 +144,11 @@ def serialize_arrow_value(value):
             return result
 
         # 3. Handle Lists recursively (e.g., Arrays of Structs containing Vectors)
-        if pa.types.is_list(value.type) or pa.types.is_large_list(value.type) or pa.types.is_fixed_size_list(value.type):
+        if (
+            pa.types.is_list(value.type)
+            or pa.types.is_large_list(value.type)
+            or pa.types.is_fixed_size_list(value.type)
+        ):
             result = []
             for item in value:  # Iterating a PyArrow ListScalar yields nested pa.Scalars
                 result.append(serialize_arrow_value(item))
@@ -139,10 +157,11 @@ def serialize_arrow_value(value):
         # 4. Fallback to normal serialization for strings, ints, dates, etc.
         return serialize_value(value)
     except Exception as e:
-        logger.warning(f"Error serializing value: {e}")
-        return {"error": f"Serialization failed: {str(e)}"}
+        logger.warning(f'Error serializing value: {e}')
+        return {'error': f'Serialization failed: {e!s}'}
 
-@app.get("/healthz")
+
+@app.get('/healthz')
 async def health_check():
     try:
         lancedb_version = lancedb.__version__
@@ -150,74 +169,72 @@ async def health_check():
 
         # Determine compatibility features based on Lance version
         compat = {
-            "vector_preview": True,
-            "schema_evolution": parse_version(lancedb_version) >= parse_version("0.5"),
-            "lance_v2_format": parse_version(lancedb_version) >= parse_version("0.16")
+            'vector_preview': True,
+            'schema_evolution': parse_version(lancedb_version) >= parse_version('0.5'),
+            'lance_v2_format': parse_version(lancedb_version) >= parse_version('0.16'),
         }
 
         # Generate build tag
-        build_tag = f"app-{APP_VERSION}_lancedb-{lancedb_version}"
+        build_tag = f'app-{APP_VERSION}_lancedb-{lancedb_version}'
 
         return {
-            "ok": True,
-            "app_version": APP_VERSION,
-            "lancedb_version": lancedb_version,
-            "pyarrow_version": pyarrow_version,
-            "build_tag": build_tag,
-            "compat": compat
+            'ok': True,
+            'app_version': APP_VERSION,
+            'lancedb_version': lancedb_version,
+            'pyarrow_version': pyarrow_version,
+            'build_tag': build_tag,
+            'compat': compat,
         }
     except Exception as e:
-        logger.error(f"Error in health check: {e}")
-        return {"ok": False, "error": str(e)}
+        logger.error(f'Error in health check: {e}')
+        return {'ok': False, 'error': str(e)}
 
-@app.get("/datasets")
+
+@app.get('/datasets')
 async def list_datasets():
     try:
         db = get_lance_connection()
         table_names = db.table_names()
         valid_tables = [name for name in table_names if validate_dataset_name(name)]
-        return {"datasets": valid_tables}
+        return {'datasets': valid_tables}
     except Exception as e:
-        logger.error(f"Error listing datasets: {e}")
-        raise HTTPException(status_code=500, detail="Failed to list datasets")
+        logger.error(f'Error listing datasets: {e}')
+        raise HTTPException(status_code=500, detail='Failed to list datasets')
 
-@app.get("/datasets/{dataset_name}/schema")
+
+@app.get('/datasets/{dataset_name}/schema')
 async def get_dataset_schema(dataset_name: str):
     if not validate_dataset_name(dataset_name):
-        raise HTTPException(status_code=400, detail="Invalid dataset name")
+        raise HTTPException(status_code=400, detail='Invalid dataset name')
 
     try:
         db = get_lance_connection()
         table = db.open_table(dataset_name)
         schema = table.schema
 
-        schema_dict = {
-            "fields": [],
-            "metadata": schema.metadata or {}
-        }
+        schema_dict = {'fields': [], 'metadata': schema.metadata or {}}
 
         for field in schema:
-            field_info = {
-                "name": field.name,
-                "type": str(field.type),
-                "nullable": field.nullable
-            }
+            field_info = {'name': field.name, 'type': str(field.type), 'nullable': field.nullable}
 
-            if (pa.types.is_list(field.type) or pa.types.is_fixed_size_list(field.type)) and pa.types.is_floating(field.type.value_type):
-                field_info["vector_dim"] = None
+            if (
+                pa.types.is_list(field.type) or pa.types.is_fixed_size_list(field.type)
+            ) and pa.types.is_floating(field.type.value_type):
+                field_info['vector_dim'] = None
 
-            schema_dict["fields"].append(field_info)
+            schema_dict['fields'].append(field_info)
 
         return schema_dict
 
     except Exception as e:
-        logger.error(f"Error getting schema for {dataset_name}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get dataset schema")
+        logger.error(f'Error getting schema for {dataset_name}: {e}')
+        raise HTTPException(status_code=500, detail='Failed to get dataset schema')
 
-@app.get("/datasets/{dataset_name}/columns")
+
+@app.get('/datasets/{dataset_name}/columns')
 async def get_dataset_columns(dataset_name: str):
     if not validate_dataset_name(dataset_name):
-        raise HTTPException(status_code=400, detail="Invalid dataset name")
+        raise HTTPException(status_code=400, detail='Invalid dataset name')
 
     try:
         db = get_lance_connection()
@@ -226,35 +243,34 @@ async def get_dataset_columns(dataset_name: str):
 
         columns = []
         for field in schema:
-            col_info = {
-                "name": field.name,
-                "type": str(field.type),
-                "nullable": field.nullable
-            }
+            col_info = {'name': field.name, 'type': str(field.type), 'nullable': field.nullable}
 
-            if (pa.types.is_list(field.type) or pa.types.is_fixed_size_list(field.type)) and pa.types.is_floating(field.type.value_type):
-                col_info["is_vector"] = True
-                col_info["dim"] = None
+            if (
+                pa.types.is_list(field.type) or pa.types.is_fixed_size_list(field.type)
+            ) and pa.types.is_floating(field.type.value_type):
+                col_info['is_vector'] = True
+                col_info['dim'] = None
             else:
-                col_info["is_vector"] = False
+                col_info['is_vector'] = False
 
             columns.append(col_info)
 
-        return {"columns": columns}
+        return {'columns': columns}
 
     except Exception as e:
-        logger.error(f"Error getting columns for {dataset_name}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get dataset columns")
+        logger.error(f'Error getting columns for {dataset_name}: {e}')
+        raise HTTPException(status_code=500, detail='Failed to get dataset columns')
 
-@app.get("/datasets/{dataset_name}/rows")
+
+@app.get('/datasets/{dataset_name}/rows')
 async def get_dataset_rows(
     dataset_name: str,
     limit: int = Query(default=50, ge=1, le=MAX_LIMIT),
     offset: int = Query(default=0, ge=0),
-    columns: Optional[str] = Query(default=None)
+    columns: str | None = Query(default=None),
 ):
     if not validate_dataset_name(dataset_name):
-        raise HTTPException(status_code=400, detail="Invalid dataset name")
+        raise HTTPException(status_code=400, detail='Invalid dataset name')
 
     try:
         db = get_lance_connection()
@@ -262,11 +278,11 @@ async def get_dataset_rows(
 
         column_list = None
         if columns:
-            column_list = [col.strip() for col in columns.split(",") if col.strip()]
+            column_list = [col.strip() for col in columns.split(',') if col.strip()]
             schema_columns = [field.name for field in table.schema]
             invalid_columns = [col for col in column_list if col not in schema_columns]
             if invalid_columns:
-                raise HTTPException(status_code=400, detail=f"Invalid columns: {invalid_columns}")
+                raise HTTPException(status_code=400, detail=f'Invalid columns: {invalid_columns}')
 
         # Read rows, falling back to an informational response if the dataset is unreadable
         result_table = None
@@ -278,26 +294,36 @@ async def get_dataset_rows(
                 total_count = table.count_rows()
                 end = min(offset + limit, total_count)
                 if offset >= total_count:
-                    result_table = pa.table({field.name: pa.array([], type=field.type) for field in table.schema})
+                    result_table = pa.table(
+                        {field.name: pa.array([], type=field.type) for field in table.schema}
+                    )
                 else:
                     offsets = list(range(offset, end))
                     builder = table.take_offsets(offsets)
                     if column_list:
-                        available_columns = [col for col in column_list if col in [field.name for field in table.schema]]
+                        available_columns = [
+                            col
+                            for col in column_list
+                            if col in [field.name for field in table.schema]
+                        ]
                         if available_columns:
                             builder = builder.select(available_columns)
                     result_table = builder.to_arrow()
 
-                logger.info(f"Read {result_table.num_rows} rows (offset={offset}, limit={limit}) from {dataset_name} ({total_count} total)")
+                logger.info(
+                    f'Read {result_table.num_rows} rows (offset={offset}, limit={limit}) from {dataset_name} ({total_count} total)'
+                )
 
-            except (AttributeError, TypeError):
+            except AttributeError, TypeError:
                 # Fallback for older Lance versions without take_offsets/count_rows
-                logger.info(f"Native pagination unavailable, using Arrow slice for {dataset_name}")
+                logger.info(f'Native pagination unavailable, using Arrow slice for {dataset_name}')
                 arrow_table = table.to_arrow()
                 total_count = arrow_table.num_rows
 
                 if column_list:
-                    available_columns = [col for col in column_list if col in arrow_table.column_names]
+                    available_columns = [
+                        col for col in column_list if col in arrow_table.column_names
+                    ]
                     if available_columns:
                         arrow_table = arrow_table.select(available_columns)
 
@@ -307,17 +333,21 @@ async def get_dataset_rows(
             # Graceful degradation: any dataset that fails to read (corruption,
             # format error, unreadable bytes) returns a single informational row
             # instead of a 500.
-            logger.warning(f"Failed to read rows from {dataset_name}, falling back to informational response: {read_error}")
+            logger.warning(
+                f'Failed to read rows from {dataset_name}, falling back to informational response: {read_error}'
+            )
 
-            error_schema = pa.schema([
-                pa.field("error", pa.string()),
-                pa.field("dataset", pa.string()),
-                pa.field("details", pa.string())
-            ])
+            error_schema = pa.schema(
+                [
+                    pa.field('error', pa.string()),
+                    pa.field('dataset', pa.string()),
+                    pa.field('details', pa.string()),
+                ]
+            )
             error_data = [
-                ["Unable to read dataset"],
+                ['Unable to read dataset'],
                 [dataset_name],
-                [f"Error: {str(read_error)[:200]}"]
+                [f'Error: {str(read_error)[:200]}'],
             ]
             result_table = pa.Table.from_arrays(error_data, schema=error_schema)
             total_count = 1
@@ -330,29 +360,25 @@ async def get_dataset_rows(
                     value = result_table.column(j)[i]
                     row[column_name] = serialize_arrow_value(value)
                 except Exception as serialize_error:
-                    logger.warning(f"Failed to serialize column {column_name} at row {i}: {serialize_error}")
-                    row[column_name] = {"error": "Failed to read value"}
+                    logger.warning(
+                        f'Failed to serialize column {column_name} at row {i}: {serialize_error}'
+                    )
+                    row[column_name] = {'error': 'Failed to read value'}
             rows.append(row)
 
-        return {
-            "rows": rows,
-            "total": total_count,
-            "limit": limit,
-            "offset": offset
-        }
+        return {'rows': rows, 'total': total_count, 'limit': limit, 'offset': offset}
 
     except Exception as e:
-        logger.error(f"Error getting rows for {dataset_name}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get dataset rows")
+        logger.error(f'Error getting rows for {dataset_name}: {e}')
+        raise HTTPException(status_code=500, detail='Failed to get dataset rows')
 
-@app.get("/datasets/{dataset_name}/vector/preview")
+
+@app.get('/datasets/{dataset_name}/vector/preview')
 async def get_vector_preview(
-    dataset_name: str,
-    column: str,
-    limit: int = Query(default=100, le=MAX_LIMIT)
+    dataset_name: str, column: str, limit: int = Query(default=100, le=MAX_LIMIT)
 ):
     if not validate_dataset_name(dataset_name):
-        raise HTTPException(status_code=400, detail="Invalid dataset name")
+        raise HTTPException(status_code=400, detail='Invalid dataset name')
 
     try:
         db = get_lance_connection()
@@ -362,7 +388,10 @@ async def get_vector_preview(
             raise HTTPException(status_code=400, detail=f"Column '{column}' not found")
 
         field = next(field for field in table.schema if field.name == column)
-        if not ((pa.types.is_list(field.type) or pa.types.is_fixed_size_list(field.type)) and pa.types.is_floating(field.type.value_type)):
+        if not (
+            (pa.types.is_list(field.type) or pa.types.is_fixed_size_list(field.type))
+            and pa.types.is_floating(field.type.value_type)
+        ):
             raise HTTPException(status_code=400, detail=f"Column '{column}' is not a vector column")
 
         result = table.to_arrow().select([column]).slice(0, limit)
@@ -370,49 +399,47 @@ async def get_vector_preview(
 
         valid_vectors = [v for v in vectors if v is not None]
         if not valid_vectors:
-            return {"stats": None, "preview": []}
+            return {'stats': None, 'preview': []}
 
         all_values = [val for vec in valid_vectors for val in vec]
 
         stats = {
-            "count": len(valid_vectors),
-            "dim": len(valid_vectors[0]) if valid_vectors else 0,
-            "min": min(all_values) if all_values else 0,
-            "max": max(all_values) if all_values else 0,
-            "mean": sum(all_values) / len(all_values) if all_values else 0
+            'count': len(valid_vectors),
+            'dim': len(valid_vectors[0]) if valid_vectors else 0,
+            'min': min(all_values) if all_values else 0,
+            'max': max(all_values) if all_values else 0,
+            'mean': sum(all_values) / len(all_values) if all_values else 0,
         }
 
         preview = []
         for vec in valid_vectors[:20]:
             if vec:
-                preview.append({
-                    "norm": float(sum(x*x for x in vec) ** 0.5),
-                    "sample": vec[:32]
-                })
+                preview.append({'norm': float(sum(x * x for x in vec) ** 0.5), 'sample': vec[:32]})
 
-        return {"stats": stats, "preview": preview}
+        return {'stats': stats, 'preview': preview}
 
     except Exception as e:
-        logger.error(f"Error getting vector preview for {dataset_name}.{column}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get vector preview")
+        logger.error(f'Error getting vector preview for {dataset_name}.{column}: {e}')
+        raise HTTPException(status_code=500, detail='Failed to get vector preview')
+
 
 # Mount static files - use vanilla version by default
 # In production, Docker copies vanilla files to /web
 # For local development, serve from web/vanilla
-static_dir = "/web"
+static_dir = '/web'
 if not os.path.exists(static_dir):
     # Local development - serve vanilla version
-    static_dir = os.path.join(os.path.dirname(__file__), "..", "web", "vanilla")
+    static_dir = os.path.join(os.path.dirname(__file__), '..', 'web', 'vanilla')
 
 if os.path.exists(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+    app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     import uvicorn
 
     # Log version information on startup
-    logger.info(f"Lance Data Viewer v{APP_VERSION}")
-    logger.info(f"LanceDB: {lancedb.__version__}, PyArrow: {pa.__version__}")
-    logger.info(f"Data path: {DATA_PATH}")
+    logger.info(f'Lance Data Viewer v{APP_VERSION}')
+    logger.info(f'LanceDB: {lancedb.__version__}, PyArrow: {pa.__version__}')
+    logger.info(f'Data path: {DATA_PATH}')
 
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host='0.0.0.0', port=8080)

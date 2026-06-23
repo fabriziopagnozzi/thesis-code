@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from experiments.medical_dataset_gen.utils.global_configs import (
+from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
 )
@@ -45,8 +45,8 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             .then(pl.lit('positive'))
             .when(pl.col('cluster_role') == 'background_outlier')
             .then(pl.lit('background_outlier'))
-            .when(pl.col('cluster_role') == 'single_isolated_outlier')
-            .then(pl.lit('single_isolated_outlier'))
+            .when(pl.col('cluster_role') == 'same_condition_wrong_axis')
+            .then(pl.lit('same_condition_wrong_axis'))
             .otherwise(pl.lit('hard_negative'))
             .alias('support_type'),
         )
@@ -58,7 +58,7 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_configs import (
+    from experiments.medical_dataset_gen.global_config import (
         load_config_from_cli,
         paths_for,
         setup_logging,

@@ -20,13 +20,13 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import v
 from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
+from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkState,
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.utils.global_configs import ExperimentCfg
 
 GENERATION_CACHE_VERSION = 10
 REWRITE_CACHE_VERSION = 2
@@ -91,7 +91,7 @@ def remember_cache_entry(
 def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
     payload: dict[str, object] = {
         'cache_version': GENERATION_CACHE_VERSION,
-        'source': 'llm' if cfg.generation.use_llm_chunk_generation else 'fallback',
+        'source': 'llm' if cfg.generation.llm_config.use_llm_chunk_generation else 'fallback',
         'fact_chunk_reuse_key': fact.chunk_reuse_key,
         'condition_id': fact.condition_id,
         'condition_display': fact.condition_display,
@@ -108,12 +108,12 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'chunk_max_words': cfg.generation.chunk_max_words,
         'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
     }
-    if cfg.generation.use_llm_chunk_generation:
+    if cfg.generation.llm_config.use_llm_chunk_generation:
         payload.update(
             {
-                'llm_name': cfg.generation.llm_name,
-                'llm_temperature': cfg.generation.llm_temperature,
-                'llm_num_ctx': cfg.generation.llm_num_ctx,
+                'llm_name': cfg.generation.llm_config.model_name,
+                'llm_temperature': cfg.generation.llm_config.temperature,
+                'llm_num_ctx': cfg.generation.llm_config.num_ctx,
             }
         )
     payload['axis_payload_json'] = fact.axis_payload_json
@@ -130,9 +130,9 @@ def chunk_rewrite_cache_key(
     payload: dict[str, object] = {
         'cache_version': REWRITE_CACHE_VERSION,
         'prompt_id': MedicalDatasetGenDefaultPrompts.chunk_rewrite_prompt_id,
-        'llm_name': cfg.generation.llm_name,
-        'llm_temperature': cfg.generation.llm_temperature,
-        'llm_num_ctx': cfg.generation.llm_num_ctx,
+        'llm_name': cfg.generation.llm_config.model_name,
+        'llm_temperature': cfg.generation.llm_config.temperature,
+        'llm_num_ctx': cfg.generation.llm_config.num_ctx,
         'draft_text_sha256': hashlib.sha256(draft_text.encode()).hexdigest(),
         'fact_chunk_reuse_key': fact.chunk_reuse_key,
         'condition_id': fact.condition_id,
@@ -189,7 +189,7 @@ def cached_chunk_state(
     cache_source = cached.text_generation_source
     cache_matches_mode = (
         cache_source == 'llm'
-        if cfg.generation.use_llm_chunk_generation
+        if cfg.generation.llm_config.use_llm_chunk_generation
         else cache_source == 'fallback'
     )
     if errors or not cache_matches_mode:
