@@ -374,10 +374,16 @@ def setup_logging(paths: MedicalDatasetGenPaths, run_id: str | None = None) -> N
 def _resolve_experiment_name(
     exp_name: str, results_dir: Path = MedicalDatasetGenPaths.results_dir
 ) -> str:
-    exact_dir = results_dir / exp_name
-    if exact_dir.is_dir():
+    dir = results_dir / exp_name
+    if dir.is_dir():
         return exp_name
-    raise FileNotFoundError(
-        f'no experiment directory named exactly {exp_name!r} in {results_dir}. '
-        'Use the full experiment directory name.'
-    )
+
+    matches = sorted(results_dir.glob(f'{exp_name}*'))
+    if len(matches) == 1:
+        return matches[0].name
+    elif len(matches) > 1:
+        raise RuntimeError(
+            f'{exp_name!r} is an ambiguous prefix, found many matches: {[m.name for m in matches]}'
+        )
+    else:
+        raise FileNotFoundError(f'no experiment directory prefixed {exp_name!r} in {results_dir}. ')
