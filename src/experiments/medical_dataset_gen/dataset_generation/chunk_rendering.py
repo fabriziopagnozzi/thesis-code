@@ -67,8 +67,8 @@ def generate_llm_chunk(
             llm_name=cfg.generation.llm_config.model_name,
             temperature=cfg.generation.llm_config.temperature,
             num_ctx=cfg.generation.llm_config.num_ctx,
-            chunk_min_words=cfg.generation.chunk_min_words,
-            chunk_max_words=cfg.generation.chunk_max_words,
+            chunk_min_words=cfg.generation.chunk_pools.chunk_min_words,
+            chunk_max_words=cfg.generation.chunk_pools.chunk_max_words,
             revision_feedback=feedback,
         )
         last_text = candidate_text
@@ -76,9 +76,9 @@ def generate_llm_chunk(
         validation = validate_chunk_text(candidate_text, fact, ontology)
         word_errors = word_count_errors(
             word_count,
-            min_words=cfg.generation.chunk_min_words,
-            max_words=cfg.generation.chunk_max_words,
-            tolerance=cfg.generation.chunk_word_tolerance,
+            min_words=cfg.generation.chunk_pools.chunk_min_words,
+            max_words=cfg.generation.chunk_pools.chunk_max_words,
+            tolerance=cfg.generation.chunk_pools.chunk_word_tolerance,
         )
         errors = validation.hard_errors + word_errors
         if not errors:
@@ -108,17 +108,17 @@ def rewrite_llm_chunk(
             llm_name=cfg.generation.llm_config.model_name,
             temperature=cfg.generation.llm_config.temperature,
             num_ctx=cfg.generation.llm_config.num_ctx,
-            chunk_min_words=cfg.generation.chunk_min_words,
-            chunk_max_words=cfg.generation.chunk_max_words,
+            chunk_min_words=cfg.generation.chunk_pools.chunk_min_words,
+            chunk_max_words=cfg.generation.chunk_pools.chunk_max_words,
             revision_feedback=feedback,
         )
         word_count = len(candidate_text.split())
         validation = validate_chunk_text(candidate_text, fact, ontology)
         word_errors = word_count_errors(
             word_count,
-            min_words=cfg.generation.chunk_min_words,
-            max_words=cfg.generation.chunk_max_words,
-            tolerance=cfg.generation.chunk_word_tolerance,
+            min_words=cfg.generation.chunk_pools.chunk_min_words,
+            max_words=cfg.generation.chunk_pools.chunk_max_words,
+            tolerance=cfg.generation.chunk_pools.chunk_word_tolerance,
         )
         errors = validation.hard_errors + word_errors
         if not errors:
@@ -263,9 +263,9 @@ def finalize_chunk_row(
     word_count = len(final_text.split())
     word_errors = word_count_errors(
         word_count,
-        min_words=cfg.generation.chunk_min_words,
-        max_words=cfg.generation.chunk_max_words,
-        tolerance=cfg.generation.chunk_word_tolerance,
+        min_words=cfg.generation.chunk_pools.chunk_min_words,
+        max_words=cfg.generation.chunk_pools.chunk_max_words,
+        tolerance=cfg.generation.chunk_pools.chunk_word_tolerance,
     )
     if word_errors:
         raise RuntimeError('; '.join(word_errors))

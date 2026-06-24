@@ -406,9 +406,9 @@ def _with_calibrated_query(
                         else facet.cluster_role
                     ),
                     'target_gold_chunks': (
-                        cfg.generation.chunk_pool_config.gold_chunks_calibrated_primary
+                        cfg.generation.chunk_pools.primary_calibrated.size
                         if selected
-                        else cfg.generation.chunk_pool_config.gold_chunks_other_primary
+                        else cfg.generation.chunk_pools.other_primary.size
                         if primary
                         else facet.target_gold_chunks
                     ),

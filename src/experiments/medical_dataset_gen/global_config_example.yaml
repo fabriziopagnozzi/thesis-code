@@ -9,10 +9,6 @@ global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
     conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
 
-    # Name of the experiment directory under:
-    #   src/experiments/medical_dataset_gen/_results/<output_experiment>
-    output_experiment: v2
-
 generation:
     query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 10,880 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
@@ -20,28 +16,48 @@ generation:
     calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.
     calibration_probe_chunks_per_facet: 8 # Per-facet probes used to select query emphasis, audit semantic separability, and choose the 24-chunk primary cohort.
 
-    chunk_pool_config:
-        gold_chunks_calibrated_primary: 24
-        gold_chunks_other_primary: 20
-        gold_chunks_secondary: 14
+    chunk_pools:
+        primary_calibrated:
+            size: 24
+            distractors:
+                same_condition_wrong_subgroup: 3
+                same_subgroup_wrong_condition: 2
+                same_axis_wrong_condition: 2
+                same_condition_wrong_axis: 1
 
-        niche_gold_clusters_per_query: 1 # Number (0-2) of complementary facets made deliberately sparse.
-        gold_chunks_niche: 4 # Gold documents in each niche facet; must be below gold_chunks_secondary.
+        other_primary:
+            size: 20
+            distractors:
+                same_condition_wrong_subgroup: 2
+                same_subgroup_wrong_condition: 2
+                same_axis_wrong_condition: 2
+                same_condition_wrong_axis: 0
 
-    distractor_config:
-        same_condition_wrong_subgroup: 9
-        same_subgroup_wrong_condition: 8
-        same_axis_wrong_condition: 8
-        same_condition_wrong_axis: 1 # Same-condition distractor on an off-query clinical axis; configured as a distractor subtype.
+        secondary:
+            size: 14
+            distractors:
+                same_condition_wrong_subgroup: 2
+                same_subgroup_wrong_condition: 2
+                same_axis_wrong_condition: 2
+                same_condition_wrong_axis: 0
 
-        background_outlier:
-            clusters_per_query: 1 # Coherent non-gold clinical islands per query-local pool.
-            cluster_size: 8
+        niche:
+            size: 4 # Gold documents in each niche facet; must stay below secondary.size.
+            num_clusters_per_query: 1 # Number (0-2) of complementary facets made deliberately sparse.
+            distractors:
+                same_condition_wrong_subgroup: 2
+                same_subgroup_wrong_condition: 2
+                same_axis_wrong_condition: 2
+                same_condition_wrong_axis: 0
 
-    chunk_min_words: 25
-    chunk_max_words: 200
-    chunk_word_tolerance: 5 # Soft tolerance around the target range for concise deterministic prose.
-    
+        background_outliers:
+            size: 8 # Chunks in each coherent non-gold clinical island.
+            num_clusters_per_query: 1
+
+        chunk_min_words: 25
+        chunk_max_words: 200
+        chunk_word_tolerance: 5 # Soft tolerance around the target range for concise deterministic prose.
+
     llm_config:
         use_llm_chunk_generation: false
         use_llm_chunk_rewriting: false # If true and chunk generation is deterministic, rewrite fallback chunks with the LLM via the isolated global rewrite cache.
@@ -54,9 +70,8 @@ generation:
 
 embeddings:
     # BAAI/bge-m3 | Qwen/Qwen3-Embedding-8B | multi-qa-mpnet-base-cos-v1
-    model_name: multi-qa-mpnet-base-cos-v1
-
-    batch_size: 8
+    model_name: BAAI/bge-m3
+    batch_size: 128
     device: cuda # Single-device fallback. Use cuda:0/cuda:1 if you want one explicit GPU.
     devices: [] # Optional data-parallel devices, e.g. [cuda:0, cuda:1] on a 2-GPU Kaggle runtime.
     query_prompt: null # Optional query prompt passed to the Embedder for models that require one.
@@ -64,18 +79,40 @@ embeddings:
 
 retrieval:
     strategies: [top_k, mmr, fac_loc]
-    # Candidate-pool scope before top-N semantic retrieval:
-    # - query_local: only chunks generated for the same hidden query plan. This is the current benchmark focus.
-    pool_scope: query_local # Schema v2 supports query_local only.
-    candidate_pool_n: 300 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
-    k_values: [5, 10, 20]
-    lambda_values: [0.3, 0.5, 0.7] # Low lambda favors diversity/coverage; high lambda favors query similarity.
+    pool_scope: query_local
+    candidate_pool_n: 10_000 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
+    k_values: [4, 5, 6, 7, 8, 9]
+    lambda_values: # Low lambda favors diversity/coverage; high lambda favors query similarity.
+        [
+            0.02,
+            0.06,
+            0.10,
+            0.14,
+            0.18,
+            0.22,
+            0.26,
+            0.30,
+            0.34,
+            0.38,
+            0.42,
+            0.46,
+            0.50,
+            0.54,
+            0.58,
+            0.62,
+            0.66,
+            0.70,
+            0.74,
+            0.78,
+            0.82,
+            0.86,
+            0.90,
+            0.94,
+            0.98,
+        ]
     mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
     compute_answer_rouge: true # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
-
-    # If true, evaluation skips queries that fail the geometric prefilter.
-    # Set false only when diagnosing failed query/corpus generation.
-    only_pass_geometry: true
+    only_pass_geometry: true # If true, evaluation skips queries that fail the geometric prefilter.
 
 geometry_filter:
     topk_k: 20 # k used by the strict geometry gate; match the main RAG context budget.

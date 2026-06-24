@@ -61,20 +61,11 @@ class GlobalCfg(ConfigModel):
     result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] = Field(default_factory=dict)
 
 
-class BackgroundOutlierCfg(ConfigModel):
-    clusters_per_query: int = Field(default=1, ge=0)
-    cluster_size: int = Field(default=8, ge=0)
-
-    def total_chunks(self) -> int:
-        return self.clusters_per_query * self.cluster_size
-
-
-class DistractorConfigCfg(ConfigModel):
-    same_condition_wrong_subgroup: int = Field(default=9, ge=0)
-    same_subgroup_wrong_condition: int = Field(default=8, ge=0)
-    same_axis_wrong_condition: int = Field(default=8, ge=0)
+class LocalDistractorConfigCfg(ConfigModel):
+    same_condition_wrong_subgroup: int = Field(default=0, ge=0)
+    same_subgroup_wrong_condition: int = Field(default=0, ge=0)
+    same_axis_wrong_condition: int = Field(default=0, ge=0)
     same_condition_wrong_axis: int = Field(default=0, ge=0)
-    background_outlier: BackgroundOutlierCfg = Field(default_factory=BackgroundOutlierCfg)
 
     def point_distractor_counts(self) -> dict[DistractorStr, int]:
         return {
@@ -88,16 +79,96 @@ class DistractorConfigCfg(ConfigModel):
         return sum(self.point_distractor_counts().values())
 
     def total_chunks(self) -> int:
-        return self.total_point_distractors() + self.background_outlier.total_chunks()
+        return self.total_point_distractors()
 
 
-class ChunkPoolConfig(ConfigModel):
-    gold_chunks_calibrated_primary: PositiveInt = 24
-    gold_chunks_other_primary: PositiveInt = 20
-    gold_chunks_secondary: PositiveInt = 14
+class BackgroundOutliersCfg(ConfigModel):
+    size: PositiveInt = 8
+    num_clusters_per_query: int = Field(default=1, ge=0)
 
-    niche_gold_clusters_per_query: int = Field(default=0, ge=0, le=2)
-    gold_chunks_niche: PositiveInt = 4
+    def total_chunks(self) -> int:
+        return self.size * self.num_clusters_per_query
+
+
+class LocalChunkPoolCfg(ConfigModel):
+    size: PositiveInt
+    distractors: LocalDistractorConfigCfg = Field(default_factory=LocalDistractorConfigCfg)
+
+
+class NicheChunkPoolCfg(LocalChunkPoolCfg):
+    num_clusters_per_query: int = Field(default=0, ge=0, le=2)
+
+
+class ChunkPoolsCfg(ConfigModel):
+    chunk_min_words: PositiveInt = 25
+    chunk_max_words: PositiveInt = 90
+    chunk_word_tolerance: PositiveInt = 2
+
+    primary_calibrated: LocalChunkPoolCfg = Field(
+        default_factory=lambda: LocalChunkPoolCfg(
+            size=24,
+            distractors=LocalDistractorConfigCfg(
+                same_condition_wrong_subgroup=3,
+                same_subgroup_wrong_condition=2,
+                same_axis_wrong_condition=2,
+                same_condition_wrong_axis=1,
+            ),
+        )
+    )
+    other_primary: LocalChunkPoolCfg = Field(
+        default_factory=lambda: LocalChunkPoolCfg(
+            size=20,
+            distractors=LocalDistractorConfigCfg(
+                same_condition_wrong_subgroup=2,
+                same_subgroup_wrong_condition=2,
+                same_axis_wrong_condition=2,
+                same_condition_wrong_axis=0,
+            ),
+        )
+    )
+    secondary: LocalChunkPoolCfg = Field(
+        default_factory=lambda: LocalChunkPoolCfg(
+            size=14,
+            distractors=LocalDistractorConfigCfg(
+                same_condition_wrong_subgroup=2,
+                same_subgroup_wrong_condition=2,
+                same_axis_wrong_condition=2,
+                same_condition_wrong_axis=0,
+            ),
+        )
+    )
+    niche: NicheChunkPoolCfg = Field(
+        default_factory=lambda: NicheChunkPoolCfg(
+            size=4,
+            num_clusters_per_query=0,
+            distractors=LocalDistractorConfigCfg(
+                same_condition_wrong_subgroup=2,
+                same_subgroup_wrong_condition=2,
+                same_axis_wrong_condition=2,
+                same_condition_wrong_axis=0,
+            ),
+        )
+    )
+    background_outliers: BackgroundOutliersCfg = Field(default_factory=BackgroundOutliersCfg)
+
+    def gold_chunks_per_query(self) -> int:
+        return (
+            self.primary_calibrated.size
+            + self.other_primary.size
+            + (2 - self.niche.num_clusters_per_query) * self.secondary.size
+            + self.niche.num_clusters_per_query * self.niche.size
+        )
+
+    def point_distractor_chunks_per_query(self) -> int:
+        return (
+            self.primary_calibrated.distractors.total_chunks()
+            + self.other_primary.distractors.total_chunks()
+            + (2 - self.niche.num_clusters_per_query) * self.secondary.distractors.total_chunks()
+            + self.niche.num_clusters_per_query * self.niche.distractors.total_chunks()
+        )
+
+    def total_distractor_chunks(self) -> int:
+        return self.point_distractor_chunks_per_query() + self.background_outliers.total_chunks()
 
 
 class GenerationLlmConfig(ConfigModel):
@@ -118,30 +189,26 @@ class GenerationCfg(ConfigModel):
     calibration_mode: PlanCalibrationMode = 'rotating'
     calibration_probe_chunks_per_facet: PositiveInt = 8
 
-    chunk_pool_config: ChunkPoolConfig = Field(default_factory=ChunkPoolConfig)
-    distractor_config: DistractorConfigCfg = Field(default_factory=DistractorConfigCfg)
-
-    chunk_min_words: PositiveInt = 25
-    chunk_max_words: PositiveInt = 90
-    chunk_word_tolerance: PositiveInt = 2
-
+    chunk_pools: ChunkPoolsCfg = Field(default_factory=ChunkPoolsCfg)
     llm_config: GenerationLlmConfig = Field(default_factory=GenerationLlmConfig)
 
     @model_validator(mode='after')
     def _validate_niche_cluster_size(self) -> GenerationCfg:
         if (
-            self.chunk_pool_config.niche_gold_clusters_per_query
-            and self.chunk_pool_config.gold_chunks_niche
-            >= self.chunk_pool_config.gold_chunks_secondary
+            self.chunk_pools.niche.num_clusters_per_query
+            and self.chunk_pools.niche.size >= self.chunk_pools.secondary.size
         ):
             raise ValueError(
-                'generation.chunk_pool_config.gold_chunks_niche must be smaller than gold_chunks_secondary '
-                'when niche gold clusters are enabled'
+                'generation.chunk_pools.niche.size must be smaller than '
+                'generation.chunk_pools.secondary.size when niche clusters are enabled'
             )
         return self
 
+    def total_gold_chunks(self) -> int:
+        return self.chunk_pools.gold_chunks_per_query()
+
     def total_distractor_chunks(self) -> int:
-        return self.distractor_config.total_chunks()
+        return self.chunk_pools.total_distractor_chunks()
 
 
 class EmbeddingCfg(ConfigModel):
@@ -240,13 +307,7 @@ class ExperimentCfg(ConfigModel):
         if self.retrieval.pool_scope != 'query_local':
             raise ValueError('dataset schema v2 supports only retrieval.pool_scope=query_local')
         local_pool_size = (
-            self.generation.chunk_pool_config.gold_chunks_calibrated_primary
-            + self.generation.chunk_pool_config.gold_chunks_other_primary
-            + (2 - self.generation.chunk_pool_config.niche_gold_clusters_per_query)
-            * self.generation.chunk_pool_config.gold_chunks_secondary
-            + self.generation.chunk_pool_config.niche_gold_clusters_per_query
-            * self.generation.chunk_pool_config.gold_chunks_niche
-            + self.generation.total_distractor_chunks()
+            self.generation.total_gold_chunks() + self.generation.total_distractor_chunks()
         )
         if self.retrieval.candidate_pool_n < local_pool_size:
             raise ValueError(

@@ -20,7 +20,8 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     other_subgroups,
 )
 from experiments.medical_dataset_gen.global_config import (
-    DistractorConfigCfg,
+    ChunkPoolsCfg,
+    LocalDistractorConfigCfg,
     ExperimentCfg,
     MedicalDatasetGenPaths,
 )
@@ -74,7 +75,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     plan,
                     ontology,
                     rng,
-                    cfg.generation.distractor_config,
+                    cfg.generation.chunk_pools,
                 )
             )
             facts.extend(
@@ -82,8 +83,8 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     plan,
                     ontology,
                     rng,
-                    cfg.generation.distractor_config.background_outlier.clusters_per_query,
-                    cfg.generation.distractor_config.background_outlier.cluster_size,
+                    cfg.generation.chunk_pools.background_outliers.num_clusters_per_query,
+                    cfg.generation.chunk_pools.background_outliers.size,
                 )
             )
             _assert_query_local_chunk_reuse_keys(plan.query_id, facts)
@@ -175,65 +176,174 @@ def make_distractor_facts(
     plan: QueryPlan,
     ontology: MedicalOntology,
     rng: Random,
-    distractor_config: DistractorConfigCfg,
+    chunk_pools: ChunkPoolsCfg,
 ) -> list[ClinicalFact]:
     """Create the configured mix of point distractors for one query-local pool."""
-    excluded = {plan.subgroup_a_id, plan.subgroup_b_id}
+    rows: list[ClinicalFact] = []
+    for facet in plan.facets:
+        local_cfg = _local_distractor_config_for_facet(chunk_pools, facet)
+        rows.extend(make_local_distractor_facts(plan, facet, ontology, rng, local_cfg))
+    return rows
+
+
+def _local_distractor_config_for_facet(
+    chunk_pools: ChunkPoolsCfg,
+    facet: QueryPlanFacet,
+) -> LocalDistractorConfigCfg:
+    if facet.cluster_role == 'calibrated_primary_gold':
+        return chunk_pools.primary_calibrated.distractors
+    if facet.cluster_role == 'primary_gold':
+        return chunk_pools.other_primary.distractors
+    if facet.cluster_role == 'niche_gold':
+        return chunk_pools.niche.distractors
+    return chunk_pools.secondary.distractors
+
+
+def make_local_distractor_facts(
+    plan: QueryPlan,
+    target: QueryPlanFacet,
+    ontology: MedicalOntology,
+    rng: Random,
+    distractor_config: LocalDistractorConfigCfg,
+) -> list[ClinicalFact]:
     rows: list[ClinicalFact] = []
     for distractor_type in DISTRACTOR_TYPES:
         count = distractor_config.point_distractor_counts()[distractor_type]
-        if distractor_type == 'same_condition_wrong_axis':
-            rows.extend(make_same_condition_wrong_axis_facts(plan, ontology, rng, count))
-            continue
         for local_idx in range(count):
-            target = plan.facets[local_idx % len(plan.facets)]
-            condition_id = plan.condition_id
-            condition_display = plan.condition_display
-            subgroup_id = target.subgroup_id
-            subgroup = ontology.subgroups[subgroup_id]
-            if distractor_type == 'same_condition_wrong_subgroup':
-                subgroup_id, subgroup = other_subgroups(ontology, excluded)[
-                    local_idx % (len(ontology.subgroups) - 2)
-                ]
-            elif distractor_type == 'same_subgroup_wrong_condition':
-                condition_id, condition = other_conditions(ontology, plan.condition_id)[
-                    local_idx % (len(ontology.conditions) - 1)
-                ]
-                condition_display = condition.display
-            else:
-                condition_id, condition = other_conditions(ontology, plan.condition_id)[
-                    (local_idx + 1) % (len(ontology.conditions) - 1)
-                ]
-                condition_display = condition.display
-                subgroup_id, subgroup = other_subgroups(ontology, excluded)[
-                    (local_idx + 1) % (len(ontology.subgroups) - 2)
-                ]
+            if distractor_type == 'same_condition_wrong_axis':
+                rows.append(make_same_condition_wrong_axis_fact(plan, target, ontology, rng, local_idx))
+                continue
             rows.append(
-                make_base_fact(
+                make_local_distractor_fact(
                     plan=plan,
-                    facet=target,
+                    target=target,
                     ontology=ontology,
                     rng=rng,
-                    local_idx=local_idx,
-                    is_gold=False,
                     distractor_type=distractor_type,
-                    condition_id=condition_id,
-                    condition_display=condition_display,
-                    subgroup_id=subgroup_id,
-                    subgroup_label=subgroup.label,
-                    subgroup_axis=subgroup.axis,
-                    subgroup_field=subgroup.field,
-                    subgroup_value=subgroup.value,
-                    subgroup_dimension_id=subgroup.dimension_id,
-                    subgroup_level_id=subgroup.level_id,
-                    subgroup_is_reference=subgroup.is_reference,
-                    axis=target.axis,
-                    value_bin=target.value_bin,
-                    cluster_id=f'{plan.pool_id}_d{len(rows) + 1:02d}',
-                    cluster_role='hard_distractor',
+                    local_idx=local_idx,
                 )
             )
     return rows
+
+
+def make_local_distractor_fact(
+    *,
+    plan: QueryPlan,
+    target: QueryPlanFacet,
+    ontology: MedicalOntology,
+    rng: Random,
+    distractor_type: str,
+    local_idx: int,
+) -> ClinicalFact:
+    excluded = {plan.subgroup_a_id, plan.subgroup_b_id}
+    condition_id = plan.condition_id
+    condition_display = plan.condition_display
+    subgroup_id = target.subgroup_id
+    subgroup = ontology.subgroups[subgroup_id]
+    if distractor_type == 'same_condition_wrong_subgroup':
+        subgroup_id, subgroup = _cycled_other_subgroup(
+            ontology,
+            excluded,
+            plan.query_id,
+            target.facet_id,
+            distractor_type,
+            local_idx,
+        )
+    elif distractor_type == 'same_subgroup_wrong_condition':
+        condition_id, condition = _cycled_other_condition(
+            ontology,
+            plan.condition_id,
+            plan.query_id,
+            target.facet_id,
+            distractor_type,
+            local_idx,
+        )
+        condition_display = condition.display
+    else:
+        condition_id, condition = _cycled_other_condition(
+            ontology,
+            plan.condition_id,
+            plan.query_id,
+            target.facet_id,
+            distractor_type,
+            local_idx,
+        )
+        condition_display = condition.display
+        subgroup_id, subgroup = _cycled_other_subgroup(
+            ontology,
+            excluded,
+            plan.query_id,
+            target.facet_id,
+            distractor_type,
+            local_idx,
+        )
+    return make_base_fact(
+        plan=plan,
+        facet=target,
+        ontology=ontology,
+        rng=rng,
+        local_idx=local_idx,
+        is_gold=False,
+        distractor_type=distractor_type,
+        condition_id=condition_id,
+        condition_display=condition_display,
+        subgroup_id=subgroup_id,
+        subgroup_label=subgroup.label,
+        subgroup_axis=subgroup.axis,
+        subgroup_field=subgroup.field,
+        subgroup_value=subgroup.value,
+        subgroup_dimension_id=subgroup.dimension_id,
+        subgroup_level_id=subgroup.level_id,
+        subgroup_is_reference=subgroup.is_reference,
+        axis=target.axis,
+        value_bin=target.value_bin,
+        cluster_id=_distractor_cluster_id(plan, target, distractor_type, local_idx),
+        cluster_role='hard_distractor',
+        # The target facet becomes part of the reuse scope so per-facet local
+        # distractor pools stay distinct even when their semantic shells match.
+        reuse_scope=f'distractor:{distractor_type}:target_{target.facet_id}',
+    )
+
+
+def _cycled_other_subgroup(
+    ontology: MedicalOntology,
+    excluded_ids: set[str],
+    query_id: str,
+    target_facet_id: str,
+    distractor_type: str,
+    local_idx: int,
+):
+    alternatives = other_subgroups(ontology, excluded_ids)
+    offset = _stable_seed(query_id, target_facet_id, distractor_type, 'subgroup') % len(alternatives)
+    return alternatives[(offset + local_idx) % len(alternatives)]
+
+
+def _cycled_other_condition(
+    ontology: MedicalOntology,
+    excluded_condition_id: ConditionKey,
+    query_id: str,
+    target_facet_id: str,
+    distractor_type: str,
+    local_idx: int,
+):
+    alternatives = other_conditions(ontology, excluded_condition_id)
+    offset = _stable_seed(query_id, target_facet_id, distractor_type, 'condition') % len(alternatives)
+    return alternatives[(offset + local_idx) % len(alternatives)]
+
+
+def _distractor_cluster_id(
+    plan: QueryPlan,
+    target: QueryPlanFacet,
+    distractor_type: str,
+    local_idx: int,
+) -> str:
+    suffix = {
+        'same_condition_wrong_subgroup': 'scws',
+        'same_subgroup_wrong_condition': 'sswc',
+        'same_axis_wrong_condition': 'sawc',
+        'same_condition_wrong_axis': 'scwa',
+    }[distractor_type]
+    return f'{plan.pool_id}_{target.facet_id}_{suffix}{local_idx + 1:02d}'
 
 
 def make_background_outlier_facts(
@@ -292,30 +402,14 @@ def make_background_outlier_facts(
     return rows
 
 
-def make_same_condition_wrong_axis_facts(
-    plan: QueryPlan,
-    ontology: MedicalOntology,
-    rng: Random,
-    n: int,
-) -> list[ClinicalFact]:
-    """Create the configured same-condition, wrong-axis distractor subtype."""
-    rows: list[ClinicalFact] = []
-    for local_idx in range(n):
-        rows.append(make_same_condition_wrong_axis_fact(plan, ontology, rng, local_idx))
-    return rows
-
-
 def make_same_condition_wrong_axis_fact(
     plan: QueryPlan,
+    target: QueryPlanFacet,
     ontology: MedicalOntology,
     rng: Random,
     local_idx: int,
 ) -> ClinicalFact:
     """Create one same-condition distractor on an off-query clinical axis."""
-    dense_facets = sorted(
-        (facet for facet in plan.facets if facet.priority == 'primary'),
-        key=lambda facet: (-facet.target_gold_chunks, facet.facet_id),
-    )
     non_query_axes: list[ClinicalAxis] = [
         axis for axis in CLINICAL_AXIS_LIST if axis not in {plan.primary_axis, plan.secondary_axis}
     ]
@@ -323,7 +417,6 @@ def make_same_condition_wrong_axis_fact(
         raise ValueError(
             'same_condition_wrong_axis requires at least one clinical axis outside query'
         )
-    target = dense_facets[local_idx % len(dense_facets)]
     axis = non_query_axes[
         _stable_seed(plan.query_id, 'same_condition_wrong_axis_axis', target.facet_id, local_idx)
         % len(non_query_axes)
@@ -359,8 +452,9 @@ def make_same_condition_wrong_axis_fact(
         subgroup_is_reference=cohort.is_reference,
         axis=axis,
         value_bin=value_bin,
-        cluster_id=f'{plan.pool_id}_cwa{local_idx + 1:02d}',
+        cluster_id=_distractor_cluster_id(plan, target, 'same_condition_wrong_axis', local_idx),
         cluster_role='same_condition_wrong_axis',
+        reuse_scope=f'distractor:same_condition_wrong_axis:target_{target.facet_id}',
     )
 
 

@@ -60,13 +60,13 @@ _QUERY_BEST_SORT = [
 ]
 _QUERY_BEST_DESC = [True, True, False, True, True, True]
 
-_DISTRACTOR_LABELS = {
-    'same_condition_wrong_subgroup': 'soft distractor: same condition, wrong subgroup',
-    'same_subgroup_wrong_condition': 'hard distractor: wrong condition, same subgroup',
-    'same_axis_wrong_condition': 'hard distractor: wrong condition, same answer axis',
+_DISTRACTOR_LABEL_TITLES = {
+    'same_condition_wrong_subgroup': 'same condition, wrong subgroup',
+    'same_subgroup_wrong_condition': 'wrong condition, same subgroup',
+    'same_axis_wrong_condition': 'wrong condition, same answer axis',
     'same_condition_wrong_axis': 'same condition, wrong axis',
-    'background_clinical_cluster': 'background outlier: clinical cluster',
-    'hard_distractor': 'hard distractor',
+    'background_clinical_cluster': 'background outlier',
+    'hard_distractor': 'distractor',
 }
 _QUERY_SELECTION_SORT = [
     'selection_score',
@@ -113,16 +113,12 @@ def query_directory_names_for_groups(
 ) -> dict[str, str]:
     ranked = ranked_queries_for_query_geometry(cfg, queries, geometry_filter, eval_results)
     best_rank_by_qid = _rank_position_map(ranked['query_id'].to_list())
-    worst_rank_by_qid = _rank_position_map(
-        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)[
-            'query_id'
-        ].to_list()
-    )
     query_dir_name_by_id: dict[str, str] = {}
     for group, query_ids in groups.items():
-        rank_by_qid = worst_rank_by_qid if group == 'bad' else best_rank_by_qid
         for fallback_rank, qid in enumerate(query_ids, start=1):
-            rank = rank_by_qid.get(qid, fallback_rank)
+            # Directory prefixes should reflect the query's absolute position in
+            # the full best-to-worst ranking, even for the "bad" tail slice.
+            rank = best_rank_by_qid.get(qid, fallback_rank)
             query_dir_name_by_id[qid] = f'{rank:04d}_{qid}'
     return query_dir_name_by_id
 
@@ -323,7 +319,12 @@ def build_query_artifact(
         for row in qrels.filter(pl.col('query_id') == qid).iter_rows(named=True)
         for qrel in [QrelRecord.model_validate(row)]
     }
-    labels, label_ids, roles, is_gold = candidate_labels(candidate_chunk_ids, query_qrels, query)
+    labels, label_ids, roles, is_gold = candidate_labels(
+        candidate_chunk_ids,
+        query_qrels,
+        maps['chunk_by_id'],
+        query,
+    )
     selection_variants = strategy_selection_variants(cfg, topn_sims, sim_matrix, k)
     selections = strategy_selections(cfg, eval_stats, eval_results, qid, selection_variants, k)
     coords, reduction_method = reduce_for_plot(
@@ -363,6 +364,7 @@ def build_query_artifact(
 def candidate_labels(
     candidate_chunk_ids: list[str],
     query_qrels: dict[str, QrelRecord],
+    chunk_by_id: dict[str, ChunkDocumentRecord],
     query: QueryRecord,
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
     facet_labels = facet_label_map(query)
@@ -386,12 +388,38 @@ def candidate_labels(
         else:
             dtype = qrel.distractor_type or 'hard_distractor'
             label_ids.append(dtype)
-            labels.append(distractor_label(dtype))
+            labels.append(distractor_label(dtype, qrel, chunk_by_id.get(chunk_id)))
     return labels, label_ids, roles, gold_flags
 
 
-def distractor_label(distractor_type: str) -> str:
-    return _DISTRACTOR_LABELS.get(distractor_type, distractor_type.replace('_', ' '))
+def distractor_label(
+    distractor_type: str,
+    qrel: QrelRecord,
+    chunk: ChunkDocumentRecord | None,
+) -> str:
+    title = _DISTRACTOR_LABEL_TITLES.get(distractor_type, distractor_type.replace('_', ' '))
+    target = distractor_target_label(chunk)
+    if qrel.cluster_role == 'background_outlier':
+        return f'{background_cluster_title(qrel.cluster_id)} ({target})'
+    return f'{title} ({target})'
+
+
+def distractor_target_label(chunk: ChunkDocumentRecord | None) -> str:
+    if chunk is None:
+        return 'unknown condition, unknown subgroup, unknown axis'
+    condition = chunk.condition_display or chunk.condition_id or 'unknown condition'
+    subgroup = chunk.subgroup_label or chunk.subgroup_id or 'unknown subgroup'
+    axis = str(chunk.axis or 'unknown axis').replace('_', ' ')
+    return f'{condition}, {subgroup}, {axis}'
+
+
+def background_cluster_title(cluster_id: str | None) -> str:
+    if cluster_id is None:
+        return 'background outlier cluster'
+    suffix = cluster_id.rsplit('_', 1)[-1]
+    if suffix.startswith('bg') and suffix[2:].isdigit():
+        return f'background outlier cluster {int(suffix[2:])}'
+    return f'background outlier {suffix}'
 
 
 def facet_label_map(query: QueryRecord) -> dict[str, str]:

@@ -175,8 +175,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
             expected_background_chunks=(
-                cfg.generation.distractor_config.background_outlier.clusters_per_query
-                * cfg.generation.distractor_config.background_outlier.cluster_size
+                cfg.generation.chunk_pools.background_outliers.num_clusters_per_query
+                * cfg.generation.chunk_pools.background_outliers.size
             ),
         )
 

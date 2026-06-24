@@ -230,7 +230,7 @@ def _materialize_plan(
         sorted(
             secondary_indices,
             key=lambda index: _stable_int(query_id, 'niche_gold', index),
-        )[: cfg.generation.chunk_pool_config.niche_gold_clusters_per_query]
+        )[: cfg.generation.chunk_pools.niche.num_clusters_per_query]
     )
     facets: list[QueryPlanFacet] = []
     for index, (cohort_id, cohort, axis) in enumerate(raw_facets, start=1):
@@ -239,13 +239,13 @@ def _materialize_plan(
         is_calibrated = is_primary and cohort_id == selected_subgroup_id
         is_niche = index in niche_indices
         target = (
-            cfg.generation.chunk_pool_config.gold_chunks_calibrated_primary
+            cfg.generation.chunk_pools.primary_calibrated.size
             if is_calibrated
-            else cfg.generation.chunk_pool_config.gold_chunks_other_primary
+            else cfg.generation.chunk_pools.other_primary.size
             if is_primary
-            else cfg.generation.chunk_pool_config.gold_chunks_niche
+            else cfg.generation.chunk_pools.niche.size
             if is_niche
-            else cfg.generation.chunk_pool_config.gold_chunks_secondary
+            else cfg.generation.chunk_pools.secondary.size
         )
         facets.append(
             QueryPlanFacet(

@@ -10,14 +10,11 @@ from numpy.typing import NDArray
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     BACKGROUND_OUTLIER_COLOR,
-    BACKGROUND_OUTLIER_LABEL,
     BACKGROUND_OUTLIER_LABEL_ID,
     BACKGROUND_OUTLIER_ROLE,
-    DISTRACTOR_LABELS,
-    FIXED_LABEL_COLORS,
-    SAME_CONDITION_WRONG_AXIS_LABEL,
     SAME_CONDITION_WRONG_AXIS_LABEL_ID,
     SAME_CONDITION_WRONG_AXIS_ROLE,
+    POINT_DISTRACTOR_TYPE_COLORS,
     UNSELECTED_BACKGROUND_COLOR,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
@@ -37,7 +34,7 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     fig, axes = plt.subplots(
         1, len(strategies), figsize=(5.3 * len(strategies), 5.2), sharex=True, sharey=True
     )
-    palette = label_palette(artifact.labels)
+    palette = label_palette(artifact)
     axes_list = [axes] if len(strategies) == 1 else list(axes)
     for ax, strategy in zip(axes_list, strategies, strict=True):
         payload = artifact.selections[strategy]
@@ -104,7 +101,7 @@ def plot_full_strategy_selection_overlay(
         constrained_layout=True,
     )  # type: ignore
 
-    palette = label_palette(artifact.labels)
+    palette = label_palette(artifact)
     topk_variants = selection_variants.get('top_k', [])
     if topk_variants:
         _plot_selection_panel(
@@ -240,13 +237,15 @@ def _plot_selection_panel(
     coords = artifact.coords
     ax.scatter(coords[:, 0], coords[:, 1], color='#dddddd', s=24, alpha=0.55, edgecolors='none')
     selected = {int(i) for i in local_indices}
-    for label in sorted(set(artifact.labels)):
-        if _is_background_outlier_label(label):
+    label_groups = _label_groups(artifact)
+    for label, indices in label_groups.items():
+        first_idx = indices[0]
+        if _is_background_outlier_point(artifact, first_idx):
             continue
-        idx = [i for i, value in enumerate(artifact.labels) if value == label and i in selected]
+        idx = [i for i in indices if i in selected]
         if not idx:
             continue
-        marker = _label_marker(label)
+        marker = _label_marker(artifact, first_idx)
         scatter_kwargs: dict[str, Any] = {
             's': 74,
             'color': palette[label],
@@ -268,7 +267,8 @@ def _plot_selection_panel(
         ax,
         artifact,
         selected=selected,
-        label=BACKGROUND_OUTLIER_LABEL,
+        palette=palette,
+        label_groups=label_groups,
     )
     draw_query_marker(ax, artifact)
     ax.set_title(title)
@@ -406,12 +406,13 @@ def _draw_selection_legend_panel(ax: Any, legend_handles: dict[str, Any]) -> Non
 def _plot_query_map_ax(
     ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
 ) -> None:
-    palette = label_palette(artifact.labels)
-    for label in sorted(set(artifact.labels)):
-        if _is_background_outlier_label(label):
+    palette = label_palette(artifact)
+    label_groups = _label_groups(artifact)
+    for label, idx in label_groups.items():
+        first_idx = idx[0]
+        if _is_background_outlier_point(artifact, first_idx):
             continue
-        idx = [i for i, value in enumerate(artifact.labels) if value == label]
-        marker = _label_marker(label)
+        marker = _label_marker(artifact, first_idx)
         scatter_kwargs: dict[str, Any] = {
             's': 34,
             'alpha': 0.78,
@@ -431,8 +432,8 @@ def _plot_query_map_ax(
     _plot_background_outliers(
         ax,
         artifact,
-        color=BACKGROUND_OUTLIER_COLOR,
-        label=BACKGROUND_OUTLIER_LABEL,
+        palette=palette,
+        label_groups=label_groups,
     )
     draw_query_marker(ax, artifact)
     title = (
@@ -476,78 +477,53 @@ def _plot_query_similarity_points(
     order = np.arange(len(artifact.candidate_chunk_ids))
     plot_coords = coords[order]
     plot_sims = sim_to_query[order]
-    is_gold = np.array([artifact.is_gold[i] for i in order], dtype=bool)
-    is_background = np.array(
-        [_is_background_outlier_point(artifact, int(i)) for i in order], dtype=bool
-    )
-    is_same_condition_wrong_axis = np.array(
-        [_is_same_condition_wrong_axis_point(artifact, int(i)) for i in order], dtype=bool
-    )
-    near_miss = (~is_gold) & (~is_background) & (~is_same_condition_wrong_axis)
+    palette = label_palette(artifact)
+    label_groups = _label_groups(artifact)
 
     vmin = float(plot_sims.min()) if len(plot_sims) else 0.0
     vmax = float(plot_sims.max()) if len(plot_sims) else 1.0
     points = None
-    if is_gold.any():
+    for label, indices in label_groups.items():
+        idx = np.array(indices, dtype=int)
+        first_idx = indices[0]
+        marker = _label_marker(artifact, first_idx)
+        if _is_background_outlier_point(artifact, first_idx):
+            points = _scatter_circled_x(
+                ax,
+                plot_coords[idx, 0],
+                plot_coords[idx, 1],
+                color_values=plot_sims[idx],
+                circle_edgecolors=palette[label],
+                cmap='viridis',
+                vmin=vmin,
+                vmax=vmax,
+                s=74,
+                alpha=0.96,
+                linewidth=0.9,
+                zorder=5,
+                label=label,
+            )
+            continue
+        scatter_kwargs: dict[str, Any] = {
+            'c': plot_sims[idx],
+            'cmap': 'viridis',
+            'vmin': vmin,
+            'vmax': vmax,
+            'alpha': 0.92,
+            'marker': marker,
+            'zorder': 4,
+            'label': label,
+        }
+        if marker == 'o':
+            scatter_kwargs.update({'s': 44, 'edgecolors': 'none'})
+        elif marker == 'D':
+            scatter_kwargs.update({'s': 52, 'edgecolors': 'black', 'linewidths': 0.6})
+        else:
+            scatter_kwargs.update({'s': 38, 'linewidths': 1.25})
         points = ax.scatter(
-            plot_coords[is_gold, 0],
-            plot_coords[is_gold, 1],
-            c=plot_sims[is_gold],
-            cmap='viridis',
-            vmin=vmin,
-            vmax=vmax,
-            s=44,
-            alpha=0.88,
-            marker='o',
-            edgecolors='none',
-            zorder=4,
-            label='gold facets',
-        )
-    if near_miss.any():
-        points = ax.scatter(
-            plot_coords[near_miss, 0],
-            plot_coords[near_miss, 1],
-            c=plot_sims[near_miss],
-            cmap='viridis',
-            vmin=vmin,
-            vmax=vmax,
-            s=38,
-            alpha=0.92,
-            marker='x',
-            linewidths=1.25,
-            zorder=4,
-            label='near-miss distractor',
-        )
-    if is_same_condition_wrong_axis.any():
-        points = ax.scatter(
-            plot_coords[is_same_condition_wrong_axis, 0],
-            plot_coords[is_same_condition_wrong_axis, 1],
-            c=plot_sims[is_same_condition_wrong_axis],
-            cmap='viridis',
-            vmin=vmin,
-            vmax=vmax,
-            s=52,
-            alpha=0.95,
-            marker='D',
-            edgecolors='black',
-            linewidths=0.6,
-            zorder=5,
-            label=SAME_CONDITION_WRONG_AXIS_LABEL,
-        )
-    if is_background.any():
-        points = _scatter_circled_x(
-            ax,
-            plot_coords[is_background, 0],
-            plot_coords[is_background, 1],
-            color_values=plot_sims[is_background],
-            cmap='viridis',
-            vmin=vmin,
-            vmax=vmax,
-            s=74,
-            alpha=0.96,
-            linewidth=0.75,
-            zorder=5,
-            label=BACKGROUND_OUTLIER_LABEL,
+            plot_coords[idx, 0],
+            plot_coords[idx, 1],
+            **scatter_kwargs,
         )
     if points is None:
         points = ax.scatter([], [], c=[], cmap='viridis', vmin=vmin, vmax=vmax)
@@ -564,12 +540,13 @@ def _plot_query_rank_ax(
     ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
 ) -> None:
     ranks = np.arange(1, len(artifact.sim_to_query) + 1)
-    palette = label_palette(artifact.labels)
-    for label in sorted(set(artifact.labels)):
-        if _is_background_outlier_label(label):
+    palette = label_palette(artifact)
+    label_groups = _label_groups(artifact)
+    for label, idx in label_groups.items():
+        first_idx = idx[0]
+        if _is_background_outlier_point(artifact, first_idx):
             continue
-        idx = [i for i, value in enumerate(artifact.labels) if value == label]
-        marker = _label_marker(label)
+        marker = _label_marker(artifact, first_idx)
         scatter_kwargs: dict[str, Any] = {
             'color': palette[label],
             's': 28,
@@ -586,19 +563,13 @@ def _plot_query_rank_ax(
             artifact.sim_to_query[idx],
             **scatter_kwargs,
         )
-    background_idx = _background_outlier_indices(artifact)
-    if background_idx:
-        _scatter_circled_x(
-            ax,
-            ranks[background_idx],
-            artifact.sim_to_query[background_idx],
-            color=BACKGROUND_OUTLIER_COLOR,
-            s=50,
-            alpha=0.94,
-            label=BACKGROUND_OUTLIER_LABEL,
-            linewidth=0.75,
-            zorder=5,
-        )
+    _plot_background_outliers_rank(
+        ax,
+        artifact,
+        ranks=ranks,
+        palette=palette,
+        label_groups=label_groups,
+    )
     ax.axvline(artifact.k, color='black', lw=1.0, ls='--', alpha=0.7, label=f'k={artifact.k}')
     ax.set_xlabel('rank by query cosine')
     ax.set_ylabel('query cosine similarity')
@@ -620,6 +591,8 @@ def _plot_discovered_clusters_ax(
     cluster_labels = artifact.cluster_labels
     unique = sorted(set(int(x) for x in cluster_labels))
     cmap = plt.get_cmap('tab20')  # type: ignore
+    palette = label_palette(artifact)
+    label_groups = _label_groups(artifact)
     for idx, cluster_id in enumerate(unique):
         mask = cluster_labels == cluster_id
         color = '#bbbbbb' if cluster_id == -1 else cmap(idx % 20)
@@ -636,8 +609,9 @@ def _plot_discovered_clusters_ax(
     _plot_background_outliers(
         ax,
         artifact,
-        color='#333333',
-        label=BACKGROUND_OUTLIER_LABEL,
+        palette=palette,
+        label_groups=label_groups,
+        fallback_color='#333333',
     )
     draw_query_marker(ax, artifact)
     ax.set_title(
@@ -649,52 +623,79 @@ def _plot_discovered_clusters_ax(
     ax.grid(alpha=0.18)
 
 
-def label_palette(labels: list[str]) -> dict[str, Any]:
+def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
     import matplotlib.pyplot as plt
 
-    unique = [label for label in sorted(set(labels)) if label not in FIXED_LABEL_COLORS]
-    cmap = plt.get_cmap('tab20')  # type: ignore
-    palette = {label: cmap(i % 20) for i, label in enumerate(unique)}
-    palette.update({label: color for label, color in FIXED_LABEL_COLORS.items() if label in labels})
+    label_groups = _label_groups(artifact)
+    gold_labels = [
+        label for label, indices in label_groups.items() if artifact.is_gold[indices[0]]
+    ]
+    gold_cmap = plt.get_cmap('tab20')  # type: ignore
+    background_cluster_ids = sorted({
+        _cluster_id_for_index(artifact, indices[0]) or label
+        for label, indices in label_groups.items()
+        if _is_background_outlier_point(artifact, indices[0])
+    })
+    background_cmap = plt.get_cmap('Dark2')  # type: ignore
+    background_palette = {
+        cluster_id: background_cmap(i % max(1, background_cmap.N))
+        for i, cluster_id in enumerate(background_cluster_ids)
+    }
+    palette: dict[str, Any] = {}
+    for index, label in enumerate(gold_labels):
+        palette[label] = gold_cmap(index % 20)
+    for label, indices in label_groups.items():
+        if label in palette:
+            continue
+        first_idx = indices[0]
+        if _is_background_outlier_point(artifact, first_idx):
+            cluster_id = _cluster_id_for_index(artifact, first_idx) or label
+            palette[label] = background_palette.get(cluster_id, BACKGROUND_OUTLIER_COLOR)
+            continue
+        palette[label] = POINT_DISTRACTOR_TYPE_COLORS.get(
+            _distractor_type_for_index(artifact, first_idx),
+            POINT_DISTRACTOR_TYPE_COLORS['hard_distractor'],
+        )
     return palette
 
 
-def _label_marker(label: str) -> str:
-    if _is_background_outlier_label(label):
+def _label_groups(artifact: GeometryArtifact) -> dict[str, list[int]]:
+    grouped: dict[str, list[int]] = {}
+    for idx, label in enumerate(artifact.labels):
+        grouped.setdefault(label, []).append(idx)
+    return dict(sorted(grouped.items(), key=lambda item: item[0].lower()))
+
+
+def _label_marker(artifact: GeometryArtifact, idx: int) -> str:
+    if _is_background_outlier_point(artifact, idx):
         return 'x'
-    if _is_same_condition_wrong_axis_label(label):
+    if _is_same_condition_wrong_axis_point(artifact, idx):
         return 'D'
-    return 'x' if label in DISTRACTOR_LABELS else 'o'
-
-
-def _is_background_outlier_label(label: str) -> bool:
-    return label == BACKGROUND_OUTLIER_LABEL
-
-
-def _is_same_condition_wrong_axis_label(label: str) -> bool:
-    return label == SAME_CONDITION_WRONG_AXIS_LABEL
+    return 'x' if not artifact.is_gold[idx] else 'o'
 
 
 def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
-    label = artifact.labels[idx]
     label_id = artifact.label_ids[idx]
     role = artifact.roles[idx]
-    return (
-        label == BACKGROUND_OUTLIER_LABEL
-        or label_id == BACKGROUND_OUTLIER_LABEL_ID
-        or role == BACKGROUND_OUTLIER_ROLE
-    )
+    return label_id == BACKGROUND_OUTLIER_LABEL_ID or role == BACKGROUND_OUTLIER_ROLE
 
 
 def _is_same_condition_wrong_axis_point(artifact: GeometryArtifact, idx: int) -> bool:
-    label = artifact.labels[idx]
     label_id = artifact.label_ids[idx]
     role = artifact.roles[idx]
-    return (
-        label == SAME_CONDITION_WRONG_AXIS_LABEL
-        or label_id == SAME_CONDITION_WRONG_AXIS_LABEL_ID
-        or role == SAME_CONDITION_WRONG_AXIS_ROLE
-    )
+    return label_id == SAME_CONDITION_WRONG_AXIS_LABEL_ID or role == SAME_CONDITION_WRONG_AXIS_ROLE
+
+
+def _distractor_type_for_index(artifact: GeometryArtifact, idx: int) -> str:
+    chunk_id = artifact.candidate_chunk_ids[idx]
+    qrel = artifact.qrel_by_chunk_id.get(chunk_id)
+    return qrel.distractor_type if qrel is not None and qrel.distractor_type else 'hard_distractor'
+
+
+def _cluster_id_for_index(artifact: GeometryArtifact, idx: int) -> str | None:
+    chunk_id = artifact.candidate_chunk_ids[idx]
+    qrel = artifact.qrel_by_chunk_id.get(chunk_id)
+    return qrel.cluster_id if qrel is not None else None
 
 
 def _background_outlier_indices(artifact: GeometryArtifact) -> list[int]:
@@ -709,24 +710,26 @@ def _plot_background_outliers(
     ax: Any,
     artifact: GeometryArtifact,
     *,
-    color: str,
-    label: str | None = None,
+    palette: dict[str, Any] | None,
+    label_groups: dict[str, list[int]],
+    fallback_color: str | None = None,
 ) -> None:
-    idx = _background_outlier_indices(artifact)
-    if not idx:
-        return
     coords = artifact.coords
-    _scatter_circled_x(
-        ax,
-        coords[idx, 0],
-        coords[idx, 1],
-        color=color,
-        s=54,
-        alpha=0.95,
-        label=label,
-        linewidth=0.75,
-        zorder=5,
-    )
+    for label, indices in label_groups.items():
+        first_idx = indices[0]
+        if not _is_background_outlier_point(artifact, first_idx):
+            continue
+        _scatter_circled_x(
+            ax,
+            coords[indices, 0],
+            coords[indices, 1],
+            color=(palette or {}).get(label, fallback_color or BACKGROUND_OUTLIER_COLOR),
+            s=54,
+            alpha=0.95,
+            label=label,
+            linewidth=0.75,
+            zorder=5,
+        )
 
 
 def _plot_background_outliers_for_selection(
@@ -734,33 +737,60 @@ def _plot_background_outliers_for_selection(
     artifact: GeometryArtifact,
     *,
     selected: set[int],
-    label: str | None = None,
+    palette: dict[str, Any],
+    label_groups: dict[str, list[int]],
 ) -> None:
-    idx = _background_outlier_indices(artifact)
-    if not idx:
-        return
-    selected_idx = [point_idx for point_idx in idx if point_idx in selected]
-    unselected_idx = [point_idx for point_idx in idx if point_idx not in selected]
     coords = artifact.coords
-    if unselected_idx:
+    for label, indices in label_groups.items():
+        first_idx = indices[0]
+        if not _is_background_outlier_point(artifact, first_idx):
+            continue
+        selected_idx = [point_idx for point_idx in indices if point_idx in selected]
+        unselected_idx = [point_idx for point_idx in indices if point_idx not in selected]
+        if unselected_idx:
+            _scatter_circled_x(
+                ax,
+                coords[unselected_idx, 0],
+                coords[unselected_idx, 1],
+                color=UNSELECTED_BACKGROUND_COLOR,
+                s=42,
+                alpha=0.58,
+                linewidth=0.55,
+                zorder=3,
+            )
+        if selected_idx:
+            _scatter_circled_x(
+                ax,
+                coords[selected_idx, 0],
+                coords[selected_idx, 1],
+                color=palette[label],
+                s=58,
+                alpha=0.95,
+                label=label,
+                linewidth=0.75,
+                zorder=5,
+            )
+
+
+def _plot_background_outliers_rank(
+    ax: Any,
+    artifact: GeometryArtifact,
+    *,
+    ranks: NDArray[np.int_],
+    palette: dict[str, Any],
+    label_groups: dict[str, list[int]],
+) -> None:
+    for label, indices in label_groups.items():
+        first_idx = indices[0]
+        if not _is_background_outlier_point(artifact, first_idx):
+            continue
         _scatter_circled_x(
             ax,
-            coords[unselected_idx, 0],
-            coords[unselected_idx, 1],
-            color=UNSELECTED_BACKGROUND_COLOR,
-            s=42,
-            alpha=0.58,
-            linewidth=0.55,
-            zorder=3,
-        )
-    if selected_idx:
-        _scatter_circled_x(
-            ax,
-            coords[selected_idx, 0],
-            coords[selected_idx, 1],
-            color=BACKGROUND_OUTLIER_COLOR,
-            s=58,
-            alpha=0.95,
+            ranks[indices],
+            artifact.sim_to_query[indices],
+            color=palette[label],
+            s=50,
+            alpha=0.94,
             label=label,
             linewidth=0.75,
             zorder=5,
@@ -774,6 +804,7 @@ def _scatter_circled_x(
     *,
     color: str | None = None,
     color_values: Any = None,
+    circle_edgecolors: Any = None,
     cmap: str | None = None,
     vmin: float | None = None,
     vmax: float | None = None,
@@ -789,7 +820,11 @@ def _scatter_circled_x(
 
         norm = Normalize(vmin=vmin, vmax=vmax)
         cmap_obj = plt.get_cmap(cmap or 'viridis')  # type: ignore
-        circle_kwargs = {'edgecolors': cmap_obj(norm(color_values))}
+        circle_kwargs = {
+            'edgecolors': (
+                circle_edgecolors if circle_edgecolors is not None else cmap_obj(norm(color_values))
+            )
+        }
         x_kwargs = {'c': color_values, 'cmap': cmap, 'vmin': vmin, 'vmax': vmax}
     else:
         circle_kwargs = {'edgecolors': color}

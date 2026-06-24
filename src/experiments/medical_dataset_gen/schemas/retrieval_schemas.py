@@ -10,6 +10,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClusterRole,
     DataSplit,
     QueryType,
+    SubgroupAxis,
 )
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
@@ -73,6 +74,14 @@ class ChunkDocumentRecord(BenchmarkModel):
     chunk_id: str
     text: str = ''
     condition_id: str | None = None
+    condition_display: str | None = None
+    subgroup_id: str | None = None
+    subgroup_label: str | None = None
+    subgroup_axis: SubgroupAxis | None = None
+    subgroup_field: str | None = None
+    subgroup_value: str | None = None
+    axis: ClinicalAxis | None = None
+    value_bin: str | None = None
     admission_id: str | int | None = None
 
 

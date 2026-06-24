@@ -104,9 +104,9 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'patient_sex': fact.patient_sex,
         'clinical_subgroup_phrase': fact.clinical_subgroup_phrase,
         'note_style': fact.note_style,
-        'chunk_min_words': cfg.generation.chunk_min_words,
-        'chunk_max_words': cfg.generation.chunk_max_words,
-        'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
+        'chunk_min_words': cfg.generation.chunk_pools.chunk_min_words,
+        'chunk_max_words': cfg.generation.chunk_pools.chunk_max_words,
+        'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,
     }
     if cfg.generation.llm_config.use_llm_chunk_generation:
         payload.update({
@@ -144,9 +144,9 @@ def chunk_rewrite_cache_key(
         'patient_sex': fact.patient_sex,
         'clinical_subgroup_phrase': fact.clinical_subgroup_phrase,
         'note_style': fact.note_style,
-        'chunk_min_words': cfg.generation.chunk_min_words,
-        'chunk_max_words': cfg.generation.chunk_max_words,
-        'chunk_word_tolerance': cfg.generation.chunk_word_tolerance,
+        'chunk_min_words': cfg.generation.chunk_pools.chunk_min_words,
+        'chunk_max_words': cfg.generation.chunk_pools.chunk_max_words,
+        'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,
         'must_mention': fact.must_mention,
         'must_not_mention': fact.must_not_mention,
     }
@@ -179,9 +179,9 @@ def cached_chunk_state(
     errors.extend(
         word_count_errors(
             len(cached_text.split()),
-            min_words=cfg.generation.chunk_min_words,
-            max_words=cfg.generation.chunk_max_words,
-            tolerance=cfg.generation.chunk_word_tolerance,
+            min_words=cfg.generation.chunk_pools.chunk_min_words,
+            max_words=cfg.generation.chunk_pools.chunk_max_words,
+            tolerance=cfg.generation.chunk_pools.chunk_word_tolerance,
         )
     )
     cache_source = cached.text_generation_source
@@ -231,9 +231,9 @@ def cached_rewrite_chunk_state(
     errors.extend(
         word_count_errors(
             len(cached_text.split()),
-            min_words=cfg.generation.chunk_min_words,
-            max_words=cfg.generation.chunk_max_words,
-            tolerance=cfg.generation.chunk_word_tolerance,
+            min_words=cfg.generation.chunk_pools.chunk_min_words,
+            max_words=cfg.generation.chunk_pools.chunk_max_words,
+            tolerance=cfg.generation.chunk_pools.chunk_word_tolerance,
         )
     )
     cache_matches_mode = cached.text_generation_source == 'llm'
