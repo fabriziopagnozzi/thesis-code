@@ -1,4 +1,9 @@
-"""Build deterministic schema-v2 query plans from explicit evidence profiles."""
+"""Build deterministic schema-v2 query plans from explicit evidence profiles.
+
+Pair-level ontology policies can restrict which axis may be dominant for a
+given joint profile, preventing clinically entangled primary-axis queries from
+materializing at all.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +17,7 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_selected_conditions,
     load_ontology,
     make_subgroup_pairs,
+    resolve_axis_pair_generation_policy,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.global_config import (
@@ -35,7 +41,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
 QUERY_TYPE: QueryType = 'prioritized_subgroup_comparison'
-EXPECTED_FULL_QUERY_COUNT = 5_440
 
 
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -43,64 +48,35 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     conditions = get_selected_conditions(ontology, cfg.global_.conditions)
     contrasts = make_subgroup_pairs(ontology)
     axis_pairs = list(combinations(CLINICAL_AXIS_LIST, 2))
-    expected_profiles_per_condition_contrast = sum(
-        (
-            1
-            if all(ontology.clinical_axes[axis].allow_as_primary for axis in axes)
-            else len(get_axis_pair_profiles(ontology, *axes))
-        )
-        for axes in axis_pairs
-    )
     specs: list[QueryPlanSpec] = []
     plans: list[QueryPlan] = []
 
-    for condition_index, (condition_key, condition) in enumerate(conditions):
-        for contrast_index, (
-            contrast,
-            (cohort_a_id, cohort_a),
-            (cohort_b_id, cohort_b),
-        ) in enumerate(contrasts):
-            for axis_pair_index, (axis_a, axis_b) in enumerate(axis_pairs):
-                profiles = get_axis_pair_profiles(ontology, axis_a, axis_b)
+    for condition_key, condition in conditions:
+        for contrast, (cohort_a_id, cohort_a), (cohort_b_id, cohort_b) in contrasts:
+            for axis_a, axis_b in axis_pairs:
+                policy = resolve_axis_pair_generation_policy(
+                    ontology,
+                    condition_id=condition_key,
+                    left=axis_a,
+                    right=axis_b,
+                )
+                profiles = [
+                    profile
+                    for profile in get_axis_pair_profiles(ontology, axis_a, axis_b)
+                    if profile.id not in policy.blocked_profile_ids
+                ]
+                if not profiles:
+                    continue
                 primary_axes = [
                     axis
                     for axis in (axis_a, axis_b)
-                    if ontology.clinical_axes[axis].allow_as_primary
+                    if (
+                        ontology.clinical_axes[axis].allow_as_primary
+                        and axis in policy.allowed_primary_axes
+                    )
                 ]
-                if len(primary_axes) == 2:
-                    # Rotate profile direction while preserving both query orientations.
-                    profile = profiles[
-                        (cfg.global_.seed + condition_index + contrast_index + axis_pair_index)
-                        % len(profiles)
-                    ]
-                    spec = _make_plan_spec(
-                        cfg=cfg,
-                        condition_key=condition_key,
-                        condition_display=condition.display,
-                        contrast_id=contrast.id,
-                        contrast_dimension_id=contrast.dimension_id,
-                        cohort_a_id=cohort_a_id,
-                        cohort_a=cohort_a,
-                        cohort_b_id=cohort_b_id,
-                        cohort_b=cohort_b,
-                        axis_a=axis_a,
-                        axis_b=axis_b,
-                        profile=profile,
-                    )
-                    specs.append(spec)
-                    plans.extend(
-                        (
-                            _materialize_plan(cfg, ontology, spec, axis_a, axis_b),
-                            _materialize_plan(cfg, ontology, spec, axis_b, axis_a),
-                        )
-                    )
+                if not primary_axes:
                     continue
-
-                # If one axis is unsuitable as the dominant retrieval target, use
-                # both YAML joint profiles with the valid axis primary. This retains
-                # two distinct queries per grid cell without duplicating a weak orientation.
-                primary_axis = primary_axes[0]
-                secondary_axis = axis_b if primary_axis == axis_a else axis_a
                 for profile in profiles:
                     spec = _make_plan_spec(
                         cfg=cfg,
@@ -117,6 +93,21 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                         profile=profile,
                     )
                     specs.append(spec)
+                    if len(primary_axes) == 2:
+                        plans.extend(
+                            (
+                                _materialize_plan(cfg, ontology, spec, axis_a, axis_b),
+                                _materialize_plan(cfg, ontology, spec, axis_b, axis_a),
+                            )
+                        )
+                        continue
+
+                    # If one axis is unsuitable as the dominant retrieval target,
+                    # emit one query per surviving joint profile with the allowed
+                    # primary axis. This keeps the richer profile inventory while
+                    # avoiding clinically weak dominant-axis orientations.
+                    primary_axis = primary_axes[0]
+                    secondary_axis = axis_b if primary_axis == axis_a else axis_a
                     plans.append(
                         _materialize_plan(
                             cfg,
@@ -130,17 +121,6 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     rows = [plan.to_row() for plan in plans]
     if cfg.generation.query_limit is not None:
         rows = rows[: int(cfg.generation.query_limit)]
-
-    if (
-        cfg.global_.conditions == len(ontology.conditions)
-        and cfg.generation.query_limit is None
-        and (
-            len(specs)
-            != len(conditions) * len(contrasts) * expected_profiles_per_condition_contrast
-            or len(rows) != EXPECTED_FULL_QUERY_COUNT
-        )
-    ):
-        raise RuntimeError(f'v2 cardinality mismatch: profiles={len(specs)}, queries={len(rows)}')
 
     df = pl.from_dicts(rows, infer_schema_length=None)
     if df['query_id'].n_unique() != len(df):

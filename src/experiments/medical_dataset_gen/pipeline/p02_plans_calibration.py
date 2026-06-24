@@ -1,4 +1,4 @@
-"""Calibrate query emphasis and the larger cluster within the declared primary axis."""
+"""Calibrate query emphasis and reject semantically entangled plans early."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_p
 class FacetProbe(TypedDict):
     texts: list[str]
     offsets: dict[str, tuple[int, int]]
+    labels: list[str]
 
 
 def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -83,34 +84,50 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
             for plan, probe in zip(batch, probes, strict=True):
                 probe_end = probe_offset + len(probe['texts'])
                 query_end = query_offset + len(template_ids)
+                plan_query_vectors = np.asarray(query_vectors[query_offset:query_end])
+                plan_probe_vectors = np.asarray(probe_vectors[probe_offset:probe_end])
                 selected_facet_id, selected_template_id, row = _select_calibration(
                     plan=plan,
                     probe=probe,
                     template_ids=template_ids,
-                    query_vectors=np.asarray(query_vectors[query_offset:query_end]),
-                    probe_vectors=np.asarray(probe_vectors[probe_offset:probe_end]),
+                    query_vectors=plan_query_vectors,
+                    probe_vectors=plan_probe_vectors,
                     probe_n=probe_n,
+                )
+                semantic_gate = _semantic_probe_gate(
+                    cfg=cfg,
+                    plan=plan,
+                    probe=probe,
+                    query_vector=plan_query_vectors[template_ids.index(selected_template_id)],
+                    probe_vectors=plan_probe_vectors,
                 )
                 probe_offset = probe_end
                 query_offset = query_end
-                updated.append(
-                    _with_calibrated_query(
-                        cfg,
-                        plan,
-                        selected_facet_id=selected_facet_id,
-                        selected_template_id=selected_template_id,
+                if bool(semantic_gate['passes_semantic_gate']):
+                    updated.append(
+                        _with_calibrated_query(
+                            cfg,
+                            plan,
+                            selected_facet_id=selected_facet_id,
+                            selected_template_id=selected_template_id,
+                        )
                     )
-                )
-                calibration_rows.append(row)
+                calibration_rows.append(row | semantic_gate)
     finally:
         embedder.release()
 
-    updated_df = pl.from_dicts([plan.to_row() for plan in updated], infer_schema_length=None)
+    updated_rows = [plan.to_row() for plan in updated]
+    updated_df = (
+        pl.from_dicts(updated_rows, infer_schema_length=None) if updated_rows else plans_df.head(0)
+    )
     write_parquet(paths, 'query_plans', updated_df)
     write_parquet(
         paths,
         'query_plan_calibration',
         pl.from_dicts(calibration_rows, infer_schema_length=None),
+    )
+    print(
+        f'[calibrate_plans] retained {len(updated):,}/{len(plans):,} plans after semantic gate'
     )
     return updated_df
 
@@ -123,13 +140,15 @@ def _prepare_probe(plan: QueryPlan, ontology: MedicalOntology, probe_n: int) -> 
     rng = Random(plan.plan_seed)
     texts: list[str] = []
     offsets: dict[str, tuple[int, int]] = {}
+    labels: list[str] = []
     for facet in plan.facets:
         start = len(texts)
         for local_idx in range(probe_n):
             fact = make_gold_fact(plan, facet, ontology, local_idx, rng)
             texts.append(render_canonical_chunk_text(fact, ontology))
+            labels.append(facet.facet_id)
         offsets[facet.facet_id] = (start, len(texts))
-    return {'texts': texts, 'offsets': offsets}
+    return {'texts': texts, 'offsets': offsets, 'labels': labels}
 
 
 def _select_calibration(
@@ -239,6 +258,132 @@ def _select_calibration(
     )
 
 
+def _semantic_probe_gate(
+    *,
+    cfg: ExperimentCfg,
+    plan: QueryPlan,
+    probe: FacetProbe,
+    query_vector: np.ndarray,
+    probe_vectors: np.ndarray,
+) -> dict[str, object]:
+    if not probe['texts']:
+        failures = {'fail_missing_probe_texts': True}
+        return {
+            'semantic_gate_applied': True,
+            'passes_semantic_gate': False,
+            'semantic_gate_failures_json': json.dumps(failures, sort_keys=True),
+            'semantic_gate_failure_reasons_json': json.dumps(list(failures)),
+            'probe_topk_k': 0,
+            'probe_primary_axis_target': 0,
+            'probe_primary_axis_topk_count': 0,
+            'probe_topk_retrieved_facets': 0,
+            'probe_mean_in_facet_similarity': 0.0,
+            'probe_mean_cross_facet_similarity': 0.0,
+            'probe_in_minus_cross_similarity': 0.0,
+            'probe_same_axis_cohort_gap': 0.0,
+            'probe_same_cohort_axis_gap': 0.0,
+        }
+
+    sims = probe_vectors @ query_vector
+    topk_k = min(int(cfg.geometry_filter.topk_k), len(probe['texts']))
+    ranked_idx = np.argsort(-sims)[:topk_k]
+    facet_by_id = {facet.facet_id: facet for facet in plan.facets}
+    topk_labels = [probe['labels'][int(index)] for index in ranked_idx]
+    primary_axis_topk_count = sum(
+        1 for facet_id in topk_labels if facet_by_id[facet_id].axis == plan.primary_axis
+    )
+    n_topk_retrieved_facets = len(set(topk_labels))
+    primary_axis_target = min(
+        int(cfg.geometry_filter.min_primary_axis_count),
+        sum(
+            end - start
+            for facet_id, (start, end) in probe['offsets'].items()
+            if facet_by_id[facet_id].axis == plan.primary_axis
+        ),
+    )
+    separation = _probe_facet_separation(plan, probe, probe_vectors)
+    max_facets = cfg.geometry_filter.max_topk_retrieved_facets
+    failures = {
+        'fail_too_many_topk_facets': (
+            max_facets is not None and n_topk_retrieved_facets > max_facets
+        ),
+        'fail_weak_primary_axis_dominance': primary_axis_topk_count < primary_axis_target,
+        'fail_weak_facet_separation': (
+            separation['in_minus_cross_similarity']
+            < float(cfg.geometry_filter.min_in_minus_cross_similarity)
+        ),
+        'fail_weak_same_axis_cohort_separation': (
+            separation['same_axis_cohort_gap'] < float(cfg.geometry_filter.min_same_axis_cohort_gap)
+        ),
+        'fail_weak_same_cohort_axis_separation': (
+            separation['same_cohort_axis_gap']
+            < float(cfg.geometry_filter.min_same_cohort_axis_gap)
+        ),
+    }
+    failure_reasons = [name for name, failed in failures.items() if failed]
+    return {
+        'semantic_gate_applied': True,
+        'passes_semantic_gate': not failure_reasons,
+        'semantic_gate_failures_json': json.dumps(failures, sort_keys=True),
+        'semantic_gate_failure_reasons_json': json.dumps(failure_reasons),
+        'probe_topk_k': topk_k,
+        'probe_primary_axis_target': primary_axis_target,
+        'probe_primary_axis_topk_count': primary_axis_topk_count,
+        'probe_topk_retrieved_facets': n_topk_retrieved_facets,
+        'probe_mean_in_facet_similarity': separation['mean_in_facet_similarity'],
+        'probe_mean_cross_facet_similarity': separation['mean_cross_facet_similarity'],
+        'probe_in_minus_cross_similarity': separation['in_minus_cross_similarity'],
+        'probe_same_axis_cohort_gap': separation['same_axis_cohort_gap'],
+        'probe_same_cohort_axis_gap': separation['same_cohort_axis_gap'],
+    }
+
+
+def _probe_facet_separation(
+    plan: QueryPlan,
+    probe: FacetProbe,
+    probe_vectors: np.ndarray,
+) -> dict[str, float]:
+    labels = np.array(probe['labels'])
+    if len(labels) < 2:
+        return {
+            'mean_in_facet_similarity': 0.0,
+            'mean_cross_facet_similarity': 0.0,
+            'in_minus_cross_similarity': 0.0,
+            'same_axis_cohort_gap': 0.0,
+            'same_cohort_axis_gap': 0.0,
+        }
+    sim = probe_vectors @ probe_vectors.T
+    same = labels[:, None] == labels[None, :]
+    not_self = ~np.eye(len(labels), dtype=bool)
+    in_vals = sim[same & not_self]
+    cross_vals = sim[~same & not_self]
+    in_sim = float(in_vals.mean()) if len(in_vals) else 0.0
+    cross_sim = float(cross_vals.mean()) if len(cross_vals) else 0.0
+    facet_by_id = {facet.facet_id: facet for facet in plan.facets}
+    same_axis_diff_cohort: list[float] = []
+    same_cohort_diff_axis: list[float] = []
+    for left in range(len(labels)):
+        left_facet = facet_by_id[str(labels[left])]
+        for right in range(left + 1, len(labels)):
+            if labels[left] == labels[right]:
+                continue
+            right_facet = facet_by_id[str(labels[right])]
+            value = float(sim[left, right])
+            if left_facet.axis == right_facet.axis:
+                same_axis_diff_cohort.append(value)
+            elif left_facet.subgroup_id == right_facet.subgroup_id:
+                same_cohort_diff_axis.append(value)
+    same_axis_mean = float(np.mean(same_axis_diff_cohort)) if same_axis_diff_cohort else 0.0
+    same_cohort_mean = float(np.mean(same_cohort_diff_axis)) if same_cohort_diff_axis else 0.0
+    return {
+        'mean_in_facet_similarity': in_sim,
+        'mean_cross_facet_similarity': cross_sim,
+        'in_minus_cross_similarity': in_sim - cross_sim,
+        'same_axis_cohort_gap': in_sim - same_axis_mean,
+        'same_cohort_axis_gap': in_sim - same_cohort_mean,
+    }
+
+
 def _with_calibrated_query(
     cfg: ExperimentCfg,
     plan: QueryPlan,
@@ -306,6 +451,19 @@ def _calibration_row_without_embeddings(plan: QueryPlan) -> dict[str, object]:
         'calibration_warning': False,
         'facet_stats_json': '[]',
         'template_stats_json': '[]',
+        'semantic_gate_applied': False,
+        'passes_semantic_gate': None,
+        'semantic_gate_failures_json': '{}',
+        'semantic_gate_failure_reasons_json': '[]',
+        'probe_topk_k': None,
+        'probe_primary_axis_target': None,
+        'probe_primary_axis_topk_count': None,
+        'probe_topk_retrieved_facets': None,
+        'probe_mean_in_facet_similarity': None,
+        'probe_mean_cross_facet_similarity': None,
+        'probe_in_minus_cross_similarity': None,
+        'probe_same_axis_cohort_gap': None,
+        'probe_same_cohort_axis_gap': None,
     }
 
 

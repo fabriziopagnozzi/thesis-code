@@ -1132,6 +1132,336 @@ conditions:
             - bloody diarrhea, abdominal pain, and elevated inflammatory markers
             - severe colitis with dehydration and poor oral intake
             - frequent bloody stools, cramping, and worsening inflammatory bowel disease activity
+    acute_pancreatitis:
+        display: acute pancreatitis
+        terms:
+            - acute pancreatitis
+            - lipase elevation
+            - intravenous fluids
+            - epigastric pain
+        axis_values:
+            treatment_duration:
+                axis: treatment_duration
+                bins:
+                    short:
+                        - 2
+                        - 4
+                    standard:
+                        - 5
+                        - 7
+                    prolonged:
+                        - 8
+                        - 12
+                treatments:
+                    - intravenous fluids
+                    - enteral nutrition support
+            rehab_outcome:
+                axis: rehab_outcome
+                bins:
+                    home_rehab:
+                        - home therapy after abdominal pain and mobility improved
+                        - visiting nursing after oral intake and strength recovered
+                    inpatient_rehab:
+                        - inpatient rehabilitation for deconditioning after severe abdominal illness
+                        - rehabilitation for weakness and impaired transfers after pancreatitis
+                    persistent_deficit:
+                        - persistent weakness and poor endurance with limited mobility
+                        - ongoing abdominal pain and nutritional frailty limiting recovery
+            complication_burden:
+                axis: complication_burden
+                bins:
+                    none_documented:
+                        - no pancreatic necrosis, organ failure, or treatment-limiting adverse effect
+                    limited_complication:
+                        - a transient electrolyte disturbance corrected during supportive care
+                    major_complication:
+                        - pancreatic necrosis with organ dysfunction requiring major escalation
+            acute_clinical_course:
+                axis: acute_clinical_course
+                bins:
+                    early_stabilization:
+                        - prompt improvement in abdominal pain and oral intake
+                    delayed_improvement:
+                        - slow improvement in pain, ileus, and inflammatory findings
+                    refractory_or_worsening:
+                        - worsening abdominal inflammation despite initial supportive management
+            care_intensity:
+                axis: care_intensity
+                bins:
+                    ward_level:
+                        - medical-ward pancreatitis care with routine fluid and pain monitoring
+                    monitored_or_procedural:
+                        - monitored care with procedural imaging or nutrition support
+                    intensive_care:
+                        - ICU-level support for pancreatitis-related organ dysfunction
+        presentations:
+            - epigastric pain radiating to the back with vomiting and lipase elevation
+            - severe abdominal pain with ileus and inflammatory pancreatitis findings
+            - pancreatitis with nausea, poor oral intake, and systemic inflammatory response
+    acute_cholecystitis:
+        display: acute cholecystitis
+        terms:
+            - acute cholecystitis
+            - right upper quadrant pain
+            - gallbladder inflammation
+            - antibiotics
+        axis_values:
+            treatment_duration:
+                axis: treatment_duration
+                bins:
+                    short:
+                        - 2
+                        - 4
+                    standard:
+                        - 5
+                        - 7
+                    prolonged:
+                        - 8
+                        - 12
+                treatments:
+                    - ceftriaxone plus metronidazole
+                    - piperacillin-tazobactam
+            rehab_outcome:
+                axis: rehab_outcome
+                bins:
+                    home_rehab:
+                        - home therapy after pain control and oral intake improved
+                        - visiting nursing after mobility and appetite recovered
+                    inpatient_rehab:
+                        - inpatient rehabilitation for deconditioning after biliary sepsis
+                        - rehabilitation for weakness still limiting transfers after gallbladder inflammation
+                    persistent_deficit:
+                        - persistent weakness and abdominal pain limiting mobility
+                        - ongoing poor endurance and reduced functional recovery after biliary illness
+            complication_burden:
+                axis: complication_burden
+                bins:
+                    none_documented:
+                        - no perforation, biliary sepsis, or treatment-limiting adverse effect
+                    limited_complication:
+                        - a transient drain-related issue or mild kidney injury that resolved
+                    major_complication:
+                        - gallbladder perforation or uncontrolled biliary sepsis requiring urgent escalation
+            acute_clinical_course:
+                axis: acute_clinical_course
+                bins:
+                    early_stabilization:
+                        - prompt improvement in right upper quadrant pain and fever
+                    delayed_improvement:
+                        - slow improvement in pain, leukocytosis, and oral intake
+                    refractory_or_worsening:
+                        - worsening biliary infection despite initial antimicrobial therapy
+            care_intensity:
+                axis: care_intensity
+                bins:
+                    ward_level:
+                        - surgical-ward care with routine abdominal and fever monitoring
+                    monitored_or_procedural:
+                        - monitored procedural care surrounding cholecystostomy or operative evaluation
+                    intensive_care:
+                        - ICU-level support for severe biliary sepsis or instability
+        presentations:
+            - right upper quadrant pain, fever, and gallbladder wall thickening
+            - biliary colic progressing to fever, leukocytosis, and poor oral intake
+            - abdominal pain with vomiting and a positive sonographic Murphy sign
+    complicated_diverticulitis:
+        display: complicated diverticulitis
+        terms:
+            - complicated diverticulitis
+            - left lower quadrant pain
+            - abdominal abscess
+            - intravenous antibiotics
+        axis_values:
+            treatment_duration:
+                axis: treatment_duration
+                bins:
+                    short:
+                        - 4
+                        - 6
+                    standard:
+                        - 7
+                        - 10
+                    prolonged:
+                        - 12
+                        - 18
+                treatments:
+                    - ceftriaxone plus metronidazole
+                    - piperacillin-tazobactam
+            rehab_outcome:
+                axis: rehab_outcome
+                bins:
+                    home_rehab:
+                        - home physical therapy after abdominal pain and walking tolerance improved
+                        - visiting nursing after safer mobility and oral intake recovered
+                    inpatient_rehab:
+                        - inpatient rehabilitation for marked deconditioning after intra-abdominal infection
+                        - rehabilitation for weakness and unsafe transfers after diverticulitis
+                    persistent_deficit:
+                        - persistent weakness and abdominal discomfort limiting mobility
+                        - ongoing poor endurance with reduced functional recovery after abdominal sepsis
+            complication_burden:
+                axis: complication_burden
+                bins:
+                    none_documented:
+                        - no perforation, uncontrolled abscess progression, or antibiotic-limiting toxicity
+                    limited_complication:
+                        - a transient ileus or drain-related issue that resolved with monitoring
+                    major_complication:
+                        - perforation or worsening intra-abdominal sepsis requiring urgent surgery
+            acute_clinical_course:
+                axis: acute_clinical_course
+                bins:
+                    early_stabilization:
+                        - prompt improvement in abdominal pain, fever, and oral intake
+                    delayed_improvement:
+                        - slow resolution of pain, leukocytosis, and bowel dysfunction
+                    refractory_or_worsening:
+                        - worsening abdominal sepsis despite initial antimicrobial therapy
+            care_intensity:
+                axis: care_intensity
+                bins:
+                    ward_level:
+                        - medical-surgical ward care with routine abdominal monitoring
+                    monitored_or_procedural:
+                        - monitored procedural care for image-guided drainage or repeated surgical evaluation
+                    intensive_care:
+                        - ICU-level support for severe abdominal sepsis
+        presentations:
+            - left lower quadrant pain, fever, and leukocytosis from diverticulitis
+            - diverticulitis with a pericolic abscess and worsening abdominal tenderness
+            - abdominal pain with ileus, inflammatory markers, and concern for complicated diverticulitis
+    upper_gastrointestinal_bleeding:
+        display: upper gastrointestinal bleeding
+        terms:
+            - upper gastrointestinal bleeding
+            - melena
+            - hematemesis
+            - endoscopy
+        axis_values:
+            treatment_duration:
+                axis: treatment_duration
+                bins:
+                    short:
+                        - 2
+                        - 3
+                    standard:
+                        - 4
+                        - 5
+                    prolonged:
+                        - 6
+                        - 8
+                treatments:
+                    - intravenous pantoprazole
+                    - octreotide infusion
+            rehab_outcome:
+                axis: rehab_outcome
+                bins:
+                    home_rehab:
+                        - home therapy after anemia symptoms and walking tolerance improved
+                        - visiting nursing after strength recovered following bleeding control
+                    inpatient_rehab:
+                        - inpatient rehabilitation for severe deconditioning after hemorrhage
+                        - rehabilitation for weakness and orthostatic symptoms limiting transfers
+                    persistent_deficit:
+                        - persistent fatigue and poor endurance after major blood loss
+                        - ongoing weakness with reduced mobility after hemorrhagic illness
+            complication_burden:
+                axis: complication_burden
+                bins:
+                    none_documented:
+                        - no recurrent bleed, aspiration event, or transfusion-limiting adverse effect
+                    limited_complication:
+                        - a transient transfusion reaction or brief hypotension that resolved
+                    major_complication:
+                        - recurrent hemorrhage requiring massive transfusion or urgent intervention
+            acute_clinical_course:
+                axis: acute_clinical_course
+                bins:
+                    early_stabilization:
+                        - prompt stabilization of hemoglobin and hemodynamics after therapy
+                    delayed_improvement:
+                        - slow recovery of dizziness, anemia symptoms, and oral intake
+                    refractory_or_worsening:
+                        - ongoing or recurrent bleeding despite initial management
+            care_intensity:
+                axis: care_intensity
+                bins:
+                    ward_level:
+                        - ward-level bleeding care with serial hemoglobin monitoring
+                    monitored_or_procedural:
+                        - monitored procedural care with urgent endoscopic support
+                    intensive_care:
+                        - ICU-level support for hemorrhagic instability
+        presentations:
+            - melena, symptomatic anemia, and orthostatic dizziness
+            - hematemesis with tachycardia and acute blood-loss symptoms
+            - black stools, weakness, and concern for upper gastrointestinal hemorrhage
+    septic_arthritis:
+        display: septic arthritis
+        terms:
+            - septic arthritis
+            - joint infection
+            - arthrocentesis
+            - intravenous antibiotics
+        axis_values:
+            treatment_duration:
+                axis: treatment_duration
+                bins:
+                    short:
+                        - 7
+                        - 10
+                    standard:
+                        - 14
+                        - 21
+                    prolonged:
+                        - 21
+                        - 28
+                treatments:
+                    - cefazolin
+                    - vancomycin
+            rehab_outcome:
+                axis: rehab_outcome
+                bins:
+                    home_rehab:
+                        - home physical therapy after pain and weight-bearing improved
+                        - outpatient therapy after joint swelling and mobility improved
+                    inpatient_rehab:
+                        - inpatient rehabilitation for mobility recovery after severe joint infection
+                        - rehabilitation for weakness and unsafe transfers after septic arthritis
+                    persistent_deficit:
+                        - persistent joint pain and stiffness limiting mobility
+                        - ongoing weakness and impaired walking tolerance after joint infection
+            complication_burden:
+                axis: complication_burden
+                bins:
+                    none_documented:
+                        - no persistent bacteremia, cartilage destruction, or antibiotic-limiting toxicity
+                    limited_complication:
+                        - a transient drain-related issue or mild kidney function rise that resolved
+                    major_complication:
+                        - progressive joint destruction or sepsis requiring urgent repeat surgery
+            acute_clinical_course:
+                axis: acute_clinical_course
+                bins:
+                    early_stabilization:
+                        - prompt improvement in pain, swelling, and ability to bear weight
+                    delayed_improvement:
+                        - slow improvement in range of motion and inflammatory findings
+                    refractory_or_worsening:
+                        - worsening infection despite initial drainage and antibiotics
+            care_intensity:
+                axis: care_intensity
+                bins:
+                    ward_level:
+                        - orthopedic-ward care with routine joint and antibiotic monitoring
+                    monitored_or_procedural:
+                        - monitored procedural care surrounding washout or drainage support
+                    intensive_care:
+                        - ICU-level support for septic instability from joint infection
+        presentations:
+            - an acutely swollen painful joint with fever and limited motion
+            - septic knee with effusion, leukocytosis, and inability to bear weight
+            - hot joint, systemic inflammatory findings, and concern for invasive joint infection
 subgroups:
     age_under_50:
         dimension_id: age_band
@@ -1749,6 +2079,13 @@ axis_pairs:
             cohort_b_bins:
                 - standard
                 - home_rehab
+          - id: crossover_tradeoff
+            cohort_a_bins:
+                - short
+                - persistent_deficit
+            cohort_b_bins:
+                - prolonged
+                - home_rehab
     - axes:
           - treatment_duration
           - complication_burden
@@ -1784,6 +2121,13 @@ axis_pairs:
                 - delayed_improvement
             cohort_b_bins:
                 - standard
+                - early_stabilization
+          - id: crossover_tradeoff
+            cohort_a_bins:
+                - standard
+                - refractory_or_worsening
+            cohort_b_bins:
+                - prolonged
                 - early_stabilization
     - axes:
           - treatment_duration
@@ -1803,9 +2147,19 @@ axis_pairs:
             cohort_b_bins:
                 - standard
                 - ward_level
+          - id: crossover_tradeoff
+            cohort_a_bins:
+                - short
+                - intensive_care
+            cohort_b_bins:
+                - prolonged
+                - ward_level
     - axes:
           - rehab_outcome
           - complication_burden
+      allowed_primary_axes:
+          - rehab_outcome
+      rationale: rehabilitation outcome remains a distinct discharge-time target, but complication burden is too often just a weaker restatement of the same uncomplicated-versus-complicated hospital course when used as the primary retrieval axis.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -1857,9 +2211,23 @@ axis_pairs:
             cohort_b_bins:
                 - home_rehab
                 - ward_level
+          - id: crossover_tradeoff
+            cohort_a_bins:
+                - home_rehab
+                - intensive_care
+            cohort_b_bins:
+                - persistent_deficit
+                - ward_level
     - axes:
           - complication_burden
           - acute_clinical_course
+      allowed_primary_axes:
+          - acute_clinical_course
+      rationale: complication burden and acute clinical course can share the same latent admission-course severity signal, so complication burden is not permitted as the dominant retrieval axis for this pair.
+      condition_overrides:
+          - condition_id: multiple_sclerosis_relapse
+            allowed_primary_axes: []
+            rationale: in multiple sclerosis relapse, relapse response and steroid or plasma-exchange complications collapse too easily into a single uncomplicated-versus-complicated admission narrative.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -1878,6 +2246,9 @@ axis_pairs:
     - axes:
           - complication_burden
           - care_intensity
+      allowed_primary_axes:
+          - care_intensity
+      rationale: care intensity yields a concrete resource-use signal, while complication burden is too correlated with overall admission severity to serve as the dominant retrieval target in this pairing.
       profiles:
           - id: low_high
             cohort_a_bins:

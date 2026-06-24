@@ -274,9 +274,49 @@ class ClinicalAxisOntology(BenchmarkModel):
         return self
 
 
+class AxisPairConditionOverride(BenchmarkModel):
+    condition_id: ConditionKey
+    allowed_primary_axes: list[ClinicalAxis] | None = None
+    blocked_profile_ids: list[str] = Field(default_factory=list)
+    rationale: str | None = None
+
+
 class AxisPairOntology(BenchmarkModel):
     axes: tuple[ClinicalAxis, ClinicalAxis]
     profiles: list[AxisPairProfile]
+    allowed_primary_axes: list[ClinicalAxis] | None = None
+    blocked_profile_ids: list[str] = Field(default_factory=list)
+    rationale: str | None = None
+    condition_overrides: list[AxisPairConditionOverride] = Field(default_factory=list)
+
+    @model_validator(mode='after')
+    def _validate_generation_policy(self) -> AxisPairOntology:
+        axis_set = set(self.axes)
+        profile_ids = {profile.id for profile in self.profiles}
+        if self.allowed_primary_axes is not None and not set(self.allowed_primary_axes) <= axis_set:
+            raise ValueError('allowed_primary_axes must be a subset of the axis-pair members')
+        unknown_blocked = set(self.blocked_profile_ids) - profile_ids
+        if unknown_blocked:
+            unknown = ', '.join(sorted(unknown_blocked))
+            raise ValueError(f'axis-pair policy blocks unknown profiles: {unknown}')
+        seen_conditions: set[str] = set()
+        for override in self.condition_overrides:
+            if override.condition_id in seen_conditions:
+                raise ValueError('axis-pair condition overrides must be unique per condition')
+            seen_conditions.add(override.condition_id)
+            if override.allowed_primary_axes is not None and not set(
+                override.allowed_primary_axes
+            ) <= axis_set:
+                raise ValueError(
+                    'axis-pair condition override allowed_primary_axes must stay within the pair'
+                )
+            unknown_override_profiles = set(override.blocked_profile_ids) - profile_ids
+            if unknown_override_profiles:
+                unknown = ', '.join(sorted(unknown_override_profiles))
+                raise ValueError(
+                    f'axis-pair condition override blocks unknown profiles: {unknown}'
+                )
+        return self
 
 
 class PatientDefaults(BenchmarkModel):
@@ -311,11 +351,14 @@ class MedicalOntology(BenchmarkModel):
         if declared_pairs != expected_pairs or len(declared_pairs) != len(self.axis_pairs):
             raise ValueError('axis_pairs must contain each unordered clinical-axis pair once')
         for pair in self.axis_pairs:
-            if len(pair.profiles) != 2:
-                raise ValueError('each axis pair must define exactly two joint profiles')
+            if len(pair.profiles) < 2:
+                raise ValueError('each axis pair must define at least two joint profiles')
             left, right = pair.axes
             if not any(self.clinical_axes[axis].allow_as_primary for axis in pair.axes):
                 raise ValueError(f'axis pair {left!r}/{right!r} has no permitted primary axis')
+            profile_ids = [profile.id for profile in pair.profiles]
+            if len(profile_ids) != len(set(profile_ids)):
+                raise ValueError(f'axis pair {left!r}/{right!r} reuses a profile id')
             for profile in pair.profiles:
                 cohort_pairs = zip(profile.cohort_a_bins, profile.cohort_b_bins, strict=True)
                 if any(a == b for a, b in cohort_pairs):

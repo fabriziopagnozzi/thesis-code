@@ -188,44 +188,6 @@ _CHUNK_COLUMNS = [
 ]
 
 
-def main() -> None:
-    args = _parse_args()
-    cfg = load_config(args.exp)
-    paths = MedicalDatasetGenPaths(
-        cfg.global_.output_experiment,
-        result_dir_overrides=cfg.global_.result_dir_overrides,
-    )
-
-    requested_query_ids = _requested_query_ids(args, paths)
-    if not requested_query_ids:
-        raise ValueError(
-            'provide at least one query id with --query-id/--query-ids/--query-id-file, '
-            'or use --from-plot-group bad'
-        )
-    comparison_query_ids = _comparison_query_ids(args, paths, requested_query_ids)
-
-    diagnostics = build_text_diagnostics(
-        cfg=cfg,
-        paths=paths,
-        query_ids=requested_query_ids,
-        comparison_query_ids=comparison_query_ids,
-        pool_n=args.pool_n,
-        extra_top_ks=_parse_top_ks(args),
-        chunk_text_chars=args.chunk_text_chars,
-        chunk_text_mode=args.chunk_text_mode,
-        detail=args.detail,
-        rank_trace_limit=args.rank_trace_limit,
-        top_chunk_texts=args.top_chunk_texts,
-        representative_chunks_per_label=args.representative_chunks_per_label,
-        max_representative_chunks=args.max_representative_chunks,
-    )
-
-    out_path = args.out or _default_out_path(paths, requested_query_ids, args.from_plot_group)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(diagnostics)
-    print(f'[write] query diagnostics -> {out_path}')
-
-
 def build_text_diagnostics(
     *,
     cfg: ExperimentCfg,
@@ -874,20 +836,18 @@ def _topk_coverage_rows(
             if not row.get('is_gold')
         )
         top_facet, _top_facet_count = _counter_top(facet_counts)
-        rows.append(
-            {
-                'k': k,
-                'k_lt_calibrated_target': _lt(k, calibrated_target),
-                'gold': sum(1 for row in selected if row.get('is_gold')),
-                'non_gold': sum(1 for row in selected if not row.get('is_gold')),
-                'facets_hit': ', '.join(sorted(facet_counts)),
-                'n_facets_hit': len(facet_counts),
-                'calibrated_facet_count': facet_counts.get(calibrated_facet_id, 0),
-                'top_facet': top_facet,
-                'facet_counts': _json(dict(sorted(facet_counts.items()))),
-                'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
-            }
-        )
+        rows.append({
+            'k': k,
+            'k_lt_calibrated_target': _lt(k, calibrated_target),
+            'gold': sum(1 for row in selected if row.get('is_gold')),
+            'non_gold': sum(1 for row in selected if not row.get('is_gold')),
+            'facets_hit': ', '.join(sorted(facet_counts)),
+            'n_facets_hit': len(facet_counts),
+            'calibrated_facet_count': facet_counts.get(calibrated_facet_id, 0),
+            'top_facet': top_facet,
+            'facet_counts': _json(dict(sorted(facet_counts.items()))),
+            'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
+        })
     return rows
 
 
@@ -904,20 +864,18 @@ def _facet_rank_rows(
         facet_rows = by_facet.get(facet_id, [])
         sims = [float(row['sim_to_query']) for row in facet_rows]
         ranks = [int(row['rank']) for row in facet_rows]
-        rows.append(
-            {
-                'facet_id': facet_id,
-                'label': _facet_label(facet),
-                'role': facet.get('cluster_role'),
-                'target_gold_chunks': facet.get('target_gold_chunks'),
-                'first_rank': min(ranks) if ranks else None,
-                'first_five_ranks': ', '.join(str(rank) for rank in sorted(ranks)[:5]),
-                'n_in_pool': len(facet_rows),
-                'mean_query_sim': float(np.mean(sims)) if sims else None,
-                'max_query_sim': max(sims) if sims else None,
-                'min_query_sim': min(sims) if sims else None,
-            }
-        )
+        rows.append({
+            'facet_id': facet_id,
+            'label': _facet_label(facet),
+            'role': facet.get('cluster_role'),
+            'target_gold_chunks': facet.get('target_gold_chunks'),
+            'first_rank': min(ranks) if ranks else None,
+            'first_five_ranks': ', '.join(str(rank) for rank in sorted(ranks)[:5]),
+            'n_in_pool': len(facet_rows),
+            'mean_query_sim': float(np.mean(sims)) if sims else None,
+            'max_query_sim': max(sims) if sims else None,
+            'min_query_sim': min(sims) if sims else None,
+        })
     return rows
 
 
@@ -931,25 +889,24 @@ def _render_composition(lines: list[str], composition_df: pl.DataFrame, *, detai
         ('By label id', ['label_id']),
     ]
     if detail == 'full':
-        groups.extend(
-            [
-                ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
-                (
-                    'By condition/subgroup/axis/value',
-                    ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
-                ),
-                (
-                    'By text generation and soft warnings',
-                    ['text_generation_source', 'validation_soft_warning_count'],
-                ),
-            ]
-        )
+        groups.extend([
+            ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
+            (
+                'By condition/subgroup/axis/value',
+                ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
+            ),
+            (
+                'By text generation and soft warnings',
+                ['text_generation_source', 'validation_soft_warning_count'],
+            ),
+        ])
 
     for title, keys in groups:
         lines.append('')
         lines.append(f'{title}:')
         group = (
-            composition_df.group_by(keys)
+            composition_df
+            .group_by(keys)
             .agg(
                 pl.len().alias('n'),
                 pl.col('rank').min().alias('first_rank'),
@@ -1008,20 +965,18 @@ def _render_embedding_separability(
                 centroids[facet_id] = centroid
         else:
             sims = np.asarray([], dtype=np.float32)
-        per_facet_rows.append(
-            {
-                'facet_id': facet_id,
-                'label': _facet_label(facet),
-                'role': facet.get('cluster_role'),
-                'n': len(ids),
-                'mean_query_sim': float(sims.mean()) if len(sims) else None,
-                'max_query_sim': float(sims.max()) if len(sims) else None,
-                'min_query_sim': float(sims.min()) if len(sims) else None,
-                'query_to_centroid': float(centroids[facet_id] @ query_vector)
-                if facet_id in centroids
-                else None,
-            }
-        )
+        per_facet_rows.append({
+            'facet_id': facet_id,
+            'label': _facet_label(facet),
+            'role': facet.get('cluster_role'),
+            'n': len(ids),
+            'mean_query_sim': float(sims.mean()) if len(sims) else None,
+            'max_query_sim': float(sims.max()) if len(sims) else None,
+            'min_query_sim': float(sims.min()) if len(sims) else None,
+            'query_to_centroid': float(centroids[facet_id] @ query_vector)
+            if facet_id in centroids
+            else None,
+        })
     lines.append('')
     lines.append('Per-facet query similarity:')
     _table(
@@ -1072,13 +1027,11 @@ def _render_selection_snapshot(
     sim_matrix = candidate_vectors @ candidate_vectors.T
     snapshot_ks = [
         value
-        for value in _dedupe(
-            [
-                *ctx.cfg.retrieval.k_values,
-                ctx.cfg.query_geometry.plot_k,
-                ctx.cfg.geometry_filter.topk_k,
-            ]
-        )
+        for value in _dedupe([
+            *ctx.cfg.retrieval.k_values,
+            ctx.cfg.query_geometry.plot_k,
+            ctx.cfg.geometry_filter.topk_k,
+        ])
         if value <= len(ranked_rows)
     ]
     lambdas = _snapshot_lambdas(ctx.cfg)
@@ -1129,28 +1082,27 @@ def _render_selection_snapshot(
 
     if ctx.eval_results.height > 0 and 'query_id' in ctx.eval_results.columns:
         eval_rows = (
-            ctx.eval_results.filter(pl.col('query_id') == query_id)
-            .select(
-                [
-                    col
-                    for col in [
-                        'strategy',
-                        'lam',
-                        'k',
-                        'gold_precision',
-                        'facet_coverage',
-                        'weighted_facet_coverage',
-                        'distractor_rate',
-                        'primary_axis_rate',
-                        'calibrated_facet_rate',
-                        'max_facet_concentration',
-                        'redundant_gold_rate',
-                        'avg_cos',
-                        'jaccard_vs_topk',
-                    ]
-                    if col in ctx.eval_results.columns
+            ctx.eval_results
+            .filter(pl.col('query_id') == query_id)
+            .select([
+                col
+                for col in [
+                    'strategy',
+                    'lam',
+                    'k',
+                    'gold_precision',
+                    'facet_coverage',
+                    'weighted_facet_coverage',
+                    'distractor_rate',
+                    'primary_axis_rate',
+                    'calibrated_facet_rate',
+                    'max_facet_concentration',
+                    'redundant_gold_rate',
+                    'avg_cos',
+                    'jaccard_vs_topk',
                 ]
-            )
+                if col in ctx.eval_results.columns
+            ])
             .sort(['k', 'strategy', 'lam'])
         )
         if eval_rows.height:
@@ -1244,22 +1196,20 @@ def _render_chunk_text(
         ('validation_soft_warning_count', row.get('validation_soft_warning_count')),
     ]
     if not compact:
-        metadata.extend(
-            [
-                ('facet_id', row.get('facet_id')),
-                ('target_facet_id', row.get('target_facet_id')),
-                ('cluster_id', row.get('cluster_id')),
-                ('patient_age', row.get('patient_age')),
-                ('patient_sex', row.get('patient_sex')),
-                ('note_style', row.get('note_style')),
-                ('approx_words', row.get('approx_words')),
-                ('text_generation_source', row.get('text_generation_source')),
-                ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
-                ('fact_id', row.get('fact_id')),
-                ('must_mention', row.get('must_mention')),
-                ('must_not_mention', row.get('must_not_mention')),
-            ]
-        )
+        metadata.extend([
+            ('facet_id', row.get('facet_id')),
+            ('target_facet_id', row.get('target_facet_id')),
+            ('cluster_id', row.get('cluster_id')),
+            ('patient_age', row.get('patient_age')),
+            ('patient_sex', row.get('patient_sex')),
+            ('note_style', row.get('note_style')),
+            ('approx_words', row.get('approx_words')),
+            ('text_generation_source', row.get('text_generation_source')),
+            ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
+            ('fact_id', row.get('fact_id')),
+            ('must_mention', row.get('must_mention')),
+            ('must_not_mention', row.get('must_not_mention')),
+        ])
     _kv(lines, metadata)
     text = str(row.get('text') or '').strip()
     if chunk_text_chars > 0 and len(text) > chunk_text_chars:
@@ -1424,15 +1374,13 @@ def _rank_candidate_pools(
         rows = []
         for rank, local_idx in enumerate(order, start=1):
             chunk_idx = int(candidate_indices[int(local_idx)])
-            rows.append(
-                {
-                    'rank': rank,
-                    'chunk_id': str(idx_to_chunk_id[chunk_idx]),
-                    'chunk_idx': chunk_idx,
-                    'sim_to_query': float(sims[int(local_idx)]),
-                    'candidate_pool_size_before_topn': len(candidate_indices),
-                }
-            )
+            rows.append({
+                'rank': rank,
+                'chunk_id': str(idx_to_chunk_id[chunk_idx]),
+                'chunk_idx': chunk_idx,
+                'sim_to_query': float(sims[int(local_idx)]),
+                'candidate_pool_size_before_topn': len(candidate_indices),
+            })
         ranked[query_id] = rows
     return ranked
 
@@ -1659,6 +1607,98 @@ def _split_query_ids(value: str) -> list[str]:
     return [part.strip() for part in value.replace(',', ' ').split() if part.strip()]
 
 
+def _h1(lines: list[str], text: str) -> None:
+    lines.append('=' * 5)
+    lines.append(text)
+    lines.append('=' * 5)
+
+
+def _h2(lines: list[str], text: str) -> None:
+    lines.append('')
+    lines.append('-' * 5)
+    lines.append(text)
+    lines.append('-' * 5)
+
+
+def _kv(lines: list[str], items: list[tuple[str, Any]]) -> None:
+    for key, value in items:
+        if value is None or value == '':
+            continue
+        lines.append(f'{key}: {_fmt(value)}')
+
+
+def _table(lines: list[str], rows: list[dict[str, Any]], columns: list[str]) -> None:
+    if not rows:
+        lines.append('(none)')
+        return
+    lines.append('| ' + ' | '.join(columns) + ' |')
+    lines.append('| ' + ' | '.join('---' for _ in columns) + ' |')
+    for row in rows:
+        lines.append('| ' + ' | '.join(_cell(row.get(column)) for column in columns) + ' |')
+
+
+def _cell(value: Any) -> str:
+    return _fmt(value).replace('\n', '<br>').replace('|', '\\|')
+
+
+def _fmt(value: Any) -> str:
+    if value is None:
+        return ''
+    if isinstance(value, float):
+        if math.isnan(value):
+            return 'nan'
+        return f'{value:.4f}'
+    if isinstance(value, np.floating):
+        return _fmt(float(value))
+    if isinstance(value, np.integer):
+        return str(int(value))
+    if isinstance(value, list | tuple | dict):
+        return _json(value)
+    return str(value)
+
+
+def _json_loads(value: Any, default: Any) -> Any:
+    if value is None or value == '':
+        return default
+    if isinstance(value, list | dict):
+        return value
+    try:
+        return json.loads(str(value))
+    except json.JSONDecodeError:
+        return default
+
+
+def _json(value: Any, indent: int | None = None) -> str:
+    return json.dumps(value, indent=indent, sort_keys=True, default=_json_default)
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return float(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    return str(value)
+
+
+def _dedupe(values: list[Any]) -> list[Any]:
+    seen = set()
+    result = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def _lt(left: Any, right: Any) -> bool | None:
+    if left is None or right is None:
+        return None
+    return left < right
+
+
 def _default_out_path(
     paths: MedicalDatasetGenPaths, query_ids: list[str], from_plot_group: str | None
 ) -> Path:
@@ -1762,97 +1802,39 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _h1(lines: list[str], text: str) -> None:
-    lines.append('=' * 5)
-    lines.append(text)
-    lines.append('=' * 5)
-
-
-def _h2(lines: list[str], text: str) -> None:
-    lines.append('')
-    lines.append('-' * 5)
-    lines.append(text)
-    lines.append('-' * 5)
-
-
-def _kv(lines: list[str], items: list[tuple[str, Any]]) -> None:
-    for key, value in items:
-        if value is None or value == '':
-            continue
-        lines.append(f'{key}: {_fmt(value)}')
-
-
-def _table(lines: list[str], rows: list[dict[str, Any]], columns: list[str]) -> None:
-    if not rows:
-        lines.append('(none)')
-        return
-    lines.append('| ' + ' | '.join(columns) + ' |')
-    lines.append('| ' + ' | '.join('---' for _ in columns) + ' |')
-    for row in rows:
-        lines.append('| ' + ' | '.join(_cell(row.get(column)) for column in columns) + ' |')
-
-
-def _cell(value: Any) -> str:
-    return _fmt(value).replace('\n', '<br>').replace('|', '\\|')
-
-
-def _fmt(value: Any) -> str:
-    if value is None:
-        return ''
-    if isinstance(value, float):
-        if math.isnan(value):
-            return 'nan'
-        return f'{value:.4f}'
-    if isinstance(value, np.floating):
-        return _fmt(float(value))
-    if isinstance(value, np.integer):
-        return str(int(value))
-    if isinstance(value, list | tuple | dict):
-        return _json(value)
-    return str(value)
-
-
-def _json_loads(value: Any, default: Any) -> Any:
-    if value is None or value == '':
-        return default
-    if isinstance(value, list | dict):
-        return value
-    try:
-        return json.loads(str(value))
-    except json.JSONDecodeError:
-        return default
-
-
-def _json(value: Any, indent: int | None = None) -> str:
-    return json.dumps(value, indent=indent, sort_keys=True, default=_json_default)
-
-
-def _json_default(value: Any) -> Any:
-    if isinstance(value, np.integer):
-        return int(value)
-    if isinstance(value, np.floating):
-        return float(value)
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    return str(value)
-
-
-def _dedupe(values: list[Any]) -> list[Any]:
-    seen = set()
-    result = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return result
-
-
-def _lt(left: Any, right: Any) -> bool | None:
-    if left is None or right is None:
-        return None
-    return left < right
-
-
 if __name__ == '__main__':
-    main()
+    args = _parse_args()
+    cfg = load_config(args.exp)
+    paths = MedicalDatasetGenPaths(
+        cfg.global_.output_experiment,
+        result_dir_overrides=cfg.global_.result_dir_overrides,
+    )
+
+    requested_query_ids = _requested_query_ids(args, paths)
+    if not requested_query_ids:
+        raise ValueError(
+            'provide at least one query id with --query-id/--query-ids/--query-id-file, '
+            'or use --from-plot-group bad'
+        )
+    comparison_query_ids = _comparison_query_ids(args, paths, requested_query_ids)
+
+    diagnostics = build_text_diagnostics(
+        cfg=cfg,
+        paths=paths,
+        query_ids=requested_query_ids,
+        comparison_query_ids=comparison_query_ids,
+        pool_n=args.pool_n,
+        extra_top_ks=_parse_top_ks(args),
+        chunk_text_chars=args.chunk_text_chars,
+        chunk_text_mode=args.chunk_text_mode,
+        detail=args.detail,
+        rank_trace_limit=args.rank_trace_limit,
+        top_chunk_texts=args.top_chunk_texts,
+        representative_chunks_per_label=args.representative_chunks_per_label,
+        max_representative_chunks=args.max_representative_chunks,
+    )
+
+    out_path = args.out or _default_out_path(paths, requested_query_ids, args.from_plot_group)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(diagnostics)
+    print(f'[write] query diagnostics -> {out_path}')

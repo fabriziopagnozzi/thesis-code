@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -10,6 +11,7 @@ from experiments.medical_dataset_gen.global_config import (
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AxisPairProfile,
+    AxisPairOntology,
     ClinicalAxis,
     CohortContrast,
     ConditionKey,
@@ -18,6 +20,13 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     SubgroupKey,
     SubgroupOntology,
 )
+
+
+@dataclass(frozen=True)
+class ResolvedAxisPairGenerationPolicy:
+    allowed_primary_axes: frozenset[ClinicalAxis]
+    blocked_profile_ids: frozenset[str]
+    rationale: str | None
 
 
 def load_ontology(cfg: ExperimentCfg) -> MedicalOntology:
@@ -59,21 +68,54 @@ def make_subgroup_pairs(
 def get_axis_pair_profiles(
     ontology: MedicalOntology, left: ClinicalAxis, right: ClinicalAxis
 ) -> list[AxisPairProfile]:
+    pair = get_axis_pair_ontology(ontology, left, right)
+    if pair.axes == (left, right):
+        return pair.profiles
+    return [
+        profile.model_copy(
+            update={
+                'cohort_a_bins': tuple(reversed(profile.cohort_a_bins)),
+                'cohort_b_bins': tuple(reversed(profile.cohort_b_bins)),
+            }
+        )
+        for profile in pair.profiles
+    ]
+
+
+def get_axis_pair_ontology(
+    ontology: MedicalOntology, left: ClinicalAxis, right: ClinicalAxis
+) -> AxisPairOntology:
     requested = {left, right}
     for pair in ontology.axis_pairs:
         if set(pair.axes) == requested:
-            if pair.axes == (left, right):
-                return pair.profiles
-            return [
-                profile.model_copy(
-                    update={
-                        'cohort_a_bins': tuple(reversed(profile.cohort_a_bins)),
-                        'cohort_b_bins': tuple(reversed(profile.cohort_b_bins)),
-                    }
-                )
-                for profile in pair.profiles
-            ]
+            return pair
     raise KeyError(f'missing clinical axis pair: {left}, {right}')
+
+
+def resolve_axis_pair_generation_policy(
+    ontology: MedicalOntology,
+    condition_id: ConditionKey,
+    left: ClinicalAxis,
+    right: ClinicalAxis,
+) -> ResolvedAxisPairGenerationPolicy:
+    pair = get_axis_pair_ontology(ontology, left, right)
+    allowed_primary_axes = set(pair.allowed_primary_axes or pair.axes)
+    blocked_profile_ids = set(pair.blocked_profile_ids)
+    rationale = pair.rationale
+    for override in pair.condition_overrides:
+        if override.condition_id != condition_id:
+            continue
+        if override.allowed_primary_axes is not None:
+            allowed_primary_axes = set(override.allowed_primary_axes)
+        blocked_profile_ids.update(override.blocked_profile_ids)
+        if override.rationale:
+            rationale = override.rationale
+        break
+    return ResolvedAxisPairGenerationPolicy(
+        allowed_primary_axes=frozenset(allowed_primary_axes),
+        blocked_profile_ids=frozenset(blocked_profile_ids),
+        rationale=rationale,
+    )
 
 
 def other_subgroups(

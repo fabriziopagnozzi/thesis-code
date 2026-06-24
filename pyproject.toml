@@ -47,6 +47,7 @@ dev = [
 synth_pipeline = "python -m experiments.medical_dataset_gen.pipeline"
 synth_eval_plots = "python -m experiments.medical_dataset_gen.pipeline.p11_eval_plots"
 synth_geom_plots = "python -m experiments.medical_dataset_gen.pipeline.p10_query_geom_plots"
+synth_query_diagnose = "python -m experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
 
 # -- MIMIC Experiments ----------------------------------------------------------------------------
 # Chunking

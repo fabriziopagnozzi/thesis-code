@@ -11,29 +11,20 @@ from experiments.medical_dataset_gen.global_config import (
     paths_for,
     setup_logging,
 )
-from experiments.medical_dataset_gen.pipeline.p01_plans import (
-    run_make_query_plans,
-)
-from experiments.medical_dataset_gen.pipeline.p02_plans_calibration import (
-    run_calibrate_query_plans,
-)
-from experiments.medical_dataset_gen.pipeline.p03_structured_facts import run_make_facts
-from experiments.medical_dataset_gen.pipeline.p04_chunks import run_make_chunks
-from experiments.medical_dataset_gen.pipeline.p05_queries_answers import (
-    run_make_queries_answers,
-)
-from experiments.medical_dataset_gen.pipeline.p06_qrels import (
-    run_make_qrels,
-)
-from experiments.medical_dataset_gen.pipeline.p07_embed import run_embed
-from experiments.medical_dataset_gen.pipeline.p08_filter_queries import run_filter_queries
-from experiments.medical_dataset_gen.pipeline.p09_evaluate import run_evaluate
-from experiments.medical_dataset_gen.pipeline.p10_query_geom_plots import (
-    run_query_geom_plots,
-)
-from experiments.medical_dataset_gen.pipeline.p11_eval_plots import run_eval_plots
 from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
 from helpers.ollama_client import stop_model
+
+from .p01_plans import run_make_query_plans
+from .p02_plans_calibration import run_calibrate_query_plans
+from .p03_structured_facts import run_make_facts
+from .p04_chunks import run_make_chunks
+from .p05_queries_answers import run_make_queries_answers
+from .p06_qrels import run_make_qrels
+from .p07_embed import run_embed
+from .p08_filter_queries import run_filter_queries
+from .p09_evaluate import run_evaluate
+from .p10_query_geom_plots import run_query_geom_plots
+from .p11_eval_plots import run_eval_plots
 
 type PipelineStage = Literal[
     'plans',

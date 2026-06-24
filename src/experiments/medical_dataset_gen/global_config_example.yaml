@@ -7,18 +7,18 @@ dataset_schema_version: 2
 
 global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
-    conditions: 17 # Full v2 grid: 17 conditions x 16 contrasts x 10 axis pairs x 2 valid queries.
+    conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
 
     # Name of the experiment directory under:
     #   src/experiments/medical_dataset_gen/_results/<output_experiment>
     output_experiment: v2
 
 generation:
-    query_limit: null # Optional deterministic prefix for smoke runs; null emits all 5,440 queries.
+    query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 10,880 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
 
     calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.
-    calibration_probe_chunks_per_facet: 8 # Per-facet probes used to select query emphasis and the 24-chunk primary cohort.
+    calibration_probe_chunks_per_facet: 8 # Per-facet probes used to select query emphasis, audit semantic separability, and choose the 24-chunk primary cohort.
 
     chunk_pool_config:
         gold_chunks_calibrated_primary: 24
