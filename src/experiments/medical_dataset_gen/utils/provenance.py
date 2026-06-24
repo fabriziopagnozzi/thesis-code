@@ -130,13 +130,11 @@ class PipelineProvenance:
             else _hash_json(self.cfg.model_dump(mode='json', by_alias=True))
         )
         self.template_hash = _directory_fingerprint(self.paths.root / 'data_templates')
-        self.config_hash = _hash_json(
-            {
-                'config_hash': raw_config_hash,
-                'template_hash': self.template_hash,
-                'dataset_schema_version': self.cfg.dataset_schema_version,
-            }
-        )
+        self.config_hash = _hash_json({
+            'config_hash': raw_config_hash,
+            'template_hash': self.template_hash,
+            'dataset_schema_version': self.cfg.dataset_schema_version,
+        })
         self.manifest_path = self.paths.experiment_dir / '_artifact_manifest.json'
         self.run_path = self.paths.experiment_dir / '_runs' / f'{self.run_id}.json'
         self.run_path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,24 +192,20 @@ class PipelineProvenance:
             }
             artifacts[str(path.resolve())] = entry  # type: ignore
             output_records.append({'path': str(path), **entry})
-        manifest.update(
-            {
-                'dataset_schema_version': self.cfg.dataset_schema_version,
-                'experiment': self.paths.exp_name,
-                'config_hash': self.config_hash,
-            }
-        )
+        manifest.update({
+            'dataset_schema_version': self.cfg.dataset_schema_version,
+            'experiment': self.paths.exp_name,
+            'config_hash': self.config_hash,
+        })
         _write_json(self.manifest_path, manifest)
         stage_records = self.run_record['stage_records']
         assert isinstance(stage_records, list)
-        stage_records.append(
-            {
-                'stage': stage,
-                'inputs': input_fingerprints,
-                'outputs': output_records,
-                'finished_at': datetime.now(UTC).isoformat(),
-            }
-        )
+        stage_records.append({
+            'stage': stage,
+            'inputs': input_fingerprints,
+            'outputs': output_records,
+            'finished_at': datetime.now(UTC).isoformat(),
+        })
         self._write_run_record()
 
     def finish(self) -> None:

@@ -30,6 +30,7 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    ChunkDocumentRecord,
     QrelRecord,
     QueryRecord,
     RetrievalIndexMaps,
@@ -114,7 +115,7 @@ def query_directory_names_for_groups(
     ranked = ranked_queries_for_query_geometry(cfg, queries, geometry_filter, eval_results)
     best_rank_by_qid = _rank_position_map(ranked['query_id'].to_list())
     query_dir_name_by_id: dict[str, str] = {}
-    for group, query_ids in groups.items():
+    for _, query_ids in groups.items():
         for fallback_rank, qid in enumerate(query_ids, start=1):
             # Directory prefixes should reflect the query's absolute position in
             # the full best-to-worst ranking, even for the "bad" tail slice.
@@ -168,7 +169,8 @@ def ranked_queries_for_query_geometry(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base.with_columns(
+        base
+        .with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -199,7 +201,8 @@ def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[s
     n_good, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
     good_ids = ranked['query_id'].head(n_good).to_list()
     bad_ids = (
-        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
+        ranked
+        .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
         .head(n_bad)
         .to_list()
     )
@@ -256,7 +259,8 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
             sort_cols.append('alpha_ndcg')
             descending.append(True)
         best = (
-            sub.group_by('query_id', 'lam')
+            sub
+            .group_by('query_id', 'lam')
             .agg(agg_exprs)
             .sort(sort_cols, descending=descending)
             .group_by('query_id')

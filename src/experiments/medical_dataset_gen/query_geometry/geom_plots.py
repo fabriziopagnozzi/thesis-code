@@ -12,9 +12,9 @@ from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     BACKGROUND_OUTLIER_COLOR,
     BACKGROUND_OUTLIER_LABEL_ID,
     BACKGROUND_OUTLIER_ROLE,
+    POINT_DISTRACTOR_TYPE_COLORS,
     SAME_CONDITION_WRONG_AXIS_LABEL_ID,
     SAME_CONDITION_WRONG_AXIS_ROLE,
-    POINT_DISTRACTOR_TYPE_COLORS,
     UNSELECTED_BACKGROUND_COLOR,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
@@ -629,13 +629,11 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
     label_groups = _label_groups(artifact)
     gold_labels = [label for label, indices in label_groups.items() if artifact.is_gold[indices[0]]]
     gold_cmap = plt.get_cmap('tab20')  # type: ignore
-    background_cluster_ids = sorted(
-        {
-            _cluster_id_for_index(artifact, indices[0]) or label
-            for label, indices in label_groups.items()
-            if _is_background_outlier_point(artifact, indices[0])
-        }
-    )
+    background_cluster_ids = sorted({
+        _cluster_id_for_index(artifact, indices[0]) or label
+        for label, indices in label_groups.items()
+        if _is_background_outlier_point(artifact, indices[0])
+    })
     background_cmap = plt.get_cmap('Dark2')  # type: ignore
     background_palette = {
         cluster_id: background_cmap(i % max(1, background_cmap.N))

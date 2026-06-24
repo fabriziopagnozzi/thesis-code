@@ -124,7 +124,8 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'n_topk_retrieved_facets',
     ]
     return (
-        results.group_by(*slice_columns, 'strategy', 'lam', 'k')
+        results
+        .group_by(*slice_columns, 'strategy', 'lam', 'k')
         .agg(
             pl.col('query_id').n_unique().alias('n_queries'),
             pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
@@ -262,47 +263,45 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                 selected_local = selected_indices_list_max_k[:k]
                 selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
 
-                eval_result_rows.append(
-                    {
-                        'query_id': qid,
-                        'evidence_profile_id': query.evidence_profile_id,
-                        'pool_id': query.pool_id,
-                        'query_type': query.query_type,
-                        'template_id': query.template_id,
-                        'condition_id': query.condition_id,
-                        'cohort_dimension_id': query.cohort_dimension_id,
-                        'cohort_contrast_id': query.cohort_contrast_id,
-                        'primary_axis': query.primary_axis,
-                        'secondary_axis': query.secondary_axis,
-                        'calibrated_primary_facet_id': query.calibrated_primary_facet_id,
-                        'split': query.split,
-                        'strategy': strategy,
-                        'k': k,
-                        'lam': lam,
-                        'pool_scope': cfg.retrieval.pool_scope,
-                        'pool_size': len(candidate_chunk_ids),
-                        **compute_retrieval_metrics(
-                            selected_chunk_ids=selected_chunk_ids,
-                            chunk_by_id=maps['chunk_by_id'],
-                            query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
-                            facet_to_gold=query_facet_gold,
-                            all_gold_ids=query_all_gold,
-                            primary_axis=query.primary_axis,
-                            calibrated_primary_facet_id=query.calibrated_primary_facet_id,
-                        ),
-                        **(
-                            answer_rouge_scorer.score(selected_chunk_ids)
-                            if answer_rouge_scorer is not None
-                            else {}
-                        ),
-                        **compute_retrieval_diagnostics(
-                            selected_local,
-                            sim_to_query,
-                            sim_matrix,
-                            topk_local_indices=topk_full[:k] if strategy != 'top_k' else None,
-                        ),
-                    }
-                )
+                eval_result_rows.append({
+                    'query_id': qid,
+                    'evidence_profile_id': query.evidence_profile_id,
+                    'pool_id': query.pool_id,
+                    'query_type': query.query_type,
+                    'template_id': query.template_id,
+                    'condition_id': query.condition_id,
+                    'cohort_dimension_id': query.cohort_dimension_id,
+                    'cohort_contrast_id': query.cohort_contrast_id,
+                    'primary_axis': query.primary_axis,
+                    'secondary_axis': query.secondary_axis,
+                    'calibrated_primary_facet_id': query.calibrated_primary_facet_id,
+                    'split': query.split,
+                    'strategy': strategy,
+                    'k': k,
+                    'lam': lam,
+                    'pool_scope': cfg.retrieval.pool_scope,
+                    'pool_size': len(candidate_chunk_ids),
+                    **compute_retrieval_metrics(
+                        selected_chunk_ids=selected_chunk_ids,
+                        chunk_by_id=maps['chunk_by_id'],
+                        query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
+                        facet_to_gold=query_facet_gold,
+                        all_gold_ids=query_all_gold,
+                        primary_axis=query.primary_axis,
+                        calibrated_primary_facet_id=query.calibrated_primary_facet_id,
+                    ),
+                    **(
+                        answer_rouge_scorer.score(selected_chunk_ids)
+                        if answer_rouge_scorer is not None
+                        else {}
+                    ),
+                    **compute_retrieval_diagnostics(
+                        selected_local,
+                        sim_to_query,
+                        sim_matrix,
+                        topk_local_indices=topk_full[:k] if strategy != 'top_k' else None,
+                    ),
+                })
             # end for k in valid_k_values
         # end for lam in lam_values
     # end for strategy in strategies

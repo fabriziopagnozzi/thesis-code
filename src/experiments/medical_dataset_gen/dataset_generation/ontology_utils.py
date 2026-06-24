@@ -10,8 +10,8 @@ from experiments.medical_dataset_gen.global_config import (
     MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    AxisPairProfile,
     AxisPairOntology,
+    AxisPairProfile,
     ClinicalAxis,
     CohortContrast,
     ConditionKey,

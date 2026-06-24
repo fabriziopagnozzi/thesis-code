@@ -157,7 +157,7 @@ def _select_calibration(
     query_vectors: np.ndarray,
     probe_vectors: np.ndarray,
     probe_n: int,
-) -> tuple[str, str, dict[str, object]]:
+) -> tuple[str, str, dict[str, str | float]]:
     if len(template_ids) != len(query_vectors):
         raise ValueError('each query template must have one calibration embedding')
     primary_facets = [facet for facet in plan.facets if facet.priority == 'primary']
@@ -165,30 +165,28 @@ def _select_calibration(
     if len(primary_facets) != 2 or len(secondary_facets) != 2:
         raise ValueError(f'query {plan.query_id} must have two facets per axis priority')
     offsets = probe['offsets']
-    candidate_rows: list[dict[str, object]] = []
-    candidate_facet_stats: list[list[dict[str, object]]] = []
+    candidate_rows: list[dict[str, str | float]] = []
+    candidate_facet_stats: list[list[dict[str, str | float]]] = []
     for template_index, (template_id, query_vector) in enumerate(
         zip(template_ids, query_vectors, strict=True)
     ):
         similarities = probe_vectors @ query_vector
-        facet_stats: list[dict[str, object]] = []
+        facet_stats: list[dict[str, str | float]] = []
         for facet in plan.facets:
             start, end = offsets[facet.facet_id]
             values = similarities[start:end]
             p25, median, p75 = np.percentile(values, [25, 50, 75])
-            facet_stats.append(
-                {
-                    'facet_id': facet.facet_id,
-                    'subgroup_id': facet.subgroup_id,
-                    'axis': facet.axis,
-                    'value_bin': facet.value_bin,
-                    'priority': facet.priority,
-                    'mean_query_sim': float(values.mean()),
-                    'p25_query_sim': float(p25),
-                    'median_query_sim': float(median),
-                    'p75_query_sim': float(p75),
-                }
-            )
+            facet_stats.append({
+                'facet_id': facet.facet_id,
+                'subgroup_id': facet.subgroup_id,
+                'axis': facet.axis,
+                'value_bin': facet.value_bin,
+                'priority': facet.priority,
+                'mean_query_sim': float(values.mean()),
+                'p25_query_sim': float(p25),
+                'median_query_sim': float(median),
+                'p75_query_sim': float(p75),
+            })
         primary_stats = [row for row in facet_stats if row['priority'] == 'primary']
         secondary_stats = [row for row in facet_stats if row['priority'] == 'secondary']
         primary_axis_margin = min(float(row['p25_query_sim']) for row in primary_stats) - max(
@@ -197,17 +195,15 @@ def _select_calibration(
         primary_cohort_mean_gap = abs(
             float(primary_stats[0]['mean_query_sim']) - float(primary_stats[1]['mean_query_sim'])
         )
-        candidate_rows.append(
-            {
-                'template_id': template_id,
-                'template_index': template_index,
-                'primary_axis_probe_margin': primary_axis_margin,
-                'primary_cohort_mean_gap': primary_cohort_mean_gap,
-                'secondary_mean_query_sim': float(
-                    np.mean([float(row['mean_query_sim']) for row in secondary_stats])
-                ),
-            }
-        )
+        candidate_rows.append({
+            'template_id': template_id,
+            'template_index': template_index,
+            'primary_axis_probe_margin': primary_axis_margin,
+            'primary_cohort_mean_gap': primary_cohort_mean_gap,
+            'secondary_mean_query_sim': float(
+                np.mean([float(row['mean_query_sim']) for row in secondary_stats])
+            ),
+        })
         candidate_facet_stats.append(facet_stats)
 
     selected_index = max(

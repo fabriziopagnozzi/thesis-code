@@ -180,13 +180,11 @@ def _facet_coverage_metrics(
     n_facet_hits = len(facet_hits)
     facet_coverage = n_facet_hits / n_facets if n_facets else 0.0
     mean_facet_recall = (
-        np.mean(
-            [
-                len(selected & gold_ids) / len(gold_ids)
-                for gold_ids in facet_gold_sets.values()
-                if gold_ids
-            ]
-        )
+        np.mean([
+            len(selected & gold_ids) / len(gold_ids)
+            for gold_ids in facet_gold_sets.values()
+            if gold_ids
+        ])
         if facet_gold_sets
         else 0.0
     )

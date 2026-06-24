@@ -67,7 +67,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                 ]
                 if not profiles:
                     continue
-                primary_axes = [
+                primary_axes: list[ClinicalAxis] = [
                     axis
                     for axis in (axis_a, axis_b)
                     if (
@@ -94,12 +94,10 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     )
                     specs.append(spec)
                     if len(primary_axes) == 2:
-                        plans.extend(
-                            (
-                                _materialize_plan(cfg, ontology, spec, axis_a, axis_b),
-                                _materialize_plan(cfg, ontology, spec, axis_b, axis_a),
-                            )
-                        )
+                        plans.extend((
+                            _materialize_plan(cfg, ontology, spec, axis_a, axis_b),
+                            _materialize_plan(cfg, ontology, spec, axis_b, axis_a),
+                        ))
                         continue
 
                     # If one axis is unsuitable as the dominant retrieval target,
@@ -109,13 +107,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     primary_axis = primary_axes[0]
                     secondary_axis = axis_b if primary_axis == axis_a else axis_a
                     plans.append(
-                        _materialize_plan(
-                            cfg,
-                            ontology,
-                            spec,
-                            primary_axis,
-                            secondary_axis,
-                        )
+                        _materialize_plan(cfg, ontology, spec, primary_axis, secondary_axis)
                     )
 
     rows = [plan.to_row() for plan in plans]
@@ -216,7 +208,7 @@ def _materialize_plan(
         (spec.subgroup_b_id, spec.axis_a): spec.cohort_b_bins[0],
         (spec.subgroup_b_id, spec.axis_b): spec.cohort_b_bins[1],
     }
-    raw_facets = [
+    raw_facets: list[tuple[str, SubgroupOntology, ClinicalAxis]] = [
         (spec.subgroup_a_id, spec.subgroup_a, spec.axis_a),
         (spec.subgroup_a_id, spec.subgroup_a, spec.axis_b),
         (spec.subgroup_b_id, spec.subgroup_b, spec.axis_a),

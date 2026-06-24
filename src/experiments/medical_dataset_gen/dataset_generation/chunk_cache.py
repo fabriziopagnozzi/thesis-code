@@ -109,13 +109,11 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,
     }
     if cfg.generation.llm_config.use_llm_chunk_generation:
-        payload.update(
-            {
-                'llm_name': cfg.generation.llm_config.model_name,
-                'llm_temperature': cfg.generation.llm_config.temperature,
-                'llm_num_ctx': cfg.generation.llm_config.num_ctx,
-            }
-        )
+        payload.update({
+            'llm_name': cfg.generation.llm_config.model_name,
+            'llm_temperature': cfg.generation.llm_config.temperature,
+            'llm_num_ctx': cfg.generation.llm_config.num_ctx,
+        })
     payload['axis_payload_json'] = fact.axis_payload_json
 
     raw = json.dumps(payload, sort_keys=True)
