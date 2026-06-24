@@ -1,8 +1,3 @@
-# Example configuration for the synthetic medical RAG benchmark.
-#
-# Copy this file into the target experiment directory as:
-#   src/experiments/medical_dataset_gen/_results/<exp>/_config.yaml
-#
 dataset_schema_version: 2
 
 global:

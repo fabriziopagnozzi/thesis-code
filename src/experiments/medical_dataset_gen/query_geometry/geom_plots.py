@@ -627,15 +627,15 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
     import matplotlib.pyplot as plt
 
     label_groups = _label_groups(artifact)
-    gold_labels = [
-        label for label, indices in label_groups.items() if artifact.is_gold[indices[0]]
-    ]
+    gold_labels = [label for label, indices in label_groups.items() if artifact.is_gold[indices[0]]]
     gold_cmap = plt.get_cmap('tab20')  # type: ignore
-    background_cluster_ids = sorted({
-        _cluster_id_for_index(artifact, indices[0]) or label
-        for label, indices in label_groups.items()
-        if _is_background_outlier_point(artifact, indices[0])
-    })
+    background_cluster_ids = sorted(
+        {
+            _cluster_id_for_index(artifact, indices[0]) or label
+            for label, indices in label_groups.items()
+            if _is_background_outlier_point(artifact, indices[0])
+        }
+    )
     background_cmap = plt.get_cmap('Dark2')  # type: ignore
     background_palette = {
         cluster_id: background_cmap(i % max(1, background_cmap.N))

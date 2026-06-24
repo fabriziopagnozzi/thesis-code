@@ -126,9 +126,7 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
         'query_plan_calibration',
         pl.from_dicts(calibration_rows, infer_schema_length=None),
     )
-    print(
-        f'[calibrate_plans] retained {len(updated):,}/{len(plans):,} plans after semantic gate'
-    )
+    print(f'[calibrate_plans] retained {len(updated):,}/{len(plans):,} plans after semantic gate')
     return updated_df
 
 
@@ -316,8 +314,7 @@ def _semantic_probe_gate(
             separation['same_axis_cohort_gap'] < float(cfg.geometry_filter.min_same_axis_cohort_gap)
         ),
         'fail_weak_same_cohort_axis_separation': (
-            separation['same_cohort_axis_gap']
-            < float(cfg.geometry_filter.min_same_cohort_axis_gap)
+            separation['same_cohort_axis_gap'] < float(cfg.geometry_filter.min_same_cohort_axis_gap)
         ),
     }
     failure_reasons = [name for name, failed in failures.items() if failed]

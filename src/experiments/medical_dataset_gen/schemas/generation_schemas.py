@@ -304,18 +304,17 @@ class AxisPairOntology(BenchmarkModel):
             if override.condition_id in seen_conditions:
                 raise ValueError('axis-pair condition overrides must be unique per condition')
             seen_conditions.add(override.condition_id)
-            if override.allowed_primary_axes is not None and not set(
-                override.allowed_primary_axes
-            ) <= axis_set:
+            if (
+                override.allowed_primary_axes is not None
+                and not set(override.allowed_primary_axes) <= axis_set
+            ):
                 raise ValueError(
                     'axis-pair condition override allowed_primary_axes must stay within the pair'
                 )
             unknown_override_profiles = set(override.blocked_profile_ids) - profile_ids
             if unknown_override_profiles:
                 unknown = ', '.join(sorted(unknown_override_profiles))
-                raise ValueError(
-                    f'axis-pair condition override blocks unknown profiles: {unknown}'
-                )
+                raise ValueError(f'axis-pair condition override blocks unknown profiles: {unknown}')
         return self
 
 

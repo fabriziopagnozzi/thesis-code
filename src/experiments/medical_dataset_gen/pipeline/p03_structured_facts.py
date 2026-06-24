@@ -123,13 +123,15 @@ def _assert_query_local_chunk_reuse_keys(query_id: str, facts: list[ClinicalFact
             continue
         duplicate_count += 1
         if len(duplicate_examples) < 5:
-            duplicate_examples.append({
-                'chunk_reuse_key': fact.chunk_reuse_key,
-                'previous_fact_id': previous.fact_id,
-                'previous_cluster_id': previous.cluster_id,
-                'fact_id': fact.fact_id,
-                'cluster_id': fact.cluster_id,
-            })
+            duplicate_examples.append(
+                {
+                    'chunk_reuse_key': fact.chunk_reuse_key,
+                    'previous_fact_id': previous.fact_id,
+                    'previous_cluster_id': previous.cluster_id,
+                    'fact_id': fact.fact_id,
+                    'cluster_id': fact.cluster_id,
+                }
+            )
 
     if duplicate_count:
         raise RuntimeError(
@@ -211,7 +213,9 @@ def make_local_distractor_facts(
         count = distractor_config.point_distractor_counts()[distractor_type]
         for local_idx in range(count):
             if distractor_type == 'same_condition_wrong_axis':
-                rows.append(make_same_condition_wrong_axis_fact(plan, target, ontology, rng, local_idx))
+                rows.append(
+                    make_same_condition_wrong_axis_fact(plan, target, ontology, rng, local_idx)
+                )
                 continue
             rows.append(
                 make_local_distractor_fact(
@@ -314,7 +318,9 @@ def _cycled_other_subgroup(
     local_idx: int,
 ):
     alternatives = other_subgroups(ontology, excluded_ids)
-    offset = _stable_seed(query_id, target_facet_id, distractor_type, 'subgroup') % len(alternatives)
+    offset = _stable_seed(query_id, target_facet_id, distractor_type, 'subgroup') % len(
+        alternatives
+    )
     return alternatives[(offset + local_idx) % len(alternatives)]
 
 
@@ -327,7 +333,9 @@ def _cycled_other_condition(
     local_idx: int,
 ):
     alternatives = other_conditions(ontology, excluded_condition_id)
-    offset = _stable_seed(query_id, target_facet_id, distractor_type, 'condition') % len(alternatives)
+    offset = _stable_seed(query_id, target_facet_id, distractor_type, 'condition') % len(
+        alternatives
+    )
     return alternatives[(offset + local_idx) % len(alternatives)]
 
 
