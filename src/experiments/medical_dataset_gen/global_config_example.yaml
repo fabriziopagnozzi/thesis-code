@@ -7,6 +7,7 @@ global:
 generation:
     query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 10,880 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
+    axis_pair_policy_overrides: [] # Optional config-layer pair gating applied after ontology policies, keyed by unordered axis pair.
 
     calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.
     calibration_probe_chunks_per_facet: 8 # Per-facet probes used to select query emphasis, audit semantic separability, and choose the 24-chunk primary cohort.

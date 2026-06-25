@@ -57,6 +57,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
             for axis_a, axis_b in axis_pairs:
                 policy = resolve_axis_pair_generation_policy(
                     ontology,
+                    cfg,
                     condition_id=condition_key,
                     left=axis_a,
                     right=axis_b,

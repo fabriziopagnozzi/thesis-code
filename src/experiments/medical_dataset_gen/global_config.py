@@ -21,7 +21,10 @@ from pydantic import (
 )
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    AxisPairConditionOverride,
     ChunkPoolScope,
+    ClinicalAxis,
+    ConditionKey,
     DistractorStr,
     PlanCalibrationMode,
 )
@@ -182,12 +185,50 @@ class GenerationLlmConfig(ConfigModel):
     num_ctx: PositiveInt = 4096
 
 
+class AxisPairPolicyOverrideCfg(ConfigModel):
+    axes: tuple[ClinicalAxis, ClinicalAxis]
+    allowed_primary_axes: list[ClinicalAxis] | None = None
+    blocked_profile_ids: list[str] = Field(default_factory=list)
+    rationale: str | None = None
+    condition_overrides: list[AxisPairConditionOverride] = Field(default_factory=list)
+
+    @model_validator(mode='after')
+    def _validate_override(self) -> AxisPairPolicyOverrideCfg:
+        axis_set = set(self.axes)
+        if len(axis_set) != 2:
+            raise ValueError('generation.axis_pair_policy_overrides.axes must contain two axes')
+        if self.allowed_primary_axes is not None and not set(self.allowed_primary_axes) <= axis_set:
+            raise ValueError(
+                'generation.axis_pair_policy_overrides.allowed_primary_axes must stay within the pair'
+            )
+        seen_conditions: set[ConditionKey] = set()
+        for override in self.condition_overrides:
+            if override.condition_id in seen_conditions:
+                raise ValueError(
+                    'generation.axis_pair_policy_overrides.condition_overrides must be unique per condition'
+                )
+            seen_conditions.add(override.condition_id)
+            if (
+                override.allowed_primary_axes is not None
+                and not set(override.allowed_primary_axes) <= axis_set
+            ):
+                raise ValueError(
+                    'generation.axis_pair_policy_overrides.condition_overrides.allowed_primary_axes '
+                    'must stay within the pair'
+                )
+        return self
+
+    def matches(self, left: ClinicalAxis, right: ClinicalAxis) -> bool:
+        return set(self.axes) == {left, right}
+
+
 class GenerationCfg(ConfigModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
 
     calibration_mode: PlanCalibrationMode = 'rotating'
     calibration_probe_chunks_per_facet: PositiveInt = 8
+    axis_pair_policy_overrides: list[AxisPairPolicyOverrideCfg] = Field(default_factory=list)
 
     chunk_pools: ChunkPoolsCfg = Field(default_factory=ChunkPoolsCfg)
     llm_config: GenerationLlmConfig = Field(default_factory=GenerationLlmConfig)
@@ -202,6 +243,14 @@ class GenerationCfg(ConfigModel):
                 'generation.chunk_pools.niche.size must be smaller than '
                 'generation.chunk_pools.secondary.size when niche clusters are enabled'
             )
+        seen_pairs: set[frozenset[ClinicalAxis]] = set()
+        for override in self.axis_pair_policy_overrides:
+            key = frozenset(override.axes)
+            if key in seen_pairs:
+                raise ValueError(
+                    'generation.axis_pair_policy_overrides must be unique per unordered axis pair'
+                )
+            seen_pairs.add(key)
         return self
 
     def total_gold_chunks(self) -> int:
@@ -209,6 +258,14 @@ class GenerationCfg(ConfigModel):
 
     def total_distractor_chunks(self) -> int:
         return self.chunk_pools.total_distractor_chunks()
+
+    def axis_pair_policy_override(
+        self, left: ClinicalAxis, right: ClinicalAxis
+    ) -> AxisPairPolicyOverrideCfg | None:
+        for override in self.axis_pair_policy_overrides:
+            if override.matches(left, right):
+                return override
+        return None
 
 
 class EmbeddingCfg(ConfigModel):
