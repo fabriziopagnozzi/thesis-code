@@ -132,7 +132,7 @@ def plot_lambda_sensitivity_metrics(stats_df: pl.DataFrame, out_dir: Path) -> No
         out_dir,
         plot_name='lambda_sensitivity_metrics',
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
-        title='Lambda sensitivity (main metrics) - each row is a metric, each column is a strategy',
+        figure_title='Lambda sensitivity (main metrics) - each row is a metric, each column is a strategy',
         output_filename='lambda_sensitivity_metrics.png',
     )
 
@@ -144,7 +144,7 @@ def plot_lambda_sensitivity_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -
         out_dir,
         plot_name='lambda_sensitivity_diagnostics',
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
-        title='Lambda sensitivity (diagnostics) - each row is a metric, each column is a strategy',
+        figure_title='Lambda sensitivity (diagnostics) - each row is a metric, each column is a strategy',
         output_filename='lambda_sensitivity_diagnostics.png',
     )
 
@@ -155,7 +155,7 @@ def _plot_lambda_sensitivity(
     *,
     plot_name: EvalPlotFileName,
     metric_names: list[str],
-    title: str,
+    figure_title: str,
     output_filename: str,
 ) -> None:
     """Shared lambda-sensitivity renderer for fixed metric groups."""
@@ -190,7 +190,7 @@ def _plot_lambda_sensitivity(
         sharex=True,
     )
 
-    for row_idx, (metric, title) in enumerate(metric_cols):
+    for row_idx, (metric, metric_title) in enumerate(metric_cols):
         row_ylim = _shared_lambda_sensitivity_ylim(
             stats_df,
             metric=metric,
@@ -222,7 +222,7 @@ def _plot_lambda_sensitivity(
             if row_idx == 0:
                 ax.set_title(style['label'], fontsize=10)
             if col_idx == 0:
-                ax.set_ylabel(title, fontsize=10)
+                ax.set_ylabel(metric_title, fontsize=10)
             if row_idx == len(metric_cols) - 1:
                 ax.set_xlabel('lambda', fontsize=9)
             _set_lambda_tick_labels(ax, sampled_lambda_values)
@@ -241,7 +241,7 @@ def _plot_lambda_sensitivity(
             frameon=False,
             bbox_to_anchor=(0.5, -0.01),
         )
-    fig.suptitle(title, fontsize=12)
+    fig.suptitle(figure_title, fontsize=12)
     _figure_note(
         fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
     )

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+from collections import defaultdict
 from pathlib import Path
+from textwrap import fill
 from typing import Any, cast
 
 import numpy as np
@@ -11,17 +14,41 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_in
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     BACKGROUND_OUTLIER_COLOR,
     BACKGROUND_OUTLIER_LABEL_ID,
+    BACKGROUND_OUTLIER_MAP_MARKER_SIZE,
+    BACKGROUND_OUTLIER_RANK_MARKER_SIZE,
     BACKGROUND_OUTLIER_ROLE,
-    POINT_DISTRACTOR_TYPE_COLORS,
+    BACKGROUND_OUTLIER_SELECTION_SELECTED_MARKER_SIZE,
+    BACKGROUND_OUTLIER_SELECTION_UNSELECTED_MARKER_SIZE,
+    BACKGROUND_OUTLIER_SIMILARITY_MAP_MARKER_SIZE,
+    FULL_STRATEGY_BOTTOM_MARGIN_IN,
+    FULL_STRATEGY_COLORBAR_GAP_IN,
+    FULL_STRATEGY_COLORBAR_WIDTH_IN,
+    FULL_STRATEGY_LEFT_MARGIN_IN,
+    FULL_STRATEGY_LEGEND_GAP_IN,
+    FULL_STRATEGY_LEGEND_WIDTH_IN,
+    FULL_STRATEGY_PANEL_GAP_X_IN,
+    FULL_STRATEGY_PANEL_GAP_Y_IN,
+    FULL_STRATEGY_PANEL_SIZE_IN,
+    FULL_STRATEGY_RIGHT_MARGIN_IN,
+    FULL_STRATEGY_TOP_MARGIN_IN,
+    QUERY_OVERVIEW_FIGURE_SIZE,
+    QUERY_OVERVIEW_LEGEND_BBOX_TO_ANCHOR_X,
+    QUERY_OVERVIEW_LEGEND_FONT_SIZE,
+    QUERY_OVERVIEW_LEGEND_WRAP_WIDTH,
     SAME_CONDITION_WRONG_AXIS_LABEL_ID,
     SAME_CONDITION_WRONG_AXIS_ROLE,
-    UNSELECTED_BACKGROUND_COLOR,
+    UNSELECTED_DATA_POINT_COLOR,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryArtifact,
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
+
+LEGEND_CHILD_INDENT = '    '
+LEGEND_HEADER_LABEL = 'Primary Condition / Subgroup / Clinical Axis\n'
+QUERY_TITLE_SUBGROUP_COLOR = '#7B2CBF'
+QUERY_TITLE_AXIS_COLOR = '#2D6A4F'
 
 
 def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
@@ -52,19 +79,18 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
             title=title,
         )
     legend_handles = _selection_legend_handles(axes_list)
+    legend_entries = _display_legend_entries(artifact, legend_handles)
     fig.legend(
-        legend_handles.values(),
-        legend_handles.keys(),
+        [handle for _, handle in legend_entries],
+        [_format_legend_label(artifact, label) for label, _ in legend_entries],
         fontsize=7,
         frameon=False,
         loc='center left',
         bbox_to_anchor=(0.985, 0.5),
+        alignment='left',
     )
-    fig.suptitle(
-        f'{artifact_title_prefix(artifact)}: selected chunks over same embedding coordinates',
-        fontsize=12,
-    )
-    fig.tight_layout(rect=(0, 0, 0.92, 0.96))
+    _draw_artifact_figure_title(fig, artifact, fontsize=12)
+    fig.tight_layout(rect=(0, 0, 0.92, 0.94))
     fig.savefig(out_dir / 'strategy_selection_overlay.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
@@ -91,21 +117,55 @@ def plot_full_strategy_selection_overlay(
         )
         for strategy in rows
     }
-    top_row_cols = 3
-    n_cols = max(top_row_cols, *(len(row_variants[strategy]) for strategy in rows))
-    fig, axes = plt.subplots(
-        3,
-        n_cols,
-        figsize=(5.1 * n_cols, 5.0 * 3),
-        squeeze=False,
-        constrained_layout=True,
-    )  # type: ignore
+    mmr_cols = max(1, len(row_variants['mmr']))
+    facloc_cols = max(1, len(row_variants['fac_loc']))
+    top_row_width = (
+        2 * FULL_STRATEGY_PANEL_SIZE_IN
+        + FULL_STRATEGY_PANEL_GAP_X_IN
+        + FULL_STRATEGY_COLORBAR_GAP_IN
+        + FULL_STRATEGY_COLORBAR_WIDTH_IN
+        + FULL_STRATEGY_LEGEND_GAP_IN
+        + FULL_STRATEGY_LEGEND_WIDTH_IN
+    )
+    widest_selection_row = (
+        max(mmr_cols, facloc_cols) * FULL_STRATEGY_PANEL_SIZE_IN
+        + max(0, max(mmr_cols, facloc_cols) - 1) * FULL_STRATEGY_PANEL_GAP_X_IN
+    )
+    fig_width = (
+        FULL_STRATEGY_LEFT_MARGIN_IN
+        + max(top_row_width, widest_selection_row)
+        + FULL_STRATEGY_RIGHT_MARGIN_IN
+    )
+    fig_height = (
+        FULL_STRATEGY_BOTTOM_MARGIN_IN
+        + 3 * FULL_STRATEGY_PANEL_SIZE_IN
+        + 2 * FULL_STRATEGY_PANEL_GAP_Y_IN
+        + FULL_STRATEGY_TOP_MARGIN_IN
+    )
+    fig = plt.figure(figsize=(fig_width, fig_height))  # type: ignore
 
     palette = label_palette(artifact)
     topk_variants = selection_variants.get('top_k', [])
+    top_row_bottom = FULL_STRATEGY_BOTTOM_MARGIN_IN + 2 * (
+        FULL_STRATEGY_PANEL_SIZE_IN + FULL_STRATEGY_PANEL_GAP_Y_IN
+    )
+    middle_row_bottom = FULL_STRATEGY_BOTTOM_MARGIN_IN + (
+        FULL_STRATEGY_PANEL_SIZE_IN + FULL_STRATEGY_PANEL_GAP_Y_IN
+    )
+    bottom_row_bottom = FULL_STRATEGY_BOTTOM_MARGIN_IN
+
+    ax_topk = _add_axes_in_inches(
+        fig,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        left=FULL_STRATEGY_LEFT_MARGIN_IN,
+        bottom=top_row_bottom,
+        width=FULL_STRATEGY_PANEL_SIZE_IN,
+        height=FULL_STRATEGY_PANEL_SIZE_IN,
+    )
     if topk_variants:
         _plot_selection_panel(
-            ax=axes[0, 0],
+            ax=ax_topk,
             artifact=artifact,
             palette=palette,
             local_indices=topk_variants[0].local_indices,
@@ -116,29 +176,77 @@ def plot_full_strategy_selection_overlay(
                 local_indices=topk_variants[0].local_indices,
             ),
         )
+    else:
+        ax_topk.axis('off')
+    ax_topk.set_box_aspect(1)
 
-    similarity_points = _plot_query_similarity_map_ax(
-        axes[0, 1], artifact, include_title_prefix=False
+    similarity_left = (
+        FULL_STRATEGY_LEFT_MARGIN_IN + FULL_STRATEGY_PANEL_SIZE_IN + FULL_STRATEGY_PANEL_GAP_X_IN
     )
-    legend_col_idx = 2
+    ax_similarity = _add_axes_in_inches(
+        fig,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        left=similarity_left,
+        bottom=top_row_bottom,
+        width=FULL_STRATEGY_PANEL_SIZE_IN,
+        height=FULL_STRATEGY_PANEL_SIZE_IN,
+    )
+    similarity_points = _plot_query_similarity_map_ax(
+        ax_similarity, artifact, include_title_prefix=False
+    )
+    ax_similarity.set_box_aspect(1)
+    ax_colorbar = _add_axes_in_inches(
+        fig,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        left=similarity_left + FULL_STRATEGY_PANEL_SIZE_IN + FULL_STRATEGY_COLORBAR_GAP_IN,
+        bottom=top_row_bottom,
+        width=FULL_STRATEGY_COLORBAR_WIDTH_IN,
+        height=FULL_STRATEGY_PANEL_SIZE_IN,
+    )
     if similarity_points is not None:
         fig.colorbar(
             similarity_points,
-            ax=axes[0, 1],
-            fraction=0.05,
-            pad=0.02,
+            cax=ax_colorbar,
             label='query cosine similarity',
         )
+    else:
+        ax_colorbar.axis('off')
 
-    for col_idx in range(top_row_cols, n_cols):
-        axes[0, col_idx].axis('off')
-
-    for row_idx, strategy in enumerate(rows, start=1):
+    ax_legend = _add_axes_in_inches(
+        fig,
+        fig_width=fig_width,
+        fig_height=fig_height,
+        left=(
+            similarity_left
+            + FULL_STRATEGY_PANEL_SIZE_IN
+            + FULL_STRATEGY_COLORBAR_GAP_IN
+            + FULL_STRATEGY_COLORBAR_WIDTH_IN
+            + FULL_STRATEGY_LEGEND_GAP_IN
+        ),
+        bottom=top_row_bottom,
+        width=FULL_STRATEGY_LEGEND_WIDTH_IN,
+        height=FULL_STRATEGY_PANEL_SIZE_IN,
+    )
+    mmr_axes: list[Any] = []
+    facloc_axes: list[Any] = []
+    for strategy, row_bottom in [('mmr', middle_row_bottom), ('fac_loc', bottom_row_bottom)]:
         variants = row_variants[strategy]
-
+        row_axes = mmr_axes if strategy == 'mmr' else facloc_axes
         for col_idx, payload in enumerate(variants):
+            ax = _add_axes_in_inches(
+                fig,
+                fig_width=fig_width,
+                fig_height=fig_height,
+                left=FULL_STRATEGY_LEFT_MARGIN_IN
+                + col_idx * (FULL_STRATEGY_PANEL_SIZE_IN + FULL_STRATEGY_PANEL_GAP_X_IN),
+                bottom=row_bottom,
+                width=FULL_STRATEGY_PANEL_SIZE_IN,
+                height=FULL_STRATEGY_PANEL_SIZE_IN,
+            )
             _plot_selection_panel(
-                ax=axes[row_idx, col_idx],
+                ax=ax,
                 artifact=artifact,
                 palette=palette,
                 local_indices=payload.local_indices,
@@ -149,17 +257,14 @@ def plot_full_strategy_selection_overlay(
                     local_indices=payload.local_indices,
                 ),
             )
-        for col_idx in range(len(variants), n_cols):
-            axes[row_idx, col_idx].axis('off')
+            ax.set_box_aspect(1)
+            row_axes.append(ax)
 
-    legend_handles = _selection_legend_handles([ax for ax in axes.ravel() if ax.get_visible()])
-    _draw_selection_legend_panel(axes[0, legend_col_idx], legend_handles)
+    legend_axes = [ax_topk, *mmr_axes, *facloc_axes]
+    legend_handles = _selection_legend_handles(legend_axes)
+    _draw_selection_legend_panel(ax_legend, artifact, legend_handles)
 
-    fig.suptitle(
-        f'{artifact_title_prefix(artifact)}: top-k, query cosine maps, and lambda sweeps '
-        f'at k={effective_k}' + (f' (requested {render_k})' if render_k != effective_k else ''),
-        fontsize=12,
-    )
+    _draw_artifact_figure_title(fig, artifact, fontsize=12, y=1 - 0.16 / fig_height)
     fig.savefig(
         out_dir / f'full_strategy_selection_overlay_k{render_k}.png',
         dpi=150,
@@ -174,11 +279,11 @@ def plot_query_overview_4panel(
 ) -> None:
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(2, 2, figsize=(14.5, 11), constrained_layout=True)  # type: ignore
+    fig, axes = plt.subplots(2, 2, figsize=QUERY_OVERVIEW_FIGURE_SIZE)  # type: ignore
     ax_map, ax_cos, ax_rank, ax_cluster = axes.ravel()
 
     _plot_query_map_ax(ax_map, artifact, include_title_prefix=False)
-    ax_map.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
+    _draw_facet_family_side_legend(ax_map, artifact)
 
     similarity_points = _plot_query_similarity_map_ax(ax_cos, artifact, include_title_prefix=False)
     if similarity_points is not None:
@@ -189,14 +294,16 @@ def plot_query_overview_4panel(
             pad=0.02,
             label='query cosine',
         )
-    ax_cos.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
 
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
-    ax_rank.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
+    _draw_facet_family_side_legend(ax_rank, artifact)
 
     _plot_discovered_clusters_ax(ax_cluster, artifact, include_title_prefix=False)
-    ax_cluster.legend(fontsize=6, frameon=False, loc='center left', bbox_to_anchor=(1.02, 0.5))
-    fig.suptitle(f'{artifact_title_prefix(artifact)}: embedding geometry overview', fontsize=14)
+    _draw_wrapped_side_legend(ax_cluster)
+    for ax in axes.ravel():
+        ax.set_box_aspect(1)
+    fig.subplots_adjust(left=0.055, right=0.94, top=0.88, bottom=0.06, wspace=0.78, hspace=0.30)
+    _draw_artifact_figure_title(fig, artifact, fontsize=14)
     fig.savefig(out_dir / 'query_overview_4panel.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
@@ -390,16 +497,210 @@ def _selection_legend_handles(axes: list[Any]) -> dict[str, Any]:
     return legend_handles
 
 
-def _draw_selection_legend_panel(ax: Any, legend_handles: dict[str, Any]) -> None:
+def _draw_selection_legend_panel(
+    ax: Any,
+    artifact: GeometryArtifact,
+    legend_handles: dict[str, Any],
+) -> None:
     ax.axis('off')
     ax.set_title('Legend')
+    legend_entries = _display_legend_entries(artifact, legend_handles)
     ax.legend(
-        legend_handles.values(),
-        legend_handles.keys(),
+        [handle for _, handle in legend_entries],
+        [_format_legend_label(artifact, label) for label, _ in legend_entries],
         fontsize=7,
         frameon=False,
         loc='center left',
         bbox_to_anchor=(0.0, 0.5),
+        alignment='left',
+    )
+
+
+def _draw_wrapped_side_legend(ax: Any) -> None:
+    handles, labels = ax.get_legend_handles_labels()
+    if not handles:
+        return
+    ax.legend(
+        handles,
+        [_wrap_legend_label(label) for label in labels],
+        fontsize=QUERY_OVERVIEW_LEGEND_FONT_SIZE,
+        frameon=False,
+        loc='center left',
+        bbox_to_anchor=(QUERY_OVERVIEW_LEGEND_BBOX_TO_ANCHOR_X, 0.5),
+        alignment='left',
+    )
+
+
+def _draw_facet_family_side_legend(ax: Any, artifact: GeometryArtifact) -> None:
+    handles, labels = ax.get_legend_handles_labels()
+    if not handles:
+        return
+    legend_handles = {label: handle for handle, label in zip(handles, labels, strict=True)}
+    legend_entries = _display_legend_entries(artifact, legend_handles)
+    ax.legend(
+        [handle for _, handle in legend_entries],
+        [_format_legend_label(artifact, label) for label, _ in legend_entries],
+        fontsize=QUERY_OVERVIEW_LEGEND_FONT_SIZE,
+        frameon=False,
+        loc='center left',
+        bbox_to_anchor=(QUERY_OVERVIEW_LEGEND_BBOX_TO_ANCHOR_X, 0.5),
+        alignment='left',
+    )
+
+
+def _format_legend_label(artifact: GeometryArtifact, label: str) -> str:
+    if label == LEGEND_HEADER_LABEL:
+        return label
+    indent = LEGEND_CHILD_INDENT if _is_child_legend_label(artifact, label) else ''
+    return _wrap_legend_label(label, indent=indent)
+
+
+def _wrap_legend_label(
+    label: str,
+    *,
+    width: int = QUERY_OVERVIEW_LEGEND_WRAP_WIDTH,
+    indent: str = '',
+) -> str:
+    # Preserve explicit line breaks if any label already carries semantic grouping.
+    return '\n'.join(
+        fill(
+            segment.strip(),
+            width=width,
+            initial_indent=indent,
+            subsequent_indent=indent,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        for segment in label.splitlines()
+    )
+
+
+def _ordered_facet_family_legend_entries(
+    artifact: GeometryArtifact,
+    legend_handles: dict[str, Any],
+) -> list[tuple[str, Any]]:
+    label_groups = _label_groups(artifact)
+    ordered_facet_ids = _ordered_facet_ids(artifact)
+    ordered_facet_id_set = set(ordered_facet_ids)
+    gold_label_by_facet_id: dict[str, str] = {}
+    distractor_labels_by_facet_id: dict[str, list[str]] = defaultdict(list)
+    background_labels: list[str] = []
+    extra_labels: list[str] = []
+
+    for label, indices in label_groups.items():
+        if label not in legend_handles:
+            continue
+        first_idx = indices[0]
+        if artifact.is_gold[first_idx]:
+            gold_label_by_facet_id[artifact.label_ids[first_idx]] = label
+            continue
+        if _is_background_outlier_point(artifact, first_idx):
+            background_labels.append(label)
+            continue
+        target_facet_id = _target_facet_id_for_index(artifact, first_idx)
+        if target_facet_id is not None:
+            distractor_labels_by_facet_id[target_facet_id].append(label)
+        else:
+            extra_labels.append(label)
+
+    entries: list[tuple[str, Any]] = []
+    added_labels: set[str] = set()
+    for facet_id in ordered_facet_ids:
+        facet_label = gold_label_by_facet_id.get(facet_id)
+        if facet_label is not None:
+            entries.append((facet_label, legend_handles[facet_label]))
+            added_labels.add(facet_label)
+        for label in _sorted_distractor_labels(
+            artifact,
+            distractor_labels_by_facet_id.get(facet_id, []),
+        ):
+            entries.append((label, legend_handles[label]))
+            added_labels.add(label)
+
+    for label in sorted(gold_label_by_facet_id.values(), key=str.lower):
+        if label in added_labels:
+            continue
+        entries.append((label, legend_handles[label]))
+        added_labels.add(label)
+
+    for facet_id in sorted(distractor_labels_by_facet_id):
+        if facet_id in ordered_facet_id_set:
+            continue
+        for label in _sorted_distractor_labels(artifact, distractor_labels_by_facet_id[facet_id]):
+            if label in added_labels:
+                continue
+            entries.append((label, legend_handles[label]))
+            added_labels.add(label)
+
+    for label in sorted(extra_labels, key=str.lower):
+        if label in added_labels:
+            continue
+        entries.append((label, legend_handles[label]))
+        added_labels.add(label)
+
+    for label in _sorted_background_labels(artifact, background_labels):
+        if label in added_labels:
+            continue
+        entries.append((label, legend_handles[label]))
+        added_labels.add(label)
+
+    for label, handle in legend_handles.items():
+        if label in added_labels:
+            continue
+        entries.append((label, handle))
+        added_labels.add(label)
+
+    return entries
+
+
+def _display_legend_entries(
+    artifact: GeometryArtifact,
+    legend_handles: dict[str, Any],
+) -> list[tuple[str, Any]]:
+    return [
+        (LEGEND_HEADER_LABEL, _legend_header_handle()),
+        *_ordered_facet_family_legend_entries(artifact, legend_handles),
+    ]
+
+
+def _ordered_facet_ids(artifact: GeometryArtifact) -> list[str]:
+    if artifact.facets_by_id:
+        return list(artifact.facets_by_id.keys())
+    label_groups = _label_groups(artifact)
+    return [
+        artifact.label_ids[indices[0]]
+        for _, indices in label_groups.items()
+        if artifact.is_gold[indices[0]]
+    ]
+
+
+def _legend_header_handle() -> Any:
+    from matplotlib.lines import Line2D
+
+    return Line2D([], [], linestyle='none', linewidth=0, marker=None, color='none')  # type: ignore
+
+
+def _is_child_legend_label(artifact: GeometryArtifact, label: str) -> bool:
+    idx = _first_index_for_label(artifact, label)
+    if idx is None:
+        return False
+    return not artifact.is_gold[idx] and not _is_background_outlier_point(artifact, idx)
+
+
+def _sorted_distractor_labels(artifact: GeometryArtifact, labels: list[str]) -> list[str]:
+    return sorted(
+        labels,
+        key=lambda label: (
+            _distractor_type_sort_key(_distractor_type_for_label(artifact, label)),
+            label.lower(),
+        ),
+    )
+
+
+def _sorted_background_labels(artifact: GeometryArtifact, labels: list[str]) -> list[str]:
+    return sorted(
+        labels,
+        key=lambda label: ((_cluster_id_for_label(artifact, label) or label), label.lower()),
     )
 
 
@@ -477,7 +778,6 @@ def _plot_query_similarity_points(
     order = np.arange(len(artifact.candidate_chunk_ids))
     plot_coords = coords[order]
     plot_sims = sim_to_query[order]
-    palette = label_palette(artifact)
     label_groups = _label_groups(artifact)
 
     vmin = float(plot_sims.min()) if len(plot_sims) else 0.0
@@ -493,11 +793,10 @@ def _plot_query_similarity_points(
                 plot_coords[idx, 0],
                 plot_coords[idx, 1],
                 color_values=plot_sims[idx],
-                circle_edgecolors=palette[label],
                 cmap='viridis',
                 vmin=vmin,
                 vmax=vmax,
-                s=74,
+                s=BACKGROUND_OUTLIER_SIMILARITY_MAP_MARKER_SIZE,
                 alpha=0.96,
                 linewidth=0.9,
                 zorder=5,
@@ -591,8 +890,6 @@ def _plot_discovered_clusters_ax(
     cluster_labels = artifact.cluster_labels
     unique = sorted(set(int(x) for x in cluster_labels))
     cmap = plt.get_cmap('tab20')  # type: ignore
-    palette = label_palette(artifact)
-    label_groups = _label_groups(artifact)
     for idx, cluster_id in enumerate(unique):
         mask = cluster_labels == cluster_id
         color = '#bbbbbb' if cluster_id == -1 else cmap(idx % 20)
@@ -606,13 +903,6 @@ def _plot_discovered_clusters_ax(
             label=label,
             edgecolors='none',
         )
-    _plot_background_outliers(
-        ax,
-        artifact,
-        palette=palette,
-        label_groups=label_groups,
-        fallback_color='#333333',
-    )
     draw_query_marker(ax, artifact)
     ax.set_title(
         _axis_title(artifact, 'HDBSCAN clusters', include_title_prefix=include_title_prefix)
@@ -628,7 +918,15 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
 
     label_groups = _label_groups(artifact)
     gold_labels = [label for label, indices in label_groups.items() if artifact.is_gold[indices[0]]]
+    gold_label_by_facet_id = {
+        artifact.label_ids[label_groups[label][0]]: label for label in gold_labels
+    }
     gold_cmap = plt.get_cmap('tab20')  # type: ignore
+    facet_palette = {
+        facet_id: gold_cmap(index % 20)
+        for index, facet_id in enumerate(_ordered_facet_ids(artifact))
+        if facet_id in gold_label_by_facet_id
+    }
     background_cluster_ids = sorted({
         _cluster_id_for_index(artifact, indices[0]) or label
         for label, indices in label_groups.items()
@@ -640,8 +938,9 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
         for i, cluster_id in enumerate(background_cluster_ids)
     }
     palette: dict[str, Any] = {}
-    for index, label in enumerate(gold_labels):
-        palette[label] = gold_cmap(index % 20)
+    for label in gold_labels:
+        facet_id = artifact.label_ids[label_groups[label][0]]
+        palette[label] = facet_palette.get(facet_id, gold_cmap(len(palette) % 20))
     for label, indices in label_groups.items():
         if label in palette:
             continue
@@ -650,10 +949,12 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
             cluster_id = _cluster_id_for_index(artifact, first_idx) or label
             palette[label] = background_palette.get(cluster_id, BACKGROUND_OUTLIER_COLOR)
             continue
-        palette[label] = POINT_DISTRACTOR_TYPE_COLORS.get(
-            _distractor_type_for_index(artifact, first_idx),
-            POINT_DISTRACTOR_TYPE_COLORS['hard_distractor'],
-        )
+        target_facet_id = _target_facet_id_for_index(artifact, first_idx)
+        if target_facet_id is not None and target_facet_id in facet_palette:
+            palette[label] = facet_palette[target_facet_id]
+            continue
+
+        raise RuntimeError('Unexpected distractor without parent facet_id')
     return palette
 
 
@@ -696,6 +997,44 @@ def _cluster_id_for_index(artifact: GeometryArtifact, idx: int) -> str | None:
     return qrel.cluster_id if qrel is not None else None
 
 
+def _target_facet_id_for_index(artifact: GeometryArtifact, idx: int) -> str | None:
+    chunk_id = artifact.candidate_chunk_ids[idx]
+    qrel = artifact.qrel_by_chunk_id.get(chunk_id)
+    return qrel.target_facet_id if qrel is not None else None
+
+
+def _first_index_for_label(artifact: GeometryArtifact, label: str) -> int | None:
+    for idx, candidate_label in enumerate(artifact.labels):
+        if candidate_label == label:
+            return idx
+    return None
+
+
+def _distractor_type_for_label(artifact: GeometryArtifact, label: str) -> str:
+    idx = _first_index_for_label(artifact, label)
+    if idx is None:
+        return 'hard_distractor'
+    return _distractor_type_for_index(artifact, idx)
+
+
+def _cluster_id_for_label(artifact: GeometryArtifact, label: str) -> str | None:
+    idx = _first_index_for_label(artifact, label)
+    if idx is None:
+        return None
+    return _cluster_id_for_index(artifact, idx)
+
+
+def _distractor_type_sort_key(distractor_type: str) -> tuple[int, str]:
+    order = {
+        'same_axis_wrong_condition': 0,
+        'same_condition_wrong_axis': 1,
+        'same_condition_wrong_subgroup': 2,
+        'same_subgroup_wrong_condition': 3,
+        'hard_distractor': 4,
+    }
+    return (order.get(distractor_type, len(order)), distractor_type)
+
+
 def _background_outlier_indices(artifact: GeometryArtifact) -> list[int]:
     return [
         idx
@@ -722,7 +1061,7 @@ def _plot_background_outliers(
             coords[indices, 0],
             coords[indices, 1],
             color=(palette or {}).get(label, fallback_color or BACKGROUND_OUTLIER_COLOR),
-            s=54,
+            s=BACKGROUND_OUTLIER_MAP_MARKER_SIZE,
             alpha=0.95,
             label=label,
             linewidth=0.75,
@@ -750,8 +1089,8 @@ def _plot_background_outliers_for_selection(
                 ax,
                 coords[unselected_idx, 0],
                 coords[unselected_idx, 1],
-                color=UNSELECTED_BACKGROUND_COLOR,
-                s=42,
+                color=UNSELECTED_DATA_POINT_COLOR,
+                s=BACKGROUND_OUTLIER_SELECTION_UNSELECTED_MARKER_SIZE,
                 alpha=0.58,
                 linewidth=0.55,
                 zorder=3,
@@ -762,7 +1101,7 @@ def _plot_background_outliers_for_selection(
                 coords[selected_idx, 0],
                 coords[selected_idx, 1],
                 color=palette[label],
-                s=58,
+                s=BACKGROUND_OUTLIER_SELECTION_SELECTED_MARKER_SIZE,
                 alpha=0.95,
                 label=label,
                 linewidth=0.75,
@@ -787,7 +1126,7 @@ def _plot_background_outliers_rank(
             ranks[indices],
             artifact.sim_to_query[indices],
             color=palette[label],
-            s=50,
+            s=BACKGROUND_OUTLIER_RANK_MARKER_SIZE,
             alpha=0.94,
             label=label,
             linewidth=0.75,
@@ -856,6 +1195,24 @@ def draw_query_marker(ax: Any, artifact: GeometryArtifact) -> None:
     _draw_query_marker_at(ax, artifact.query_coord)
 
 
+def _add_axes_in_inches(
+    fig: Any,
+    *,
+    fig_width: float,
+    fig_height: float,
+    left: float,
+    bottom: float,
+    width: float,
+    height: float,
+) -> Any:
+    return fig.add_axes([
+        left / fig_width,
+        bottom / fig_height,
+        width / fig_width,
+        height / fig_height,
+    ])
+
+
 def _draw_query_marker_at(ax: Any, query_coord: NDArray[np.float32]) -> None:
     ax.scatter(
         [query_coord[0]],
@@ -873,6 +1230,71 @@ def _draw_query_marker_at(ax: Any, query_coord: NDArray[np.float32]) -> None:
 def artifact_title_prefix(artifact: GeometryArtifact) -> str:
     condition = artifact.query.condition_display or artifact.query.condition_id
     return f'{artifact.query_id} - {condition}'
+
+
+def _artifact_figure_title_parts(artifact: GeometryArtifact) -> tuple[str, str, str]:
+    condition = artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
+    subgroup_labels = _artifact_subgroup_labels(artifact)
+    axis_labels = (
+        str(artifact.query.primary_axis).replace('_', ' '),
+        str(artifact.query.secondary_axis).replace('_', ' '),
+    )
+    subgroup_text = ' vs. '.join(subgroup_labels)
+    axis_text = ' & '.join(axis_labels)
+    prefix = f'{artifact.query_id} - {condition} / '
+    return prefix, subgroup_text, f' / {axis_text}'
+
+
+def _artifact_subgroup_labels(artifact: GeometryArtifact) -> tuple[str, str]:
+    facets_json = artifact.query.facets_json
+    if facets_json:
+        subgroup_labels: list[str] = []
+        seen_labels: set[str] = set()
+        for facet in json.loads(facets_json):
+            subgroup_label = str(facet.get('subgroup_label') or '').strip()
+            if subgroup_label and subgroup_label not in seen_labels:
+                subgroup_labels.append(subgroup_label)
+                seen_labels.add(subgroup_label)
+            if len(subgroup_labels) == 2:
+                return subgroup_labels[0], subgroup_labels[1]
+    return 'unknown subgroup', 'unknown subgroup'
+
+
+def _draw_artifact_figure_title(
+    fig: Any,
+    artifact: GeometryArtifact,
+    *,
+    fontsize: int,
+    y: float = 0.985,
+) -> None:
+    from matplotlib.offsetbox import AnchoredOffsetbox, HPacker, TextArea
+
+    prefix, subgroup_text, axis_suffix = _artifact_figure_title_parts(artifact)
+    title_box = HPacker(
+        children=[
+            TextArea(prefix, textprops={'fontsize': fontsize, 'color': 'black'}),
+            TextArea(
+                subgroup_text,
+                textprops={'fontsize': fontsize, 'color': QUERY_TITLE_SUBGROUP_COLOR},
+            ),
+            TextArea(
+                axis_suffix,
+                textprops={'fontsize': fontsize, 'color': QUERY_TITLE_AXIS_COLOR},
+            ),
+        ],
+        align='center',
+        pad=0,
+        sep=0,
+    )
+    anchored = AnchoredOffsetbox(
+        loc='upper center',
+        child=title_box,
+        frameon=False,
+        bbox_to_anchor=(0.5, y),
+        bbox_transform=fig.transFigure,
+        borderpad=0.0,
+    )
+    fig.add_artist(anchored)
 
 
 def _axis_title(artifact: GeometryArtifact, title: str, *, include_title_prefix: bool) -> str:

@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
+from tabulate import tabulate
 
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     load_embedding_arrays,
@@ -1627,18 +1628,45 @@ def _kv(lines: list[str], items: list[tuple[str, Any]]) -> None:
         lines.append(f'{key}: {_fmt(value)}')
 
 
+_TABLE_MAX_WIDTHS = {
+    'facet_id': 28,
+    'target_facet_id': 28,
+    'calibrated_primary_facet_id': 28,
+    'top_facet': 28,
+    'label': 42,
+    'facet_counts': 50,
+    'distractor_counts': 42,
+    'condition': 32,
+    'subgroup': 32,
+    'chunk_id': 32,
+}
+
+_DEFAULT_COL_WIDTH = 12
+
+
 def _table(lines: list[str], rows: list[dict[str, Any]], columns: list[str]) -> None:
     if not rows:
         lines.append('(none)')
         return
-    lines.append('| ' + ' | '.join(columns) + ' |')
-    lines.append('| ' + ' | '.join('---' for _ in columns) + ' |')
-    for row in rows:
-        lines.append('| ' + ' | '.join(_cell(row.get(column)) for column in columns) + ' |')
+
+    table_rows = [[_cell_for_text_table(row.get(column)) for column in columns] for row in rows]
+
+    maxcolwidths = [_TABLE_MAX_WIDTHS.get(column, _DEFAULT_COL_WIDTH) for column in columns]
+
+    text = tabulate(
+        table_rows,
+        headers=columns,
+        tablefmt='rounded_grid',  # or 'simple', 'rounded_grid', 'fancy_grid'
+        maxcolwidths=maxcolwidths,
+        stralign='left',
+        numalign='right',
+        disable_numparse=True,
+    )
+    lines.extend(text.splitlines())
 
 
-def _cell(value: Any) -> str:
-    return _fmt(value).replace('\n', '<br>').replace('|', '\\|')
+def _cell_for_text_table(value: Any) -> str:
+    return _fmt(value).replace('\n', ' ')
 
 
 def _fmt(value: Any) -> str:

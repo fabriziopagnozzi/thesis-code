@@ -50,6 +50,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     axis_pairs = list(combinations(CLINICAL_AXIS_LIST, 2))
     specs: list[QueryPlanSpec] = []
     plans: list[QueryPlan] = []
+    next_query_number = 1
 
     for condition_key, condition in conditions:
         for contrast, (cohort_a_id, cohort_a), (cohort_b_id, cohort_b) in contrasts:
@@ -95,9 +96,24 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     specs.append(spec)
                     if len(primary_axes) == 2:
                         plans.extend((
-                            _materialize_plan(cfg, ontology, spec, axis_a, axis_b),
-                            _materialize_plan(cfg, ontology, spec, axis_b, axis_a),
+                            _materialize_plan(
+                                cfg,
+                                ontology,
+                                spec,
+                                axis_a,
+                                axis_b,
+                                query_id=f'q{next_query_number}',
+                            ),
+                            _materialize_plan(
+                                cfg,
+                                ontology,
+                                spec,
+                                axis_b,
+                                axis_a,
+                                query_id=f'q{next_query_number + 1}',
+                            ),
                         ))
+                        next_query_number += 2
                         continue
 
                     # If one axis is unsuitable as the dominant retrieval target,
@@ -107,8 +123,16 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     primary_axis = primary_axes[0]
                     secondary_axis = axis_b if primary_axis == axis_a else axis_a
                     plans.append(
-                        _materialize_plan(cfg, ontology, spec, primary_axis, secondary_axis)
+                        _materialize_plan(
+                            cfg,
+                            ontology,
+                            spec,
+                            primary_axis,
+                            secondary_axis,
+                            query_id=f'q{next_query_number}',
+                        )
                     )
+                    next_query_number += 1
 
     rows = [plan.to_row() for plan in plans]
     if cfg.generation.query_limit is not None:
@@ -116,7 +140,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
 
     df = pl.from_dicts(rows, infer_schema_length=None)
     if df['query_id'].n_unique() != len(df):
-        raise RuntimeError('stable v2 query IDs must be unique')
+        raise RuntimeError('query IDs must be unique')
     write_parquet(paths, 'query_plans', df)
     print(f'[plans] {len(specs):,} evidence profiles -> {len(df):,} prioritized queries')
     return df
@@ -176,8 +200,10 @@ def _materialize_plan(
     spec: QueryPlanSpec,
     primary_axis: ClinicalAxis,
     secondary_axis: ClinicalAxis,
+    *,
+    query_id: str,
 ) -> QueryPlan:
-    query_id = _stable_id(
+    query_key = _stable_id(
         'qv2',
         cfg.dataset_schema_version,
         cfg.global_.seed,
@@ -199,7 +225,7 @@ def _materialize_plan(
         (spec.subgroup_b_id, primary_axis),
     ]
     selected_subgroup_id, _ = primary_candidates[
-        _stable_int(cfg.global_.seed, query_id, 'initial_primary') % 2
+        _stable_int(cfg.global_.seed, query_key, 'initial_primary') % 2
     ]
 
     bin_by_cohort_axis = {
@@ -221,7 +247,7 @@ def _materialize_plan(
     niche_indices = set(
         sorted(
             secondary_indices,
-            key=lambda index: _stable_int(query_id, 'niche_gold', index),
+            key=lambda index: _stable_int(query_key, 'niche_gold', index),
         )[: cfg.generation.chunk_pools.niche.num_clusters_per_query]
     )
     facets: list[QueryPlanFacet] = []
@@ -269,7 +295,7 @@ def _materialize_plan(
         facet.facet_id for facet in facets if facet.cluster_role == 'calibrated_primary_gold'
     )
     template_ids = query_template_ids()
-    template_id = template_ids[_stable_int(query_id, 'template') % len(template_ids)]
+    template_id = template_ids[_stable_int(query_key, 'template') % len(template_ids)]
     logical_form = QueryLogicalForm(
         type=QUERY_TYPE,
         condition=spec.condition_key,
@@ -285,7 +311,7 @@ def _materialize_plan(
         evidence_profile_id=spec.evidence_profile_id,
         pool_id=pool_id,
         outcome_profile_id=spec.profile_id,
-        plan_seed=_stable_int(cfg.global_.seed, query_id) % (2**31 - 1),
+        plan_seed=_stable_int(cfg.global_.seed, query_key) % (2**31 - 1),
         split=split,
         query_type=QUERY_TYPE,
         template_id=template_id,

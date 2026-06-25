@@ -61,14 +61,6 @@ _QUERY_BEST_SORT = [
 ]
 _QUERY_BEST_DESC = [True, True, False, True, True, True]
 
-_DISTRACTOR_LABEL_TITLES = {
-    'same_condition_wrong_subgroup': 'same condition, wrong subgroup',
-    'same_subgroup_wrong_condition': 'wrong condition, same subgroup',
-    'same_axis_wrong_condition': 'wrong condition, same answer axis',
-    'same_condition_wrong_axis': 'same condition, wrong axis',
-    'background_clinical_cluster': 'background outlier',
-    'hard_distractor': 'distractor',
-}
 _QUERY_SELECTION_SORT = [
     'selection_score',
     'passes_filter',
@@ -392,38 +384,38 @@ def candidate_labels(
         else:
             dtype = qrel.distractor_type or 'hard_distractor'
             label_ids.append(dtype)
-            labels.append(distractor_label(dtype, qrel, chunk_by_id.get(chunk_id)))
+            labels.append(distractor_label(qrel, chunk_by_id.get(chunk_id)))
     return labels, label_ids, roles, gold_flags
 
 
-def distractor_label(
-    distractor_type: str,
-    qrel: QrelRecord,
-    chunk: ChunkDocumentRecord | None,
-) -> str:
-    title = _DISTRACTOR_LABEL_TITLES.get(distractor_type, distractor_type.replace('_', ' '))
+def distractor_label(qrel: QrelRecord, chunk: ChunkDocumentRecord | None) -> str:
     target = distractor_target_label(chunk)
     if qrel.cluster_role == 'background_outlier':
-        return f'{background_cluster_title(qrel.cluster_id)} ({target})'
-    return f'{title} ({target})'
+        cluster_suffix = background_cluster_suffix(qrel.cluster_id)
+        return f'background outlier: {target}{cluster_suffix}'
+    return target
 
 
 def distractor_target_label(chunk: ChunkDocumentRecord | None) -> str:
     if chunk is None:
-        return 'unknown condition, unknown subgroup, unknown axis'
+        return facet_surface_label(
+            condition='unknown condition',
+            subgroup='unknown subgroup',
+            axis='unknown axis',
+        )
     condition = chunk.condition_display or chunk.condition_id or 'unknown condition'
     subgroup = chunk.subgroup_label or chunk.subgroup_id or 'unknown subgroup'
-    axis = str(chunk.axis or 'unknown axis').replace('_', ' ')
-    return f'{condition}, {subgroup}, {axis}'
+    axis = str(chunk.axis or 'unknown axis')
+    return facet_surface_label(condition=condition, subgroup=subgroup, axis=axis)
 
 
-def background_cluster_title(cluster_id: str | None) -> str:
+def background_cluster_suffix(cluster_id: str | None) -> str:
     if cluster_id is None:
-        return 'background outlier cluster'
+        return ''
     suffix = cluster_id.rsplit('_', 1)[-1]
     if suffix.startswith('bg') and suffix[2:].isdigit():
-        return f'background outlier cluster {int(suffix[2:])}'
-    return f'background outlier {suffix}'
+        return f' (cluster {int(suffix[2:])})'
+    return f' ({suffix.replace("_", " ")})'
 
 
 def facet_label_map(query: QueryRecord) -> dict[str, str]:
@@ -431,11 +423,20 @@ def facet_label_map(query: QueryRecord) -> dict[str, str]:
         return {}
     facets = json.loads(query.facets_json)
     result = {}
+    condition = query.condition_display or query.condition_id or 'unknown condition'
     for facet in facets:
-        subgroup = str(facet['subgroup_label']).replace('patients ', '')
-        axis = str(facet['axis']).replace('_', ' ')
-        result[facet['facet_id']] = f'{subgroup} / {axis}'
+        subgroup = str(facet['subgroup_label'])
+        axis = str(facet['axis'])
+        result[facet['facet_id']] = facet_surface_label(
+            condition=condition,
+            subgroup=subgroup,
+            axis=axis,
+        )
     return result
+
+
+def facet_surface_label(*, condition: str, subgroup: str, axis: str) -> str:
+    return f'{condition} / {subgroup} / {axis.replace("_", " ")}'
 
 
 def strategy_selections(

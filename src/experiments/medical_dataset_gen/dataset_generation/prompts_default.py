@@ -174,6 +174,8 @@ class MedicalDatasetGenDefaultPrompts:
 
             Preserve the hierarchy: discuss the primary endpoint first and with more emphasis.
             Keep the secondary endpoint explicit but subordinate. Do not reverse or equalize them.
+            Scope the condition before the cohort contrast so it clearly applies to both groups.
+            Avoid attachment ambiguities such as "compare A and B with C".
 
             Query:
             {query_text}
