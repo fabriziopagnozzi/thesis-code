@@ -169,13 +169,14 @@ class MedicalDatasetGenDefaultPrompts:
             - {plan.condition_display}
             - {plan.subgroup_a_label}
             - {plan.subgroup_b_label}
-            - Primary endpoint: {ontology.clinical_axes[plan.primary_axis].label}
-            - Secondary endpoint: {ontology.clinical_axes[plan.secondary_axis].label}
+            - Emphasized topic: {ontology.clinical_axes[plan.primary_axis].label}
+            - Context topic: {ontology.clinical_axes[plan.secondary_axis].label}
 
-            Preserve the hierarchy: discuss the primary endpoint first and with more emphasis.
-            Keep the secondary endpoint explicit but subordinate. Do not reverse or equalize them.
+            Preserve the hierarchy: discuss the emphasized topic first and in more detail.
+            Keep the context topic explicit but subordinate. Do not reverse or equalize them.
             Scope the condition before the cohort contrast so it clearly applies to both groups.
             Avoid attachment ambiguities such as "compare A and B with C".
+            Do not use the phrases "primary endpoint", "secondary endpoint", or "primary comparison".
 
             Query:
             {query_text}

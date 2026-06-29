@@ -191,8 +191,6 @@ def maybe_paraphrase_query(
         primary_label in lower
         and secondary_label in lower
         and lower.index(primary_label) < lower.index(secondary_label)
-        and 'primary' in lower
-        and 'secondary' in lower
     )
     if paraphrase and has_required_entities and has_ordered_axes:
         return paraphrase
