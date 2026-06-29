@@ -2,7 +2,6 @@ patient_defaults:
     age_range:
         - 50
         - 75
-
 conditions:
     encephalitis_myelitis:
         display: encephalitis or myelitis
@@ -27,50 +26,112 @@ conditions:
                 treatments:
                     - acyclovir
                     - corticosteroids
+                    - intravenous acyclovir
+                    - intravenous methylprednisolone
+                    - plasma-exchange therapy
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient neurorehabilitation
                         - home therapy with improving gait stability
+                        - home therapy focused on balance and cognitive recovery
+                        - outpatient rehabilitation after encephalitis or myelitis symptoms improved
+                        - visiting nursing with gradual activity advancement after encephalitis or myelitis
+                        - home exercise and safety review for residual cognitive slowing or gait ataxia
                     inpatient_rehab:
                         - inpatient rehabilitation for persistent weakness
                         - acute rehabilitation for mobility and cognitive deficits
+                        - inpatient rehabilitation for myelopathic weakness and unsafe gait
+                        - facility-based therapy after hospitalization for encephalitis or myelitis
+                        - acute rehabilitation when cognitive slowing or gait ataxia limited safe transfers
+                        - supervised rehabilitation for deconditioning and cognitive slowing or gait ataxia
                     persistent_deficit:
                         - persistent focal deficits requiring close neurologic follow-up
                         - ongoing weakness and impaired balance
+                        - persistent cognitive slowing or gait ataxia requiring close neurology follow-up
+                        - ongoing cognitive slowing or gait ataxia with reduced walking tolerance
+                        - residual functional limitation after encephalitis or myelitis
+                        - continued symptoms from encephalitis or myelitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no seizure, aspiration event, or treatment-limiting toxicity
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during encephalitis or myelitis care
+                        - no recurrent clinical decline or organ-support requirement while treating encephalitis or myelitis
+                        - no documented major complication during the encephalitis or myelitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during encephalitis or myelitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient acyclovir-related creatinine rise that resolved
+                        - a self-limited inpatient issue during encephalitis or myelitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - a breakthrough seizure requiring escalation of management
+                        - clinical deterioration from encephalitis or myelitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of encephalitis or myelitis requiring procedural or intensive support
+                        - severe encephalitis or myelitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in mentation and neurologic examination
+                        - prompt improvement in mentation and neurologic examination soon after initial treatment
+                        - early stabilization of encephalitis or myelitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for encephalitis or myelitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in mentation with residual weakness
+                        - slow improvement in mentation with residual weakness over several hospital days
+                        - gradual recovery after initial treatment for encephalitis or myelitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening neurologic findings despite initial therapy
+                        - worsening neurologic findings despite initial therapy during the early hospital course
+                        - worsening clinical status despite initial management for encephalitis or myelitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - neurology-ward care with routine neurologic checks
+                        - ward-level care for encephalitis or myelitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored neurologic care with lumbar-puncture support
+                        - step-down monitoring during encephalitis or myelitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of encephalitis or myelitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level neurologic monitoring and organ support
+                        - ICU-level support for severe encephalitis or myelitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated encephalitis or myelitis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - several days of fever, confusion, and gait instability
             - headache, altered mental status, and lower-extremity weakness
             - new focal neurologic deficits and inflammatory cerebrospinal fluid findings
-
     pneumonia:
         display: pneumonia
         terms:
@@ -94,50 +155,112 @@ conditions:
                 treatments:
                     - ceftriaxone
                     - azithromycin
+                    - ampicillin-sulbactam
+                    - levofloxacin
+                    - piperacillin-tazobactam
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home discharge with breathing exercises and visiting nursing
                         - home physical therapy after oxygen needs improved
+                        - home therapy focused on breathing exercises and endurance recovery
+                        - outpatient rehabilitation after pneumonia symptoms improved
+                        - visiting nursing with gradual activity advancement after pneumonia
+                        - home exercise and safety review for residual exertional dyspnea
                     inpatient_rehab:
                         - rehabilitation for deconditioning
                         - inpatient therapy for weakness after respiratory illness
+                        - inpatient rehabilitation for deconditioning after hypoxemic illness
+                        - facility-based therapy after hospitalization for pneumonia
+                        - acute rehabilitation when exertional dyspnea limited safe transfers
+                        - supervised rehabilitation for deconditioning and exertional dyspnea
                     persistent_deficit:
                         - continued exertional limitation
                         - persistent oxygen requirement with reduced exercise tolerance
+                        - persistent exertional dyspnea requiring close pulmonary follow-up
+                        - ongoing exertional dyspnea with reduced walking tolerance
+                        - residual functional limitation after pneumonia
+                        - continued symptoms from pneumonia limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no pleural complication, sustained hypoxemic deterioration, or antibiotic-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during pneumonia care
+                        - no recurrent clinical decline or organ-support requirement while treating pneumonia
+                        - no documented major complication during the pneumonia admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during pneumonia care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a brief antibiotic-associated kidney injury that improved with supportive care
+                        - a self-limited inpatient issue during pneumonia care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - respiratory failure requiring high-level ventilatory support
+                        - clinical deterioration from pneumonia requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of pneumonia requiring procedural or intensive support
+                        - severe pneumonia-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in oxygenation and fever
+                        - prompt improvement in oxygenation and fever soon after initial treatment
+                        - early stabilization of pneumonia symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for pneumonia
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in oxygenation and respiratory symptoms
+                        - slow improvement in oxygenation and respiratory symptoms over several hospital days
+                        - gradual recovery after initial treatment for pneumonia
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening hypoxemia despite initial antimicrobial therapy
+                        - worsening hypoxemia despite initial antimicrobial therapy during the early hospital course
+                        - worsening clinical status despite initial management for pneumonia
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward care with routine oxygen monitoring
+                        - ward-level care for pneumonia with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - step-down respiratory monitoring with noninvasive support
+                        - step-down monitoring during pneumonia management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of pneumonia
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level respiratory support
+                        - ICU-level support for severe pneumonia decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated pneumonia treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - fever, productive cough, and worsening hypoxemia
             - a new oxygen requirement and bibasilar infiltrates
             - dyspnea, leukocytosis, and lobar consolidation on imaging
-
     ischemic_stroke:
         display: ischemic stroke
         terms:
@@ -161,50 +284,112 @@ conditions:
                 treatments:
                     - aspirin
                     - clopidogrel
+                    - dual antiplatelet therapy
+                    - high-intensity atorvastatin
+                    - therapeutic anticoagulation transition
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient stroke therapy
                         - home therapy after mild residual dysarthria
+                        - home therapy focused on speech, balance, and hand-strength recovery
+                        - outpatient rehabilitation after ischemic stroke symptoms improved
+                        - visiting nursing with gradual activity advancement after ischemic stroke
+                        - home exercise and safety review for residual focal neurologic deficit
                     inpatient_rehab:
                         - acute stroke rehabilitation
                         - inpatient rehabilitation for hemiparesis
+                        - inpatient rehabilitation for hemiparesis or aphasia limiting transfers
+                        - facility-based therapy after hospitalization for ischemic stroke
+                        - acute rehabilitation when focal neurologic deficit limited safe transfers
+                        - supervised rehabilitation for deconditioning and focal neurologic deficit
                     persistent_deficit:
                         - persistent hemiparesis
                         - ongoing aphasia and mobility impairment
+                        - persistent focal neurologic deficit requiring close stroke follow-up
+                        - ongoing focal neurologic deficit with reduced walking tolerance
+                        - residual functional limitation after ischemic stroke
+                        - continued symptoms from ischemic stroke limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no hemorrhagic transformation, aspiration event, or early recurrent ischemia
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during ischemic stroke care
+                        - no recurrent clinical decline or organ-support requirement while treating ischemic stroke
+                        - no documented major complication during the ischemic stroke admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during ischemic stroke care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - transient aspiration risk from dysphagia requiring diet modification
+                        - a self-limited inpatient issue during ischemic stroke care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - hemorrhagic transformation requiring urgent management changes
+                        - clinical deterioration from ischemic stroke requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of ischemic stroke requiring procedural or intensive support
+                        - severe ischemic stroke-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - early stabilization of focal neurologic deficits
+                        - early stabilization of focal neurologic deficits soon after initial treatment
+                        - early stabilization of ischemic stroke symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for ischemic stroke
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - gradual neurologic improvement with residual deficits
+                        - gradual neurologic improvement with residual deficits over several hospital days
+                        - gradual recovery after initial treatment for ischemic stroke
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - progressive neurologic deficits despite initial management
+                        - progressive neurologic deficits despite initial management during the early hospital course
+                        - worsening clinical status despite initial management for ischemic stroke
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - stroke-unit care with routine neurologic checks
+                        - ward-level care for ischemic stroke with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored stroke care with procedural evaluation
+                        - step-down monitoring during ischemic stroke management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of ischemic stroke
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - neurocritical care with ICU-level monitoring
+                        - ICU-level support for severe ischemic stroke decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated ischemic stroke treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - acute dysarthria with unilateral weakness
             - new focal neurologic deficits at presentation
             - hemiparesis and imaging evidence of acute infarction
-
     heart_failure:
         display: acute decompensated heart failure
         terms:
@@ -228,50 +413,113 @@ conditions:
                 treatments:
                     - intravenous furosemide
                     - spironolactone
+                    - intravenous bumetanide
+                    - metolazone
+                    - torsemide
+                    - intravenous nitroglycerin
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home discharge with cardiac rehabilitation referral
                         - home nursing and gradual activity advancement
+                        - home therapy focused on weight monitoring and gradual activity advancement
+                        - outpatient rehabilitation after acute decompensated heart failure symptoms improved
+                        - visiting nursing with gradual activity advancement after acute decompensated heart failure
+                        - home exercise and safety review for residual exertional dyspnea and fatigue
                     inpatient_rehab:
                         - rehabilitation after marked deconditioning
                         - inpatient therapy before safe return home
+                        - inpatient rehabilitation for low endurance after decongestion
+                        - facility-based therapy after hospitalization for acute decompensated heart failure
+                        - acute rehabilitation when exertional dyspnea and fatigue limited safe transfers
+                        - supervised rehabilitation for deconditioning and exertional dyspnea and fatigue
                     persistent_deficit:
                         - persistent exertional dyspnea with reduced exercise tolerance
                         - ongoing fatigue and mobility limitation
+                        - persistent exertional dyspnea and fatigue requiring close cardiology follow-up
+                        - ongoing exertional dyspnea and fatigue with reduced walking tolerance
+                        - residual functional limitation after acute decompensated heart failure
+                        - continued symptoms from acute decompensated heart failure limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no sustained arrhythmia, worsening kidney injury, or diuretic-limiting hypotension
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during acute decompensated heart failure care
+                        - no recurrent clinical decline or organ-support requirement while treating acute decompensated heart failure
+                        - no documented major complication during the acute decompensated heart failure admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during acute decompensated heart failure care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a brief creatinine rise during diuresis that improved with monitoring
+                        - a self-limited inpatient issue during acute decompensated heart failure care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - worsening low-output hypotension requiring vasopressor support
+                        - clinical deterioration from acute decompensated heart failure requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of acute decompensated heart failure requiring procedural or intensive support
+                        - severe acute decompensated heart failure-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in congestion and breathing
+                        - prompt improvement in congestion and breathing soon after initial treatment
+                        - early stabilization of acute decompensated heart failure symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for acute decompensated heart failure
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow decongestion with persistent edema
+                        - slow decongestion with persistent edema over several hospital days
+                        - gradual recovery after initial treatment for acute decompensated heart failure
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening congestion despite initial diuretic therapy
+                        - worsening congestion despite initial diuretic therapy during the early hospital course
+                        - worsening clinical status despite initial management for acute decompensated heart failure
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - cardiology-ward care with routine fluid monitoring
+                        - ward-level care for acute decompensated heart failure with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - telemetry care with invasive or procedural assessment
+                        - step-down monitoring during acute decompensated heart failure management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of acute decompensated heart failure
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - cardiac intensive care with hemodynamic support
+                        - ICU-level support for severe acute decompensated heart failure decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated acute decompensated heart failure treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - progressive volume overload with edema and exertional dyspnea
             - pulmonary congestion with elevated filling pressures
             - worsening orthopnea with increasing lower-extremity edema
-
     bacterial_meningitis:
         display: bacterial meningitis
         terms:
@@ -295,45 +543,108 @@ conditions:
                 treatments:
                     - ceftriaxone
                     - vancomycin
+                    - ampicillin
+                    - meropenem
+                    - adjunctive dexamethasone
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient neurorehabilitation after improved cognition
                         - home therapy after headache and confusion improved
+                        - home therapy focused on cognitive and gait recovery
+                        - outpatient rehabilitation after bacterial meningitis symptoms improved
+                        - visiting nursing with gradual activity advancement after bacterial meningitis
+                        - home exercise and safety review for residual hearing, cognitive, or gait deficit
                     inpatient_rehab:
                         - inpatient rehabilitation for residual weakness and slowed processing
                         - rehabilitation for impaired balance and cognition
+                        - inpatient rehabilitation for balance impairment after meningeal infection
+                        - facility-based therapy after hospitalization for bacterial meningitis
+                        - acute rehabilitation when hearing, cognitive, or gait deficit limited safe transfers
+                        - supervised rehabilitation for deconditioning and hearing, cognitive, or gait deficit
                     persistent_deficit:
                         - persistent cognitive slowing and gait instability
                         - ongoing neurologic deficits
+                        - persistent hearing, cognitive, or gait deficit requiring close neurology follow-up
+                        - ongoing hearing, cognitive, or gait deficit with reduced walking tolerance
+                        - residual functional limitation after bacterial meningitis
+                        - continued symptoms from bacterial meningitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no seizure, hearing loss, or antimicrobial-limiting toxicity
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during bacterial meningitis care
+                        - no recurrent clinical decline or organ-support requirement while treating bacterial meningitis
+                        - no documented major complication during the bacterial meningitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during bacterial meningitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - transient hyponatremia corrected during therapy
+                        - a self-limited inpatient issue during bacterial meningitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - cerebral edema or recurrent seizure requiring escalation
+                        - clinical deterioration from bacterial meningitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of bacterial meningitis requiring procedural or intensive support
+                        - severe bacterial meningitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt defervescence and improved cognition
+                        - prompt defervescence and improved cognition soon after initial treatment
+                        - early stabilization of bacterial meningitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for bacterial meningitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow cognitive recovery with persistent headache
+                        - slow cognitive recovery with persistent headache over several hospital days
+                        - gradual recovery after initial treatment for bacterial meningitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening meningeal and neurologic findings despite therapy
+                        - worsening meningeal and neurologic findings despite therapy during the early hospital course
+                        - worsening clinical status despite initial management for bacterial meningitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - infectious-disease ward care with neurologic checks
+                        - ward-level care for bacterial meningitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with repeated diagnostic procedures
+                        - step-down monitoring during bacterial meningitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of bacterial meningitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level neurologic and sepsis support
+                        - ICU-level support for severe bacterial meningitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated bacterial meningitis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - fever, headache, neck stiffness, and photophobia
             - meningeal signs, confusion, and inflammatory cerebrospinal fluid findings
@@ -361,45 +672,108 @@ conditions:
                 treatments:
                     - intravenous methylprednisolone
                     - plasma exchange
+                    - high-dose oral prednisone
+                    - oral prednisone taper
+                    - therapeutic plasma-exchange series
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient neurorehabilitation for residual weakness
                         - home therapy after gait and fatigue improved
+                        - home therapy focused on gait and fatigue recovery
+                        - outpatient rehabilitation after multiple sclerosis relapse symptoms improved
+                        - visiting nursing with gradual activity advancement after multiple sclerosis relapse
+                        - home exercise and safety review for residual gait impairment or sensory deficit
                     inpatient_rehab:
                         - inpatient rehabilitation for persistent mobility deficits
                         - rehabilitation for weakness that still limited transfers
+                        - inpatient rehabilitation for relapse-related weakness limiting transfers
+                        - facility-based therapy after hospitalization for multiple sclerosis relapse
+                        - acute rehabilitation when gait impairment or sensory deficit limited safe transfers
+                        - supervised rehabilitation for deconditioning and gait impairment or sensory deficit
                     persistent_deficit:
                         - persistent lower-extremity weakness and imbalance
                         - ongoing sensory and gait deficits
+                        - persistent gait impairment or sensory deficit requiring close neurology follow-up
+                        - ongoing gait impairment or sensory deficit with reduced walking tolerance
+                        - residual functional limitation after multiple sclerosis relapse
+                        - continued symptoms from multiple sclerosis relapse limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no major steroid-related or plasma-exchange complication
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during multiple sclerosis relapse care
+                        - no recurrent clinical decline or organ-support requirement while treating multiple sclerosis relapse
+                        - no documented major complication during the multiple sclerosis relapse admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during multiple sclerosis relapse care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - steroid-related hyperglycemia controlled during treatment
+                        - a self-limited inpatient issue during multiple sclerosis relapse care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - a catheter-related complication forcing cessation of plasma exchange
+                        - clinical deterioration from multiple sclerosis relapse requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of multiple sclerosis relapse requiring procedural or intensive support
+                        - severe multiple sclerosis relapse-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in strength after relapse therapy
+                        - prompt improvement in strength after relapse therapy soon after initial treatment
+                        - early stabilization of multiple sclerosis relapse symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for multiple sclerosis relapse
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - gradual neurologic recovery with persistent gait symptoms
+                        - gradual neurologic recovery with persistent gait symptoms over several hospital days
+                        - gradual recovery after initial treatment for multiple sclerosis relapse
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - continued neurologic worsening despite initial relapse therapy
+                        - continued neurologic worsening despite initial relapse therapy during the early hospital course
+                        - worsening clinical status despite initial management for multiple sclerosis relapse
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - neurology-ward treatment with routine assessments
+                        - ward-level care for multiple sclerosis relapse with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care during plasma-exchange procedures
+                        - step-down monitoring during multiple sclerosis relapse management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of multiple sclerosis relapse
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe neurologic deterioration
+                        - ICU-level support for severe multiple sclerosis relapse decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated multiple sclerosis relapse treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - new weakness, sensory change, and gait instability
             - a demyelinating flare causing leg weakness and urinary urgency
@@ -427,45 +801,108 @@ conditions:
                 treatments:
                     - vancomycin
                     - cefepime
+                    - ceftriaxone
+                    - nafcillin
+                    - daptomycin
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient therapy after improved leg strength
                         - home physical therapy after pain control and safer ambulation
+                        - home therapy focused on pain control and leg-strength recovery
+                        - outpatient rehabilitation after spinal epidural abscess symptoms improved
+                        - visiting nursing with gradual activity advancement after spinal epidural abscess
+                        - home exercise and safety review for residual lower-extremity weakness or sensory loss
                     inpatient_rehab:
                         - inpatient rehabilitation for persistent weakness after decompression
                         - rehabilitation for unsafe gait after decompression
+                        - inpatient rehabilitation for weakness after spinal infection or decompression
+                        - facility-based therapy after hospitalization for spinal epidural abscess
+                        - acute rehabilitation when lower-extremity weakness or sensory loss limited safe transfers
+                        - supervised rehabilitation for deconditioning and lower-extremity weakness or sensory loss
                     persistent_deficit:
                         - persistent lower-extremity weakness and sensory loss
                         - ongoing neurologic deficits with limited independent mobility
+                        - persistent lower-extremity weakness or sensory loss requiring close spine follow-up
+                        - ongoing lower-extremity weakness or sensory loss with reduced walking tolerance
+                        - residual functional limitation after spinal epidural abscess
+                        - continued symptoms from spinal epidural abscess limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no new neurologic decline, wound complication, or operative adverse event
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during spinal epidural abscess care
+                        - no recurrent clinical decline or organ-support requirement while treating spinal epidural abscess
+                        - no documented major complication during the spinal epidural abscess admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during spinal epidural abscess care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - mild postoperative wound drainage managed locally
+                        - a self-limited inpatient issue during spinal epidural abscess care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - progressive cord compression requiring urgent repeat intervention
+                        - clinical deterioration from spinal epidural abscess requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of spinal epidural abscess requiring procedural or intensive support
+                        - severe spinal epidural abscess-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt stabilization of pain and neurologic findings
+                        - prompt stabilization of pain and neurologic findings soon after initial treatment
+                        - early stabilization of spinal epidural abscess symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for spinal epidural abscess
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement after antimicrobial and source-control management
+                        - slow improvement after antimicrobial and source-control management over several hospital days
+                        - gradual recovery after initial treatment for spinal epidural abscess
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - progressive weakness despite initial management
+                        - progressive weakness despite initial management during the early hospital course
+                        - worsening clinical status despite initial management for spinal epidural abscess
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - spine-ward care with routine neurologic monitoring
+                        - ward-level care for spinal epidural abscess with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - procedural care surrounding drainage or decompression
+                        - step-down monitoring during spinal epidural abscess management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of spinal epidural abscess
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe neurologic compromise
+                        - ICU-level support for severe spinal epidural abscess decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated spinal epidural abscess treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - severe back pain, fever, and progressive leg weakness
             - an epidural infection with canal narrowing and concern for cord compression
@@ -493,45 +930,109 @@ conditions:
                 treatments:
                     - heparin infusion
                     - apixaban
+                    - enoxaparin
+                    - rivaroxaban
+                    - warfarin bridge therapy
+                    - catheter-directed thrombolysis
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - gradual activity advancement with outpatient therapy
                         - home physical therapy after dyspnea improved
+                        - home therapy focused on dyspnea recovery and anticoagulation education
+                        - outpatient rehabilitation after pulmonary embolism symptoms improved
+                        - visiting nursing with gradual activity advancement after pulmonary embolism
+                        - home exercise and safety review for residual exertional dyspnea or oxygen need
                     inpatient_rehab:
                         - inpatient rehabilitation for severe deconditioning after hypoxemia
                         - rehabilitation for limited mobility after pulmonary embolism
+                        - inpatient rehabilitation for poor endurance after embolic illness
+                        - facility-based therapy after hospitalization for pulmonary embolism
+                        - acute rehabilitation when exertional dyspnea or oxygen need limited safe transfers
+                        - supervised rehabilitation for deconditioning and exertional dyspnea or oxygen need
                     persistent_deficit:
                         - persistent exertional dyspnea with reduced exercise tolerance
                         - continued oxygen requirement with reduced walking tolerance
+                        - persistent exertional dyspnea or oxygen need requiring close pulmonary vascular follow-up
+                        - ongoing exertional dyspnea or oxygen need with reduced walking tolerance
+                        - residual functional limitation after pulmonary embolism
+                        - continued symptoms from pulmonary embolism limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no major bleeding, recurrent embolic event, or infarction-related complication
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during pulmonary embolism care
+                        - no recurrent clinical decline or organ-support requirement while treating pulmonary embolism
+                        - no documented major complication during the pulmonary embolism admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during pulmonary embolism care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a brief anticoagulation-related mucosal bleed managed without stopping therapy
+                        - a self-limited inpatient issue during pulmonary embolism care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - obstructive shock or major bleeding requiring escalation
+                        - clinical deterioration from pulmonary embolism requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of pulmonary embolism requiring procedural or intensive support
+                        - severe pulmonary embolism-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt stabilization of oxygenation and hemodynamics
+                        - prompt stabilization of oxygenation and hemodynamics soon after initial treatment
+                        - early stabilization of pulmonary embolism symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for pulmonary embolism
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in dyspnea and oxygen requirement
+                        - slow improvement in dyspnea and oxygen requirement over several hospital days
+                        - gradual recovery after initial treatment for pulmonary embolism
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening right-heart strain despite initial anticoagulation
+                        - worsening right-heart strain despite initial anticoagulation during the early hospital course
+                        - worsening clinical status despite initial management for pulmonary embolism
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward anticoagulation with routine monitoring
+                        - ward-level care for pulmonary embolism with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - telemetry care with catheter-procedure evaluation
+                        - step-down monitoring during pulmonary embolism management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of pulmonary embolism
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level cardiopulmonary support
+                        - ICU-level support for severe pulmonary embolism decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated pulmonary embolism treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - acute dyspnea, pleuritic chest pain, and hypoxemia
             - tachycardia, imaging-confirmed pulmonary emboli, and concern for right-heart strain
@@ -559,45 +1060,108 @@ conditions:
                 treatments:
                     - prednisone
                     - azithromycin
+                    - ipratropium-albuterol nebulizers
+                    - doxycycline
+                    - intravenous methylprednisolone
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - pulmonary rehabilitation referral with inhaler teaching
                         - home therapy after breathing and endurance improved
+                        - home therapy focused on pulmonary rehabilitation and inhaler technique
+                        - outpatient rehabilitation after acute COPD exacerbation symptoms improved
+                        - visiting nursing with gradual activity advancement after acute COPD exacerbation
+                        - home exercise and safety review for residual dyspnea above baseline
                     inpatient_rehab:
                         - inpatient rehabilitation for deconditioning limiting safe ambulation
                         - rehabilitation for weakness after severe respiratory decompensation
+                        - inpatient rehabilitation for deconditioning after respiratory failure
+                        - facility-based therapy after hospitalization for acute COPD exacerbation
+                        - acute rehabilitation when dyspnea above baseline limited safe transfers
+                        - supervised rehabilitation for deconditioning and dyspnea above baseline
                     persistent_deficit:
                         - persistent exertional limitation and dyspnea
                         - ongoing oxygen need and poor endurance reduced baseline activity
+                        - persistent dyspnea above baseline requiring close pulmonary follow-up
+                        - ongoing dyspnea above baseline with reduced walking tolerance
+                        - residual functional limitation after acute COPD exacerbation
+                        - continued symptoms from acute COPD exacerbation limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no pneumothorax, treatment-limiting arrhythmia, or infectious complication
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during acute COPD exacerbation care
+                        - no recurrent clinical decline or organ-support requirement while treating acute COPD exacerbation
+                        - no documented major complication during the acute COPD exacerbation admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during acute COPD exacerbation care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - steroid-related hyperglycemia controlled with short-term insulin
+                        - a self-limited inpatient issue during acute COPD exacerbation care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - hypercapnic respiratory failure requiring invasive ventilation
+                        - clinical deterioration from acute COPD exacerbation requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of acute COPD exacerbation requiring procedural or intensive support
+                        - severe acute COPD exacerbation-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt reduction in wheezing and work of breathing
+                        - prompt reduction in wheezing and work of breathing soon after initial treatment
+                        - early stabilization of acute COPD exacerbation symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for acute COPD exacerbation
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in hypercapnia and exertional symptoms
+                        - slow improvement in hypercapnia and exertional symptoms over several hospital days
+                        - gradual recovery after initial treatment for acute COPD exacerbation
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening ventilatory failure despite initial therapy
+                        - worsening ventilatory failure despite initial therapy during the early hospital course
+                        - worsening clinical status despite initial management for acute COPD exacerbation
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - pulmonary-ward care with routine respiratory checks
+                        - ward-level care for acute COPD exacerbation with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - step-down care with noninvasive ventilation
+                        - step-down monitoring during acute COPD exacerbation management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of acute COPD exacerbation
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level ventilatory support
+                        - ICU-level support for severe acute COPD exacerbation decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated acute COPD exacerbation treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - worsening dyspnea, wheezing, and increased sputum production
             - hypercapnia with increased work of breathing
@@ -626,45 +1190,108 @@ conditions:
                     - ceftriaxone
                     - nafcillin
                     - vancomycin
+                    - daptomycin
+                    - gentamicin
+                    - ampicillin
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home infusion support with outpatient therapy
                         - home rehabilitation after strength improved
+                        - home therapy focused on antibiotic coordination and strength recovery
+                        - outpatient rehabilitation after infective endocarditis symptoms improved
+                        - visiting nursing with gradual activity advancement after infective endocarditis
+                        - home exercise and safety review for residual fatigue or embolic neurologic deficit
                     inpatient_rehab:
                         - inpatient rehabilitation for marked infection-related deconditioning
                         - inpatient rehabilitation for limited endurance and mobility
+                        - inpatient rehabilitation for weakness after prolonged bacteremia
+                        - facility-based therapy after hospitalization for infective endocarditis
+                        - acute rehabilitation when fatigue or embolic neurologic deficit limited safe transfers
+                        - supervised rehabilitation for deconditioning and fatigue or embolic neurologic deficit
                     persistent_deficit:
                         - persistent fatigue and reduced mobility
                         - persistent fatigue and reduced mobility at discharge
+                        - persistent fatigue or embolic neurologic deficit requiring close infectious-disease follow-up
+                        - ongoing fatigue or embolic neurologic deficit with reduced walking tolerance
+                        - residual functional limitation after infective endocarditis
+                        - continued symptoms from infective endocarditis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no embolic stroke, worsening valvular dysfunction, or antibiotic-limiting toxicity
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during infective endocarditis care
+                        - no recurrent clinical decline or organ-support requirement while treating infective endocarditis
+                        - no documented major complication during the infective endocarditis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during infective endocarditis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient antibiotic-related kidney injury that improved with monitoring
+                        - a self-limited inpatient issue during infective endocarditis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - an embolic event or acute valvular deterioration requiring intervention
+                        - clinical deterioration from infective endocarditis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of infective endocarditis requiring procedural or intensive support
+                        - severe infective endocarditis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt culture clearance and resolution of fever
+                        - prompt culture clearance and resolution of fever soon after initial treatment
+                        - early stabilization of infective endocarditis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for infective endocarditis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow culture clearance with persistent inflammatory findings
+                        - slow culture clearance with persistent inflammatory findings over several hospital days
+                        - gradual recovery after initial treatment for infective endocarditis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - persistent bacteremia despite directed therapy
+                        - persistent bacteremia despite directed therapy during the early hospital course
+                        - worsening clinical status despite initial management for infective endocarditis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - infectious-disease ward care with routine culture monitoring
+                        - ward-level care for infective endocarditis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with transesophageal or surgical evaluation
+                        - step-down monitoring during infective endocarditis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of infective endocarditis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for valvular or septic instability
+                        - ICU-level support for severe infective endocarditis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated infective endocarditis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - persistent bacteremia, fever, and concern for valvular infection
             - a new murmur, bloodstream infection, and embolic risk
@@ -693,45 +1320,108 @@ conditions:
                     - vancomycin
                     - cefazolin
                     - daptomycin
+                    - ceftriaxone
+                    - levofloxacin
+                    - linezolid
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient therapy with protected weight bearing
                         - home physical therapy after pain and swelling improved
+                        - home therapy focused on protected mobility and wound-care recovery
+                        - outpatient rehabilitation after osteomyelitis symptoms improved
+                        - visiting nursing with gradual activity advancement after osteomyelitis
+                        - home exercise and safety review for residual bone pain or wound-related mobility restriction
                     inpatient_rehab:
                         - inpatient rehabilitation for transfers and gait training with weight-bearing limits
                         - rehabilitation for weakness and offloading needs that limited independence
+                        - inpatient rehabilitation for limited weight-bearing after bone infection
+                        - facility-based therapy after hospitalization for osteomyelitis
+                        - acute rehabilitation when bone pain or wound-related mobility restriction limited safe transfers
+                        - supervised rehabilitation for deconditioning and bone pain or wound-related mobility restriction
                     persistent_deficit:
                         - persistent pain and impaired mobility
                         - ongoing difficulty with ambulation
+                        - persistent bone pain or wound-related mobility restriction requiring close infectious-disease follow-up
+                        - ongoing bone pain or wound-related mobility restriction with reduced walking tolerance
+                        - residual functional limitation after osteomyelitis
+                        - continued symptoms from osteomyelitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no wound-breakdown, catheter, or antimicrobial complication
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during osteomyelitis care
+                        - no recurrent clinical decline or organ-support requirement while treating osteomyelitis
+                        - no documented major complication during the osteomyelitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during osteomyelitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - brief line-associated irritation managed without changing therapy
+                        - a self-limited inpatient issue during osteomyelitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - progressive bone or soft-tissue destruction requiring surgical debridement
+                        - clinical deterioration from osteomyelitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of osteomyelitis requiring procedural or intensive support
+                        - severe osteomyelitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in pain and inflammatory findings
+                        - prompt improvement in pain and inflammatory findings soon after initial treatment
+                        - early stabilization of osteomyelitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for osteomyelitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in local symptoms and markers
+                        - slow improvement in local symptoms and markers over several hospital days
+                        - gradual recovery after initial treatment for osteomyelitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - progressive local infection despite initial therapy
+                        - progressive local infection despite initial therapy during the early hospital course
+                        - worsening clinical status despite initial management for osteomyelitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward care with routine wound assessment
+                        - ward-level care for osteomyelitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - procedural care for biopsy or debridement
+                        - step-down monitoring during osteomyelitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of osteomyelitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe infectious instability
+                        - ICU-level support for severe osteomyelitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated osteomyelitis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - focal bone pain, elevated inflammatory markers, and imaging concerning for infection
             - chronic wound changes with contiguous bone involvement
@@ -759,45 +1449,108 @@ conditions:
                 treatments:
                     - ceftriaxone
                     - piperacillin-tazobactam
+                    - cefepime
+                    - ertapenem
+                    - levofloxacin
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - visiting nursing after strength improved
                         - home physical therapy after sepsis-related weakness improved
+                        - home therapy focused on urosepsis recovery and activity advancement
+                        - outpatient rehabilitation after pyelonephritis with sepsis symptoms improved
+                        - visiting nursing with gradual activity advancement after pyelonephritis with sepsis
+                        - home exercise and safety review for residual fatigue after urosepsis
                     inpatient_rehab:
                         - inpatient rehabilitation for deconditioning after septic illness
                         - rehabilitation for mobility below baseline after sepsis
+                        - inpatient rehabilitation for marked weakness after urinary-source sepsis
+                        - facility-based therapy after hospitalization for pyelonephritis with sepsis
+                        - acute rehabilitation when fatigue after urosepsis limited safe transfers
+                        - supervised rehabilitation for deconditioning and fatigue after urosepsis
                     persistent_deficit:
                         - persistent weakness and limited endurance
                         - ongoing fatigue with reduced activity tolerance after sepsis
+                        - persistent fatigue after urosepsis requiring close urology follow-up
+                        - ongoing fatigue after urosepsis with reduced walking tolerance
+                        - residual functional limitation after pyelonephritis with sepsis
+                        - continued symptoms from pyelonephritis with sepsis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no persistent hypotension, renal deterioration, or antibiotic-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during pyelonephritis with sepsis care
+                        - no recurrent clinical decline or organ-support requirement while treating pyelonephritis with sepsis
+                        - no documented major complication during the pyelonephritis with sepsis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during pyelonephritis with sepsis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a brief acute kidney injury that resolved with fluids
+                        - a self-limited inpatient issue during pyelonephritis with sepsis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - septic shock with ongoing organ dysfunction
+                        - clinical deterioration from pyelonephritis with sepsis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of pyelonephritis with sepsis requiring procedural or intensive support
+                        - severe pyelonephritis with sepsis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt resolution of fever and hypotension
+                        - prompt resolution of fever and hypotension soon after initial treatment
+                        - early stabilization of pyelonephritis with sepsis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for pyelonephritis with sepsis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in renal and inflammatory findings
+                        - slow improvement in renal and inflammatory findings over several hospital days
+                        - gradual recovery after initial treatment for pyelonephritis with sepsis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - persistent shock physiology despite initial therapy
+                        - persistent shock physiology despite initial therapy during the early hospital course
+                        - worsening clinical status despite initial management for pyelonephritis with sepsis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward care with routine renal monitoring
+                        - ward-level care for pyelonephritis with sepsis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with urologic procedure evaluation
+                        - step-down monitoring during pyelonephritis with sepsis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of pyelonephritis with sepsis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level sepsis and organ support
+                        - ICU-level support for severe pyelonephritis with sepsis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated pyelonephritis with sepsis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - fever, flank pain, hypotension, and urinary tract infection
             - urosepsis with leukocytosis and acute kidney injury
@@ -825,45 +1578,109 @@ conditions:
                 treatments:
                     - vancomycin
                     - piperacillin-tazobactam
+                    - cefepime plus metronidazole
+                    - ampicillin-sulbactam
+                    - ertapenem
+                    - linezolid
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - wound care support with outpatient gait therapy
                         - home therapy after pain improved and protected ambulation was feasible
+                        - home therapy focused on wound care, offloading, and gait recovery
+                        - outpatient rehabilitation after diabetic foot infection symptoms improved
+                        - visiting nursing with gradual activity advancement after diabetic foot infection
+                        - home exercise and safety review for residual foot pain or wound-related mobility limitation
                     inpatient_rehab:
                         - inpatient rehabilitation for transfers and gait training with offloading precautions
                         - rehabilitation for unsafe mobility with wound-care restrictions
+                        - inpatient rehabilitation for limited weight-bearing after foot infection
+                        - facility-based therapy after hospitalization for diabetic foot infection
+                        - acute rehabilitation when foot pain or wound-related mobility limitation limited safe transfers
+                        - supervised rehabilitation for deconditioning and foot pain or wound-related mobility limitation
                     persistent_deficit:
                         - persistent gait limitation and wound-related pain
                         - ongoing difficulty with mobility
+                        - persistent foot pain or wound-related mobility limitation requiring close podiatry follow-up
+                        - ongoing foot pain or wound-related mobility limitation with reduced walking tolerance
+                        - residual functional limitation after diabetic foot infection
+                        - continued symptoms from diabetic foot infection limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no progressive tissue loss, vascular compromise, or antimicrobial complication
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during diabetic foot infection care
+                        - no recurrent clinical decline or organ-support requirement while treating diabetic foot infection
+                        - no documented major complication during the diabetic foot infection admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during diabetic foot infection care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - localized wound-edge maceration managed with dressing changes
+                        - a self-limited inpatient issue during diabetic foot infection care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - progressive tissue necrosis requiring major surgical intervention
+                        - clinical deterioration from diabetic foot infection requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of diabetic foot infection requiring procedural or intensive support
+                        - severe diabetic foot infection-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt reduction in erythema and drainage
+                        - prompt reduction in erythema and drainage soon after initial treatment
+                        - early stabilization of diabetic foot infection symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for diabetic foot infection
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow wound improvement despite directed care
+                        - slow wound improvement despite directed care over several hospital days
+                        - gradual recovery after initial treatment for diabetic foot infection
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - progressive infection despite antibiotics and offloading
+                        - progressive infection despite antibiotics and offloading during the early hospital course
+                        - worsening clinical status despite initial management for diabetic foot infection
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward care with routine wound management
+                        - ward-level care for diabetic foot infection with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - procedural care for debridement and vascular assessment
+                        - step-down monitoring during diabetic foot infection management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of diabetic foot infection
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe infection
+                        - ICU-level support for severe diabetic foot infection decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated diabetic foot infection treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - plantar ulceration with cellulitis and concern for deep soft-tissue infection
             - an infected diabetic foot wound with drainage and offloading needs
@@ -891,45 +1708,108 @@ conditions:
                 treatments:
                     - lactulose
                     - rifaximin
+                    - polyethylene glycol catharsis
+                    - intravenous albumin
+                    - ceftriaxone prophylaxis
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - visiting nursing after mentation improved
                         - home therapy after balance and orientation improved
+                        - home therapy focused on lactulose education and fall-risk recovery
+                        - outpatient rehabilitation after cirrhosis with hepatic encephalopathy symptoms improved
+                        - visiting nursing with gradual activity advancement after cirrhosis with hepatic encephalopathy
+                        - home exercise and safety review for residual cognitive slowing or poor balance
                     inpatient_rehab:
                         - inpatient rehabilitation for weakness and cognitive slowing limiting safe mobility
                         - rehabilitation after recurrent falls and deconditioning
+                        - inpatient rehabilitation for balance and cognition impairment after encephalopathy
+                        - facility-based therapy after hospitalization for cirrhosis with hepatic encephalopathy
+                        - acute rehabilitation when cognitive slowing or poor balance limited safe transfers
+                        - supervised rehabilitation for deconditioning and cognitive slowing or poor balance
                     persistent_deficit:
                         - persistent cognitive slowing and poor balance
                         - ongoing fatigue and impaired mobility
+                        - persistent cognitive slowing or poor balance requiring close hepatology follow-up
+                        - ongoing cognitive slowing or poor balance with reduced walking tolerance
+                        - residual functional limitation after cirrhosis with hepatic encephalopathy
+                        - continued symptoms from cirrhosis with hepatic encephalopathy limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no gastrointestinal bleeding, kidney injury, or lactulose-related dehydration
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during cirrhosis with hepatic encephalopathy care
+                        - no recurrent clinical decline or organ-support requirement while treating cirrhosis with hepatic encephalopathy
+                        - no documented major complication during the cirrhosis with hepatic encephalopathy admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during cirrhosis with hepatic encephalopathy care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - transient hypokalemia corrected during bowel-regimen titration
+                        - a self-limited inpatient issue during cirrhosis with hepatic encephalopathy care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - variceal bleeding or hepatorenal deterioration requiring escalation
+                        - clinical deterioration from cirrhosis with hepatic encephalopathy requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of cirrhosis with hepatic encephalopathy requiring procedural or intensive support
+                        - severe cirrhosis with hepatic encephalopathy-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in orientation and asterixis
+                        - prompt improvement in orientation and asterixis soon after initial treatment
+                        - early stabilization of cirrhosis with hepatic encephalopathy symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for cirrhosis with hepatic encephalopathy
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow cognitive improvement with persistent imbalance
+                        - slow cognitive improvement with persistent imbalance over several hospital days
+                        - gradual recovery after initial treatment for cirrhosis with hepatic encephalopathy
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening encephalopathy despite initial therapy
+                        - worsening encephalopathy despite initial therapy during the early hospital course
+                        - worsening clinical status despite initial management for cirrhosis with hepatic encephalopathy
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - hepatology-ward care with routine mentation checks
+                        - ward-level care for cirrhosis with hepatic encephalopathy with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with endoscopic or procedural support
+                        - step-down monitoring during cirrhosis with hepatic encephalopathy management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of cirrhosis with hepatic encephalopathy
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for hepatic decompensation
+                        - ICU-level support for severe cirrhosis with hepatic encephalopathy decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated cirrhosis with hepatic encephalopathy treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - confusion, asterixis, and decompensated cirrhosis
             - hepatic encephalopathy with sleep-wake reversal and poor orientation
@@ -957,45 +1837,109 @@ conditions:
                 treatments:
                     - intravenous methylprednisolone
                     - cyclophosphamide
+                    - mycophenolate mofetil
+                    - rituximab
+                    - oral prednisone taper
+                    - hydroxychloroquine
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - outpatient therapy after edema and weakness improved
                         - home physical therapy after renal function stabilized
+                        - home therapy focused on edema recovery and medication education
+                        - outpatient rehabilitation after lupus nephritis flare symptoms improved
+                        - visiting nursing with gradual activity advancement after lupus nephritis flare
+                        - home exercise and safety review for residual fatigue, edema, or steroid myopathy
                     inpatient_rehab:
                         - inpatient rehabilitation for severe flare-related deconditioning
                         - rehabilitation for weakness and edema still limiting mobility
+                        - inpatient rehabilitation for weakness after renal flare and steroid exposure
+                        - facility-based therapy after hospitalization for lupus nephritis flare
+                        - acute rehabilitation when fatigue, edema, or steroid myopathy limited safe transfers
+                        - supervised rehabilitation for deconditioning and fatigue, edema, or steroid myopathy
                     persistent_deficit:
                         - persistent fatigue and reduced mobility
                         - ongoing weakness with need for functional support
+                        - persistent fatigue, edema, or steroid myopathy requiring close nephrology follow-up
+                        - ongoing fatigue, edema, or steroid myopathy with reduced walking tolerance
+                        - residual functional limitation after lupus nephritis flare
+                        - continued symptoms from lupus nephritis flare limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no major renal deterioration or immunosuppressive toxicity
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during lupus nephritis flare care
+                        - no recurrent clinical decline or organ-support requirement while treating lupus nephritis flare
+                        - no documented major complication during the lupus nephritis flare admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during lupus nephritis flare care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - treatment-related leukopenia that improved with monitoring
+                        - a self-limited inpatient issue during lupus nephritis flare care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - rapidly worsening kidney injury or severe immunosuppressive toxicity
+                        - clinical deterioration from lupus nephritis flare requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of lupus nephritis flare requiring procedural or intensive support
+                        - severe lupus nephritis flare-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt stabilization of renal function and edema
+                        - prompt stabilization of renal function and edema soon after initial treatment
+                        - early stabilization of lupus nephritis flare symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for lupus nephritis flare
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow renal response with persistent proteinuria
+                        - slow renal response with persistent proteinuria over several hospital days
+                        - gradual recovery after initial treatment for lupus nephritis flare
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening renal function despite initial immunosuppression
+                        - worsening renal function despite initial immunosuppression during the early hospital course
+                        - worsening clinical status despite initial management for lupus nephritis flare
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - nephrology-ward care with routine laboratory monitoring
+                        - ward-level care for lupus nephritis flare with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with renal biopsy or infusion support
+                        - step-down monitoring during lupus nephritis flare management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of lupus nephritis flare
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe renal or systemic instability
+                        - ICU-level support for severe lupus nephritis flare decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated lupus nephritis flare treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - proteinuria, edema, and immune-mediated kidney injury
             - worsening renal function and active lupus serologies
@@ -1023,45 +1967,108 @@ conditions:
                 treatments:
                     - cefazolin
                     - vancomycin
+                    - ceftriaxone
+                    - clindamycin
+                    - linezolid
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - visiting nursing after pain and swelling improved
                         - home therapy after safer ambulation was achieved
+                        - home therapy focused on swelling reduction and walking recovery
+                        - outpatient rehabilitation after severe cellulitis symptoms improved
+                        - visiting nursing with gradual activity advancement after severe cellulitis
+                        - home exercise and safety review for residual limb swelling or pain
                     inpatient_rehab:
                         - inpatient rehabilitation for pain and weakness limiting transfers
                         - rehabilitation for mobility recovery after severe infection
+                        - inpatient rehabilitation for pain-limited transfers after soft-tissue infection
+                        - facility-based therapy after hospitalization for severe cellulitis
+                        - acute rehabilitation when limb swelling or pain limited safe transfers
+                        - supervised rehabilitation for deconditioning and limb swelling or pain
                     persistent_deficit:
                         - persistent pain and limited walking tolerance
                         - ongoing swelling and weakness with impaired mobility
+                        - persistent limb swelling or pain requiring close wound-care follow-up
+                        - ongoing limb swelling or pain with reduced walking tolerance
+                        - residual functional limitation after severe cellulitis
+                        - continued symptoms from severe cellulitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no abscess extension, vascular compromise, or antibiotic-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during severe cellulitis care
+                        - no recurrent clinical decline or organ-support requirement while treating severe cellulitis
+                        - no documented major complication during the severe cellulitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during severe cellulitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient drug rash or mild wound complication that resolved
+                        - a self-limited inpatient issue during severe cellulitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - progressive soft-tissue necrosis requiring major intervention
+                        - clinical deterioration from severe cellulitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a major soft-tissue complication of severe cellulitis requiring procedural or intensive support
+                        - severe cellulitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt reduction in erythema, pain, and fever
+                        - prompt reduction in erythema, pain, and fever soon after initial treatment
+                        - early stabilization of severe cellulitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for severe cellulitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in swelling and walking tolerance
+                        - slow improvement in swelling and walking tolerance over several hospital days
+                        - gradual recovery after initial treatment for severe cellulitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - progressive soft-tissue findings despite initial antibiotics
+                        - progressive soft-tissue findings despite initial antibiotics during the early hospital course
+                        - worsening clinical status despite initial management for severe cellulitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward care with routine limb assessment
+                        - ward-level care for severe cellulitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - procedural care for repeated surgical evaluation
+                        - step-down monitoring during severe cellulitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of severe cellulitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe soft-tissue infection
+                        - ICU-level support for severe cellulitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated severe cellulitis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - limb erythema, swelling, pain, and systemic inflammatory signs
             - rapidly progressive soft-tissue infection without a drainable abscess
@@ -1089,45 +2096,109 @@ conditions:
                 treatments:
                     - intravenous methylprednisolone
                     - infliximab
+                    - cyclosporine
+                    - vedolizumab
+                    - oral prednisone taper
+                    - mesalamine
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - nutritional support with outpatient therapy after strength improved
                         - home physical therapy after abdominal pain and diarrhea improved
+                        - home therapy focused on nutrition recovery and gradual activity advancement
+                        - outpatient rehabilitation after ulcerative colitis flare symptoms improved
+                        - visiting nursing with gradual activity advancement after ulcerative colitis flare
+                        - home exercise and safety review for residual fatigue, urgency, or steroid myopathy
                     inpatient_rehab:
                         - inpatient rehabilitation for marked flare-related deconditioning
                         - rehabilitation for weakness still limiting self-care
+                        - inpatient rehabilitation for weakness after severe inflammatory bowel flare
+                        - facility-based therapy after hospitalization for ulcerative colitis flare
+                        - acute rehabilitation when fatigue, urgency, or steroid myopathy limited safe transfers
+                        - supervised rehabilitation for deconditioning and fatigue, urgency, or steroid myopathy
                     persistent_deficit:
                         - persistent fatigue and poor endurance
                         - ongoing weakness with inability to return to baseline activity
+                        - persistent fatigue, urgency, or steroid myopathy requiring close gastroenterology follow-up
+                        - ongoing fatigue, urgency, or steroid myopathy with reduced walking tolerance
+                        - residual functional limitation after ulcerative colitis flare
+                        - continued symptoms from ulcerative colitis flare limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no major bleeding, thrombosis, or steroid-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during ulcerative colitis flare care
+                        - no recurrent clinical decline or organ-support requirement while treating ulcerative colitis flare
+                        - no documented major complication during the ulcerative colitis flare admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during ulcerative colitis flare care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - transient hypokalemia or dehydration corrected during treatment
+                        - a self-limited inpatient issue during ulcerative colitis flare care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - severe bleeding or toxic colitis requiring escalation
+                        - clinical deterioration from ulcerative colitis flare requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of ulcerative colitis flare requiring procedural or intensive support
+                        - severe ulcerative colitis flare-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt reduction in stool frequency and pain
+                        - prompt reduction in stool frequency and pain soon after initial treatment
+                        - early stabilization of ulcerative colitis flare symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for ulcerative colitis flare
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in bleeding and oral intake
+                        - slow improvement in bleeding and oral intake over several hospital days
+                        - gradual recovery after initial treatment for ulcerative colitis flare
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening colitis despite initial anti-inflammatory therapy
+                        - worsening colitis despite initial anti-inflammatory therapy during the early hospital course
+                        - worsening clinical status despite initial management for ulcerative colitis flare
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - gastroenterology-ward care with routine monitoring
+                        - ward-level care for ulcerative colitis flare with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with endoscopic or infusion support
+                        - step-down monitoring during ulcerative colitis flare management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of ulcerative colitis flare
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe colitis complications
+                        - ICU-level support for severe ulcerative colitis flare decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated ulcerative colitis flare treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - bloody diarrhea, abdominal pain, and elevated inflammatory markers
             - severe colitis with dehydration and poor oral intake
@@ -1155,45 +2226,108 @@ conditions:
                 treatments:
                     - intravenous fluids
                     - enteral nutrition support
+                    - lactated Ringer fluid resuscitation
+                    - opioid analgesia
+                    - nasojejunal enteral feeding
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home therapy after abdominal pain and mobility improved
                         - visiting nursing after oral intake and strength recovered
+                        - home therapy focused on pain control, nutrition recovery, and activity advancement
+                        - outpatient rehabilitation after acute pancreatitis symptoms improved
+                        - visiting nursing with gradual activity advancement after acute pancreatitis
+                        - home exercise and safety review for residual abdominal pain or poor endurance
                     inpatient_rehab:
                         - inpatient rehabilitation for deconditioning after severe abdominal illness
                         - rehabilitation for weakness and impaired transfers after pancreatitis
+                        - inpatient rehabilitation for weakness after systemic inflammatory illness
+                        - facility-based therapy after hospitalization for acute pancreatitis
+                        - acute rehabilitation when abdominal pain or poor endurance limited safe transfers
+                        - supervised rehabilitation for deconditioning and abdominal pain or poor endurance
                     persistent_deficit:
                         - persistent weakness and poor endurance with limited mobility
                         - ongoing abdominal pain and nutritional frailty limiting recovery
+                        - persistent abdominal pain or poor endurance requiring close gastroenterology follow-up
+                        - ongoing abdominal pain or poor endurance with reduced walking tolerance
+                        - residual functional limitation after acute pancreatitis
+                        - continued symptoms from acute pancreatitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no pancreatic necrosis, organ failure, or treatment-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during acute pancreatitis care
+                        - no recurrent clinical decline or organ-support requirement while treating acute pancreatitis
+                        - no documented major complication during the acute pancreatitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during acute pancreatitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient electrolyte disturbance corrected during supportive care
+                        - a self-limited inpatient issue during acute pancreatitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - pancreatic necrosis with organ dysfunction requiring major escalation
+                        - clinical deterioration from acute pancreatitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of acute pancreatitis requiring procedural or intensive support
+                        - severe acute pancreatitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in abdominal pain and oral intake
+                        - prompt improvement in abdominal pain and oral intake soon after initial treatment
+                        - early stabilization of acute pancreatitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for acute pancreatitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in pain, ileus, and inflammatory findings
+                        - slow improvement in pain, ileus, and inflammatory findings over several hospital days
+                        - gradual recovery after initial treatment for acute pancreatitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening abdominal inflammation despite initial supportive management
+                        - worsening abdominal inflammation despite initial supportive management during the early hospital course
+                        - worsening clinical status despite initial management for acute pancreatitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-ward pancreatitis care with routine fluid and pain monitoring
+                        - ward-level care for acute pancreatitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored care with procedural imaging or nutrition support
+                        - step-down monitoring during acute pancreatitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of acute pancreatitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for pancreatitis-related organ dysfunction
+                        - ICU-level support for severe acute pancreatitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated acute pancreatitis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - epigastric pain radiating to the back with vomiting and lipase elevation
             - severe abdominal pain with ileus and inflammatory pancreatitis findings
@@ -1221,45 +2355,108 @@ conditions:
                 treatments:
                     - ceftriaxone plus metronidazole
                     - piperacillin-tazobactam
+                    - cefepime plus metronidazole
+                    - ampicillin-sulbactam
+                    - ciprofloxacin plus metronidazole
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home therapy after pain control and oral intake improved
                         - visiting nursing after mobility and appetite recovered
+                        - home therapy focused on postoperative mobility and oral-intake recovery
+                        - outpatient rehabilitation after acute cholecystitis symptoms improved
+                        - visiting nursing with gradual activity advancement after acute cholecystitis
+                        - home exercise and safety review for residual abdominal discomfort or drain-related limitation
                     inpatient_rehab:
                         - inpatient rehabilitation for deconditioning after biliary sepsis
                         - rehabilitation for weakness still limiting transfers after gallbladder inflammation
+                        - inpatient rehabilitation for weakness after biliary infection or surgery
+                        - facility-based therapy after hospitalization for acute cholecystitis
+                        - acute rehabilitation when abdominal discomfort or drain-related limitation limited safe transfers
+                        - supervised rehabilitation for deconditioning and abdominal discomfort or drain-related limitation
                     persistent_deficit:
                         - persistent weakness and abdominal pain limiting mobility
                         - ongoing poor endurance and reduced functional recovery after biliary illness
+                        - persistent abdominal discomfort or drain-related limitation requiring close surgery follow-up
+                        - ongoing abdominal discomfort or drain-related limitation with reduced walking tolerance
+                        - residual functional limitation after acute cholecystitis
+                        - continued symptoms from acute cholecystitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no perforation, biliary sepsis, or treatment-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during acute cholecystitis care
+                        - no recurrent clinical decline or organ-support requirement while treating acute cholecystitis
+                        - no documented major complication during the acute cholecystitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during acute cholecystitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient drain-related issue or mild kidney injury that resolved
+                        - a self-limited inpatient issue during acute cholecystitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - gallbladder perforation or uncontrolled biliary sepsis requiring urgent escalation
+                        - clinical deterioration from acute cholecystitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of acute cholecystitis requiring procedural or intensive support
+                        - severe acute cholecystitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in right upper quadrant pain and fever
+                        - prompt improvement in right upper quadrant pain and fever soon after initial treatment
+                        - early stabilization of acute cholecystitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for acute cholecystitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in pain, leukocytosis, and oral intake
+                        - slow improvement in pain, leukocytosis, and oral intake over several hospital days
+                        - gradual recovery after initial treatment for acute cholecystitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening biliary infection despite initial antimicrobial therapy
+                        - worsening biliary infection despite initial antimicrobial therapy during the early hospital course
+                        - worsening clinical status despite initial management for acute cholecystitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - surgical-ward care with routine abdominal and fever monitoring
+                        - ward-level care for acute cholecystitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored procedural care surrounding cholecystostomy or operative evaluation
+                        - step-down monitoring during acute cholecystitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of acute cholecystitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe biliary sepsis or instability
+                        - ICU-level support for severe acute cholecystitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated acute cholecystitis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - right upper quadrant pain, fever, and gallbladder wall thickening
             - biliary colic progressing to fever, leukocytosis, and poor oral intake
@@ -1287,45 +2484,108 @@ conditions:
                 treatments:
                     - ceftriaxone plus metronidazole
                     - piperacillin-tazobactam
+                    - ertapenem
+                    - ciprofloxacin plus metronidazole
+                    - meropenem
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home physical therapy after abdominal pain and walking tolerance improved
                         - visiting nursing after safer mobility and oral intake recovered
+                        - home therapy focused on bowel recovery and gradual activity advancement
+                        - outpatient rehabilitation after complicated diverticulitis symptoms improved
+                        - visiting nursing with gradual activity advancement after complicated diverticulitis
+                        - home exercise and safety review for residual abdominal discomfort or drain-related limitation
                     inpatient_rehab:
                         - inpatient rehabilitation for marked deconditioning after intra-abdominal infection
                         - rehabilitation for weakness and unsafe transfers after diverticulitis
+                        - inpatient rehabilitation for weakness after intra-abdominal infection or drainage
+                        - facility-based therapy after hospitalization for complicated diverticulitis
+                        - acute rehabilitation when abdominal discomfort or drain-related limitation limited safe transfers
+                        - supervised rehabilitation for deconditioning and abdominal discomfort or drain-related limitation
                     persistent_deficit:
                         - persistent weakness and abdominal discomfort limiting mobility
                         - ongoing poor endurance with reduced functional recovery after abdominal sepsis
+                        - persistent abdominal discomfort or drain-related limitation requiring close surgery follow-up
+                        - ongoing abdominal discomfort or drain-related limitation with reduced walking tolerance
+                        - residual functional limitation after complicated diverticulitis
+                        - continued symptoms from complicated diverticulitis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no perforation, uncontrolled abscess progression, or antibiotic-limiting toxicity
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during complicated diverticulitis care
+                        - no recurrent clinical decline or organ-support requirement while treating complicated diverticulitis
+                        - no documented major complication during the complicated diverticulitis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during complicated diverticulitis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient ileus or drain-related issue that resolved with monitoring
+                        - a self-limited inpatient issue during complicated diverticulitis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - perforation or worsening intra-abdominal sepsis requiring urgent surgery
+                        - clinical deterioration from complicated diverticulitis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of complicated diverticulitis requiring procedural or intensive support
+                        - severe complicated diverticulitis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in abdominal pain, fever, and oral intake
+                        - prompt improvement in abdominal pain, fever, and oral intake soon after initial treatment
+                        - early stabilization of complicated diverticulitis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for complicated diverticulitis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow resolution of pain, leukocytosis, and bowel dysfunction
+                        - slow resolution of pain, leukocytosis, and bowel dysfunction over several hospital days
+                        - gradual recovery after initial treatment for complicated diverticulitis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening abdominal sepsis despite initial antimicrobial therapy
+                        - worsening abdominal sepsis despite initial antimicrobial therapy during the early hospital course
+                        - worsening clinical status despite initial management for complicated diverticulitis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - medical-surgical ward care with routine abdominal monitoring
+                        - ward-level care for complicated diverticulitis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored procedural care for image-guided drainage or repeated surgical evaluation
+                        - step-down monitoring during complicated diverticulitis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of complicated diverticulitis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for severe abdominal sepsis
+                        - ICU-level support for severe complicated diverticulitis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during diverticulitis with complications
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - left lower quadrant pain, fever, and leukocytosis from diverticulitis
             - diverticulitis with a pericolic abscess and worsening abdominal tenderness
@@ -1353,45 +2613,108 @@ conditions:
                 treatments:
                     - intravenous pantoprazole
                     - octreotide infusion
+                    - endoscopic hemostasis
+                    - packed red blood cell transfusion
+                    - ceftriaxone prophylaxis
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home therapy after anemia symptoms and walking tolerance improved
                         - visiting nursing after strength recovered following bleeding control
+                        - home therapy focused on anemia recovery and medication transition
+                        - outpatient rehabilitation after upper gastrointestinal bleeding symptoms improved
+                        - visiting nursing with gradual activity advancement after upper gastrointestinal bleeding
+                        - home exercise and safety review for residual fatigue after blood-loss anemia
                     inpatient_rehab:
                         - inpatient rehabilitation for severe deconditioning after hemorrhage
                         - rehabilitation for weakness and orthostatic symptoms limiting transfers
+                        - inpatient rehabilitation for orthostasis and weakness after hemorrhage
+                        - facility-based therapy after hospitalization for upper gastrointestinal bleeding
+                        - acute rehabilitation when fatigue after blood-loss anemia limited safe transfers
+                        - supervised rehabilitation for deconditioning and fatigue after blood-loss anemia
                     persistent_deficit:
                         - persistent fatigue and poor endurance after major blood loss
                         - ongoing weakness with reduced mobility after hemorrhagic illness
+                        - persistent fatigue after blood-loss anemia requiring close gastroenterology follow-up
+                        - ongoing fatigue after blood-loss anemia with reduced walking tolerance
+                        - residual functional limitation after upper gastrointestinal bleeding
+                        - continued symptoms from upper gastrointestinal bleeding limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no recurrent bleed, aspiration event, or transfusion-limiting adverse effect
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during upper gastrointestinal bleeding care
+                        - no recurrent clinical decline or organ-support requirement while treating upper gastrointestinal bleeding
+                        - no documented major complication during the upper gastrointestinal bleeding admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during upper gastrointestinal bleeding care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient transfusion reaction or brief hypotension that resolved
+                        - a self-limited inpatient issue during upper gastrointestinal bleeding care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - recurrent hemorrhage requiring massive transfusion or urgent intervention
+                        - clinical deterioration from upper gastrointestinal bleeding requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of upper gastrointestinal bleeding requiring procedural or intensive support
+                        - severe upper gastrointestinal bleeding-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt stabilization of hemoglobin and hemodynamics after therapy
+                        - prompt stabilization of hemoglobin and hemodynamics after therapy soon after initial treatment
+                        - early stabilization of upper gastrointestinal bleeding symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for upper gastrointestinal bleeding
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow recovery of dizziness, anemia symptoms, and oral intake
+                        - slow recovery of dizziness, anemia symptoms, and oral intake over several hospital days
+                        - gradual recovery after initial treatment for upper gastrointestinal bleeding
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - ongoing or recurrent bleeding despite initial management
+                        - ongoing or recurrent bleeding despite initial management during the early hospital course
+                        - worsening clinical status despite initial management for upper gastrointestinal bleeding
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - ward-level bleeding care with serial hemoglobin monitoring
+                        - ward-level care for upper gastrointestinal bleeding with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored procedural care with urgent endoscopic support
+                        - step-down monitoring during upper gastrointestinal bleeding management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of upper gastrointestinal bleeding
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for hemorrhagic instability
+                        - ICU-level support for severe upper gastrointestinal bleeding decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated upper gastrointestinal bleeding treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - melena, symptomatic anemia, and orthostatic dizziness
             - hematemesis with tachycardia and acute blood-loss symptoms
@@ -1419,45 +2742,108 @@ conditions:
                 treatments:
                     - cefazolin
                     - vancomycin
+                    - ceftriaxone
+                    - nafcillin
+                    - daptomycin
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
                     home_rehab:
                         - home physical therapy after pain and weight-bearing improved
                         - outpatient therapy after joint swelling and mobility improved
+                        - home therapy focused on range-of-motion and weight-bearing recovery
+                        - outpatient rehabilitation after septic arthritis symptoms improved
+                        - visiting nursing with gradual activity advancement after septic arthritis
+                        - home exercise and safety review for residual joint stiffness or impaired weight bearing
                     inpatient_rehab:
                         - inpatient rehabilitation for mobility recovery after severe joint infection
                         - rehabilitation for weakness and unsafe transfers after septic arthritis
+                        - inpatient rehabilitation for limited joint motion after washout
+                        - facility-based therapy after hospitalization for septic arthritis
+                        - acute rehabilitation when joint stiffness or impaired weight bearing limited safe transfers
+                        - supervised rehabilitation for deconditioning and joint stiffness or impaired weight bearing
                     persistent_deficit:
                         - persistent joint pain and stiffness limiting mobility
                         - ongoing weakness and impaired walking tolerance after joint infection
+                        - persistent joint stiffness or impaired weight bearing requiring close orthopedics follow-up
+                        - ongoing joint stiffness or impaired weight bearing with reduced walking tolerance
+                        - residual functional limitation after septic arthritis
+                        - continued symptoms from septic arthritis limiting independent activity
             complication_burden:
                 axis: complication_burden
                 bins:
                     none_documented:
                         - no persistent bacteremia, cartilage destruction, or antibiotic-limiting toxicity
+                        - no unplanned ICU transfer, procedure complication, or treatment-limiting adverse effect during septic arthritis care
+                        - no recurrent clinical decline or organ-support requirement while treating septic arthritis
+                        - no documented major complication during the septic arthritis admission
+                        - no major bleeding, sepsis escalation, or medication-limiting toxicity
+                        - no organ-support requirement, major bleeding, or treatment-limiting toxicity during septic arthritis care
+                        - no unplanned escalation for hemodynamic, respiratory, neurologic, or procedural complication
                     limited_complication:
                         - a transient drain-related issue or mild kidney function rise that resolved
+                        - a self-limited inpatient issue during septic arthritis care that improved with monitoring
+                        - a mild electrolyte or laboratory abnormality corrected before discharge
+                        - temporary medication adjustment for a manageable adverse effect
+                        - brief clinical instability that resolved with supportive care
+                        - a transient treatment-related issue that improved without ICU transfer
+                        - a manageable inpatient complication that resolved before discharge planning
                     major_complication:
                         - progressive joint destruction or sepsis requiring urgent repeat surgery
+                        - clinical deterioration from septic arthritis requiring high-acuity support
+                        - organ dysfunction or shock requiring critical-care reassessment
+                        - a treatment-limiting adverse event requiring a major management change
+                        - a severe complication of septic arthritis requiring procedural or intensive support
+                        - severe septic arthritis-related decompensation requiring urgent escalation
+                        - a major inpatient adverse event requiring high-acuity or procedural support
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
                     early_stabilization:
                         - prompt improvement in pain, swelling, and ability to bear weight
+                        - prompt improvement in pain, swelling, and ability to bear weight soon after initial treatment
+                        - early stabilization of septic arthritis symptoms after therapy began
+                        - prompt improvement in vital signs and bedside clinical assessment
+                        - rapid inpatient response after management for septic arthritis
+                        - stable examination and improving functional status within the early hospital course
                     delayed_improvement:
                         - slow improvement in range of motion and inflammatory findings
+                        - slow improvement in range of motion and inflammatory findings over several hospital days
+                        - gradual recovery after initial treatment for septic arthritis
+                        - slow improvement in symptoms with persistent inpatient monitoring needs
+                        - stepwise clinical improvement rather than an immediate response
+                        - delayed recovery of mobility and physiologic stability
                     refractory_or_worsening:
                         - worsening infection despite initial drainage and antibiotics
+                        - worsening infection despite initial drainage and antibiotics during the early hospital course
+                        - worsening clinical status despite initial management for septic arthritis
+                        - persistent instability requiring reassessment of the treatment plan
+                        - progressive symptoms prompting escalation of inpatient evaluation
+                        - failure to stabilize with concern for uncontrolled disease activity
             care_intensity:
                 axis: care_intensity
                 bins:
                     ward_level:
                         - orthopedic-ward care with routine joint and antibiotic monitoring
+                        - ward-level care for septic arthritis with routine monitoring
+                        - general inpatient management with scheduled laboratory and bedside reassessment
+                        - standard floor care with therapy evaluation and discharge planning
+                        - routine hospital monitoring without need for high-acuity support
+                        - ward-based medication adjustment and clinical observation
                     monitored_or_procedural:
                         - monitored procedural care surrounding washout or drainage support
+                        - step-down monitoring during septic arthritis management
+                        - procedure-supported care with closer bedside observation
+                        - telemetry or monitored-unit care for evolving clinical needs
+                        - monitored inpatient management while evaluating complications of septic arthritis
+                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
                     intensive_care:
                         - ICU-level support for septic instability from joint infection
+                        - ICU-level support for severe septic arthritis decompensation
+                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - intensive monitoring with organ-support capability
+                        - high-acuity support during complicated septic arthritis treatment
+                        - ICU care after failure to remain stable on lower-acuity monitoring
         presentations:
             - an acutely swollen painful joint with fever and limited motion
             - septic knee with effusion, leukocytosis, and inability to bear weight
@@ -1874,16 +3260,22 @@ clinical_axes:
                 - brief therapy interval
                 - short course
                 - brief treatment interval
+                - abbreviated treatment course
+                - short active-therapy interval
             standard:
                 - standard treatment course
                 - usual therapy interval
                 - standard course
                 - usual treatment interval
+                - typical treatment course
+                - expected therapy interval
             prolonged:
                 - prolonged treatment course
                 - extended therapy interval
                 - prolonged course
                 - extended treatment interval
+                - extended treatment course
+                - longer-than-usual therapy interval
     rehab_outcome:
         label: rehabilitation outcome
         allow_as_primary: true
@@ -1905,14 +3297,20 @@ clinical_axes:
                 - outpatient or home therapy
                 - home rehabilitation
                 - home therapy
+                - home discharge with therapy support
+                - outpatient rehabilitation pathway
             inpatient_rehab:
                 - inpatient rehabilitation
                 - supervised facility-based rehabilitation
                 - supervised rehabilitation
+                - acute rehabilitation placement
+                - facility-based therapy need
             persistent_deficit:
                 - persistent functional deficit
                 - residual functional limitation
                 - residual mobility limitation
+                - persistent neurologic or functional limitation
+                - ongoing functional deficit
     complication_burden:
         label: in-hospital complication burden
         allow_as_primary: true
@@ -1933,14 +3331,20 @@ clinical_axes:
                 - uncomplicated in-hospital course
                 - no documented major complication
                 - uncomplicated safety course
+                - no major adverse inpatient event
+                - no documented serious complication
             limited_complication:
                 - limited complication burden
                 - manageable adverse event
                 - limited complication
+                - minor or transient complication
+                - self-limited adverse event
             major_complication:
                 - major complication burden
                 - treatment-limiting adverse event
                 - major complication
+                - serious inpatient complication
+                - major adverse clinical event
     acute_clinical_course:
         label: acute clinical course
         allow_as_primary: true
@@ -1960,14 +3364,20 @@ clinical_axes:
                 - early clinical stabilization
                 - prompt response trajectory
                 - prompt improvement
+                - early clinical response
+                - rapid inpatient stabilization
             delayed_improvement:
                 - delayed clinical improvement
                 - slow response trajectory
                 - slow improvement
+                - slower clinical recovery
+                - delayed inpatient response
             refractory_or_worsening:
                 - refractory clinical course
                 - worsening response trajectory
                 - worsening despite initial management
+                - clinical deterioration despite treatment
+                - refractory inpatient trajectory
     care_intensity:
         label: care intensity
         allow_as_primary: true
@@ -1986,15 +3396,21 @@ clinical_axes:
             ward_level:
                 - ward-level care
                 - routine inpatient monitoring
+                - routine ward-level management
+                - standard inpatient ward care
             monitored_or_procedural:
                 - monitored or procedural care
                 - step-down or procedure-supported care
                 - monitored care with procedural support
                 - step-down or procedural care
+                - step-down or procedure-supported monitoring
+                - monitored inpatient management
             intensive_care:
                 - intensive care
                 - ICU-level support
                 - ICU-level organ support
+                - critical care support
+                - ICU-level monitoring and support
 cohort_contrasts:
     - id: age_under_50_vs_50_to_75
       dimension_id: age_band

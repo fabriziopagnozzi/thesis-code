@@ -8,6 +8,7 @@ note_style_templates:
     discharge_summary:
         - "{patient} was treated for {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
         - Following presentation with {presentation}, {patient_lower} was managed for {condition}. {cohort_sentence} {axis_sentence}
+
 cohort_evidence_templates:
     comorbidity_present:
         - "{possessive_cap} established medical history included {subgroup_phrase}."
@@ -16,6 +17,7 @@ cohort_evidence_templates:
     comorbidity_reference:
         - "{pronoun_cap} had {subgroup_phrase}."
         - "Baseline assessment confirmed {subgroup_phrase}."
+
 axis_sentence_templates:
     treatment_duration:
         short:
@@ -67,10 +69,12 @@ axis_sentence_templates:
         intensive_care:
             - "Clinical needs escalated to {axis_value}. The highest care intensity was therefore {axis_bin_term}."
             - "{pronoun_cap} required {axis_value} during the admission. This represented {axis_bin_term}."
+
 duration_phrase_templates:
     - "{duration_days} days of {treatment}"
     - "{duration_days} days of therapy with {treatment}"
     - "a {duration_days}-day course of {treatment}"
+
 hidden_benchmark_terms:
     - admission adm_
     - benchmark
