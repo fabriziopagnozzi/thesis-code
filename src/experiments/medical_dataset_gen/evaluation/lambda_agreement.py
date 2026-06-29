@@ -10,7 +10,7 @@ from experiments.medical_dataset_gen.global_config import (
 )
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
-_LAMBDA_PAIR_AGREEMENT_METRICS = [
+_LAMBDA_PAIR_AGREEMENT_EVAL_METRICS = [
     'Precision@k',
     'Recall@k',
     'F1@k',
@@ -19,20 +19,25 @@ _LAMBDA_PAIR_AGREEMENT_METRICS = [
     'MeanFacetRecall@k',
     'FacetMRR@k',
     'alpha-nDCG@k',
-    'DistractorRate',
-    'NearMissDistractorRate',
-    'BackgroundOutlierRate',
-    'PrimaryAxisRate',
-    'CalibratedFacetRate',
-    'RedundantGoldRate',
-    'fac',
-    'avg_cos',
-    'jac',
     'AnswerROUGE1Recall@k',
     'AnswerROUGE1Precision@k',
     'AnswerROUGE2Recall@k',
     'MacroFacetAnswerROUGE1Recall@k',
 ]
+
+_LAMBDA_PAIR_AGREEMENT_DIAGNOSTIC_METRICS = [
+    'DistractorRate',
+    'NearMissDistractorRate',
+    'BackgroundOutlierRate',
+    'PrimaryAxisRate',
+    'fac',
+    'avg_cos',
+    'jac',
+]
+
+_LAMBDA_PAIR_AGREEMENT_METRICS = (
+    _LAMBDA_PAIR_AGREEMENT_EVAL_METRICS + _LAMBDA_PAIR_AGREEMENT_DIAGNOSTIC_METRICS
+)
 
 
 def build_lambda_pair_agreement(
@@ -42,6 +47,7 @@ def build_lambda_pair_agreement(
     kernel_cfg: MethodsComparisonKernelsCfg | None = None,
 ) -> pl.DataFrame:
     metric_cols = lambda_pair_agreement_metric_cols(stats_df)
+    eval_metric_cols = lambda_pair_agreement_eval_metric_cols(stats_df)
     active_kernel_metrics = _active_lambda_pair_kernel_metrics(
         kernel_cfg or MethodsComparisonKernelsCfg(),
         stats_df,
@@ -75,7 +81,7 @@ def build_lambda_pair_agreement(
         'rank_within_k': pl.UInt32,
         'weighted_rank_within_k': pl.UInt32,
     }
-    if stats_df.is_empty() or not metric_cols:
+    if stats_df.is_empty() or not metric_cols or not eval_metric_cols:
         return pl.DataFrame(schema=schema)
 
     cfg = kernel_cfg or MethodsComparisonKernelsCfg()
@@ -151,6 +157,7 @@ def build_lambda_pair_agreement(
         return pl.DataFrame(schema=schema)
 
     diff_cols = [f'abs_diff__{metric}' for metric in metric_cols]
+    eval_diff_cols = [f'abs_diff__{metric}' for metric in eval_metric_cols]
     agreement = joined.select(
         'k',
         'fac_loc_lam',
@@ -185,7 +192,7 @@ def build_lambda_pair_agreement(
             for metric_cfg in active_kernel_metrics
         ],
         pl.col('mmr_kernel_score'),
-    ).with_columns(pl.mean_horizontal(diff_cols).alias('mean_abs_diff'))
+    ).with_columns(pl.mean_horizontal(eval_diff_cols).alias('mean_abs_diff'))
     agreement = agreement.with_columns(
         pair_kernel_polars_expr(cfg).alias('pair_quality_kernel'),
     ).with_columns(
@@ -248,6 +255,14 @@ def build_lambda_pair_agreement(
 
 def lambda_pair_agreement_metric_cols(stats_df: pl.DataFrame) -> list[str]:
     return [metric for metric in _LAMBDA_PAIR_AGREEMENT_METRICS if metric in stats_df.columns]
+
+
+def lambda_pair_agreement_eval_metrics() -> list[str]:
+    return list(_LAMBDA_PAIR_AGREEMENT_EVAL_METRICS)
+
+
+def lambda_pair_agreement_eval_metric_cols(stats_df: pl.DataFrame) -> list[str]:
+    return [metric for metric in _LAMBDA_PAIR_AGREEMENT_EVAL_METRICS if metric in stats_df.columns]
 
 
 def _active_lambda_pair_kernel_metrics(

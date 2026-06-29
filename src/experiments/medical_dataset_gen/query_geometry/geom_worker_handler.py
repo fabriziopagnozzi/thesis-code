@@ -19,16 +19,16 @@ from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet_if_exists_else_empty_df,
 )
 
-query_geometry_worker_state: EmbeddingGeometryWorkerState | None = None
+_query_geometry_worker_state: EmbeddingGeometryWorkerState | None = None
 
 
 def set_geom_worker_state(target: EmbeddingGeometryWorkerState | None) -> None:
-    global query_geometry_worker_state
-    query_geometry_worker_state = target
+    global _query_geometry_worker_state
+    _query_geometry_worker_state = target
 
 
 def get_geom_worker_state() -> EmbeddingGeometryWorkerState | None:
-    return query_geometry_worker_state
+    return _query_geometry_worker_state
 
 
 def query_geometry_worker_count(n_queries: int) -> int:

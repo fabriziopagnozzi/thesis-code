@@ -25,16 +25,16 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
-eval_worker_state: EvaluationWorkerState | None = None
+_eval_worker_state: EvaluationWorkerState | None = None
 
 
 def set_evaluation_worker_state(target: EvaluationWorkerState | None) -> None:
-    global eval_worker_state
-    eval_worker_state = target
+    global _eval_worker_state
+    _eval_worker_state = target
 
 
 def get_evaluation_worker_state() -> EvaluationWorkerState | None:
-    return eval_worker_state
+    return _eval_worker_state
 
 
 def init_evaluation_worker(cfg_dump: dict[str, object], exp_name: str) -> None:

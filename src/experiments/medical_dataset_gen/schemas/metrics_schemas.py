@@ -40,8 +40,6 @@ METRIC_NAME_TO_FIELD: dict[str, MetricFieldSpec] = {
         'same_condition_wrong_axis_rate', higher_is_better=False
     ),
     'PrimaryAxisRate': MetricFieldSpec('primary_axis_rate', higher_is_better=False),
-    'CalibratedFacetRate': MetricFieldSpec('calibrated_facet_rate', higher_is_better=False),
-    'RedundantGoldRate': MetricFieldSpec('redundant_gold_rate', higher_is_better=False),
     'fac': MetricFieldSpec('fac_cov_score', higher_is_better=True),
     'avg_cos': MetricFieldSpec('avg_cos', higher_is_better=True),
     'jac': MetricFieldSpec('jaccard_vs_topk', higher_is_better=True),

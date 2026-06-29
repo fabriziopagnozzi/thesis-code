@@ -54,7 +54,8 @@ QUERY_TITLE_AXIS_COLOR = '#2D6A4F'
 def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
-    strategies = artifact.selections.keys()
+    strategy_order: tuple[RetrievalStrategy, ...] = ('top_k', 'mmr', 'fac_loc')
+    strategies = [strategy for strategy in strategy_order if strategy in artifact.selections]
     if not strategies:
         return
 

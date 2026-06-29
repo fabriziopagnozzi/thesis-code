@@ -1096,9 +1096,7 @@ def _render_selection_snapshot(
                     'weighted_facet_coverage',
                     'distractor_rate',
                     'primary_axis_rate',
-                    'calibrated_facet_rate',
                     'max_facet_concentration',
-                    'redundant_gold_rate',
                     'avg_cos',
                     'jaccard_vs_topk',
                 ]

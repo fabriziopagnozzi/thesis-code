@@ -22,6 +22,9 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     EvalPlotFileName,
     NamedPlotMetric,
 )
+from experiments.medical_dataset_gen.evaluation.lambda_agreement import (
+    lambda_pair_agreement_eval_metrics,
+)
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
@@ -936,11 +939,11 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
     if not k_values or not fac_lams or not mmr_lams:
         return
 
-    metric_diff_cols = sorted(
-        col
-        for col in agreement_df.columns
-        if col.startswith('abs_diff__') and col != 'mean_abs_diff'
-    )
+    eval_metric_diff_cols = [
+        f'abs_diff__{metric}'
+        for metric in lambda_pair_agreement_eval_metrics()
+        if f'abs_diff__{metric}' in agreement_df.columns
+    ]
     score_col = (
         'weighted_mean_abs_diff'
         if 'weighted_mean_abs_diff' in agreement_df.columns
@@ -1069,16 +1072,417 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
         fig,
         (
             'Cell values are kernel-weighted mean absolute differences across '
-            f'{len(metric_diff_cols)} summary metrics; lower is better.{lambda_cutoff_note}'
+            f'{len(eval_metric_diff_cols)} evaluation metrics; diagnostic abs-diff columns are retained but do not affect ranking.'
+            f'{lambda_cutoff_note}'
         )
         if uses_kernel_weighting
         else (
             'Cell values are mean absolute differences across '
-            f'{len(metric_diff_cols)} summary metrics; lower is better.{lambda_cutoff_note}'
+            f'{len(eval_metric_diff_cols)} evaluation metrics; diagnostic abs-diff columns are retained but do not affect ranking.'
+            f'{lambda_cutoff_note}'
         ),
     )
     fig.subplots_adjust(left=0.05, right=0.955, bottom=0.11, top=0.90, wspace=0.20)
     fig.savefig(out_dir / 'lambda_agreement_facloc_mmr.png', dpi=140, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_lambda_agreeing_pair_metrics(
+    stats_df: pl.DataFrame,
+    agreement_df: pl.DataFrame,
+    out_dir: Path,
+) -> None:
+    """Per-k metric traces for the best-agreeing pair plus best-coverage controls."""
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.ticker import FormatStrFormatter, MaxNLocator
+
+    if stats_df.is_empty() or agreement_df.is_empty():
+        return
+
+    eval_metrics = _available_metric_specs(
+        stats_df,
+        results_df=None,
+        metric_names=PLOTTED_MAIN_METRIC_NAMES,
+        require_result_col=False,
+    )
+    diagnostic_metrics = _available_metric_specs(
+        stats_df,
+        results_df=None,
+        metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
+        require_result_col=False,
+    )
+    if not eval_metrics or not diagnostic_metrics:
+        return
+
+    best_pairs = _best_lambda_agreement_rows(agreement_df)
+    if best_pairs.is_empty():
+        return
+    control_pairs = _best_mean_facet_hit_rate_control_rows(stats_df, best_pairs['k'].to_list())
+    if control_pairs.is_empty():
+        return
+
+    k_values = [int(v) for v in best_pairs['k'].to_list()]
+    max_metric_count = max(len(eval_metrics), len(diagnostic_metrics))
+    fig_width = len(k_values) * max(4.8, 0.72 * max_metric_count)
+    fig, axes = _custom_grid_figure(
+        rows=4,
+        cols=len(k_values),
+        width_per_col=fig_width / max(len(k_values), 1),
+        height_per_row=3.4,
+        footer_height=2.0,
+    )
+
+    row_specs = [
+        ('Evaluation metrics', eval_metrics, False),
+        ('Evaluation control', eval_metrics, True),
+        ('Diagnostic metrics', diagnostic_metrics, False),
+        ('Diagnostic control', diagnostic_metrics, True),
+    ]
+    styles = {
+        'mmr': get_style('mmr'),
+        'fac_loc': get_style('fac_loc'),
+    }
+    eval_ylim = _lambda_agreeing_metrics_ylim(
+        stats_df,
+        pl.concat([best_pairs.select('k', 'fac_loc_lam', 'mmr_lam'), control_pairs]),
+        [m.stats_col for m in eval_metrics],
+    )
+    diagnostic_ylim = _lambda_agreeing_metrics_ylim(
+        stats_df,
+        pl.concat([best_pairs.select('k', 'fac_loc_lam', 'mmr_lam'), control_pairs]),
+        [m.stats_col for m in diagnostic_metrics],
+    )
+    row_limits = [eval_ylim, eval_ylim, diagnostic_ylim, diagnostic_ylim]
+    control_facecolor = '#f4efe2'
+
+    score_col = (
+        'weighted_mean_abs_diff'
+        if 'weighted_mean_abs_diff' in best_pairs.columns
+        else 'mean_abs_diff'
+    )
+    for col_idx, k in enumerate(k_values):
+        agreement_row = _k_row(best_pairs, k)
+        control_row = _k_row(control_pairs, k)
+        if agreement_row is None or control_row is None:
+            for row_idx in range(4):
+                axes[row_idx][col_idx].set_visible(False)
+            continue
+
+        for row_idx, (row_title, metrics, is_control) in enumerate(row_specs):
+            pair_row = control_row if is_control else agreement_row
+            fac_loc_lam = float(pair_row['fac_loc_lam'])
+            mmr_lam = float(pair_row['mmr_lam'])
+            fac_loc_row = _strategy_k_lambda_row(
+                stats_df,
+                strategy='fac_loc',
+                k=k,
+                lam=fac_loc_lam,
+            )
+            mmr_row = _strategy_k_lambda_row(
+                stats_df,
+                strategy='mmr',
+                k=k,
+                lam=mmr_lam,
+            )
+            ax = axes[row_idx][col_idx]
+            if fac_loc_row is None or mmr_row is None:
+                ax.set_visible(False)
+                continue
+            x_positions = np.arange(len(metrics))
+            labels = [metric.title for metric in metrics]
+            mmr_values = [float(mmr_row[metric.stats_col]) for metric in metrics]
+            fac_loc_values = [float(fac_loc_row[metric.stats_col]) for metric in metrics]
+            if is_control:
+                ax.set_facecolor(control_facecolor)
+
+            ax.plot(
+                x_positions,
+                mmr_values,
+                color=styles['mmr']['color'],
+                lw=2.0,
+                marker='o',
+                ms=4.5,
+                label='MMR',
+            )
+            ax.plot(
+                x_positions,
+                fac_loc_values,
+                color=styles['fac_loc']['color'],
+                lw=2.0,
+                marker='o',
+                ms=4.5,
+                label='FacLoc',
+            )
+            ax.set_xticks(x_positions)
+            ax.set_xticklabels(labels, rotation=35, ha='right', fontsize=8)
+            ax.grid(axis='y', alpha=0.3)
+            ax.set_ylim(*row_limits[row_idx])
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=9, min_n_ticks=7))
+            ax.yaxis.set_major_formatter(
+                FormatStrFormatter(_best_facet_hit_rate_tick_format(*row_limits[row_idx]))
+            )
+            _annotate_pair_metric_deltas(
+                ax,
+                x_positions=x_positions,
+                fac_loc_values=fac_loc_values,
+                mmr_values=mmr_values,
+                metrics=metrics,
+            )
+            if col_idx == 0:
+                ax.set_ylabel(row_title, fontsize=9)
+            if row_idx == 0:
+                ax.set_title(
+                    '\n'.join(
+                        [
+                            f'k={k}',
+                            f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                            f'{score_col}={float(agreement_row[score_col]):.3f}',
+                        ]
+                    ),
+                    fontsize=9,
+                )
+            if row_idx == 1:
+                ax.set_title(
+                    '\n'.join(
+                        [
+                            f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                            'lambda* = max MeanFacetHitRate@k within strategy x k',
+                        ]
+                    ),
+                    fontsize=8.5,
+                )
+            if row_idx == 2:
+                ax.set_title(
+                    '\n'.join(
+                        [
+                            f'k={k}',
+                            f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                            f'{score_col}={float(agreement_row[score_col]):.3f}',
+                        ]
+                    ),
+                    fontsize=9,
+                )
+            if row_idx == 3:
+                ax.set_title(
+                    '\n'.join(
+                        [
+                            f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                            'lambda* = max MeanFacetHitRate@k within strategy x k',
+                        ]
+                    ),
+                    fontsize=8.5,
+                )
+
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc='lower center',
+            ncol=2,
+            fontsize=9,
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.045),
+        )
+
+    fig.suptitle(
+        'Best-agreeing FacLoc/MMR pair metrics by k with best-coverage controls',
+        fontsize=12,
+    )
+    _figure_note(
+        fig,
+        (
+            'Rows 1 and 3 use the best agreement pair for that k. '
+            'Rows 2 and 4 are control rows using each strategy lambda* = max MeanFacetHitRate@k within strategy x k.'
+        ),
+    )
+    fig.tight_layout(rect=(0.02, 0.12, 1, 0.95))
+    fig.savefig(out_dir / 'lambda_agreeing_pair_metrics.png', dpi=140, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_best_facet_hit_rate_eval_metrics(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+) -> None:
+    """Control-only evaluation metrics using each strategy's best MeanFacetHitRate@k lambda."""
+    _plot_best_facet_hit_rate_metric_group(
+        stats_df,
+        out_dir,
+        plot_name='best_facet_hit_rate_eval_metrics',
+        row_title='Evaluation control',
+        metric_names=PLOTTED_MAIN_METRIC_NAMES,
+        figure_title='Best MeanFacetHitRate@k evaluation control metrics by k',
+        output_filename='best_facet_hit_rate_eval_metrics.png',
+    )
+
+
+def plot_best_facet_hit_rate_diagnostic_metrics(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+) -> None:
+    """Control-only diagnostic metrics using each strategy's best MeanFacetHitRate@k lambda."""
+    _plot_best_facet_hit_rate_metric_group(
+        stats_df,
+        metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
+        out_dir=out_dir,
+        plot_name='best_facet_hit_rate_diagnostic_metrics',
+        row_title='Diagnostic control',
+        figure_title='Best MeanFacetHitRate@k diagnostic control metrics by k',
+        output_filename='best_facet_hit_rate_diagnostic_metrics.png',
+    )
+
+
+def _plot_best_facet_hit_rate_metric_group(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+    *,
+    plot_name: EvalPlotFileName,
+    row_title: str,
+    metric_names: list[str],
+    figure_title: str,
+    output_filename: str,
+) -> None:
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.ticker import FormatStrFormatter, MaxNLocator
+
+    if stats_df.is_empty():
+        return
+
+    metrics = _available_metric_specs(
+        stats_df,
+        results_df=None,
+        metric_names=metric_names,
+        require_result_col=False,
+    )
+    if not metrics:
+        return
+
+    k_values = sorted(int(v) for v in stats_df['k'].unique().to_list())
+    control_pairs = _best_mean_facet_hit_rate_control_rows(stats_df, k_values)
+    if control_pairs.is_empty():
+        return
+
+    fig_width = max(6.4, 0.72 * len(metrics) + 2.0)
+    layout = DEFAULT_PLOT_GRID_LAYOUTS[plot_name]
+    fig, axes = _custom_grid_figure(
+        rows=len(k_values),
+        cols=1,
+        width_per_col=fig_width,
+        height_per_row=layout.height_per_row,
+        footer_height=layout.footer_height,
+    )
+
+    styles = {
+        'mmr': get_style('mmr'),
+        'fac_loc': get_style('fac_loc'),
+    }
+    control_facecolor = '#f4efe2'
+    row_ylim = _lambda_agreeing_metrics_ylim(
+        stats_df,
+        control_pairs,
+        [m.stats_col for m in metrics],
+        include_topk=True,
+    )
+
+    for row_idx, k in enumerate(k_values):
+        ax = axes[row_idx][0]
+        control_row = _k_row(control_pairs, k)
+        if control_row is None:
+            ax.set_visible(False)
+            continue
+
+        fac_loc_lam = float(control_row['fac_loc_lam'])
+        mmr_lam = float(control_row['mmr_lam'])
+        topk_row = _topk_k_row(stats_df, k)
+        fac_loc_row = _strategy_k_lambda_row(stats_df, strategy='fac_loc', k=k, lam=fac_loc_lam)
+        mmr_row = _strategy_k_lambda_row(stats_df, strategy='mmr', k=k, lam=mmr_lam)
+        if topk_row is None or fac_loc_row is None or mmr_row is None:
+            ax.set_visible(False)
+            continue
+
+        x_positions = np.arange(len(metrics))
+        labels = [metric.title for metric in metrics]
+        topk_values = [float(topk_row[metric.stats_col]) for metric in metrics]
+        mmr_values = [float(mmr_row[metric.stats_col]) for metric in metrics]
+        fac_loc_values = [float(fac_loc_row[metric.stats_col]) for metric in metrics]
+
+        ax.set_facecolor(control_facecolor)
+        ax.plot(
+            x_positions,
+            topk_values,
+            color='#000000',
+            lw=2.0,
+            marker='o',
+            ms=4.5,
+            label='top-k',
+        )
+        ax.plot(
+            x_positions,
+            mmr_values,
+            color=styles['mmr']['color'],
+            lw=2.0,
+            marker='o',
+            ms=4.5,
+            label='MMR',
+        )
+        ax.plot(
+            x_positions,
+            fac_loc_values,
+            color=styles['fac_loc']['color'],
+            lw=2.0,
+            marker='o',
+            ms=4.5,
+            label='FacLoc',
+        )
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(labels, rotation=35, ha='right', fontsize=8)
+        ax.grid(axis='y', alpha=0.3)
+        ax.set_ylim(*row_ylim)
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=9, min_n_ticks=7))
+        ax.yaxis.set_major_formatter(
+            FormatStrFormatter(_best_facet_hit_rate_tick_format(*row_ylim))
+        )
+        _annotate_pair_metric_deltas(
+            ax,
+            x_positions=x_positions,
+            fac_loc_values=fac_loc_values,
+            mmr_values=mmr_values,
+            metrics=metrics,
+        )
+        ax.set_ylabel(row_title, fontsize=9)
+        ax.set_title(
+            '\n'.join(
+                [
+                    f'k={k}',
+                    f'FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                    'lambda* = max MeanFacetHitRate@k within strategy x k',
+                ]
+            ),
+            fontsize=8.8,
+        )
+
+    handles, labels = axes[0][0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc='lower center',
+            ncol=3,
+            fontsize=9,
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.05),
+        )
+
+    fig.suptitle(figure_title, fontsize=12)
+    _figure_note(
+        fig,
+        'Each row shows bare top-k for that k plus each strategy lambda* = max MeanFacetHitRate@k within strategy x k.',
+    )
+    fig.tight_layout(rect=(0.02, 0.12, 1, 0.95))
+    fig.savefig(out_dir / output_filename, dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
@@ -1997,6 +2401,182 @@ def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -
             sort_cols, desc = _available_sort(ksub)
             rows.append(ksub.sort(sort_cols, descending=desc).head(1))
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
+
+
+def _best_lambda_agreement_rows(agreement_df: pl.DataFrame) -> pl.DataFrame:
+    rank_col = (
+        'weighted_rank_within_k'
+        if 'weighted_rank_within_k' in agreement_df.columns
+        else 'rank_within_k'
+    )
+    rows = []
+    for k in sorted(int(v) for v in agreement_df['k'].unique().to_list()):
+        sub = agreement_df.filter(pl.col('k') == k).sort(
+            [rank_col, 'fac_loc_lam', 'mmr_lam'],
+            descending=[False, False, False],
+        )
+        if sub.height > 0:
+            rows.append(sub.head(1))
+    return pl.concat(rows).sort('k') if rows else pl.DataFrame()
+
+
+def _best_mean_facet_hit_rate_control_rows(
+    stats_df: pl.DataFrame,
+    k_values: list[int],
+) -> pl.DataFrame:
+    rows = []
+    for k in [int(v) for v in k_values]:
+        fac_loc_best = _best_mean_facet_hit_rate_lam_row(stats_df, strategy='fac_loc', k=k)
+        mmr_best = _best_mean_facet_hit_rate_lam_row(stats_df, strategy='mmr', k=k)
+        if fac_loc_best is None or mmr_best is None:
+            continue
+        rows.append(
+            pl.DataFrame(
+                {
+                    'k': [k],
+                    'fac_loc_lam': [float(fac_loc_best['lam'])],
+                    'mmr_lam': [float(mmr_best['lam'])],
+                }
+            )
+        )
+    return pl.concat(rows).sort('k') if rows else pl.DataFrame()
+
+
+def _strategy_k_lambda_row(
+    stats_df: pl.DataFrame,
+    *,
+    strategy: str,
+    k: int,
+    lam: float,
+) -> dict[str, object] | None:
+    sub = stats_df.filter(
+        (pl.col('strategy') == strategy) & (pl.col('k') == k) & (pl.col('lam') == lam)
+    )
+    return sub.row(0, named=True) if sub.height > 0 else None
+
+
+def _best_mean_facet_hit_rate_lam_row(
+    stats_df: pl.DataFrame,
+    *,
+    strategy: str,
+    k: int,
+) -> dict[str, object] | None:
+    sub = stats_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
+    if sub.height == 0 or 'MeanFacetHitRate@k' not in sub.columns:
+        return None
+    ranked = sub.sort(['MeanFacetHitRate@k', 'lam'], descending=[True, False])
+    return ranked.row(0, named=True) if ranked.height > 0 else None
+
+
+def _k_row(df: pl.DataFrame, k: int) -> dict[str, object] | None:
+    sub = df.filter(pl.col('k') == k)
+    return sub.row(0, named=True) if sub.height > 0 else None
+
+
+def _topk_k_row(stats_df: pl.DataFrame, k: int) -> dict[str, object] | None:
+    sub = stats_df.filter((pl.col('strategy') == 'top_k') & (pl.col('k') == k))
+    return sub.row(0, named=True) if sub.height > 0 else None
+
+
+def _best_facet_hit_rate_tick_format(ymin: float, ymax: float) -> str:
+    span = abs(ymax - ymin)
+    if span <= 0.1:
+        return '%.3f'
+    if span <= 1.0:
+        return '%.2f'
+    return '%.1f'
+
+
+def _annotate_pair_metric_deltas(
+    ax: Any,
+    *,
+    x_positions: Any,
+    fac_loc_values: list[float],
+    mmr_values: list[float],
+    metrics: list[NamedPlotMetric],
+) -> None:
+    ymin, ymax = ax.get_ylim()
+    span = max(ymax - ymin, 1e-6)
+    offset = span * 0.04
+    for x, fac_val, mmr_val, metric in zip(
+        x_positions,
+        fac_loc_values,
+        mmr_values,
+        metrics,
+        strict=True,
+    ):
+        delta = fac_val - mmr_val
+        if abs(delta) < 1e-12:
+            color = '#666666'
+        else:
+            fac_loc_better = (
+                delta > 0.0 if metric.higher_is_better else delta < 0.0
+            )
+            color = get_style('fac_loc')['color'] if fac_loc_better else get_style('mmr')['color']
+        y = max(fac_val, mmr_val) + offset
+        ax.text(
+            x,
+            y,
+            f'{delta:+.3f}',
+            ha='center',
+            va='bottom',
+            fontsize=6.3,
+            color=color,
+            bbox={
+                'boxstyle': 'round,pad=0.14',
+                'facecolor': 'white',
+                'edgecolor': color,
+                'linewidth': 0.35,
+                'alpha': 0.9,
+            },
+            clip_on=False,
+            zorder=6,
+        )
+
+
+def _lambda_agreeing_metrics_ylim(
+    stats_df: pl.DataFrame,
+    best_pairs: pl.DataFrame,
+    metric_cols: list[str],
+    *,
+    include_topk: bool = False,
+) -> tuple[float, float]:
+    values: list[float] = []
+    for row in best_pairs.iter_rows(named=True):
+        if include_topk:
+            topk_row = _topk_k_row(stats_df, int(row['k']))
+            if topk_row is not None:
+                for metric_col in metric_cols:
+                    value = topk_row.get(metric_col)
+                    if value is None:
+                        continue
+                    values.append(float(value))
+        for strategy, lam_key in [('fac_loc', 'fac_loc_lam'), ('mmr', 'mmr_lam')]:
+            metric_row = _strategy_k_lambda_row(
+                stats_df,
+                strategy=strategy,
+                k=int(row['k']),
+                lam=float(row[lam_key]),
+            )
+            if metric_row is None:
+                continue
+            for metric_col in metric_cols:
+                value = metric_row.get(metric_col)
+                if value is None:
+                    continue
+                values.append(float(value))
+
+    if not values:
+        return (0.0, 1.0)
+
+    lower = min(values)
+    upper = max(values)
+    if lower == upper:
+        padding = abs(lower) * 0.05 if lower != 0.0 else 0.05
+        return (lower - padding, upper + padding)
+
+    padding = (upper - lower) * 0.14
+    return (lower - padding, upper + padding)
 
 
 def _best_topk_k(results_df: pl.DataFrame) -> int:

@@ -93,12 +93,6 @@ def _redundancy_metrics(
     near_miss_distractor_count = sum(
         1 for chunk_id in non_gold_ids if _is_query_near_miss_distractor(query_qrels, chunk_id)
     )
-    calibrated_count = sum(
-        1
-        for chunk_id in selected_chunk_ids
-        if (qrel := query_qrels.get(chunk_id)) is not None
-        and qrel.facet_id == calibrated_primary_facet_id
-    )
     primary_axis_count = sum(
         1
         for chunk_id in selected_chunk_ids
@@ -118,8 +112,6 @@ def _redundancy_metrics(
         if n_selected and selected_facet_counts
         else 0.0
     )
-    redundant_gold_count = max(n_selected_gold - n_facet_hits, 0)
-    calibrated_facet_rate = calibrated_count / n_selected if n_selected else 0.0
     primary_axis_rate = primary_axis_count / n_selected if n_selected else 0.0
 
     return {
@@ -132,14 +124,11 @@ def _redundancy_metrics(
             same_condition_wrong_axis_count / n_selected if n_selected else 0.0
         ),
         'primary_axis_rate': float(primary_axis_rate),
-        'calibrated_facet_rate': float(calibrated_facet_rate),
         'max_facet_concentration': float(max_facet_concentration),
-        'redundant_gold_rate': redundant_gold_count / n_selected if n_selected else 0.0,
         'n_selected_non_gold': non_gold_count,
         'n_selected_near_miss_distractors': near_miss_distractor_count,
         'n_selected_background_outliers': background_outlier_count,
         'n_selected_same_condition_wrong_axis': same_condition_wrong_axis_count,
-        'n_redundant_gold': redundant_gold_count,
     }
 
 

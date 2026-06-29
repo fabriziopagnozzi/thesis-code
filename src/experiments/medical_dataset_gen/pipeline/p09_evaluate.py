@@ -9,8 +9,11 @@ just nearest-neighbor accuracy.
 
 from __future__ import annotations
 
+import argparse
 import multiprocessing as mp
+import sys
 from concurrent.futures import ProcessPoolExecutor
+from typing import Literal, cast, get_args
 
 import numpy as np
 import polars as pl
@@ -39,75 +42,134 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
 from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
+    setup_logging,
 )
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     EvaluationResultRow,
     QueryRecord,
 )
-from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
+from experiments.medical_dataset_gen.utils.io_utils import (
+    read_parquet,
+    read_parquet_if_exists_else_empty_df,
+    write_parquet,
+)
+
+type EvaluationStep = Literal[
+    'evaluation_results',
+    'evaluation_stats',
+    'evaluation_slice_stats',
+    'lambda_agreement',
+]
+EVALUATION_STEP_NAMES = set[EvaluationStep](get_args(EvaluationStep.__value__))
+EVALUATION_STEP_ALIASES: dict[str, EvaluationStep] = {
+    'lambda_pair_agreement': 'lambda_agreement',
+}
 
 
-def run_evaluate(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    queries = read_parquet(paths, 'queries')
-    qrels = read_parquet(paths, 'qrels')
-    geometry = read_parquet(paths, 'geometry_stats')
-    assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
-
-    facet_gold = build_query_to_facet_gold_map(qrels)
-    gold_by_query = {
-        qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
-        for qid, facet_map in facet_gold.items()
-    }
-    pass_map = {
-        str(query_id): bool(passes_filter)
-        for query_id, passes_filter in zip(
-            geometry['query_id'].to_list(),
-            geometry['passes_filter'].to_list(),
-            strict=True,
-        )
-    }
-
-    # Three results: per-query eval, aggregated eval, and lambda_agreement stats between fac_loc and MMR
-    eval_results_df = pl.DataFrame(
-        _evaluate_queries(
-            cfg,
-            paths,
-            _get_query_ids_to_evaluate(
-                queries=queries,
-                facet_gold=facet_gold,
-                gold_by_query=gold_by_query,
-                pass_map=pass_map,
-                only_pass_geometry=cfg.retrieval.only_pass_geometry,
-            ),
-        )
+def run_evaluate(
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    selected_steps: set[EvaluationStep] | None = None,
+) -> pl.DataFrame:
+    requested_steps = (
+        selected_steps if selected_steps is not None else set[EvaluationStep](EVALUATION_STEP_NAMES)
     )
-    if not eval_results_df.is_empty():
-        geometry_dimensions = geometry.select(
-            'query_id',
-            'calibration_warning',
-            'n_topk_retrieved_facets',
-        )
-        eval_results_df = eval_results_df.join(
-            geometry_dimensions,
-            on='query_id',
-            how='left',
-            validate='m:1',
-        )
-    aggregated_eval_stats_df = stats_aggregated_results_df(eval_results_df)
-    sliced_eval_stats_df = stats_sliced_results_df(eval_results_df)
-    lambda_pair_agreement_df = build_lambda_pair_agreement(
-        aggregated_eval_stats_df,
-        results_df=eval_results_df,
-        kernel_cfg=cfg.evaluation.fac_loc_mmr_comparison_kernels,
-    )
+    eval_results_df: pl.DataFrame | None = None
+    aggregated_eval_stats_df: pl.DataFrame | None = None
 
-    write_parquet(paths, 'evaluation_results', eval_results_df)
-    write_parquet(paths, 'evaluation_stats', aggregated_eval_stats_df)
-    write_parquet(paths, 'evaluation_slice_stats', sliced_eval_stats_df)
-    write_parquet(paths, 'lambda_pair_agreement', lambda_pair_agreement_df)
+    if 'evaluation_results' in requested_steps:
+        queries = read_parquet(paths, 'queries')
+        qrels = read_parquet(paths, 'qrels')
+        geometry = read_parquet(paths, 'geometry_stats')
+        assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
 
-    print(aggregated_eval_stats_df)
-    return eval_results_df
+        facet_gold = build_query_to_facet_gold_map(qrels)
+        gold_by_query = {
+            qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
+            for qid, facet_map in facet_gold.items()
+        }
+        pass_map = {
+            str(query_id): bool(passes_filter)
+            for query_id, passes_filter in zip(
+                geometry['query_id'].to_list(),
+                geometry['passes_filter'].to_list(),
+                strict=True,
+            )
+        }
+
+        eval_results_df = pl.DataFrame(
+            _evaluate_queries(
+                cfg,
+                paths,
+                _get_query_ids_to_evaluate(
+                    queries=queries,
+                    facet_gold=facet_gold,
+                    gold_by_query=gold_by_query,
+                    pass_map=pass_map,
+                    only_pass_geometry=cfg.retrieval.only_pass_geometry,
+                ),
+            )
+        )
+        if not eval_results_df.is_empty():
+            geometry_dimensions = geometry.select(
+                'query_id',
+                'calibration_warning',
+                'n_topk_retrieved_facets',
+            )
+            eval_results_df = eval_results_df.join(
+                geometry_dimensions,
+                on='query_id',
+                how='left',
+                validate='m:1',
+            )
+        write_parquet(paths, 'evaluation_results', eval_results_df)
+
+    if 'evaluation_stats' in requested_steps:
+        eval_results_df = _ensure_eval_results_loaded(
+            cfg=cfg,
+            paths=paths,
+            eval_results_df=eval_results_df,
+            requesting_step='evaluation_stats',
+        )
+        aggregated_eval_stats_df = stats_aggregated_results_df(eval_results_df)
+        write_parquet(paths, 'evaluation_stats', aggregated_eval_stats_df)
+
+    if 'evaluation_slice_stats' in requested_steps:
+        eval_results_df = _ensure_eval_results_loaded(
+            cfg=cfg,
+            paths=paths,
+            eval_results_df=eval_results_df,
+            requesting_step='evaluation_slice_stats',
+        )
+        sliced_eval_stats_df = stats_sliced_results_df(eval_results_df)
+        write_parquet(paths, 'evaluation_slice_stats', sliced_eval_stats_df)
+
+    if 'lambda_agreement' in requested_steps:
+        eval_results_df = _ensure_eval_results_loaded(
+            cfg=cfg,
+            paths=paths,
+            eval_results_df=eval_results_df,
+            requesting_step='lambda_agreement',
+        )
+        if aggregated_eval_stats_df is None:
+            aggregated_eval_stats_df = _load_eval_stats_or_compute_from_results(
+                cfg=cfg,
+                paths=paths,
+                eval_results_df=eval_results_df,
+            )
+        lambda_pair_agreement_df = build_lambda_pair_agreement(
+            aggregated_eval_stats_df,
+            results_df=eval_results_df,
+            kernel_cfg=cfg.evaluation.fac_loc_mmr_comparison_kernels,
+        )
+        write_parquet(paths, 'lambda_pair_agreement', lambda_pair_agreement_df)
+
+    if aggregated_eval_stats_df is not None:
+        print(aggregated_eval_stats_df)
+
+    return eval_results_df if eval_results_df is not None else pl.DataFrame()
 
 
 def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
@@ -133,10 +195,52 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
             pl.col('gold_precision').mean().alias('Precision@k'),
             pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
             pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
-            pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
         )
         .sort(*slice_columns, 'k', 'strategy', 'lam')
     )
+
+
+def _ensure_eval_results_loaded(
+    *,
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    eval_results_df: pl.DataFrame | None,
+    requesting_step: EvaluationStep,
+) -> pl.DataFrame:
+    if eval_results_df is not None:
+        return eval_results_df
+
+    loaded_df = _read_required_table(paths, 'evaluation_results', requesting_step)
+    assert_pool_scope_match(loaded_df, cfg.retrieval.pool_scope, table_name='evaluation_results')
+    return loaded_df
+
+
+def _load_eval_stats_or_compute_from_results(
+    *,
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    eval_results_df: pl.DataFrame,
+) -> pl.DataFrame:
+    stats_df = read_parquet_if_exists_else_empty_df(paths, 'evaluation_stats')
+    if stats_df.is_empty():
+        return stats_aggregated_results_df(eval_results_df)
+
+    assert_pool_scope_match(stats_df, cfg.retrieval.pool_scope, table_name='evaluation_stats')
+    return stats_df
+
+
+def _read_required_table(
+    paths: MedicalDatasetGenPaths,
+    table_name: Literal['evaluation_results'],
+    requesting_step: EvaluationStep,
+) -> pl.DataFrame:
+    table_path = paths.table_path(table_name)
+    if not table_path.exists():
+        raise FileNotFoundError(
+            f'Step "{requesting_step}" requires {table_name}. Run p09_evaluate.py with '
+            f'--steps evaluation_results first, or omit --steps to run the full stage.'
+        )
+    return read_parquet(paths, table_name)
 
 
 def _evaluate_queries(
@@ -351,8 +455,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
         pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
-        pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
-        pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
         pl.col('fac_cov_score').mean().alias('fac'),
         pl.col('avg_cos').mean().alias('avg_cos'),
         pl.col('jaccard_vs_topk').mean().alias('jac'),
@@ -394,8 +496,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'BackgroundOutlierRate',
         'SameConditionWrongAxisRate',
         'PrimaryAxisRate',
-        'CalibratedFacetRate',
-        'RedundantGoldRate',
         'fac',
         'avg_cos',
         'jac',
@@ -404,14 +504,47 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
     return stats.select([col for col in STATS_DF_ORDERED_COLS if col in stats.columns])
 
 
-if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
-        setup_logging,
-    )
+def parse_evaluation_steps(raw_value: str | None) -> set[EvaluationStep] | None:
+    if raw_value is None:
+        return None
 
-    cfg = load_config_from_cli()
+    raw_steps = {part.strip() for part in raw_value.split(',') if part.strip()}
+    if not raw_steps:
+        raise ValueError('--steps was provided but no evaluation step names were specified')
+
+    normalized_steps = {
+        EVALUATION_STEP_ALIASES.get(step_name, cast(EvaluationStep | str, step_name))
+        for step_name in raw_steps
+    }
+    unknown_steps = sorted(step for step in normalized_steps if step not in EVALUATION_STEP_NAMES)
+    if unknown_steps:
+        available = ', '.join(sorted(EVALUATION_STEP_NAMES))
+        unknown = ', '.join(unknown_steps)
+        raise ValueError(f'Unknown evaluation step name(s): {unknown}. Available steps: {available}')
+
+    return cast(set[EvaluationStep], normalized_steps)
+
+
+def parse_evaluate_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[EvaluationStep] | None]:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        '--steps',
+        type=str,
+        help='Comma-separated evaluation step names to recompute selectively.',
+    )
+    args, remaining_argv = parser.parse_known_args(argv)
+
+    original_argv = sys.argv[:]
+    try:
+        sys.argv = [sys.argv[0], *remaining_argv]
+        cfg = load_config_from_cli()
+    finally:
+        sys.argv = original_argv
+    return cfg, parse_evaluation_steps(args.steps)
+
+
+if __name__ == '__main__':
+    cfg, selected_steps = parse_evaluate_cli_args(sys.argv[1:])
     paths = paths_for(cfg)
     setup_logging(paths)
-    run_evaluate(cfg, paths)
+    run_evaluate(cfg, paths, selected_steps=selected_steps)
