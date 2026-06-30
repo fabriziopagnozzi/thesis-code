@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     DEFAULT_PLOT_GRID_LAYOUTS,
+    FOR_LAMBDA_K_CURVE_MARKER_SIZE,
     PLOT_METRIC_TITLES,
     PLOTTED_ANSWER_ROUGE_METRIC_NAMES,
     PLOTTED_DIAGNOSTIC_METRIC_NAMES,
@@ -126,34 +127,34 @@ def plot_metrics_at_best_lambda_for_k(
     )
     _figure_note(
         fig,
-        f'{lambda_selection_policy_note(lambda_selection)}; see metrics_k_curves_per_lambda.png for the full sweep',
+        f'{lambda_selection_policy_note(lambda_selection)}; see metrics_k_curves_for_lambda.png for the full sweep',
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(out_dir / 'metrics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Main benchmark metrics as lambda changes."""
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
-        plot_name='metrics_k_curves_per_lambda',
+        plot_name='metrics_k_curves_for_lambda',
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
         figure_title=' ',
-        output_filename='metrics_k_curves_per_lambda.png',
+        output_filename='metrics_k_curves_for_lambda.png',
     )
 
 
-def plot_diagnostics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_diagnostics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Diagnostic metrics as lambda changes."""
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
-        plot_name='diagnostics_k_curves_per_lambda',
+        plot_name='diagnostics_k_curves_for_lambda',
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
         figure_title=' ',
-        output_filename='diagnostics_k_curves_per_lambda.png',
+        output_filename='diagnostics_k_curves_for_lambda.png',
     )
 
 
@@ -206,7 +207,9 @@ def _plot_lambda_sensitivity(
         for col_idx, strategy in enumerate(diversity_strategies):
             style = get_style(strategy)
             sub = stats_df.filter(pl.col('strategy') == strategy)
-            sampled_lambda_values = _sample_tick_values(_lambda_values_for_strategy(stats_df, strategy))
+            sampled_lambda_values = _sample_tick_values(
+                _lambda_values_for_strategy(stats_df, strategy)
+            )
             ax = axes[row_idx][col_idx]
             for k in k_values:
                 ksub = sub.filter(pl.col('k') == k).sort('lam')
@@ -219,7 +222,7 @@ def _plot_lambda_sensitivity(
                     ls=style['ls'],
                     lw=1.8,
                     marker='o',
-                    ms=4,
+                    ms=FOR_LAMBDA_K_CURVE_MARKER_SIZE,
                     label=f'k={k}',
                 )
                 ref = topk_df.filter(pl.col('k') == k)
@@ -641,7 +644,7 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
                     ls=style['ls'],
                     lw=1.8,
                     marker='o',
-                    ms=3.8,
+                    ms=FOR_LAMBDA_K_CURVE_MARKER_SIZE,
                     label=f'k={k}',
                 )
                 if np.any(ci > 0):
@@ -1530,7 +1533,7 @@ def plot_answer_metrics_at_best_lambda_for_k(
     plt.close(fig)
 
 
-def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Auxiliary ROUGE metrics as lambda changes."""
     import matplotlib.pyplot as plt
 
@@ -1556,7 +1559,7 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
     k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
 
     fig, axes = _grid_figure(
-        'answer_metrics_k_curves_per_lambda',
+        'answer_metrics_k_curves_for_lambda',
         rows=len(metric_cols),
         cols=len(diversity_strategies),
         sharex=False,
@@ -1566,7 +1569,9 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
         for col_idx, strategy in enumerate(diversity_strategies):
             style = get_style(strategy)
             sub = stats_df.filter(pl.col('strategy') == strategy)
-            sampled_lambda_values = _sample_tick_values(_lambda_values_for_strategy(stats_df, strategy))
+            sampled_lambda_values = _sample_tick_values(
+                _lambda_values_for_strategy(stats_df, strategy)
+            )
             ax = axes[row_idx][col_idx]
             for k in k_values:
                 ksub = sub.filter(pl.col('k') == k).sort('lam')
@@ -1579,7 +1584,7 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
                     ls=style['ls'],
                     lw=1.8,
                     marker='o',
-                    ms=4,
+                    ms=FOR_LAMBDA_K_CURVE_MARKER_SIZE,
                     label=f'k={k}',
                 )
                 ref = topk_df.filter(pl.col('k') == k)
@@ -1621,7 +1626,7 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
         fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
     )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
-    fig.savefig(out_dir / 'answer_metrics_k_curves_per_lambda.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'answer_metrics_k_curves_for_lambda.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 

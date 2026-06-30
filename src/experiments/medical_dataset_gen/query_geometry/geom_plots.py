@@ -661,10 +661,35 @@ def _legend_label_fragment_lines(
         return [[(line, 'black')] for line in rendered_label.splitlines()]
     condition, subgroup, axis_part = parts
     axis, axis_suffix = _split_axis_suffix(axis_part)
+    legend_entry_matches_query_facet = _legend_entry_matches_query_facet(artifact, raw_label)
     raw_fragments: LegendTextFragments = [
-        (condition, _legend_value_color(artifact, 'condition', condition)),
-        (subgroup, _legend_value_color(artifact, 'subgroup', subgroup)),
-        (axis, _legend_value_color(artifact, 'axis', axis)),
+        (
+            condition,
+            _legend_value_color(
+                artifact,
+                'condition',
+                condition,
+                legend_entry_matches_query_facet=legend_entry_matches_query_facet,
+            ),
+        ),
+        (
+            subgroup,
+            _legend_value_color(
+                artifact,
+                'subgroup',
+                subgroup,
+                legend_entry_matches_query_facet=legend_entry_matches_query_facet,
+            ),
+        ),
+        (
+            axis,
+            _legend_value_color(
+                artifact,
+                'axis',
+                axis,
+                legend_entry_matches_query_facet=legend_entry_matches_query_facet,
+            ),
+        ),
     ]
     if axis_suffix:
         raw_fragments.append((axis_suffix, LEGEND_NON_MATCH_COLOR))
@@ -672,11 +697,35 @@ def _legend_label_fragment_lines(
         return [
             [
                 (indent, 'black'),
-                (condition, _legend_value_color(artifact, 'condition', condition)),
+                (
+                    condition,
+                    _legend_value_color(
+                        artifact,
+                        'condition',
+                        condition,
+                        legend_entry_matches_query_facet=legend_entry_matches_query_facet,
+                    ),
+                ),
                 (' / ', 'black'),
-                (subgroup, _legend_value_color(artifact, 'subgroup', subgroup)),
+                (
+                    subgroup,
+                    _legend_value_color(
+                        artifact,
+                        'subgroup',
+                        subgroup,
+                        legend_entry_matches_query_facet=legend_entry_matches_query_facet,
+                    ),
+                ),
                 (' / ', 'black'),
-                (axis, _legend_value_color(artifact, 'axis', axis)),
+                (
+                    axis,
+                    _legend_value_color(
+                        artifact,
+                        'axis',
+                        axis,
+                        legend_entry_matches_query_facet=legend_entry_matches_query_facet,
+                    ),
+                ),
                 (axis_suffix, LEGEND_NON_MATCH_COLOR if axis_suffix else 'black'),
             ]
         ]
@@ -727,7 +776,11 @@ def _legend_value_color(
     artifact: GeometryArtifact,
     value_kind: str,
     value: str,
+    *,
+    legend_entry_matches_query_facet: bool,
 ) -> str:
+    if not legend_entry_matches_query_facet:
+        return LEGEND_NON_MATCH_COLOR
     query_condition = str(
         artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
     )
@@ -743,6 +796,28 @@ def _legend_value_color(
     if value_kind == 'axis':
         return LEGEND_MATCH_COLOR if value in query_axes else LEGEND_NON_MATCH_COLOR
     return 'black'
+
+
+def _legend_entry_matches_query_facet(artifact: GeometryArtifact, label: str) -> bool:
+    return label in _artifact_facet_labels(artifact)
+
+
+def _artifact_facet_labels(artifact: GeometryArtifact) -> set[str]:
+    facet_label_map = getattr(artifact, 'facets_by_id', None)
+    if facet_label_map:
+        return set(facet_label_map.values())
+    facets_json = artifact.query.facets_json
+    if not facets_json:
+        return set()
+    facet_labels: set[str] = set()
+    condition = str(
+        artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
+    )
+    for facet in json.loads(facets_json):
+        subgroup = str(facet.get('subgroup_label') or 'unknown subgroup')
+        axis = str(facet.get('axis') or 'unknown axis')
+        facet_labels.add(f'{condition} / {subgroup} / {axis.replace("_", " ")}')
+    return facet_labels
 
 
 def _wrap_legend_label(

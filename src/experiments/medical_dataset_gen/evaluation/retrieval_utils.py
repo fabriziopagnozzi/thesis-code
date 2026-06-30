@@ -189,6 +189,15 @@ def harmonic_mean(left: float, right: float) -> float:
     return 0.0 if denom <= 0 else 2 * left * right / denom
 
 
+def harmonic_mean_many(values: Sequence[float]) -> float:
+    if not values:
+        return 0.0
+    normalized_values = [float(value) for value in values]
+    if any(value <= 0.0 for value in normalized_values):
+        return 0.0
+    return len(normalized_values) / sum(1.0 / value for value in normalized_values)
+
+
 def pair_kernel_polars_expr(kernel_cfg: MethodsComparisonKernelsCfg) -> pl.Expr:
     match kernel_cfg.pair_aggregation:
         case 'arithmetic_mean':

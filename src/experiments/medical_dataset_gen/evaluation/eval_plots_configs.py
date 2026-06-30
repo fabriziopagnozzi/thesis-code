@@ -11,7 +11,7 @@ type EvalPlotCallContext = dict[str, pl.DataFrame | Path | LambdaSelectionCfg]
 type EvalPlotFileName = Literal[
     # -------------------------------------------
     # retrieval metrics
-    'metrics_k_curves_per_lambda',
+    'metrics_k_curves_for_lambda',
     'metrics_at_best_lambda_for_k',
     'metrics_heatmap_k_lambda_grid',
     'metrics_heatmap_k_lambda_grid_html',
@@ -19,10 +19,10 @@ type EvalPlotFileName = Literal[
     # -------------------------------------------
     # answer metrics
     'answer_metrics_at_best_lambda_for_k',
-    'answer_metrics_k_curves_per_lambda',
+    'answer_metrics_k_curves_for_lambda',
     # -------------------------------------------
     # diagnostics
-    'diagnostics_k_curves_per_lambda',
+    'diagnostics_k_curves_for_lambda',
     'diagnostics_at_best_lambda_for_k',
     # -------------------------------------------
     # deltas
@@ -46,6 +46,9 @@ STRATEGY_STYLE: dict[str, dict[str, str]] = {
     'mmr': {'color': '#1f77b4', 'ls': '-', 'label': 'MMR'},
     'fac_loc': {'color': '#d62728', 'ls': '-', 'label': 'FacLoc'},
 }
+
+# Marker size for raw-lambda figures that draw one curve per k.
+FOR_LAMBDA_K_CURVE_MARKER_SIZE = 3.0
 
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {
@@ -91,8 +94,8 @@ class PlotGridLayout:
 # - `plot_lambda_agreement(...)` depends on lambda counts and shared y-axis behavior.
 DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     'metrics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
-    'metrics_k_curves_per_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
-    'diagnostics_k_curves_per_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
+    'metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
+    'diagnostics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     'metrics_distributions': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
     'delta_vs_topk_metrics_for_k_for_lambda': PlotGridLayout(1, 1, 1.0, 2.9, 1.8),
     'delta_vs_topk_metrics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.83, 3.4, 1.4),
@@ -100,7 +103,7 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     'profiles_diagnostics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
     'diagnostics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
     'answer_metrics_at_best_lambda_for_k': PlotGridLayout(1, 3, 4.2, 3.4, 1.4),
-    'answer_metrics_k_curves_per_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
+    'answer_metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     'lambda_agreement': PlotGridLayout(1, 1, 1.0, 1.0, 1.7),
     'metrics_at_agreeing_lambda_wrt_best_lambda': PlotGridLayout(2, 1, 1.0, 1.0, 1.6),
 }

@@ -80,12 +80,12 @@ retrieval:
     k_values: [4, 5, 6, 7, 8, 9]
     lambdas_mmr: # MMR uses lambda on its full relevance-diversity scale.
         start: 0.02
-        stop: 0.98
-        num_values: 100
+        stop: 0.90
+        num_values: 30
     lambdas_fac_loc: # FacLoc reaches useful coverage behavior on a lower raw-lambda scale.
         start: 0.01
         stop: 0.40
-        num_values: 100
+        num_values: 30
     mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
     compute_answer_rouge: true # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
     only_pass_geometry: true # If true, evaluation skips queries that fail the geometric prefilter.
@@ -101,36 +101,7 @@ geometry_filter:
 
 evaluation:
     lambda_selection:
-        primary_metric: CleanFacetF1@k # Primary benchmark objective: cover facets while avoiding non-gold chunks.
-        primary_higher_is_better: null # null means infer direction from the metric registry.
-        primary_tolerance: 0.01 # Only used when primary_metric is not null.
-        missing_metric_policy: skip # skip missing components, e.g. ROUGE when answer ROUGE is disabled.
-        tie_break: lower_lambda # Stable final tie-break after composite score and primary metric.
-        metrics:
-            - metric: CleanFacetF1@k
-              enabled: true
-              weight: 0.45
-              higher_is_better: true
-            - metric: MeanFacetHitRate@k
-              enabled: true
-              weight: 0.20
-              higher_is_better: null
-            - metric: MeanFacetRecall@k
-              enabled: true
-              weight: 0.10
-              higher_is_better: null
-            - metric: F1@k # Persisted gold-relevance F1 metric.
-              enabled: true
-              weight: 0.10
-              higher_is_better: true
-            - metric: DistractorRate
-              enabled: true
-              weight: 0.10
-              higher_is_better: false
-            - metric: AnswerROUGE1F1@k # Persisted answer ROUGE-1 F1 metric when answer ROUGE is enabled.
-              enabled: true
-              weight: 0.05
-              higher_is_better: true
+        tie_break: lower_lambda # Representative lambda always maximizes CleanFacetF1@k; use this only to break exact ties.
     fac_loc_mmr_comparison_kernels:
         lambda_max: 0.80 # Ignore near-top-k lambda pairs in the FacLoc/MMR agreement sweep.
         agreement_alpha: 3.0 # Exponent applied to the inverse quality-kernel penalty; larger is more aggressive.
