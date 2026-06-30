@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import TypedDict
 
 import numpy as np
-import polars as pl
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
@@ -19,9 +18,11 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
     QueryRecord,
-    RetrievalIndexMaps,
     RetrievalStrategy,
 )
+
+type GeometryGlobalLambdaKey = tuple[RetrievalStrategy, int]
+type GeometryQueryLambdaKey = tuple[str, RetrievalStrategy, int]
 
 
 class GeometrySelection(BenchmarkModel):
@@ -53,7 +54,7 @@ class GeometryArtifact(BenchmarkModel):
     cluster_labels: NDArray[np.int32]
     selections: dict[RetrievalStrategy, GeometrySelection]
     selection_variants: dict[RetrievalStrategy, list[GeometrySelection]]
-    lambda_values: list[float]
+    lambda_values_by_strategy: dict[RetrievalStrategy, list[float]]
     mmr_window: int | None
     k: int
     chunk_by_id: dict[str, ChunkDocumentRecord]
@@ -177,16 +178,22 @@ class RenderedGeometryResult(TypedDict):
     query_stats: EmbeddingGeometryQueryStats
 
 
+class GeometryIndexMaps(TypedDict):
+    query_id_to_idx: dict[str, int]
+    chunk_by_id: dict[str, ChunkDocumentRecord]
+    chunks_by_source_query: dict[str, list[int]]
+
+
 class EmbeddingGeometryWorkerState(TypedDict):
     cfg: ExperimentCfg
-    queries: pl.DataFrame
-    qrels: pl.DataFrame
+    queries_by_id: dict[str, QueryRecord]
+    qrels_by_query_chunk: dict[str, dict[str, QrelRecord]]
     chunk_vectors: NDArray[np.float32]
     query_vectors: NDArray[np.float32]
     chunk_ids: list[str]
-    maps: RetrievalIndexMaps
-    eval_stats: pl.DataFrame
-    eval_results: pl.DataFrame
+    maps: GeometryIndexMaps
+    query_best_lambdas: dict[GeometryQueryLambdaKey, float]
+    global_best_lambdas: dict[GeometryGlobalLambdaKey, float]
     out_dir: Path
     query_group_by_id: dict[str, str]
     query_dir_name_by_id: dict[str, str]

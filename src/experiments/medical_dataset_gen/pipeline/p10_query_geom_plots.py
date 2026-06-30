@@ -207,18 +207,21 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
     maps = state['maps']
     if qid not in maps['query_id_to_idx']:
         return None
+    query = state['queries_by_id'].get(qid)
+    if query is None:
+        return None
 
     artifact = build_query_artifact(
         cfg=state['cfg'],
         qid=qid,
-        queries=state['queries'],
-        qrels=state['qrels'],
+        query=query,
+        query_qrels=state['qrels_by_query_chunk'].get(qid, {}),
         chunk_vectors=state['chunk_vectors'],
         query_vectors=state['query_vectors'],
         chunk_ids=state['chunk_ids'],
         maps=state['maps'],
-        eval_stats=state['eval_stats'],
-        eval_results=state['eval_results'],
+        query_best_lambdas=state['query_best_lambdas'],
+        global_best_lambdas=state['global_best_lambdas'],
     )
     if artifact is None:
         return None

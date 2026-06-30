@@ -30,6 +30,7 @@ METRIC_NAME_TO_FIELD: dict[str, MetricFieldSpec] = {
     'MAP@k': MetricFieldSpec('average_precision_at_k', higher_is_better=True),
     'MeanFacetHitRate@k': MetricFieldSpec('facet_coverage', higher_is_better=True),
     'MeanFacetRecall@k': MetricFieldSpec('weighted_facet_coverage', higher_is_better=True),
+    'CleanFacetF1@k': MetricFieldSpec('clean_facet_f1', higher_is_better=True),
     'FacetMRR@k': MetricFieldSpec('facet_mrr_at_k', higher_is_better=True),
     'alpha-nDCG@k': MetricFieldSpec('alpha_ndcg', higher_is_better=True),
     'DistractorRate': MetricFieldSpec('distractor_rate', higher_is_better=False),
@@ -39,6 +40,8 @@ METRIC_NAME_TO_FIELD: dict[str, MetricFieldSpec] = {
         'same_condition_wrong_axis_rate', higher_is_better=False
     ),
     'PrimaryAxisRate': MetricFieldSpec('primary_axis_rate', higher_is_better=False),
+    'CalibratedFacetRate': MetricFieldSpec('calibrated_facet_rate', higher_is_better=False),
+    'RedundantGoldRate': MetricFieldSpec('redundant_gold_rate', higher_is_better=False),
     'fac': MetricFieldSpec('fac_cov_score', higher_is_better=True),
     'avg_cos': MetricFieldSpec('avg_cos', higher_is_better=True),
     'jac': MetricFieldSpec('jaccard_vs_topk', higher_is_better=True),

@@ -189,11 +189,14 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('query_id').n_unique().alias('n_queries'),
         pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
         pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
+        pl.col('clean_facet_f1').mean().alias('CleanFacetF1@k'),
         pl.col('gold_precision').mean().alias('Precision@k'),
         pl.col('gold_recall').mean().alias('Recall@k'),
         pl.col('gold_f1').mean().alias('F1@k'),
         pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
+        pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
+        pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
     ]
     optional_rouge_exprs = [
         ('answer_rouge1_recall', 'AnswerROUGE1Recall@k'),
@@ -360,9 +363,7 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
 
     eval_result_rows: list[EvaluationResultRow] = []
     for strategy in cfg.retrieval.strategies:
-        lam_values: list[None] | list[float] = (
-            [None] if strategy == 'top_k' else cfg.retrieval.lambda_values
-        )
+        lam_values = cfg.retrieval.lambda_values_for_strategy(strategy)
 
         for lam in lam_values:
             if strategy == 'top_k':
@@ -462,6 +463,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('average_precision_at_k').mean().alias('MAP@k'),
         pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
         pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
+        pl.col('clean_facet_f1').mean().alias('CleanFacetF1@k'),
         pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
         pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
         pl.col('distractor_rate').mean().alias('DistractorRate'),
@@ -469,6 +471,8 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
         pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
+        pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
+        pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
         pl.col('fac_cov_score').mean().alias('fac'),
         pl.col('avg_cos').mean().alias('avg_cos'),
         pl.col('jaccard_vs_topk').mean().alias('jac'),
@@ -499,6 +503,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'MAP@k',
         'MeanFacetHitRate@k',
         'MeanFacetRecall@k',
+        'CleanFacetF1@k',
         'FacetMRR@k',
         'alpha-nDCG@k',
         'AnswerROUGE1Recall@k',
@@ -510,6 +515,8 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'BackgroundOutlierRate',
         'SameConditionWrongAxisRate',
         'PrimaryAxisRate',
+        'CalibratedFacetRate',
+        'RedundantGoldRate',
         'fac',
         'avg_cos',
         'jac',

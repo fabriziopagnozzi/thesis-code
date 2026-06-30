@@ -51,6 +51,7 @@ STRATEGY_STYLE: dict[str, dict[str, str]] = {
 PLOT_METRIC_TITLES = {
     'MeanFacetHitRate@k': 'MeanFacetHitRate@k',
     'MeanFacetRecall@k': 'FacetRecall@k',
+    'CleanFacetF1@k': 'CleanFacetF1@k',
     'DistractorRate': 'DistractorRate@k',
     'F1@k': 'F1@k',
     'Recall@k': 'Recall@k',
@@ -59,7 +60,10 @@ PLOT_METRIC_TITLES = {
     'AnswerROUGE2Recall@k': 'Answer ROUGE-2 Recall@k',
     'NearMissDistractorRate': 'NearMissDistractorRate',
     'BackgroundOutlierRate': 'BackgroundOutlierRate',
+    'SameConditionWrongAxisRate': 'SameConditionWrongAxisRate',
     'PrimaryAxisRate': 'PrimaryAxisRate',
+    'CalibratedFacetRate': 'CalibratedFacetRate',
+    'RedundantGoldRate': 'RedundantGoldRate',
     'fac': 'Facility-Location Objective',
     'avg_cos': 'Average Query Cosine',
     'jac': 'Jaccard vs top-k',
@@ -104,6 +108,7 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
 
 # Main benchmark metrics shown in the primary strategy-comparison figures.
 PLOTTED_MAIN_METRIC_NAMES = [
+    'CleanFacetF1@k',
     'MeanFacetHitRate@k',
     'MeanFacetRecall@k',
     'DistractorRate',
@@ -119,7 +124,10 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
     'DistractorRate',
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
+    'SameConditionWrongAxisRate',
     'PrimaryAxisRate',
+    'CalibratedFacetRate',
+    'RedundantGoldRate',
     'fac',
     'avg_cos',
     'jac',

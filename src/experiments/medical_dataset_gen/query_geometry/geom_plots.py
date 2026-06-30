@@ -108,8 +108,10 @@ def plot_full_strategy_selection_overlay(
 ) -> None:
     import matplotlib.pyplot as plt
 
-    lambda_values = [float(lam) for lam in artifact.lambda_values]
-    if not lambda_values:
+    lambda_values_by_strategy = {
+        strategy: _artifact_lambda_values(artifact, strategy) for strategy in ['mmr', 'fac_loc']
+    }
+    if not any(lambda_values_by_strategy.values()):
         return
     render_k = int(artifact.k if k is None else k)
     effective_k = min(render_k, len(artifact.sim_to_query))
@@ -118,7 +120,7 @@ def plot_full_strategy_selection_overlay(
     row_variants = {
         strategy: _meaningful_lambda_selection_variants(
             selection_variants.get(strategy, []),
-            lambda_values=lambda_values,
+            lambda_values=lambda_values_by_strategy[strategy],
         )
         for strategy in rows
     }
@@ -408,7 +410,6 @@ def _selection_variants_for_k(
     sim_to_query = np.asarray(artifact.sim_to_query)
     sim_matrix = np.asarray(artifact.sim_matrix)
     mmr_window = artifact.mmr_window
-    lambda_values = [float(lam) for lam in artifact.lambda_values]
 
     variants: dict[str, list[GeometrySelection]] = {
         'top_k': [
@@ -426,6 +427,7 @@ def _selection_variants_for_k(
         ]
     }
     for strategy in cast(list[RetrievalStrategy], ['mmr', 'fac_loc']):
+        lambda_values = _artifact_lambda_values(artifact, strategy)
         variants[strategy] = [
             GeometrySelection(
                 local_indices=select_indices(
@@ -441,6 +443,10 @@ def _selection_variants_for_k(
             for lam in lambda_values
         ]
     return variants
+
+
+def _artifact_lambda_values(artifact: GeometryArtifact, strategy: RetrievalStrategy) -> list[float]:
+    return [float(lam) for lam in artifact.lambda_values_by_strategy.get(strategy, [])]
 
 
 def _meaningful_lambda_selection_variants(

@@ -4,15 +4,22 @@ from pathlib import Path
 
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     build_index_maps,
+    get_qrels_by_query_chunk,
     load_embedding_arrays,
 )
 from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
     MedicalDatasetGenPaths,
 )
+from experiments.medical_dataset_gen.query_geometry.artifacts import build_best_lambda_maps
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometryWorkerState,
+    GeometryIndexMaps,
+)
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+    QueryRecord,
+    RetrievalIndexMaps,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
@@ -62,18 +69,25 @@ def init_query_geometry_worker(
     eval_stats = read_parquet_if_exists_else_empty_df(paths, 'evaluation_stats')
     eval_results = read_parquet_if_exists_else_empty_df(paths, 'evaluation_results')
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
+    raw_maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
+    maps = _build_geometry_index_maps(raw_maps)
+    query_best_lambdas, global_best_lambdas = build_best_lambda_maps(eval_stats, eval_results)
 
     worker_state: EmbeddingGeometryWorkerState = {
         'cfg': cfg,
-        'queries': queries,
-        'qrels': qrels,
+        'queries_by_id': {
+            query_record.query_id: query_record
+            for query_record in (
+                QueryRecord.model_validate(row) for row in queries.iter_rows(named=True)
+            )
+        },
+        'qrels_by_query_chunk': get_qrels_by_query_chunk(qrels),
         'chunk_vectors': chunk_vectors,
         'query_vectors': query_vectors,
         'chunk_ids': chunk_ids,
         'maps': maps,
-        'eval_stats': eval_stats,
-        'eval_results': eval_results,
+        'query_best_lambdas': query_best_lambdas,
+        'global_best_lambdas': global_best_lambdas,
         'out_dir': Path(out_dir),
         'query_group_by_id': query_group_by_id,
         'query_dir_name_by_id': query_dir_name_by_id,
@@ -81,3 +95,11 @@ def init_query_geometry_worker(
         'selected_plot_names': selected_plot_names,
     }
     set_geom_worker_state(worker_state)
+
+
+def _build_geometry_index_maps(raw_maps: RetrievalIndexMaps) -> GeometryIndexMaps:
+    return {
+        'query_id_to_idx': raw_maps['query_id_to_idx'],
+        'chunk_by_id': raw_maps['chunk_by_id'],
+        'chunks_by_source_query': raw_maps['chunks_by_source_query'],
+    }

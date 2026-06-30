@@ -22,6 +22,10 @@ def compute_retrieval_metrics(
 ) -> dict[str, float | int]:
     relevance = _relevance_metrics(selected_chunk_ids, all_gold_ids)
     facet_coverage = _facet_coverage_metrics(selected_chunk_ids, facet_to_gold)
+    clean_facet_f1 = harmonic_mean(
+        float(relevance['gold_precision']),
+        float(facet_coverage['facet_coverage']),
+    )
     diversified_ranking = _diversified_ranking_metrics(
         selected_chunk_ids, query_qrels, facet_to_gold, all_gold_ids
     )
@@ -39,6 +43,7 @@ def compute_retrieval_metrics(
     return {
         **relevance,
         **facet_coverage,
+        'clean_facet_f1': float(clean_facet_f1),
         **diversified_ranking,
         **redundancy,
         'n_unique_hadms': len({row.admission_id for row in selected_rows if row.admission_id}),
@@ -113,6 +118,8 @@ def _redundancy_metrics(
         else 0.0
     )
     primary_axis_rate = primary_axis_count / n_selected if n_selected else 0.0
+    calibrated_facet_count = selected_facet_counts.get(calibrated_primary_facet_id, 0)
+    redundant_gold_count = max(0, n_selected_gold - n_facet_hits)
 
     return {
         'distractor_rate': non_gold_count / n_selected if n_selected else 0.0,
@@ -124,6 +131,8 @@ def _redundancy_metrics(
             same_condition_wrong_axis_count / n_selected if n_selected else 0.0
         ),
         'primary_axis_rate': float(primary_axis_rate),
+        'calibrated_facet_rate': calibrated_facet_count / n_selected if n_selected else 0.0,
+        'redundant_gold_rate': redundant_gold_count / n_selected if n_selected else 0.0,
         'max_facet_concentration': float(max_facet_concentration),
         'n_selected_non_gold': non_gold_count,
         'n_selected_near_miss_distractors': near_miss_distractor_count,
@@ -320,4 +329,8 @@ class DiversifiedRankingIndexMetrics:
 
 def _is_query_near_miss_distractor(query_qrels: dict[str, QrelRecord], chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
-    return row is not None and not row.is_gold and row.cluster_role not in {'background_outlier'}
+    return (
+        row is not None
+        and not row.is_gold
+        and row.cluster_role not in {'background_outlier', 'same_condition_wrong_axis'}
+    )

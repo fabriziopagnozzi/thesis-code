@@ -9,6 +9,7 @@ consistent with the rest of the pipeline.
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import numpy as np
 import polars as pl
@@ -27,31 +28,36 @@ from experiments.medical_dataset_gen.query_geometry.dim_reduction import (
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryArtifact,
+    GeometryGlobalLambdaKey,
+    GeometryIndexMaps,
+    GeometryQueryLambdaKey,
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
     QueryRecord,
-    RetrievalIndexMaps,
     RetrievalStrategy,
 )
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [
+    'CleanFacetF1@k',
     'MeanFacetHitRate@k',
     'Precision@k',
     'DistractorRate',
     'MeanFacetRecall@k',
     'alpha-nDCG@k',
+    'CFF1',
     'FC',
     'GP',
     'DR',
     'WFC',
     'alpha_nDCG',
 ]
-_STATS_BEST_DESC = [True, True, False, True, True, True, False, True, True, True]
+_STATS_BEST_DESC = [True, True, True, False, True, True, True, True, False, True, True, True]
 _QUERY_BEST_SORT = [
+    'clean_facet_f1',
     'facet_coverage',
     'gold_precision',
     'distractor_rate',
@@ -59,7 +65,7 @@ _QUERY_BEST_SORT = [
     'alpha_ndcg',
     'gold_recall',
 ]
-_QUERY_BEST_DESC = [True, True, False, True, True, True]
+_QUERY_BEST_DESC = [True, True, True, False, True, True, True]
 
 _QUERY_SELECTION_SORT = [
     'selection_score',
@@ -93,7 +99,7 @@ def choose_query_groups(
 
     ranked = ranked_queries_for_query_geometry(cfg, queries, geometry_filter, eval_results)
     if cfg.query_geometry.query_selection == 'best':
-        return {'good': ranked['query_id'].head(cfg.query_geometry.n_queries).to_list()}
+        return {'best': ranked['query_id'].head(cfg.query_geometry.n_queries).to_list()}
     return mixed_query_groups(ranked, cfg.query_geometry.n_queries)
 
 
@@ -190,22 +196,22 @@ def mixed_query_ids(ranked: pl.DataFrame, n_queries: int) -> list[str]:
 
 
 def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[str]]:
-    n_good, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
-    good_ids = ranked['query_id'].head(n_good).to_list()
+    n_best, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
+    best_ids = ranked['query_id'].head(n_best).to_list()
     bad_ids = (
         ranked
         .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
         .head(n_bad)
         .to_list()
     )
-    excluded_ids = [*good_ids, *bad_ids]
+    excluded_ids = [*best_ids, *bad_ids]
     remaining = ranked.filter(~pl.col('query_id').is_in(excluded_ids))
     mid_start = max(0, (remaining.height - n_mid) // 2)
     mid_ids = remaining['query_id'].slice(mid_start, n_mid).to_list()
 
     return {
         group: query_ids
-        for group, query_ids in [('good', good_ids), ('mid', mid_ids), ('bad', bad_ids)]
+        for group, query_ids in [('best', best_ids), ('mid', mid_ids), ('worst', bad_ids)]
         if query_ids
     }
 
@@ -213,10 +219,10 @@ def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[s
 def mixed_group_sizes(n_queries: int) -> tuple[int, int, int]:
     base = n_queries // 3
     remainder = n_queries % 3
-    n_good = base + int(remainder >= 1)
+    n_best = base + int(remainder >= 1)
     n_mid = base + int(remainder >= 2)
     n_bad = base
-    return n_good, n_mid, n_bad
+    return n_best, n_mid, n_bad
 
 
 def _rank_position_map(query_ids: list[str]) -> dict[str, int]:
@@ -279,16 +285,15 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
 def build_query_artifact(
     cfg: ExperimentCfg,
     qid: str,
-    queries: pl.DataFrame,
-    qrels: pl.DataFrame,
+    query: QueryRecord,
+    query_qrels: dict[str, QrelRecord],
     chunk_vectors: NDArray[np.float32],
     query_vectors: NDArray[np.float32],
     chunk_ids: list[str],
-    maps: RetrievalIndexMaps,
-    eval_stats: pl.DataFrame,
-    eval_results: pl.DataFrame,
+    maps: GeometryIndexMaps,
+    query_best_lambdas: dict[GeometryQueryLambdaKey, float],
+    global_best_lambdas: dict[GeometryGlobalLambdaKey, float],
 ) -> GeometryArtifact | None:
-    query = QueryRecord.model_validate(queries.filter(pl.col('query_id') == qid).row(0, named=True))
     qidx = maps['query_id_to_idx'][qid]
     pool_n = cfg.query_geometry.candidate_pool_n or cfg.retrieval.candidate_pool_n
 
@@ -310,11 +315,6 @@ def build_query_artifact(
     sim_matrix = candidate_vectors @ candidate_vectors.T
     k = min(cfg.query_geometry.plot_k, len(topn_global))
     candidate_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
-    query_qrels = {
-        qrel.chunk_id: qrel
-        for row in qrels.filter(pl.col('query_id') == qid).iter_rows(named=True)
-        for qrel in [QrelRecord.model_validate(row)]
-    }
     labels, label_ids, roles, is_gold = candidate_labels(
         candidate_chunk_ids,
         query_qrels,
@@ -322,7 +322,14 @@ def build_query_artifact(
         query,
     )
     selection_variants = strategy_selection_variants(cfg, topn_sims, sim_matrix, k)
-    selections = strategy_selections(cfg, eval_stats, eval_results, qid, selection_variants, k)
+    selections = strategy_selections(
+        cfg,
+        query_best_lambdas,
+        global_best_lambdas,
+        qid,
+        selection_variants,
+        k,
+    )
     coords, reduction_method = reduce_for_plot(
         cfg,
         np.vstack([candidate_vectors, query_vector[None, :]]).astype(np.float32),
@@ -349,7 +356,18 @@ def build_query_artifact(
         cluster_labels=cluster_labels,
         selections=selections,
         selection_variants=selection_variants,
-        lambda_values=[float(lam) for lam in cfg.retrieval.lambda_values],
+        lambda_values_by_strategy={
+            'mmr': [
+                float(lam)
+                for lam in cfg.retrieval.lambda_values_for_strategy('mmr')
+                if lam is not None
+            ],
+            'fac_loc': [
+                float(lam)
+                for lam in cfg.retrieval.lambda_values_for_strategy('fac_loc')
+                if lam is not None
+            ],
+        },
         mmr_window=cfg.retrieval.mmr_window,
         k=k,
         chunk_by_id=maps['chunk_by_id'],
@@ -441,8 +459,8 @@ def facet_surface_label(*, condition: str, subgroup: str, axis: str) -> str:
 
 def strategy_selections(
     cfg: ExperimentCfg,
-    eval_stats: pl.DataFrame,
-    eval_results: pl.DataFrame,
+    query_best_lambdas: dict[GeometryQueryLambdaKey, float],
+    global_best_lambdas: dict[GeometryGlobalLambdaKey, float],
     qid: str,
     selection_variants: dict[RetrievalStrategy, list[GeometrySelection]],
     k: int,
@@ -457,11 +475,11 @@ def strategy_selections(
         if not variants:
             continue
         lam = best_lambda(
-            eval_stats,
             strategy,
             k,
             cfg,
-            eval_results=eval_results,
+            query_best_lambdas=query_best_lambdas,
+            global_best_lambdas=global_best_lambdas,
             query_id=qid,
         )
         local = _selection_for_lambda(variants, lam)
@@ -506,7 +524,8 @@ def strategy_selection_variants(
                 ),
                 lam=float(lam),
             )
-            for lam in cfg.retrieval.lambda_values
+            for lam in cfg.retrieval.lambda_values_for_strategy(strategy)
+            if lam is not None
         ]
 
     return variants
@@ -526,29 +545,31 @@ def _selection_for_lambda(
 
 
 def best_lambda(
-    eval_stats: pl.DataFrame,
-    strategy: str,
+    strategy: RetrievalStrategy,
     k: int,
     cfg: ExperimentCfg | None,
     *,
-    eval_results: pl.DataFrame | None = None,
+    query_best_lambdas: dict[GeometryQueryLambdaKey, float] | None = None,
+    global_best_lambdas: dict[GeometryGlobalLambdaKey, float] | None = None,
     query_id: str | None = None,
 ) -> float:
-    if eval_results is not None and query_id is not None:
-        query_lam = _best_query_lambda(eval_results, query_id, strategy, k)
+    if query_best_lambdas is not None and query_id is not None:
+        query_lam = query_best_lambdas.get((query_id, strategy, k))
         if query_lam is not None:
             return query_lam
 
-    if (
-        eval_stats.height > 0
-        and {'strategy', 'k', 'lam'}.issubset(eval_stats.columns)
-        and strategy in eval_stats['strategy'].unique().to_list()
-    ):
-        sub = eval_stats.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
-        if sub.height > 0:
-            sort_cols, desc = _available_sort(sub, _STATS_BEST_SORT, _STATS_BEST_DESC)
-            return float(sub.sort(sort_cols, descending=desc)['lam'][0])
-    lambda_values = [] if cfg is None else cfg.retrieval.lambda_values
+    if global_best_lambdas is not None:
+        global_lam = global_best_lambdas.get((strategy, k))
+        if global_lam is not None:
+            return global_lam
+
+    lambda_values = []
+    if cfg is not None and strategy in {'fac_loc', 'mmr'}:
+        lambda_values = [
+            float(lam)
+            for lam in cfg.retrieval.lambda_values_for_strategy(strategy)
+            if lam is not None
+        ]
     if not lambda_values:
         return 0.5
     if strategy == 'fac_loc':
@@ -558,21 +579,71 @@ def best_lambda(
     return 0.5
 
 
-def _best_query_lambda(
+def build_best_lambda_maps(
+    eval_stats: pl.DataFrame,
     eval_results: pl.DataFrame,
-    query_id: str,
-    strategy: str,
-    k: int,
-) -> float | None:
-    if not {'query_id', 'strategy', 'k', 'lam'}.issubset(eval_results.columns):
-        return None
-    sub = eval_results.filter(
-        (pl.col('query_id') == query_id) & (pl.col('strategy') == strategy) & (pl.col('k') == k)
+) -> tuple[
+    dict[GeometryQueryLambdaKey, float],
+    dict[GeometryGlobalLambdaKey, float],
+]:
+    return _query_best_lambda_map(eval_results), _global_best_lambda_map(eval_stats)
+
+
+def _query_best_lambda_map(eval_results: pl.DataFrame) -> dict[GeometryQueryLambdaKey, float]:
+    result: dict[GeometryQueryLambdaKey, float] = {}
+    required_columns = {'query_id', 'strategy', 'k', 'lam'}
+    if eval_results.height == 0 or not required_columns.issubset(eval_results.columns):
+        return result
+
+    best_rows = _first_sorted_lambdas(
+        eval_results.filter(pl.col('strategy') != 'top_k'),
+        group_cols=['query_id', 'strategy', 'k'],
+        preferred_sort_cols=_QUERY_BEST_SORT,
+        preferred_sort_desc=_QUERY_BEST_DESC,
     )
-    if sub.height == 0:
-        return None
-    sort_cols, desc = _available_sort(sub, _QUERY_BEST_SORT, _QUERY_BEST_DESC)
-    return float(sub.sort(sort_cols, descending=desc)['lam'][0])
+    for row in best_rows.iter_rows(named=True):
+        strategy = cast(RetrievalStrategy, str(row['strategy']))
+        result[(str(row['query_id']), strategy, int(row['k']))] = float(row['lam'])
+    return result
+
+
+def _global_best_lambda_map(eval_stats: pl.DataFrame) -> dict[GeometryGlobalLambdaKey, float]:
+    result: dict[GeometryGlobalLambdaKey, float] = {}
+    required_columns = {'strategy', 'k', 'lam'}
+    if eval_stats.height == 0 or not required_columns.issubset(eval_stats.columns):
+        return result
+
+    best_rows = _first_sorted_lambdas(
+        eval_stats.filter(pl.col('strategy') != 'top_k'),
+        group_cols=['strategy', 'k'],
+        preferred_sort_cols=_STATS_BEST_SORT,
+        preferred_sort_desc=_STATS_BEST_DESC,
+    )
+    for row in best_rows.iter_rows(named=True):
+        strategy = cast(RetrievalStrategy, str(row['strategy']))
+        result[(strategy, int(row['k']))] = float(row['lam'])
+    return result
+
+
+def _first_sorted_lambdas(
+    df: pl.DataFrame,
+    *,
+    group_cols: list[str],
+    preferred_sort_cols: list[str],
+    preferred_sort_desc: list[bool],
+) -> pl.DataFrame:
+    if df.height == 0:
+        return df
+    sort_cols, desc = _available_sort(df, preferred_sort_cols, preferred_sort_desc)
+    return (
+        df
+        .sort(
+            [*group_cols, *sort_cols],
+            descending=[False] * len(group_cols) + desc,
+        )
+        .group_by(*group_cols, maintain_order=True)
+        .first()
+    )
 
 
 def _available_sort(

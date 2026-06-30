@@ -78,34 +78,14 @@ retrieval:
     pool_scope: query_local
     candidate_pool_n: 10_000 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
     k_values: [4, 5, 6, 7, 8, 9]
-    lambda_values: # Low lambda favors diversity/coverage; high lambda favors query similarity.
-        [
-            0.02,
-            0.06,
-            0.10,
-            0.14,
-            0.18,
-            0.22,
-            0.26,
-            0.30,
-            0.34,
-            0.38,
-            0.42,
-            0.46,
-            0.50,
-            0.54,
-            0.58,
-            0.62,
-            0.66,
-            0.70,
-            0.74,
-            0.78,
-            0.82,
-            0.86,
-            0.90,
-            0.94,
-            0.98,
-        ]
+    lambdas_mmr: # MMR uses lambda on its full relevance-diversity scale.
+        start: 0.02
+        stop: 0.98
+        num_values: 100
+    lambdas_fac_loc: # FacLoc reaches useful coverage behavior on a lower raw-lambda scale.
+        start: 0.01
+        stop: 0.40
+        num_values: 100
     mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
     compute_answer_rouge: true # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
     only_pass_geometry: true # If true, evaluation skips queries that fail the geometric prefilter.
@@ -121,23 +101,27 @@ geometry_filter:
 
 evaluation:
     lambda_selection:
-        primary_metric: null # Optional guard metric. null means rank all lambdas by the weighted composite.
+        primary_metric: CleanFacetF1@k # Primary benchmark objective: cover facets while avoiding non-gold chunks.
         primary_higher_is_better: null # null means infer direction from the metric registry.
         primary_tolerance: 0.01 # Only used when primary_metric is not null.
         missing_metric_policy: skip # skip missing components, e.g. ROUGE when answer ROUGE is disabled.
         tie_break: lower_lambda # Stable final tie-break after composite score and primary metric.
         metrics:
+            - metric: CleanFacetF1@k
+              enabled: true
+              weight: 0.45
+              higher_is_better: true
             - metric: MeanFacetHitRate@k
               enabled: true
-              weight: 0.40
+              weight: 0.20
               higher_is_better: null
             - metric: MeanFacetRecall@k
               enabled: true
-              weight: 0.25
+              weight: 0.10
               higher_is_better: null
             - metric: F1@k # Persisted gold-relevance F1 metric.
               enabled: true
-              weight: 0.20
+              weight: 0.10
               higher_is_better: true
             - metric: DistractorRate
               enabled: true
@@ -153,7 +137,7 @@ evaluation:
         kernel_floor: 0.05 # Caps the maximum penalty and prevents division by zero.
         pair_aggregation: geometric_mean # How to combine FacLoc and MMR kernel scores into one pair score.
         metrics:
-            - summary_metric: MeanFacetHitRate@k
+            - summary_metric: CleanFacetF1@k
               enabled: true
               weight: 1.0
               target_gain_vs_topk: 0.08 # Soft threshold for "meaningfully better than top-k".

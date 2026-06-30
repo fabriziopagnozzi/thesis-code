@@ -174,8 +174,6 @@ def _plot_lambda_sensitivity(
         return
 
     k_values = sorted(stats_df['k'].unique().to_list())
-    lambda_values = _lambda_values(stats_df)
-    sampled_lambda_values = _sample_tick_values(lambda_values)
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
     metric_cols = [
         (metric.stats_col, metric.title)
@@ -195,7 +193,7 @@ def _plot_lambda_sensitivity(
         plot_name,
         rows=len(metric_cols),
         cols=len(diversity_strategies),
-        sharex=True,
+        sharex=False,
     )
 
     for row_idx, (metric, metric_title) in enumerate(metric_cols):
@@ -208,6 +206,7 @@ def _plot_lambda_sensitivity(
         for col_idx, strategy in enumerate(diversity_strategies):
             style = get_style(strategy)
             sub = stats_df.filter(pl.col('strategy') == strategy)
+            sampled_lambda_values = _sample_tick_values(_lambda_values_for_strategy(stats_df, strategy))
             ax = axes[row_idx][col_idx]
             for k in k_values:
                 ksub = sub.filter(pl.col('k') == k).sort('lam')
@@ -232,7 +231,7 @@ def _plot_lambda_sensitivity(
             if col_idx == 0:
                 ax.set_ylabel(metric_title, fontsize=10)
             if row_idx == len(metric_cols) - 1:
-                ax.set_xlabel('lambda', fontsize=9)
+                ax.set_xlabel(f'{style["label"]} lambda', fontsize=9)
             _set_lambda_tick_labels(ax, sampled_lambda_values)
             ax.set_ylim(*row_ylim)
             ax.tick_params(labelbottom=True)
@@ -271,7 +270,7 @@ def plot_metrics_heatmap_k_lambda_grid(
     heatmap_data = _build_strategy_lambda_heatmap_data(stats_df, results_df)
     if heatmap_data is None:
         return
-    metric_matrices, k_values, lambda_values = heatmap_data
+    metric_matrices, k_values, lambda_axes = heatmap_data
     metrics = _available_metrics(stats_df, results_df)
     fig = plt.figure(figsize=(15.5, 2.7 * len(metrics) + 1.8))
     grid = fig.add_gridspec(
@@ -284,10 +283,8 @@ def plot_metrics_heatmap_k_lambda_grid(
         hspace=0.48,
     )
 
-    panel_titles = ['FacLoc', 'MMR', 'FacLoc Advantage']
+    panel_titles = ['FacLoc', 'MMR', 'Normalized FacLoc Advantage']
 
-    annotate_cells = len(k_values) * len(lambda_values) <= 42
-    sampled_lambda_tick_positions = _sample_tick_indices(len(lambda_values), max_ticks=6)
     for row_idx, (stats_col, _result_col, title, higher_is_better) in enumerate(metrics):
         matrices = metric_matrices[stats_col]
         raw_min = float(
@@ -297,6 +294,8 @@ def plot_metrics_heatmap_k_lambda_grid(
             np.nanmax(np.concatenate([matrices['fac_loc'].ravel(), matrices['mmr'].ravel()]))
         )
         adv_abs_max = float(np.nanmax(np.abs(matrices['advantage'])))
+        if not np.isfinite(adv_abs_max) or adv_abs_max == 0.0:
+            adv_abs_max = 1e-9
         raw_norm = Normalize(vmin=raw_min, vmax=raw_max)
         adv_norm = TwoSlopeNorm(vmin=-adv_abs_max, vcenter=0.0, vmax=adv_abs_max)
 
@@ -316,6 +315,9 @@ def plot_metrics_heatmap_k_lambda_grid(
             zip(row_axes, ['fac_loc', 'mmr', 'advantage'], strict=True)
         ):
             matrix = matrices[key]
+            x_values = lambda_axes[key]
+            sampled_lambda_tick_positions = _sample_tick_indices(len(x_values), max_ticks=6)
+            annotate_cells = len(k_values) * len(x_values) <= 42
             image = ax.imshow(
                 matrix,
                 origin='lower',
@@ -335,15 +337,18 @@ def plot_metrics_heatmap_k_lambda_grid(
             _set_heatmap_axis_labels(
                 ax,
                 k_values,
-                lambda_values,
+                x_values,
                 sampled_lambda_tick_positions=sampled_lambda_tick_positions,
             )
             if col_idx > 0:
                 ax.tick_params(axis='y', labelleft=False, left=False)
             if row_idx == len(metrics) - 1:
-                ax.set_xlabel('lambda', fontsize=9)
+                if key == 'advantage':
+                    ax.set_xlabel('normalized grid position', fontsize=9)
+                else:
+                    ax.set_xlabel(f'{get_style(key)["label"]} lambda', fontsize=9)
             ax.tick_params(axis='x', labelbottom=True)
-            _draw_heatmap_grid(ax, len(k_values), len(lambda_values))
+            _draw_heatmap_grid(ax, len(k_values), len(x_values))
             if annotate_cells:
                 _annotate_heatmap_cells(ax, matrix, diverging=(key == 'advantage'))
 
@@ -364,7 +369,8 @@ def plot_metrics_heatmap_k_lambda_grid(
         fig,
         (
             'Rows are metrics; columns are FacLoc, MMR, and FacLoc advantage. '
-            'For lower-better metrics, advantage is computed so positive still means FacLoc better.'
+            'Advantage is matched by normalized grid position, not raw lambda equality; '
+            'for lower-better metrics, positive still means FacLoc better.'
         ),
     )
     fig.subplots_adjust(left=0.08, right=0.985, bottom=0.10, top=0.92)
@@ -378,6 +384,7 @@ def plot_metrics_heatmap_k_lambda_grid_html(
     out_dir: Path,
 ) -> None:
     """Interactive HTML explorer for strategy-vs-lambda heatmaps."""
+    import numpy as np
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
@@ -385,9 +392,9 @@ def plot_metrics_heatmap_k_lambda_grid_html(
     if heatmap_data is None:
         return
 
-    metric_matrices, k_values, lambda_values = heatmap_data
+    metric_matrices, k_values, lambda_axes = heatmap_data
     metrics = _available_metrics(stats_df, results_df)
-    subplot_titles = ['FacLoc', 'MMR', 'FacLoc Advantage']
+    subplot_titles = ['FacLoc', 'MMR', 'Normalized FacLoc Advantage']
     fig = make_subplots(
         rows=1,
         cols=3,
@@ -401,29 +408,34 @@ def plot_metrics_heatmap_k_lambda_grid_html(
     first_metric_higher = metrics[0][3]
     for metric_idx, (stats_col, _result_col, title, higher_is_better) in enumerate(metrics):
         matrices = metric_matrices[stats_col]
-        raw_min = min(
-            float(matrices['fac_loc'].min()),
-            float(matrices['mmr'].min()),
+        raw_min = float(
+            np.nanmin(np.concatenate([matrices['fac_loc'].ravel(), matrices['mmr'].ravel()]))
         )
-        raw_max = max(
-            float(matrices['fac_loc'].max()),
-            float(matrices['mmr'].max()),
+        raw_max = float(
+            np.nanmax(np.concatenate([matrices['fac_loc'].ravel(), matrices['mmr'].ravel()]))
         )
-        advantage_abs_max = max(
-            abs(float(matrices['advantage'].min())), abs(float(matrices['advantage'].max()))
-        )
+        advantage_abs_max = float(np.nanmax(np.abs(matrices['advantage'])))
+        if not np.isfinite(advantage_abs_max) or advantage_abs_max == 0.0:
+            advantage_abs_max = 1e-9
         for col_idx, key in enumerate(['fac_loc', 'mmr', 'advantage'], start=1):
             matrix = matrices[key]
+            x_values = lambda_axes[key]
+            x_label = (
+                'normalized grid position'
+                if key == 'advantage'
+                else f'{get_style(key)["label"]} lambda'
+            )
             hovertemplate = _plotly_heatmap_hovertemplate(
                 title=title,
                 panel_title=subplot_titles[col_idx - 1],
                 higher_is_better=higher_is_better,
                 advantage=(key == 'advantage'),
+                x_label=x_label,
             )
             fig.add_trace(
                 go.Heatmap(
                     z=matrix,
-                    x=[f'{lam:.2f}' for lam in lambda_values],
+                    x=[f'{value:.2f}' for value in x_values],
                     y=[f'k={k}' for k in k_values],
                     colorscale='Viridis' if key != 'advantage' else 'RdBu_r',
                     zmin=raw_min if key != 'advantage' else -advantage_abs_max,
@@ -477,8 +489,11 @@ def plot_metrics_heatmap_k_lambda_grid_html(
         ],
         margin={'l': 65, 'r': 90, 't': 110, 'b': 70},
     )
-    for col_idx in range(1, 4):
-        fig.update_xaxes(title_text='lambda', row=1, col=col_idx)
+    for col_idx, x_title in enumerate(
+        ['FacLoc lambda', 'MMR lambda', 'normalized grid position'],
+        start=1,
+    ):
+        fig.update_xaxes(title_text=x_title, row=1, col=col_idx)
         fig.update_yaxes(title_text='k', row=1, col=col_idx)
 
     fig.write_html(
@@ -565,7 +580,7 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
     results_df: pl.DataFrame,
     out_dir: Path,
 ) -> None:
-    """Paired delta bars relative to top-k.
+    """Paired delta curves relative to top-k on each strategy's native lambda grid.
 
     For lower-is-better diagnostics, negative bars are favorable.
     """
@@ -577,40 +592,37 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
         return
 
     k_values = sorted(stats_df['k'].unique().to_list())
-    lambda_values = _lambda_values(stats_df)
-    if not lambda_values:
-        return
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
     metrics = _available_metrics(stats_df, results_df)
-    n_groups = len(diversity_strategies) * len(lambda_values)
-    geometry = _delta_vs_topk_metrics_for_k_for_lambda_geometry(len(k_values), n_groups)
-    footer_layout = _delta_vs_topk_metrics_for_k_for_lambda_footer_layout(lambda_values)
-    x = np.asarray(geometry.k_positions, dtype=float)
-    width_per_k = max(1.45, 0.08 * n_groups + 0.45)
-    fig_width = len(k_values) * width_per_k + 1.4
+    if not metrics:
+        return
+    cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
+    k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
 
     fig, axes = _grid_figure(
         'delta_vs_topk_metrics_for_k_for_lambda',
         rows=len(metrics),
-        cols=1,
-        sharex=True,
-        width_per_col=fig_width,
-        footer_height=footer_layout.footer_height,
+        cols=len(diversity_strategies),
+        sharex=False,
+        width_per_col=4.4,
+        footer_height=1.0,
     )
-    flat_axes = axes.flatten()
-    for row_idx, (ax, (stats_col, result_col, title, higher_is_better)) in enumerate(
-        zip(flat_axes, metrics, strict=False)
-    ):
-        extrema_by_strategy_k: dict[tuple[str, int], list[tuple[Any, float]]] = {}
-        slot_centers: list[float] = []
-        for i, strategy in enumerate(diversity_strategies):
+    for row_idx, (stats_col, result_col, title, higher_is_better) in enumerate(metrics):
+        for col_idx, strategy in enumerate(diversity_strategies):
+            ax = axes[row_idx][col_idx]
             style = get_style(strategy)
-            for j, lam in enumerate(lambda_values):
+            lambda_values = _lambda_values_for_strategy(stats_df, strategy)
+            if not lambda_values:
+                ax.set_visible(False)
+                continue
+            x = np.asarray(lambda_values, dtype=float)
+
+            for k in k_values:
+                ref_row = topk_df.filter(pl.col('k') == k)
+                ref_val = float(ref_row[stats_col][0]) if ref_row.height > 0 else 0.0
                 deltas: list[float] = []
                 cis: list[float] = []
-                for k in k_values:
-                    ref_row = topk_df.filter(pl.col('k') == k)
-                    ref_val = float(ref_row[stats_col][0]) if ref_row.height > 0 else 0.0
+                for lam in lambda_values:
                     sub = stats_df.filter(
                         (pl.col('strategy') == strategy)
                         & (pl.col('k') == k)
@@ -620,62 +632,53 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
                     deltas.append(strat_val - ref_val)
                     cis.append(_paired_delta_ci(results_df, strategy, k, lam, result_col))
 
-                ci_display = [0.0 if np.isnan(c) else c for c in cis]
-                group_idx = i * len(lambda_values) + j
-                offset = _delta_vs_topk_metrics_for_k_for_lambda_offset(
-                    group_idx=group_idx,
-                    n_groups=n_groups,
-                    slot_width=geometry.slot_width,
+                y = np.asarray(deltas, dtype=float)
+                ci = np.asarray([0.0 if np.isnan(c) else c for c in cis], dtype=float)
+                ax.plot(
+                    x,
+                    y,
+                    color=k_colors[k],
+                    ls=style['ls'],
+                    lw=1.8,
+                    marker='o',
+                    ms=3.8,
+                    label=f'k={k}',
                 )
-                color = _lambda_shade(style['color'], lam, lambda_values)
-                bars = ax.bar(
-                    x + offset,
-                    deltas,
-                    width=geometry.bar_width,
-                    color=color,
-                    alpha=0.9,
-                    edgecolor='#222222',
-                    linewidth=0.35,
-                    yerr=ci_display,
-                    capsize=2.5,
-                    error_kw={'linewidth': 0.75, 'ecolor': color},
-                )
-                for bar, k, delta in zip(bars, k_values, deltas, strict=True):
-                    extrema_by_strategy_k.setdefault((strategy, int(k)), []).append((bar, delta))
-                    slot_centers.append(float(bar.get_x() + bar.get_width() / 2))
+                if np.any(ci > 0):
+                    ax.fill_between(x, y - ci, y + ci, color=k_colors[k], alpha=0.12, linewidth=0)
 
-        ax.axhline(0, color='black', lw=0.8)
-        _draw_bar_slot_guides(ax, slot_centers, geometry.bar_width)
-        _annotate_extreme_delta_bars(ax, extrema_by_strategy_k)
-        ax.set_title(
-            _panel_title(f'Delta {title} vs top-k', higher_is_better, delta=True),
-            fontsize=10,
+            ax.axhline(0, color='black', lw=0.8)
+            if row_idx == 0:
+                ax.set_title(style['label'], fontsize=10)
+            if col_idx == 0:
+                ax.set_ylabel(
+                    _panel_title(f'Delta {title} vs top-k', higher_is_better, delta=True),
+                    fontsize=9,
+                )
+            if row_idx == len(metrics) - 1:
+                ax.set_xlabel(f'{style["label"]} lambda', fontsize=9)
+            _set_lambda_tick_labels(ax, _sample_tick_values(lambda_values))
+            ax.grid(alpha=0.3)
+            ax.tick_params(labelbottom=True)
+            _bold_zero_ytick_label(ax)
+
+    handles, labels = _first_legend_handles(axes)
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc='lower center',
+            ncol=len(k_values),
+            fontsize=8,
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.0),
         )
-        ax.set_ylabel(f'Delta {stats_col}', fontsize=9)
-        ax.grid(axis='y', alpha=0.3)
-        ax.set_xlim(geometry.x_min, geometry.x_max)
-        ax.margins(x=0.0, y=0.18)
-        _set_k_tick_labels(ax, k_values, positions=geometry.k_positions)
-        ax.tick_params(labelbottom=True)
-        _bold_zero_ytick_label(ax)
-        if row_idx == len(metrics) - 1:
-            ax.set_xlabel('k', fontsize=9)
-
-    for ax in flat_axes[len(metrics) :]:
-        ax.set_visible(False)
-
-    # fig.suptitle(
-    #     'Delta vs top-k by strategy and lambda, paired 95% CI',
-    #     fontsize=12,
-    # )
-    fig.tight_layout(rect=(0, footer_layout.tight_layout_bottom, 1, 1))
-    _add_lambda_shade_legend(
+    _figure_note(
         fig,
-        diversity_strategies,
-        lambda_values,
-        bottom=footer_layout.legend_bottom,
-        values_per_line=footer_layout.values_per_line,
+        'Raw lambda axes are strategy-specific; compare methods by trend, not equal raw lambda.',
+        y=0.035,
     )
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(
         out_dir / 'delta_vs_topk_metrics_for_k_for_lambda.png',
         dpi=140,
@@ -1548,8 +1551,6 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
         return
 
     k_values = sorted(stats_df['k'].unique().to_list())
-    lambda_values = _lambda_values(stats_df)
-    sampled_lambda_values = _sample_tick_values(lambda_values)
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
     cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
     k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
@@ -1558,13 +1559,14 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
         'answer_metrics_k_curves_per_lambda',
         rows=len(metric_cols),
         cols=len(diversity_strategies),
-        sharex=True,
+        sharex=False,
     )
 
     for row_idx, (metric, title) in enumerate(metric_cols):
         for col_idx, strategy in enumerate(diversity_strategies):
             style = get_style(strategy)
             sub = stats_df.filter(pl.col('strategy') == strategy)
+            sampled_lambda_values = _sample_tick_values(_lambda_values_for_strategy(stats_df, strategy))
             ax = axes[row_idx][col_idx]
             for k in k_values:
                 ksub = sub.filter(pl.col('k') == k).sort('lam')
@@ -1595,7 +1597,7 @@ def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Pat
             if col_idx == 0:
                 ax.set_ylabel(title, fontsize=10)
             if row_idx == len(metric_cols) - 1:
-                ax.set_xlabel('lambda', fontsize=9)
+                ax.set_xlabel(f'{style["label"]} lambda', fontsize=9)
             _set_lambda_tick_labels(ax, sampled_lambda_values)
             ax.tick_params(labelbottom=True)
             ax.grid(alpha=0.3)
@@ -1836,16 +1838,18 @@ def _panel_title(title: str, higher_is_better: bool, *, delta: bool = False) -> 
 def _build_strategy_lambda_heatmap_data(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
-) -> tuple[dict[str, dict[str, NDArray[Any]]], list[int], list[float]] | None:
+) -> tuple[dict[str, dict[str, NDArray[Any]]], list[int], dict[str, list[float]]] | None:
     import numpy as np
-
-    lambda_values = _lambda_values(stats_df)
-    if not lambda_values:
-        return None
 
     present_strategies = set(stats_df['strategy'].unique().to_list())
     if 'fac_loc' not in present_strategies or 'mmr' not in present_strategies:
         return None
+
+    fac_lambdas = _lambda_values_for_strategy(stats_df, 'fac_loc')
+    mmr_lambdas = _lambda_values_for_strategy(stats_df, 'mmr')
+    if not fac_lambdas or not mmr_lambdas:
+        return None
+    normalized_positions = _normalized_grid_positions(max(len(fac_lambdas), len(mmr_lambdas)))
 
     k_values = sorted(int(k) for k in stats_df['k'].unique().to_list())
     metrics = _available_metrics(stats_df, results_df)
@@ -1854,18 +1858,24 @@ def _build_strategy_lambda_heatmap_data(
 
     metric_matrices: dict[str, dict[str, NDArray[Any]]] = {}
     for stats_col, _result_col, _title, higher_is_better in metrics:
-        fac_matrix = np.full((len(k_values), len(lambda_values)), np.nan, dtype=float)
-        mmr_matrix = np.full((len(k_values), len(lambda_values)), np.nan, dtype=float)
-        adv_matrix = np.full((len(k_values), len(lambda_values)), np.nan, dtype=float)
+        fac_matrix = np.full((len(k_values), len(fac_lambdas)), np.nan, dtype=float)
+        mmr_matrix = np.full((len(k_values), len(mmr_lambdas)), np.nan, dtype=float)
+        adv_matrix = np.full((len(k_values), len(normalized_positions)), np.nan, dtype=float)
         for k_idx, k in enumerate(k_values):
-            for lam_idx, lam in enumerate(lambda_values):
+            for lam_idx, lam in enumerate(fac_lambdas):
                 fac_val = _cell_value_for_strategy(stats_df, 'fac_loc', k, lam, stats_col)
-                mmr_val = _cell_value_for_strategy(stats_df, 'mmr', k, lam, stats_col)
                 fac_matrix[k_idx, lam_idx] = fac_val
+            for lam_idx, lam in enumerate(mmr_lambdas):
+                mmr_val = _cell_value_for_strategy(stats_df, 'mmr', k, lam, stats_col)
                 mmr_matrix[k_idx, lam_idx] = mmr_val
+            for pos_idx, position in enumerate(normalized_positions):
+                fac_lam = _lambda_at_normalized_position(fac_lambdas, position)
+                mmr_lam = _lambda_at_normalized_position(mmr_lambdas, position)
+                fac_val = _cell_value_for_strategy(stats_df, 'fac_loc', k, fac_lam, stats_col)
+                mmr_val = _cell_value_for_strategy(stats_df, 'mmr', k, mmr_lam, stats_col)
                 if np.isnan(fac_val) or np.isnan(mmr_val):
                     continue
-                adv_matrix[k_idx, lam_idx] = (
+                adv_matrix[k_idx, pos_idx] = (
                     fac_val - mmr_val if higher_is_better else mmr_val - fac_val
                 )
         metric_matrices[stats_col] = {
@@ -1873,7 +1883,15 @@ def _build_strategy_lambda_heatmap_data(
             'mmr': mmr_matrix,
             'advantage': adv_matrix,
         }
-    return metric_matrices, k_values, lambda_values
+    return (
+        metric_matrices,
+        k_values,
+        {
+            'fac_loc': fac_lambdas,
+            'mmr': mmr_lambdas,
+            'advantage': normalized_positions,
+        },
+    )
 
 
 def _cell_value_for_strategy(
@@ -1957,6 +1975,7 @@ def _plotly_heatmap_hovertemplate(
     panel_title: str,
     higher_is_better: bool,
     advantage: bool,
+    x_label: str,
 ) -> str:
     direction_note = (
         'Positive values mean FacLoc is better for this metric'
@@ -1966,7 +1985,7 @@ def _plotly_heatmap_hovertemplate(
     return (
         f'{panel_title}<br>'
         f'metric={title}<br>'
-        'lambda=%{x}<br>'
+        f'{x_label}=%{{x}}<br>'
         'k=%{y}<br>'
         'value=%{z:.4f}<br>'
         f'{direction_note}'
@@ -2102,6 +2121,31 @@ def _lambda_values(df: pl.DataFrame) -> list[float]:
     if 'lam' not in df.columns:
         return []
     return sorted(float(lam) for lam in df['lam'].drop_nulls().unique().to_list())
+
+
+def _lambda_values_for_strategy(df: pl.DataFrame, strategy: str) -> list[float]:
+    if 'lam' not in df.columns or 'strategy' not in df.columns:
+        return []
+    strategy_df = df.filter(pl.col('strategy') == strategy)
+    return sorted(float(lam) for lam in strategy_df['lam'].drop_nulls().unique().to_list())
+
+
+def _normalized_grid_positions(n_values: int) -> list[float]:
+    if n_values <= 0:
+        return []
+    if n_values == 1:
+        return [0.0]
+    return [idx / (n_values - 1) for idx in range(n_values)]
+
+
+def _lambda_at_normalized_position(lambda_values: list[float], position: float) -> float:
+    if not lambda_values:
+        raise ValueError('cannot map a normalized position onto an empty lambda grid')
+    if len(lambda_values) == 1:
+        return lambda_values[0]
+    bounded_position = min(max(float(position), 0.0), 1.0)
+    index = int(bounded_position * (len(lambda_values) - 1) + 0.5)
+    return lambda_values[min(index, len(lambda_values) - 1)]
 
 
 @dataclass(frozen=True)
@@ -2689,3 +2733,18 @@ def _figure_legend(fig: Figure, axes: NDArray[Any]) -> None:
             frameon=False,
             bbox_to_anchor=(0.5, -0.005),
         )
+
+
+def _first_legend_handles(axes: NDArray[Any]) -> tuple[list[Any], list[str]]:
+    handles: list[Any] = []
+    labels: list[str] = []
+    seen: set[str] = set()
+    for ax in axes.flatten():
+        ax_handles, ax_labels = ax.get_legend_handles_labels()
+        for handle, label in zip(ax_handles, ax_labels, strict=True):
+            if label in seen:
+                continue
+            handles.append(handle)
+            labels.append(label)
+            seen.add(label)
+    return handles, labels

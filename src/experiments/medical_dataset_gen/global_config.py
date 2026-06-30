@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Literal, NoReturn, get_args
 from uuid import uuid4
 
+import numpy as np
 import yaml
 from pydantic import (
     BaseModel,
@@ -277,17 +278,47 @@ class EmbeddingCfg(ConfigModel):
     normalize: bool = True
 
 
+class LambdaGridCfg(ConfigModel):
+    start: float = Field(ge=0.0, le=1.0)
+    stop: float = Field(ge=0.0, le=1.0)
+    num_values: PositiveInt
+
+    @model_validator(mode='after')
+    def _validate_bounds(self) -> LambdaGridCfg:
+        if self.start > self.stop:
+            raise ValueError('lambda grid start must be <= stop')
+        return self
+
+    def values(self) -> list[float]:
+        return sorted(
+            {float(round(value, 6)) for value in np.linspace(self.start, self.stop, self.num_values)}
+        )
+
+
 class RetrievalCfg(ConfigModel):
     pool_scope: ChunkPoolScope = 'query_local'
     candidate_pool_n: PositiveInt = 300
     k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
-    lambda_values: list[NonNegativeFloat] = Field(default_factory=lambda: [0.3, 0.5, 0.7])
+    lambdas_mmr: LambdaGridCfg
+    lambdas_fac_loc: LambdaGridCfg
     strategies: set[Literal['top_k', 'mmr', 'fac_loc']] = Field(
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
     )
     mmr_window: int | None = None
     only_pass_geometry: bool = True
     compute_answer_rouge: bool = True
+
+    def lambda_values_for_strategy(
+        self,
+        strategy: Literal['top_k', 'mmr', 'fac_loc'],
+    ) -> list[float | None]:
+        if strategy == 'top_k':
+            return [None]
+        if strategy == 'mmr':
+            return self.lambdas_mmr.values()
+        if strategy == 'fac_loc':
+            return self.lambdas_fac_loc.values()
+        raise ValueError(f'unknown retrieval strategy: {strategy!r}')
 
 
 class GeometryFilterCfg(ConfigModel):

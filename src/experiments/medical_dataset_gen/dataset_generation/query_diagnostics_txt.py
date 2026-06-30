@@ -387,7 +387,14 @@ def _render_diagnostics(
             ),
             ('geometry.min_primary_axis_count', ctx.cfg.geometry_filter.min_primary_axis_count),
             ('retrieval.k_values', ctx.cfg.retrieval.k_values),
-            ('retrieval.lambda_values', ctx.cfg.retrieval.lambda_values),
+            (
+                'retrieval.lambdas_mmr',
+                _lambda_grid_summary(ctx.cfg.retrieval.lambdas_mmr.values()),
+            ),
+            (
+                'retrieval.lambdas_fac_loc',
+                _lambda_grid_summary(ctx.cfg.retrieval.lambdas_fac_loc.values()),
+            ),
             ('detail', ctx.detail),
             ('chunk_text_mode', ctx.chunk_text_mode),
             ('chunk_text_chars', ctx.chunk_text_chars),
@@ -1035,14 +1042,14 @@ def _render_selection_snapshot(
         ])
         if value <= len(ranked_rows)
     ]
-    lambdas = _snapshot_lambdas(ctx.cfg)
+    lambdas_by_strategy = _snapshot_lambdas(ctx.cfg)
     rows = []
     for k in snapshot_ks:
         topk = select_indices('top_k', sim_to_query, sim_matrix, k=k, lam=None)
         rows.append(_selection_summary_row('top_k', None, k, topk, topk, ranked_rows, sim_to_query))
 
         for strategy in ctx.cfg.retrieval.strategies.difference({'top_k'}):
-            for lam in lambdas:
+            for lam in lambdas_by_strategy.get(strategy, []):
                 selected = select_indices(
                     strategy,
                     sim_to_query,
@@ -1520,11 +1527,41 @@ def _counter_top(counter: Counter[str]) -> tuple[str | None, int]:
     return key, count
 
 
-def _snapshot_lambdas(cfg: ExperimentCfg) -> list[float]:
-    values = sorted({float(value) for value in cfg.retrieval.lambda_values})
+def _snapshot_lambdas(cfg: ExperimentCfg) -> dict[str, list[float]]:
+    return {
+        'mmr': _snapshot_lambda_values(
+            [
+                float(value)
+                for value in cfg.retrieval.lambda_values_for_strategy('mmr')
+                if value is not None
+            ]
+        ),
+        'fac_loc': _snapshot_lambda_values(
+            [
+                float(value)
+                for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
+                if value is not None
+            ]
+        ),
+    }
+
+
+def _snapshot_lambda_values(values: list[float]) -> list[float]:
+    values = sorted({float(value) for value in values})
     if len(values) <= 3:
         return values
     return _dedupe([values[0], values[len(values) // 2], values[-1]])
+
+
+def _lambda_grid_summary(values: list[float]) -> dict[str, Any] | list[float]:
+    if len(values) <= 8:
+        return values
+    return {
+        'start': values[0],
+        'stop': values[-1],
+        'num_values': len(values),
+        'sample': _snapshot_lambda_values(values),
+    }
 
 
 def _jaccard(left: NDArray[np.intp], right: NDArray[np.intp]) -> float:
@@ -1560,7 +1597,7 @@ def _comparison_query_ids(
         query_ids.extend(_split_query_ids(value))
     query_ids.extend(_split_query_ids(args.comparison_query_ids or ''))
 
-    if not query_ids and args.from_plot_group == 'bad' and args.comparison_plot_group:
+    if not query_ids and args.from_plot_group == 'worst' and args.comparison_plot_group:
         query_ids.extend(_query_ids_from_plot_group(paths, args.comparison_plot_group))
 
     target_set = set(target_query_ids)
