@@ -343,10 +343,10 @@ class LambdaSelectionCfg(ConfigModel):
     metrics: list[LambdaSelectionMetricCfg] = Field(
         default_factory=lambda: [
             LambdaSelectionMetricCfg(metric='MeanFacetHitRate@k', weight=0.40),
-            LambdaSelectionMetricCfg(metric='MeanFacetRecall@k', weight=0.25),
-            LambdaSelectionMetricCfg(metric='F1@k', weight=0.20),
-            LambdaSelectionMetricCfg(metric='DistractorRate', weight=0.10, higher_is_better=False),
-            LambdaSelectionMetricCfg(metric='AnswerROUGE1F1@k', weight=0.05),
+            LambdaSelectionMetricCfg(metric='MeanFacetRecall@k', weight=0.35),
+            LambdaSelectionMetricCfg(metric='F1@k', weight=0.25),
+            # LambdaSelectionMetricCfg(metric='DistractorRate', weight=0.10, higher_is_better=False),
+            # LambdaSelectionMetricCfg(metric='AnswerROUGE1F1@k', weight=0.),
         ]
     )
 

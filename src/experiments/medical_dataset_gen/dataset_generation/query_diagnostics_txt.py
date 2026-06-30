@@ -1747,7 +1747,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--query-id-file', type=Path, default=None)
     parser.add_argument(
         '--from-plot-group',
-        choices=['good', 'mid', 'bad', 'manual'],
+        choices=['best', 'mid', 'worst', 'manual'],
         default=None,
         help='Add query ids from _figures/query_geometry/<group> subdirectories.',
     )
@@ -1764,9 +1764,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         '--comparison-plot-group',
-        choices=['good', 'mid', 'bad', 'manual'],
-        default='good',
-        help='Plot group to sample comparison queries from when --from-plot-group bad is used.',
+        choices=['best', 'mid', 'worst', 'manual'],
+        default='best',
+        help='Plot group to sample comparison queries from when --from-plot-group worst is used.',
     )
     parser.add_argument(
         '--comparison-n',

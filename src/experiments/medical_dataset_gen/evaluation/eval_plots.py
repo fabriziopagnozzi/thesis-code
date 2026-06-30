@@ -140,7 +140,7 @@ def plot_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> N
         out_dir,
         plot_name='metrics_k_curves_per_lambda',
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
-        figure_title='Lambda sensitivity (main metrics) - each row is a metric, each column is a strategy',
+        figure_title=' ',
         output_filename='metrics_k_curves_per_lambda.png',
     )
 
@@ -152,7 +152,7 @@ def plot_diagnostics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) 
         out_dir,
         plot_name='diagnostics_k_curves_per_lambda',
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
-        figure_title='Lambda sensitivity (diagnostics) - each row is a metric, each column is a strategy',
+        figure_title=' ',
         output_filename='diagnostics_k_curves_per_lambda.png',
     )
 
@@ -449,20 +449,18 @@ def plot_metrics_heatmap_k_lambda_grid_html(
         visibility = [False] * total_traces
         base_idx = metric_idx * 3
         visibility[base_idx : base_idx + 3] = [True, True, True]
-        button_defs.append(
-            {
-                'label': title,
-                'method': 'update',
-                'args': [
-                    {'visible': visibility},
-                    {
-                        'title': (
-                            f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
-                        )
-                    },
-                ],
-            }
-        )
+        button_defs.append({
+            'label': title,
+            'method': 'update',
+            'args': [
+                {'visible': visibility},
+                {
+                    'title': (
+                        f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
+                    )
+                },
+            ],
+        })
 
     fig.update_layout(
         title=f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)}',
@@ -666,10 +664,10 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
     for ax in flat_axes[len(metrics) :]:
         ax.set_visible(False)
 
-    fig.suptitle(
-        'Delta vs top-k by strategy and lambda, paired 95% CI',
-        fontsize=12,
-    )
+    # fig.suptitle(
+    #     'Delta vs top-k by strategy and lambda, paired 95% CI',
+    #     fontsize=12,
+    # )
     fig.tight_layout(rect=(0, footer_layout.tight_layout_bottom, 1, 1))
     _add_lambda_shade_legend(
         fig,
@@ -884,16 +882,14 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
             zorder=5,
         )
         ax.set_title(
-            '\n'.join(
-                [
-                    f'k={k}',
-                    (
-                        f'best FacLoc λ={float(best_row["fac_loc_lam"]):.2f} | '
-                        f'MMR λ={float(best_row["mmr_lam"]):.2f}'
-                    ),
-                    f'{score_label}={float(best_row[score_col]):.3f}',
-                ]
-            ),
+            '\n'.join([
+                f'k={k}',
+                (
+                    f'best FacLoc λ={float(best_row["fac_loc_lam"]):.2f} | '
+                    f'MMR λ={float(best_row["mmr_lam"]):.2f}'
+                ),
+                f'{score_label}={float(best_row[score_col]):.3f}',
+            ]),
             fontsize=8.5,
         )
         ax.set_xticks(range(len(mmr_lams)))
@@ -1093,44 +1089,36 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
                 ax.set_ylabel(row_title, fontsize=9)
             if row_idx == 0:
                 ax.set_title(
-                    '\n'.join(
-                        [
-                            f'k={k}',
-                            f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                            f'{score_col}={float(agreement_row[score_col]):.3f}',
-                        ]
-                    ),
+                    '\n'.join([
+                        f'k={k}',
+                        f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                        f'{score_col}={float(agreement_row[score_col]):.3f}',
+                    ]),
                     fontsize=9,
                 )
             if row_idx == 1:
                 ax.set_title(
-                    '\n'.join(
-                        [
-                            f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                            lambda_selection_short_label(lambda_selection),
-                        ]
-                    ),
+                    '\n'.join([
+                        f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                        lambda_selection_short_label(lambda_selection),
+                    ]),
                     fontsize=8.5,
                 )
             if row_idx == 2:
                 ax.set_title(
-                    '\n'.join(
-                        [
-                            f'k={k}',
-                            f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                            f'{score_col}={float(agreement_row[score_col]):.3f}',
-                        ]
-                    ),
+                    '\n'.join([
+                        f'k={k}',
+                        f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                        f'{score_col}={float(agreement_row[score_col]):.3f}',
+                    ]),
                     fontsize=9,
                 )
             if row_idx == 3:
                 ax.set_title(
-                    '\n'.join(
-                        [
-                            f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                            lambda_selection_short_label(lambda_selection),
-                        ]
-                    ),
+                    '\n'.join([
+                        f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                        lambda_selection_short_label(lambda_selection),
+                    ]),
                     fontsize=8.5,
                 )
 
@@ -1321,13 +1309,11 @@ def _plot_best_lambda_metric_group(
         )
         ax.set_ylabel(row_title, fontsize=9)
         ax.set_title(
-            '\n'.join(
-                [
-                    f'k={k}',
-                    f'FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                    lambda_selection_short_label(lambda_selection),
-                ]
-            ),
+            '\n'.join([
+                f'k={k}',
+                f'FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+                lambda_selection_short_label(lambda_selection),
+            ]),
             fontsize=8.8,
         )
 
@@ -2260,9 +2246,7 @@ def _annotate_delta_bars(
     span = max(ymax - ymin, 1e-6)
     value_offset = span * 0.025
     lambda_step_points = 11
-    lambda_labels = (
-        lambda_values if lambda_values is not None else [None for _ in values]
-    )
+    lambda_labels = lambda_values if lambda_values is not None else [None for _ in values]
     for bar, value, lam in zip(bars, values, lambda_labels, strict=True):
         x = bar.get_x() + bar.get_width() / 2
         y = value + value_offset if value >= 0 else value - value_offset
@@ -2409,13 +2393,11 @@ def _best_lambda_control_rows(
         if fac_loc_best is None or mmr_best is None:
             continue
         rows.append(
-            pl.DataFrame(
-                {
-                    'k': [k],
-                    'fac_loc_lam': [float(fac_loc_best['lam'])],
-                    'mmr_lam': [float(mmr_best['lam'])],
-                }
-            )
+            pl.DataFrame({
+                'k': [k],
+                'fac_loc_lam': [float(fac_loc_best['lam'])],
+                'mmr_lam': [float(mmr_best['lam'])],
+            })
         )
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
 
@@ -2547,7 +2529,8 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     if topk.height == 0:
         return int(results_df['k'].max())  # type: ignore[arg-type]
     ranked = (
-        topk.group_by('k')
+        topk
+        .group_by('k')
         .agg(
             pl.col('facet_coverage').median().alias('med_fc'),
         )
