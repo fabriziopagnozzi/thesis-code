@@ -11,13 +11,10 @@ from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     DEFAULT_PLOT_GRID_LAYOUTS,
-    LAMBDA_POLICY_NOTE,
     PLOT_METRIC_TITLES,
     PLOTTED_ANSWER_ROUGE_METRIC_NAMES,
     PLOTTED_DIAGNOSTIC_METRIC_NAMES,
     PLOTTED_MAIN_METRIC_NAMES,
-    PRIMARY_DESC,
-    PRIMARY_SORT,
     STRATEGY_STYLE,
     EvalPlotFileName,
     NamedPlotMetric,
@@ -25,14 +22,22 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
 from experiments.medical_dataset_gen.evaluation.lambda_agreement import (
     lambda_pair_agreement_eval_metrics,
 )
+from experiments.medical_dataset_gen.evaluation.lambda_selection import (
+    lambda_selection_policy_note,
+    lambda_selection_short_label,
+    select_best_lambda_row,
+    select_best_lambda_rows,
+)
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
+from experiments.medical_dataset_gen.global_config import LambdaSelectionCfg
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
 
-def plot_strategy_comparison(
+def plot_metrics_at_best_lambda_for_k(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
     """Metric-vs-k lines.
 
@@ -44,7 +49,7 @@ def plot_strategy_comparison(
     k_values = sorted(stats_df['k'].unique().to_list())
     strategies = _ordered_strategies(stats_df)
     metrics = _available_metrics(stats_df, results_df)
-    fig, axes = _grid_figure('strategy_comparison', sharex=True)
+    fig, axes = _grid_figure('metrics_at_best_lambda_for_k', sharex=True)
 
     for ax, (stats_col, result_col, title, higher_is_better) in zip(
         axes.flatten(),
@@ -64,7 +69,7 @@ def plot_strategy_comparison(
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
                 continue
 
-            best_df = _best_lam_rows(stats_df, strategy, k_values)
+            best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
             if best_df.height == 0:
                 continue
             xs = best_df['k'].to_list()
@@ -121,34 +126,34 @@ def plot_strategy_comparison(
     )
     _figure_note(
         fig,
-        f'{LAMBDA_POLICY_NOTE}; see lambda_sensitivity_metrics.png for the full sweep',
+        f'{lambda_selection_policy_note(lambda_selection)}; see metrics_k_curves_per_lambda.png for the full sweep',
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
-    fig.savefig(out_dir / 'strategy_comparison.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'metrics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_lambda_sensitivity_metrics(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Main benchmark metrics as lambda changes."""
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
-        plot_name='lambda_sensitivity_metrics',
+        plot_name='metrics_k_curves_per_lambda',
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
         figure_title='Lambda sensitivity (main metrics) - each row is a metric, each column is a strategy',
-        output_filename='lambda_sensitivity_metrics.png',
+        output_filename='metrics_k_curves_per_lambda.png',
     )
 
 
-def plot_lambda_sensitivity_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_diagnostics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Diagnostic metrics as lambda changes."""
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
-        plot_name='lambda_sensitivity_diagnostics',
+        plot_name='diagnostics_k_curves_per_lambda',
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
         figure_title='Lambda sensitivity (diagnostics) - each row is a metric, each column is a strategy',
-        output_filename='lambda_sensitivity_diagnostics.png',
+        output_filename='diagnostics_k_curves_per_lambda.png',
     )
 
 
@@ -253,7 +258,7 @@ def _plot_lambda_sensitivity(
     plt.close(fig)
 
 
-def plot_strategy_comparison_heatmap(
+def plot_metrics_heatmap_k_lambda_grid(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
@@ -363,11 +368,11 @@ def plot_strategy_comparison_heatmap(
         ),
     )
     fig.subplots_adjust(left=0.08, right=0.985, bottom=0.10, top=0.92)
-    fig.savefig(out_dir / 'strategy_comparison_heatmap.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'metrics_heatmap_k_lambda_grid.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_strategy_comparison_heatmap_html(
+def plot_metrics_heatmap_k_lambda_grid_html(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
@@ -479,39 +484,51 @@ def plot_strategy_comparison_heatmap_html(
         fig.update_yaxes(title_text='k', row=1, col=col_idx)
 
     fig.write_html(
-        out_dir / 'strategy_comparison_heatmap.html',
+        out_dir / 'metrics_heatmap_k_lambda_grid.html',
         include_plotlyjs=True,
         full_html=True,
     )
 
 
-def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> None:
-    """Violin plots at the top-k best k and each strategy's best primary lambda."""
+def plot_metrics_distributions(
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
+) -> None:
+    """Violin plots at the top-k best k and each strategy's configured lambda*."""
     import matplotlib.pyplot as plt
     import numpy as np
 
     best_k = _best_topk_k(results_df)
     strategies = _ordered_strategies(results_df)
     metric_cols = [
-        ('facet_coverage', 'MeanFacetHitRate@k'),
-        ('weighted_facet_coverage', 'MeanFacetRecall@k'),
-        ('distractor_rate', 'DistractorRate@k'),
-        ('gold_recall', 'Recall@k'),
-        ('alpha_ndcg', 'alpha-nDCG@k'),
-        ('answer_rouge2_recall', 'Answer ROUGE-2 Recall@k'),
+        (metric.result_col, metric.title)
+        for metric in _available_metric_specs(
+            stats_df,
+            results_df=results_df,
+            metric_names=PLOTTED_MAIN_METRIC_NAMES,
+        )
     ]
-    metric_cols = [(col, title) for col, title in metric_cols if col in results_df.columns]
+    if not metric_cols:
+        return
 
     per_strategy_data: dict[str, dict[str, list[float]]] = {}
     for strategy in strategies:
-        slice_df = _best_result_slice(results_df, strategy, best_k)
+        slice_df = _best_result_slice(
+            stats_df,
+            results_df,
+            strategy,
+            best_k,
+            lambda_selection,
+        )
         per_strategy_data[strategy] = {
             col: [float(v) for v in slice_df[col].drop_nulls().to_list()] for col, _ in metric_cols
         }
 
     labels = [get_style(s)['label'] for s in strategies]
     colors = [get_style(s)['color'] for s in strategies]
-    fig, axes = _grid_figure('per_query_distributions')
+    fig, axes = _grid_figure('metrics_distributions')
 
     for ax, (col, title) in zip(axes.flatten(), metric_cols, strict=False):
         data = [per_strategy_data[s][col] for s in strategies]
@@ -533,7 +550,7 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
         )
         ax.set_xticks(range(len(strategies)))
         ax.set_xticklabels(labels, fontsize=9, rotation=15)
-        ax.set_title(f'{title} (k={best_k}, coverage-first lambda*)', fontsize=10)
+        ax.set_title(f'{title} (k={best_k}, configured lambda*)', fontsize=10)
         ax.set_ylabel(title, fontsize=9)
         ax.grid(axis='y', alpha=0.3)
     for ax in axes.flatten()[len(metric_cols) :]:
@@ -541,11 +558,11 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
 
     fig.suptitle('Per-query score distributions', fontsize=12)
     fig.tight_layout(rect=(0, 0.03, 1, 1))
-    fig.savefig(out_dir / 'per_query_distributions.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'metrics_distributions.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_gain_over_topk(
+def plot_delta_vs_topk_metrics_for_k_for_lambda(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
@@ -568,14 +585,14 @@ def plot_gain_over_topk(
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
     metrics = _available_metrics(stats_df, results_df)
     n_groups = len(diversity_strategies) * len(lambda_values)
-    geometry = _gain_over_topk_geometry(len(k_values), n_groups)
-    footer_layout = _gain_over_topk_footer_layout(lambda_values)
+    geometry = _delta_vs_topk_metrics_for_k_for_lambda_geometry(len(k_values), n_groups)
+    footer_layout = _delta_vs_topk_metrics_for_k_for_lambda_footer_layout(lambda_values)
     x = np.asarray(geometry.k_positions, dtype=float)
     width_per_k = max(1.45, 0.08 * n_groups + 0.45)
     fig_width = len(k_values) * width_per_k + 1.4
 
     fig, axes = _grid_figure(
-        'gain_over_topk',
+        'delta_vs_topk_metrics_for_k_for_lambda',
         rows=len(metrics),
         cols=1,
         sharex=True,
@@ -607,7 +624,7 @@ def plot_gain_over_topk(
 
                 ci_display = [0.0 if np.isnan(c) else c for c in cis]
                 group_idx = i * len(lambda_values) + j
-                offset = _gain_over_topk_offset(
+                offset = _delta_vs_topk_metrics_for_k_for_lambda_offset(
                     group_idx=group_idx,
                     n_groups=n_groups,
                     slot_width=geometry.slot_width,
@@ -642,6 +659,7 @@ def plot_gain_over_topk(
         ax.margins(x=0.0, y=0.18)
         _set_k_tick_labels(ax, k_values, positions=geometry.k_positions)
         ax.tick_params(labelbottom=True)
+        _bold_zero_ytick_label(ax)
         if row_idx == len(metrics) - 1:
             ax.set_xlabel('k', fontsize=9)
 
@@ -649,7 +667,7 @@ def plot_gain_over_topk(
         ax.set_visible(False)
 
     fig.suptitle(
-        'Gain over top-k by strategy and lambda, paired 95% CI',
+        'Delta vs top-k by strategy and lambda, paired 95% CI',
         fontsize=12,
     )
     fig.tight_layout(rect=(0, footer_layout.tight_layout_bottom, 1, 1))
@@ -660,190 +678,21 @@ def plot_gain_over_topk(
         bottom=footer_layout.legend_bottom,
         values_per_line=footer_layout.values_per_line,
     )
-    fig.savefig(out_dir / 'gain_over_topk.png', dpi=140, bbox_inches='tight')
+    fig.savefig(
+        out_dir / 'delta_vs_topk_metrics_for_k_for_lambda.png',
+        dpi=140,
+        bbox_inches='tight',
+    )
     plt.close(fig)
 
 
-def plot_gain_over_topk_html(
+def plot_delta_vs_topk_metrics_at_best_lambda_for_k(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
-    """Interactive HTML companion for the full gain-over-top-k lambda sweep."""
-    import numpy as np
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-
-    diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
-    if not diversity_strategies:
-        return
-
-    k_values = sorted(int(k) for k in stats_df['k'].unique().to_list())
-    lambda_values = _lambda_values(stats_df)
-    if not lambda_values:
-        return
-    metrics = _available_metrics(stats_df, results_df)
-    if not metrics:
-        return
-
-    topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
-    geometry = _gain_over_topk_geometry(
-        len(k_values), len(diversity_strategies) * len(lambda_values)
-    )
-    subplot_titles = [
-        _panel_title(f'Delta {title} vs top-k', higher_is_better, delta=True)
-        for _stats_col, _result_col, title, higher_is_better in metrics
-    ]
-    fig = make_subplots(
-        rows=len(metrics),
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.055,
-        subplot_titles=subplot_titles,
-    )
-
-    for row_idx, (stats_col, result_col, _title, higher_is_better) in enumerate(metrics, start=1):
-        direction_note = (
-            'Positive delta is favorable' if higher_is_better else 'Negative delta is favorable'
-        )
-        for strategy_idx, strategy in enumerate(diversity_strategies):
-            style = get_style(strategy)
-            x_positions: list[float] = []
-            deltas: list[float] = []
-            ci_values: list[float] = []
-            colors: list[str] = []
-            customdata: list[list[float | int | str]] = []
-
-            for lambda_idx, lam in enumerate(lambda_values):
-                group_idx = strategy_idx * len(lambda_values) + lambda_idx
-                offset = _gain_over_topk_offset(
-                    group_idx=group_idx,
-                    n_groups=len(diversity_strategies) * len(lambda_values),
-                    slot_width=geometry.slot_width,
-                )
-                color_rgb = _lambda_shade(style['color'], lam, lambda_values)
-                color_hex = _rgb_to_plotly_color(color_rgb)
-
-                for k_position, k in zip(geometry.k_positions, k_values, strict=True):
-                    ref_row = topk_df.filter(pl.col('k') == k)
-                    ref_val = float(ref_row[stats_col][0]) if ref_row.height > 0 else 0.0
-                    sub = stats_df.filter(
-                        (pl.col('strategy') == strategy)
-                        & (pl.col('k') == k)
-                        & (pl.col('lam') == lam)
-                    )
-                    strat_val = float(sub[stats_col][0]) if sub.height > 0 else ref_val
-                    delta = strat_val - ref_val
-                    ci_value = _paired_delta_ci(results_df, strategy, k, lam, result_col)
-
-                    x_positions.append(k_position + offset)
-                    deltas.append(delta)
-                    ci_values.append(0.0 if np.isnan(ci_value) else ci_value)
-                    colors.append(color_hex)
-                    customdata.append(
-                        [
-                            get_style(strategy)['label'],
-                            lam,
-                            k,
-                            strat_val,
-                            ref_val,
-                            0.0 if np.isnan(ci_value) else ci_value,
-                            direction_note,
-                        ]
-                    )
-
-            fig.add_trace(
-                go.Bar(
-                    x=x_positions,
-                    y=deltas,
-                    width=[geometry.bar_width] * len(x_positions),
-                    marker={
-                        'color': colors,
-                        'line': {'color': '#222222', 'width': 0.45},
-                    },
-                    error_y={
-                        'type': 'data',
-                        'array': ci_values,
-                        'visible': True,
-                        'thickness': 0.8,
-                        'width': 2,
-                        'color': style['color'],
-                    },
-                    customdata=customdata,
-                    hovertemplate=(
-                        '%{customdata[0]}<br>'
-                        'k=%{customdata[2]}<br>'
-                        'lambda=%{customdata[1]:.2f}<br>'
-                        'delta=%{y:+.4f}<br>'
-                        'strategy value=%{customdata[3]:.4f}<br>'
-                        'top-k value=%{customdata[4]:.4f}<br>'
-                        'paired 95% CI half-width=%{customdata[5]:.4f}<br>'
-                        '%{customdata[6]}'
-                        '<extra></extra>'
-                    ),
-                    name=style['label'],
-                    legendgroup=strategy,
-                    showlegend=row_idx == 1,
-                    opacity=0.92,
-                ),
-                row=row_idx,
-                col=1,
-            )
-        fig.add_hline(y=0.0, line_width=1.0, line_color='black', row=row_idx, col=1)  # type: ignore
-        fig.update_yaxes(title_text=f'Delta {stats_col}', row=row_idx, col=1)
-
-    for row_idx in range(1, len(metrics) + 1):
-        fig.update_xaxes(
-            tickmode='array',
-            tickvals=geometry.k_positions,
-            ticktext=[f'k={k}' for k in k_values],
-            range=[geometry.x_min, geometry.x_max],
-            row=row_idx,
-            col=1,
-        )
-    fig.update_xaxes(title_text='k', row=len(metrics), col=1)
-    fig.update_layout(
-        title='Gain over top-k by strategy and lambda, paired 95% CI',
-        barmode='overlay',
-        height=250 * len(metrics) + 120,
-        margin={'l': 80, 'r': 40, 't': 120, 'b': 55},
-        legend={
-            'orientation': 'h',
-            'yanchor': 'bottom',
-            'y': 1.01,
-            'xanchor': 'right',
-            'x': 1.0,
-        },
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        annotations=[
-            *list(fig.layout.annotations),  # type: ignore
-            {
-                'text': 'Bar shade encodes lambda within each strategy; hover a bar for lambda, values, and CI.',
-                'xref': 'paper',
-                'yref': 'paper',
-                'x': 0.0,
-                'y': 1.08,
-                'showarrow': False,
-                'font': {'size': 12, 'color': '#444444'},
-                'align': 'left',
-            },
-        ],
-    )
-
-    fig.write_html(
-        out_dir / 'gain_over_topk.html',
-        include_plotlyjs=True,
-        full_html=True,
-    )
-
-
-def plot_gain_over_topk_best_facet_hit_lambda(
-    stats_df: pl.DataFrame,
-    results_df: pl.DataFrame,
-    out_dir: Path,
-) -> None:
-    """Simpler paired delta bars using lambda* per strategy and k."""
+    """Paired delta bars using lambda* per strategy and k, with per-bar lambda labels."""
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -857,7 +706,7 @@ def plot_gain_over_topk_best_facet_hit_lambda(
     x = np.arange(len(k_values))
     width = 0.8 / max(len(diversity_strategies), 1)
 
-    fig, axes = _grid_figure('gain_over_topk_best_facet_hit_lambda')
+    fig, axes = _grid_figure('delta_vs_topk_metrics_at_best_lambda_for_k')
     for ax, (stats_col, result_col, title, higher_is_better) in zip(
         axes.flatten(),
         metrics,
@@ -867,10 +716,11 @@ def plot_gain_over_topk_best_facet_hit_lambda(
             style = get_style(strategy)
             deltas: list[float] = []
             cis: list[float] = []
+            selected_lambdas: list[float | None] = []
             for k in k_values:
                 ref_row = topk_df.filter(pl.col('k') == k)
                 ref_val = float(ref_row[stats_col][0]) if ref_row.height > 0 else 0.0
-                best_row = _best_lam_rows(stats_df, strategy, [k])
+                best_row = _best_lam_rows(stats_df, strategy, [k], lambda_selection)
                 if best_row.height > 0:
                     strat_val = float(best_row[stats_col][0])
                     lam = float(best_row['lam'][0])
@@ -879,6 +729,7 @@ def plot_gain_over_topk_best_facet_hit_lambda(
                     lam = None
                 deltas.append(strat_val - ref_val)
                 cis.append(_paired_delta_ci(results_df, strategy, k, lam, result_col))
+                selected_lambdas.append(lam)
 
             ci_display = [0.0 if np.isnan(c) else c for c in cis]
             offset = (i - len(diversity_strategies) / 2 + 0.5) * width
@@ -893,7 +744,13 @@ def plot_gain_over_topk_best_facet_hit_lambda(
                 capsize=3,
                 error_kw={'linewidth': 0.8, 'ecolor': style['color']},
             )
-            _annotate_delta_bars(ax, bars, deltas)
+            _annotate_delta_bars(
+                ax,
+                bars,
+                deltas,
+                lambda_values=selected_lambdas,
+                color=style['color'],
+            )
 
         ax.axhline(0, color='black', lw=0.8)
         ax.set_xticks(x)
@@ -904,22 +761,20 @@ def plot_gain_over_topk_best_facet_hit_lambda(
         )
         ax.set_ylabel(f'Delta {stats_col}', fontsize=9)
         ax.grid(axis='y', alpha=0.3)
-        ax.margins(y=0.18)
+        ax.margins(y=0.28)
 
     _figure_legend(fig, axes.flatten())
     for ax in axes.flatten()[len(metrics) :]:
         ax.set_visible(False)
 
     fig.suptitle(
-        'Gain over top-k - coverage-first lambda* within strategy x k, paired 95% CI',
+        'Gain over top-k - configured lambda* within strategy x k, paired 95% CI',
         fontsize=12,
     )
-    _figure_note(
-        fig,
-        _best_lambda_note(stats_df, diversity_strategies, k_values),
-    )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
-    fig.savefig(out_dir / 'gain_over_topk_best_facet_hit_lambda.png', dpi=140, bbox_inches='tight')
+    fig.savefig(
+        out_dir / 'delta_vs_topk_metrics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight'
+    )
     plt.close(fig)
 
 
@@ -1087,12 +942,13 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
     plt.close(fig)
 
 
-def plot_lambda_agreeing_pair_metrics(
+def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
     stats_df: pl.DataFrame,
     agreement_df: pl.DataFrame,
     out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
-    """Per-k metric traces for the best-agreeing pair plus best-coverage controls."""
+    """Per-k metric traces for the best-agreeing pair plus configured lambda* controls."""
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.ticker import FormatStrFormatter, MaxNLocator
@@ -1118,7 +974,11 @@ def plot_lambda_agreeing_pair_metrics(
     best_pairs = _best_lambda_agreement_rows(agreement_df)
     if best_pairs.is_empty():
         return
-    control_pairs = _best_mean_facet_hit_rate_control_rows(stats_df, best_pairs['k'].to_list())
+    control_pairs = _best_lambda_control_rows(
+        stats_df,
+        best_pairs['k'].to_list(),
+        lambda_selection,
+    )
     if control_pairs.is_empty():
         return
 
@@ -1247,7 +1107,7 @@ def plot_lambda_agreeing_pair_metrics(
                     '\n'.join(
                         [
                             f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                            'lambda* = max MeanFacetHitRate@k within strategy x k',
+                            lambda_selection_short_label(lambda_selection),
                         ]
                     ),
                     fontsize=8.5,
@@ -1268,7 +1128,7 @@ def plot_lambda_agreeing_pair_metrics(
                     '\n'.join(
                         [
                             f'Control: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                            'lambda* = max MeanFacetHitRate@k within strategy x k',
+                            lambda_selection_short_label(lambda_selection),
                         ]
                     ),
                     fontsize=8.5,
@@ -1287,54 +1147,60 @@ def plot_lambda_agreeing_pair_metrics(
         )
 
     fig.suptitle(
-        'Best-agreeing FacLoc/MMR pair metrics by k with best-coverage controls',
+        'Best-agreeing FacLoc/MMR pair metrics by k with configured lambda* controls',
         fontsize=12,
     )
     _figure_note(
         fig,
         (
             'Rows 1 and 3 use the best agreement pair for that k. '
-            'Rows 2 and 4 are control rows using each strategy lambda* = max MeanFacetHitRate@k within strategy x k.'
+            f'Rows 2 and 4 are control rows using each strategy {lambda_selection_policy_note(lambda_selection)}.'
         ),
     )
     fig.tight_layout(rect=(0.02, 0.12, 1, 0.95))
-    fig.savefig(out_dir / 'lambda_agreeing_pair_metrics.png', dpi=140, bbox_inches='tight')
+    fig.savefig(
+        out_dir / 'metrics_at_agreeing_lambda_wrt_best_lambda.png', dpi=140, bbox_inches='tight'
+    )
     plt.close(fig)
 
 
-def plot_best_facet_hit_rate_eval_metrics(
+def plot_profiles_metrics_by_k_at_best_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
-    """Control-only evaluation metrics using each strategy's best MeanFacetHitRate@k lambda."""
-    _plot_best_facet_hit_rate_metric_group(
+    """Control-only evaluation metrics using each strategy's configured lambda*."""
+    _plot_best_lambda_metric_group(
         stats_df,
         out_dir,
-        plot_name='best_facet_hit_rate_eval_metrics',
+        plot_name='profiles_metrics_by_k_at_best_lambda',
         row_title='Evaluation control',
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
-        figure_title='Best MeanFacetHitRate@k evaluation control metrics by k',
-        output_filename='best_facet_hit_rate_eval_metrics.png',
+        figure_title='Configured lambda* evaluation control metrics by k',
+        output_filename='profiles_metrics_by_k_at_best_lambda.png',
+        lambda_selection=lambda_selection,
     )
 
 
-def plot_best_facet_hit_rate_diagnostic_metrics(
+def plot_profiles_diagnostics_by_k_at_best_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
-    """Control-only diagnostic metrics using each strategy's best MeanFacetHitRate@k lambda."""
-    _plot_best_facet_hit_rate_metric_group(
+    """Control-only diagnostic metrics using each strategy's configured lambda*."""
+    _plot_best_lambda_metric_group(
         stats_df,
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
         out_dir=out_dir,
-        plot_name='best_facet_hit_rate_diagnostic_metrics',
+        plot_name='profiles_diagnostics_by_k_at_best_lambda',
         row_title='Diagnostic control',
-        figure_title='Best MeanFacetHitRate@k diagnostic control metrics by k',
-        output_filename='best_facet_hit_rate_diagnostic_metrics.png',
+        figure_title='Configured lambda* diagnostic control metrics by k',
+        output_filename='profiles_diagnostics_by_k_at_best_lambda.png',
+        lambda_selection=lambda_selection,
     )
 
 
-def _plot_best_facet_hit_rate_metric_group(
+def _plot_best_lambda_metric_group(
     stats_df: pl.DataFrame,
     out_dir: Path,
     *,
@@ -1343,6 +1209,7 @@ def _plot_best_facet_hit_rate_metric_group(
     metric_names: list[str],
     figure_title: str,
     output_filename: str,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
     import matplotlib.pyplot as plt
     import numpy as np
@@ -1361,7 +1228,7 @@ def _plot_best_facet_hit_rate_metric_group(
         return
 
     k_values = sorted(int(v) for v in stats_df['k'].unique().to_list())
-    control_pairs = _best_mean_facet_hit_rate_control_rows(stats_df, k_values)
+    control_pairs = _best_lambda_control_rows(stats_df, k_values, lambda_selection)
     if control_pairs.is_empty():
         return
 
@@ -1458,7 +1325,7 @@ def _plot_best_facet_hit_rate_metric_group(
                 [
                     f'k={k}',
                     f'FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                    'lambda* = max MeanFacetHitRate@k within strategy x k',
+                    lambda_selection_short_label(lambda_selection),
                 ]
             ),
             fontsize=8.8,
@@ -1479,14 +1346,18 @@ def _plot_best_facet_hit_rate_metric_group(
     fig.suptitle(figure_title, fontsize=12)
     _figure_note(
         fig,
-        'Each row shows bare top-k for that k plus each strategy lambda* = max MeanFacetHitRate@k within strategy x k.',
+        f'Each row shows bare top-k for that k plus each strategy {lambda_selection_policy_note(lambda_selection)}.',
     )
     fig.tight_layout(rect=(0.02, 0.12, 1, 0.95))
     fig.savefig(out_dir / output_filename, dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_diagnostics_at_best_lambda_for_k(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
+) -> None:
     """Diagnostic metrics that explain why a strategy wins or fails."""
     import matplotlib.pyplot as plt
 
@@ -1502,7 +1373,7 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
         )
     ]
 
-    fig, axes = _grid_figure('selection_diagnostics', sharex=True)
+    fig, axes = _grid_figure('diagnostics_at_best_lambda_for_k', sharex=True)
     for ax, (col, title, higher_is_better) in zip(axes.flatten(), metric_cols, strict=False):
         for strategy in strategies:
             style = get_style(strategy)
@@ -1512,7 +1383,7 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
                 ys = [_cell_value(sub, k, None, col) for k in xs]
                 ax.plot(xs, ys, color=style['color'], ls=style['ls'], lw=2.0, label=style['label'])
                 continue
-            best_df = _best_lam_rows(stats_df, strategy, k_values)
+            best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
             if best_df.height > 0:
                 ax.plot(
                     best_df['k'].to_list(),
@@ -1520,9 +1391,27 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
                     color=style['color'],
                     ls=style['ls'],
                     lw=2.0,
-                    marker='o',
-                    ms=4,
                     label=style['label'],
+                )
+                xs = best_df['k'].to_list()
+                ys = [float(v) for v in best_df[col].to_list()]
+                lams = [float(v) for v in best_df['lam'].to_list()]
+                ax.scatter(
+                    xs,
+                    ys,
+                    s=42,
+                    facecolors='white',
+                    edgecolors=style['color'],
+                    linewidths=1.4,
+                    zorder=4,
+                )
+                _annotate_lambda_points(
+                    ax,
+                    xs,
+                    ys,
+                    lams,
+                    color=style['color'],
+                    placement='above' if strategy == 'mmr' else 'below',
                 )
         ax.set_title(_panel_title(title, higher_is_better), fontsize=10)
         ax.set_ylabel(col, fontsize=9)
@@ -1537,21 +1426,28 @@ def plot_selection_diagnostics(stats_df: pl.DataFrame, out_dir: Path) -> None:
 
     _figure_legend(fig, axes.flatten())
     fig.suptitle(
-        'Selection diagnostics - coverage-first lambda* within strategy x k',
+        'Selection diagnostics - configured lambda* within strategy x k',
         fontsize=12,
     )
     _figure_note(
-        fig, _best_lambda_note(stats_df, [s for s in strategies if s != 'top_k'], k_values)
+        fig,
+        _best_lambda_note(
+            stats_df,
+            [s for s in strategies if s != 'top_k'],
+            k_values,
+            lambda_selection,
+        ),
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
-    fig.savefig(out_dir / 'selection_diagnostics.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'diagnostics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_answer_rouge_comparison(
+def plot_answer_metrics_at_best_lambda_for_k(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    lambda_selection: LambdaSelectionCfg,
 ) -> None:
     """Auxiliary answer-token overlap diagnostics."""
     import matplotlib.pyplot as plt
@@ -1562,7 +1458,7 @@ def plot_answer_rouge_comparison(
 
     k_values = sorted(stats_df['k'].unique().to_list())
     strategies = _ordered_strategies(stats_df)
-    fig, axes = _grid_figure('answer_rouge_comparison', sharex=True)
+    fig, axes = _grid_figure('answer_metrics_at_best_lambda_for_k', sharex=True)
 
     for ax, (stats_col, result_col, title, higher_is_better) in zip(
         axes.flatten(),
@@ -1582,7 +1478,7 @@ def plot_answer_rouge_comparison(
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
                 continue
 
-            best_df = _best_lam_rows(stats_df, strategy, k_values)
+            best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
             if best_df.height == 0:
                 continue
             xs = best_df['k'].to_list()
@@ -1638,14 +1534,14 @@ def plot_answer_rouge_comparison(
     )
     _figure_note(
         fig,
-        f'ROUGE is diagnostic only; lambda* is still selected by coverage metrics. {LAMBDA_POLICY_NOTE}',
+        lambda_selection_policy_note(lambda_selection),
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
-    fig.savefig(out_dir / 'answer_rouge_comparison.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'answer_metrics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
-def plot_answer_rouge_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_answer_metrics_k_curves_per_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
     """Auxiliary ROUGE metrics as lambda changes."""
     import matplotlib.pyplot as plt
 
@@ -1673,7 +1569,7 @@ def plot_answer_rouge_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) 
     k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
 
     fig, axes = _grid_figure(
-        'answer_rouge_lambda_sensitivity',
+        'answer_metrics_k_curves_per_lambda',
         rows=len(metric_cols),
         cols=len(diversity_strategies),
         sharex=True,
@@ -1737,7 +1633,7 @@ def plot_answer_rouge_lambda_sensitivity(stats_df: pl.DataFrame, out_dir: Path) 
         fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
     )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
-    fig.savefig(out_dir / 'answer_rouge_lambda_sensitivity.png', dpi=140, bbox_inches='tight')
+    fig.savefig(out_dir / 'answer_metrics_k_curves_per_lambda.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
 
@@ -1770,7 +1666,7 @@ def _available_metrics(
 def _main_metric_grid_figure(n_metrics: int) -> tuple[Figure, NDArray[Any]]:
     """Compatibility wrapper for the standard 3x2 main-metric grid."""
     del n_metrics
-    return _grid_figure('strategy_comparison', sharex=True)
+    return _grid_figure('metrics_at_best_lambda_for_k', sharex=True)
 
 
 def _available_answer_rouge_metrics(
@@ -1813,18 +1709,6 @@ def _available_metric_specs(
         )
 
     return metrics
-
-
-def _available_sort(df: pl.DataFrame) -> tuple[list[str], list[bool]]:
-    pairs = [
-        (col, desc)
-        for col, desc in zip(PRIMARY_SORT, PRIMARY_DESC, strict=True)
-        if col in df.columns
-    ]
-    if not pairs:
-        return ['lam'], [False]
-    cols, desc = zip(*pairs, strict=True)
-    return list(cols), list(desc)
 
 
 def _grid_figure(
@@ -1902,10 +1786,11 @@ def _best_lambda_note(
     stats_df: pl.DataFrame,
     strategies: list[str],
     k_values: list[int],
+    lambda_selection: LambdaSelectionCfg,
 ) -> str:
-    parts = [LAMBDA_POLICY_NOTE]
+    parts = [lambda_selection_policy_note(lambda_selection)]
     for strategy in strategies:
-        best_df = _best_lam_rows(stats_df, strategy, k_values)
+        best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
         if best_df.height == 0 or 'lam' not in best_df.columns:
             continue
         mapping = ', '.join(
@@ -1920,11 +1805,46 @@ def _figure_note(fig: Figure, text: str, *, y: float = 0.025) -> None:
     fig.text(0.5, y, text, ha='center', va='bottom', fontsize=8, color='#444444')
 
 
+def _add_centered_row_labels(
+    fig: Figure,
+    axes: NDArray[Any],
+    labels: list[str],
+    *,
+    fontsize: float,
+    top_pad: float,
+) -> None:
+    n_rows = min(len(labels), axes.shape[0])
+    first_row_gap = None
+    if n_rows > 1:
+        first_row_bottom = min(ax.get_position().y0 for ax in axes[0])
+        second_row_top = max(ax.get_position().y1 for ax in axes[1])
+        first_row_gap = first_row_bottom - second_row_top
+    for row_idx in range(n_rows):
+        row_axes = [axes[row_idx][col_idx] for col_idx in range(axes.shape[1])]
+        left = min(ax.get_position().x0 for ax in row_axes)
+        right = max(ax.get_position().x1 for ax in row_axes)
+        top = max(ax.get_position().y1 for ax in row_axes)
+        if row_idx == 0:
+            y = top + (first_row_gap * 0.5 if first_row_gap is not None else top_pad)
+        else:
+            prev_row_axes = [axes[row_idx - 1][col_idx] for col_idx in range(axes.shape[1])]
+            prev_bottom = min(ax.get_position().y0 for ax in prev_row_axes)
+            y = top + (prev_bottom - top) * 0.5
+        fig.text(
+            (left + right) / 2,
+            y,
+            labels[row_idx],
+            ha='center',
+            va='center',
+            fontsize=fontsize,
+        )
+
+
 def _panel_title(title: str, higher_is_better: bool, *, delta: bool = False) -> str:
+    del delta
     if higher_is_better:
         return title
-    suffix = 'negative better' if delta else 'lower better'
-    return f'{title} [{suffix}]'
+    return f'{title} [lower better]'
 
 
 def _build_strategy_lambda_heatmap_data(
@@ -2109,6 +2029,13 @@ def _set_lambda_tick_labels(
     ax.set_xticklabels([f'{lam:.2f}' for lam in lambda_values], fontsize=fontsize)
 
 
+def _bold_zero_ytick_label(ax: Any) -> None:
+    for tick_value, label in zip(ax.get_yticks(), ax.get_yticklabels(), strict=False):
+        if abs(float(tick_value)) < 1e-12:
+            label.set_fontweight('bold')
+            label.set_color('black')
+
+
 def _add_lambda_shade_legend(
     fig: Figure,
     strategies: list[str],
@@ -2208,7 +2135,9 @@ class GainOverTopkFooterLayout:
     values_per_line: int
 
 
-def _gain_over_topk_geometry(n_k_values: int, n_groups: int) -> GainOverTopkGeometry:
+def _delta_vs_topk_metrics_for_k_for_lambda_geometry(
+    n_k_values: int, n_groups: int
+) -> GainOverTopkGeometry:
     import numpy as np
 
     min_group_span = 2.8
@@ -2218,12 +2147,12 @@ def _gain_over_topk_geometry(n_k_values: int, n_groups: int) -> GainOverTopkGeom
     k_gap = max(0.9, min(2.2, group_span * 0.16))
     k_positions = (np.arange(n_k_values, dtype=float) * (group_span + k_gap)).tolist()
     bar_width = slot_width * 0.96
-    first_center = k_positions[0] + _gain_over_topk_offset(
+    first_center = k_positions[0] + _delta_vs_topk_metrics_for_k_for_lambda_offset(
         group_idx=0,
         n_groups=n_groups,
         slot_width=slot_width,
     )
-    last_center = k_positions[-1] + _gain_over_topk_offset(
+    last_center = k_positions[-1] + _delta_vs_topk_metrics_for_k_for_lambda_offset(
         group_idx=n_groups - 1,
         n_groups=n_groups,
         slot_width=slot_width,
@@ -2238,11 +2167,15 @@ def _gain_over_topk_geometry(n_k_values: int, n_groups: int) -> GainOverTopkGeom
     )
 
 
-def _gain_over_topk_offset(*, group_idx: int, n_groups: int, slot_width: float) -> float:
+def _delta_vs_topk_metrics_for_k_for_lambda_offset(
+    *, group_idx: int, n_groups: int, slot_width: float
+) -> float:
     return (group_idx - n_groups / 2 + 0.5) * slot_width
 
 
-def _gain_over_topk_footer_layout(lambda_values: list[float]) -> GainOverTopkFooterLayout:
+def _delta_vs_topk_metrics_for_k_for_lambda_footer_layout(
+    lambda_values: list[float],
+) -> GainOverTopkFooterLayout:
     values_per_line = 35
     lambda_line_count = len(
         _format_lambda_value_lines(lambda_values, values_per_line=values_per_line)
@@ -2315,24 +2248,55 @@ def _annotate_lambda_points(
         )
 
 
-def _annotate_delta_bars(ax: object, bars: Iterable, values: list[float]) -> None:
+def _annotate_delta_bars(
+    ax: Any,
+    bars: Iterable[Any],
+    values: list[float],
+    *,
+    lambda_values: list[float | None] | None = None,
+    color: str = '#222222',
+) -> None:
     ymin, ymax = ax.get_ylim()  # type: ignore[attr-defined]
     span = max(ymax - ymin, 1e-6)
-    offset = span * 0.025
-    for bar, value in zip(bars, values, strict=True):
-        if abs(value) < 0.005:
-            continue
+    value_offset = span * 0.025
+    lambda_step_points = 11
+    lambda_labels = (
+        lambda_values if lambda_values is not None else [None for _ in values]
+    )
+    for bar, value, lam in zip(bars, values, lambda_labels, strict=True):
         x = bar.get_x() + bar.get_width() / 2
-        y = value + offset if value >= 0 else value - offset
+        y = value + value_offset if value >= 0 else value - value_offset
         va = 'bottom' if value >= 0 else 'top'
-        ax.text(  # type: ignore[attr-defined]
-            x,
-            y,
-            f'{value:+.3f}',
+        if abs(value) >= 0.005:
+            ax.text(  # type: ignore[attr-defined]
+                x,
+                y,
+                f'{value:+.3f}',
+                ha='center',
+                va=va,
+                fontsize=6.5,
+                clip_on=True,
+            )
+        if lam is None:
+            continue
+        ax.annotate(
+            f'λ={lam:.2f}',
+            xy=(x, y),
+            xytext=(0, lambda_step_points if value >= 0 else -lambda_step_points),
+            textcoords='offset points',
             ha='center',
             va=va,
             fontsize=6.5,
+            color=color,
+            bbox={
+                'boxstyle': 'round,pad=0.18',
+                'facecolor': 'white',
+                'edgecolor': color,
+                'linewidth': 0.45,
+                'alpha': 0.92,
+            },
             clip_on=True,
+            zorder=5,
         )
 
 
@@ -2392,15 +2356,18 @@ def _annotate_single_delta_bar(ax: Any, bar: Any, value: float, *, color: str) -
     )
 
 
-def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -> pl.DataFrame:
-    sub = stats_df.filter(pl.col('strategy') == strategy)
-    rows = []
-    for k in k_values:
-        ksub = sub.filter(pl.col('k') == k)
-        if ksub.height > 0:
-            sort_cols, desc = _available_sort(ksub)
-            rows.append(ksub.sort(sort_cols, descending=desc).head(1))
-    return pl.concat(rows).sort('k') if rows else pl.DataFrame()
+def _best_lam_rows(
+    stats_df: pl.DataFrame,
+    strategy: str,
+    k_values: list[int],
+    lambda_selection: LambdaSelectionCfg,
+) -> pl.DataFrame:
+    return select_best_lambda_rows(
+        stats_df,
+        strategy=strategy,
+        k_values=k_values,
+        cfg=lambda_selection,
+    )
 
 
 def _best_lambda_agreement_rows(agreement_df: pl.DataFrame) -> pl.DataFrame:
@@ -2420,14 +2387,25 @@ def _best_lambda_agreement_rows(agreement_df: pl.DataFrame) -> pl.DataFrame:
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
 
 
-def _best_mean_facet_hit_rate_control_rows(
+def _best_lambda_control_rows(
     stats_df: pl.DataFrame,
     k_values: list[int],
+    lambda_selection: LambdaSelectionCfg,
 ) -> pl.DataFrame:
     rows = []
     for k in [int(v) for v in k_values]:
-        fac_loc_best = _best_mean_facet_hit_rate_lam_row(stats_df, strategy='fac_loc', k=k)
-        mmr_best = _best_mean_facet_hit_rate_lam_row(stats_df, strategy='mmr', k=k)
+        fac_loc_best = select_best_lambda_row(
+            stats_df,
+            strategy='fac_loc',
+            k=k,
+            cfg=lambda_selection,
+        )
+        mmr_best = select_best_lambda_row(
+            stats_df,
+            strategy='mmr',
+            k=k,
+            cfg=lambda_selection,
+        )
         if fac_loc_best is None or mmr_best is None:
             continue
         rows.append(
@@ -2453,19 +2431,6 @@ def _strategy_k_lambda_row(
         (pl.col('strategy') == strategy) & (pl.col('k') == k) & (pl.col('lam') == lam)
     )
     return sub.row(0, named=True) if sub.height > 0 else None
-
-
-def _best_mean_facet_hit_rate_lam_row(
-    stats_df: pl.DataFrame,
-    *,
-    strategy: str,
-    k: int,
-) -> dict[str, object] | None:
-    sub = stats_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
-    if sub.height == 0 or 'MeanFacetHitRate@k' not in sub.columns:
-        return None
-    ranked = sub.sort(['MeanFacetHitRate@k', 'lam'], descending=[True, False])
-    return ranked.row(0, named=True) if ranked.height > 0 else None
 
 
 def _k_row(df: pl.DataFrame, k: int) -> dict[str, object] | None:
@@ -2509,9 +2474,7 @@ def _annotate_pair_metric_deltas(
         if abs(delta) < 1e-12:
             color = '#666666'
         else:
-            fac_loc_better = (
-                delta > 0.0 if metric.higher_is_better else delta < 0.0
-            )
+            fac_loc_better = delta > 0.0 if metric.higher_is_better else delta < 0.0
             color = get_style('fac_loc')['color'] if fac_loc_better else get_style('mmr')['color']
         y = max(fac_val, mmr_val) + offset
         ax.text(
@@ -2593,22 +2556,27 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     return int(ranked['k'][0])
 
 
-def _best_result_slice(results_df: pl.DataFrame, strategy: str, k: int) -> pl.DataFrame:
+def _best_result_slice(
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    strategy: str,
+    k: int,
+    lambda_selection: LambdaSelectionCfg,
+) -> pl.DataFrame:
     strat_df = results_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
     if strategy == 'top_k' or strat_df.height == 0:
         return strat_df
-    ranked = strat_df.group_by('lam').agg(
-        pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
-        pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k')
-        if 'alpha_ndcg' in strat_df.columns
-        else pl.col('facet_coverage').mean().alias('alpha-nDCG@k'),
-        pl.col('gold_precision').mean().alias('Precision@k'),
-        pl.col('distractor_rate').mean().alias('DistractorRate'),
+    best_row = select_best_lambda_row(
+        stats_df,
+        strategy=strategy,
+        k=k,
+        cfg=lambda_selection,
     )
-
-    sort_cols, desc = _available_sort(ranked)
-    ranked = ranked.sort(sort_cols, descending=desc)
-    return strat_df.filter(pl.col('lam') == ranked['lam'][0]) if ranked.height > 0 else strat_df
+    return (
+        strat_df.filter(pl.col('lam') == float(best_row['lam']))
+        if best_row is not None and 'lam' in best_row
+        else strat_df
+    )
 
 
 def _cell_value(df: pl.DataFrame, k: int, lam: float | None, col: str) -> float:

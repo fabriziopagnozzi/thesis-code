@@ -47,6 +47,9 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalS
 
 LEGEND_CHILD_INDENT = '    '
 LEGEND_HEADER_LABEL = 'Primary Condition / Subgroup / Clinical Axis\n'
+LEGEND_MATCH_COLOR = 'black'
+LEGEND_NON_MATCH_COLOR = '#9A9A9A'
+QUERY_TITLE_CONDITION_COLOR = '#9C7A00'
 QUERY_TITLE_SUBGROUP_COLOR = '#7B2CBF'
 QUERY_TITLE_AXIS_COLOR = '#2D6A4F'
 
@@ -81,7 +84,7 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
         )
     legend_handles = _selection_legend_handles(axes_list)
     legend_entries = _display_legend_entries(artifact, legend_handles)
-    fig.legend(
+    legend = fig.legend(
         [handle for _, handle in legend_entries],
         [_format_legend_label(artifact, label) for label, _ in legend_entries],
         fontsize=7,
@@ -92,6 +95,7 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     )
     _draw_artifact_figure_title(fig, artifact, fontsize=12)
     fig.tight_layout(rect=(0, 0, 0.92, 0.94))
+    _style_legend_text(legend, artifact, [label for label, _ in legend_entries], fontsize=7)
     fig.savefig(out_dir / 'strategy_selection_overlay.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
@@ -263,9 +267,10 @@ def plot_full_strategy_selection_overlay(
 
     legend_axes = [ax_topk, *mmr_axes, *facloc_axes]
     legend_handles = _selection_legend_handles(legend_axes)
-    _draw_selection_legend_panel(ax_legend, artifact, legend_handles)
+    legend, legend_labels = _draw_selection_legend_panel(ax_legend, artifact, legend_handles)
 
     _draw_artifact_figure_title(fig, artifact, fontsize=12, y=1 - 0.16 / fig_height)
+    _style_legend_text(legend, artifact, legend_labels, fontsize=7)
     fig.savefig(
         out_dir / f'full_strategy_selection_overlay_k{render_k}.png',
         dpi=150,
@@ -284,7 +289,7 @@ def plot_query_overview_4panel(
     ax_map, ax_cos, ax_rank, ax_cluster = axes.ravel()
 
     _plot_query_map_ax(ax_map, artifact, include_title_prefix=False)
-    _draw_facet_family_side_legend(ax_map, artifact)
+    map_legend, map_legend_labels = _draw_facet_family_side_legend(ax_map, artifact)
 
     similarity_points = _plot_query_similarity_map_ax(ax_cos, artifact, include_title_prefix=False)
     if similarity_points is not None:
@@ -297,7 +302,7 @@ def plot_query_overview_4panel(
         )
 
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
-    _draw_facet_family_side_legend(ax_rank, artifact)
+    rank_legend, rank_legend_labels = _draw_facet_family_side_legend(ax_rank, artifact)
 
     _plot_discovered_clusters_ax(ax_cluster, artifact, include_title_prefix=False)
     _draw_wrapped_side_legend(ax_cluster)
@@ -305,6 +310,18 @@ def plot_query_overview_4panel(
         ax.set_box_aspect(1)
     fig.subplots_adjust(left=0.055, right=0.94, top=0.88, bottom=0.06, wspace=0.78, hspace=0.30)
     _draw_artifact_figure_title(fig, artifact, fontsize=14)
+    _style_legend_text(
+        map_legend,
+        artifact,
+        map_legend_labels,
+        fontsize=QUERY_OVERVIEW_LEGEND_FONT_SIZE,
+    )
+    _style_legend_text(
+        rank_legend,
+        artifact,
+        rank_legend_labels,
+        fontsize=QUERY_OVERVIEW_LEGEND_FONT_SIZE,
+    )
     fig.savefig(out_dir / 'query_overview_4panel.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
 
@@ -502,11 +519,11 @@ def _draw_selection_legend_panel(
     ax: Any,
     artifact: GeometryArtifact,
     legend_handles: dict[str, Any],
-) -> None:
+) -> tuple[Any, list[str]]:
     ax.axis('off')
     ax.set_title('Legend')
     legend_entries = _display_legend_entries(artifact, legend_handles)
-    ax.legend(
+    legend = ax.legend(
         [handle for _, handle in legend_entries],
         [_format_legend_label(artifact, label) for label, _ in legend_entries],
         fontsize=7,
@@ -515,6 +532,7 @@ def _draw_selection_legend_panel(
         bbox_to_anchor=(0.0, 0.5),
         alignment='left',
     )
+    return legend, [label for label, _ in legend_entries]
 
 
 def _draw_wrapped_side_legend(ax: Any) -> None:
@@ -532,13 +550,13 @@ def _draw_wrapped_side_legend(ax: Any) -> None:
     )
 
 
-def _draw_facet_family_side_legend(ax: Any, artifact: GeometryArtifact) -> None:
+def _draw_facet_family_side_legend(ax: Any, artifact: GeometryArtifact) -> tuple[Any | None, list[str]]:
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
-        return
+        return None, []
     legend_handles = {label: handle for handle, label in zip(handles, labels, strict=True)}
     legend_entries = _display_legend_entries(artifact, legend_handles)
-    ax.legend(
+    legend = ax.legend(
         [handle for _, handle in legend_entries],
         [_format_legend_label(artifact, label) for label, _ in legend_entries],
         fontsize=QUERY_OVERVIEW_LEGEND_FONT_SIZE,
@@ -547,6 +565,7 @@ def _draw_facet_family_side_legend(ax: Any, artifact: GeometryArtifact) -> None:
         bbox_to_anchor=(QUERY_OVERVIEW_LEGEND_BBOX_TO_ANCHOR_X, 0.5),
         alignment='left',
     )
+    return legend, [label for label, _ in legend_entries]
 
 
 def _format_legend_label(artifact: GeometryArtifact, label: str) -> str:
@@ -554,6 +573,170 @@ def _format_legend_label(artifact: GeometryArtifact, label: str) -> str:
         return label
     indent = LEGEND_CHILD_INDENT if _is_child_legend_label(artifact, label) else ''
     return _wrap_legend_label(label, indent=indent)
+
+
+def _style_legend_text(
+    legend: Any,
+    artifact: GeometryArtifact,
+    raw_labels: list[str],
+    *,
+    fontsize: int,
+) -> None:
+    from matplotlib.offsetbox import AnnotationBbox, HPacker, TextArea, VPacker
+
+    if legend is None:
+        return
+    fig = legend.figure
+    if fig is None or fig.canvas is None:
+        return
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    for text, raw_label in zip(legend.get_texts(), raw_labels, strict=False):
+        display_label = text.get_text()
+        fragment_lines = _legend_label_fragment_lines(
+            artifact,
+            raw_label,
+            display_label=display_label,
+        )
+        if fragment_lines is None:
+            continue
+        bbox = text.get_window_extent(renderer=renderer)
+        x_fig, y_fig = fig.transFigure.inverted().transform((bbox.x0, bbox.y0 + bbox.height / 2.0))
+        line_boxes = [
+            HPacker(
+                children=[
+                    TextArea(fragment, textprops={'fontsize': fontsize, 'color': color})
+                    for fragment, color in line
+                ],
+                align='baseline',
+                pad=0,
+                sep=0,
+            )
+            for line in fragment_lines
+        ]
+        packed = VPacker(children=line_boxes, align='left', pad=0, sep=0)
+        fig.add_artist(
+            AnnotationBbox(
+                packed,
+                (x_fig, y_fig),
+                xycoords=fig.transFigure,
+                box_alignment=(0.0, 0.5),
+                frameon=False,
+                pad=0.0,
+            )
+        )
+        text.set_alpha(0.0)
+
+
+type LegendTextFragments = list[tuple[str, str]]
+
+
+def _legend_label_fragments(
+    artifact: GeometryArtifact, label: str
+) -> LegendTextFragments | None:
+    lines = _legend_label_fragment_lines(artifact, label)
+    if lines is None:
+        return None
+    return [fragment for line in lines for fragment in line]
+
+
+def _legend_label_fragment_lines(
+    artifact: GeometryArtifact,
+    raw_label: str,
+    *,
+    display_label: str | None = None,
+) -> list[LegendTextFragments] | None:
+    if raw_label == LEGEND_HEADER_LABEL:
+        return None
+    rendered_label = raw_label if display_label is None else display_label
+    indent = LEGEND_CHILD_INDENT if _is_child_legend_label(artifact, raw_label) else ''
+    parts = raw_label.split(' / ', 2)
+    if len(parts) != 3:
+        return [[(line, 'black')] for line in rendered_label.splitlines()]
+    condition, subgroup, axis_part = parts
+    axis, axis_suffix = _split_axis_suffix(axis_part)
+    raw_fragments: LegendTextFragments = [
+        (condition, _legend_value_color(artifact, 'condition', condition)),
+        (subgroup, _legend_value_color(artifact, 'subgroup', subgroup)),
+        (axis, _legend_value_color(artifact, 'axis', axis)),
+    ]
+    if axis_suffix:
+        raw_fragments.append((axis_suffix, LEGEND_NON_MATCH_COLOR))
+    if display_label is None:
+        return [
+            [
+                (indent, 'black'),
+                (condition, _legend_value_color(artifact, 'condition', condition)),
+                (' / ', 'black'),
+                (subgroup, _legend_value_color(artifact, 'subgroup', subgroup)),
+                (' / ', 'black'),
+                (axis, _legend_value_color(artifact, 'axis', axis)),
+                (axis_suffix, LEGEND_NON_MATCH_COLOR if axis_suffix else 'black'),
+            ]
+        ]
+    return [_color_display_legend_line(line, raw_fragments) for line in rendered_label.splitlines()]
+
+
+def _color_display_legend_line(
+    line: str,
+    raw_fragments: LegendTextFragments,
+) -> LegendTextFragments:
+    fragments: LegendTextFragments = []
+    cursor = 0
+    while cursor < len(line):
+        match = next(
+            (
+                (fragment, color)
+                for fragment, color in raw_fragments
+                if fragment and line.startswith(fragment, cursor)
+            ),
+            None,
+        )
+        if match is not None:
+            fragment, color = match
+            fragments.append((fragment, color))
+            cursor += len(fragment)
+            continue
+        next_match_start = min(
+            (
+                index
+                for fragment, _ in raw_fragments
+                if fragment and (index := line.find(fragment, cursor + 1)) != -1
+            ),
+            default=len(line),
+        )
+        fragments.append((line[cursor:next_match_start], 'black'))
+        cursor = next_match_start
+    return fragments
+
+
+def _split_axis_suffix(axis_part: str) -> tuple[str, str]:
+    suffix_start = axis_part.find(' (')
+    if suffix_start == -1:
+        return axis_part, ''
+    return axis_part[:suffix_start], axis_part[suffix_start:]
+
+
+def _legend_value_color(
+    artifact: GeometryArtifact,
+    value_kind: str,
+    value: str,
+) -> str:
+    query_condition = str(
+        artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
+    )
+    query_subgroups = set(_artifact_subgroup_labels(artifact))
+    query_axes = {
+        str(artifact.query.primary_axis).replace('_', ' '),
+        str(artifact.query.secondary_axis).replace('_', ' '),
+    }
+    if value_kind == 'condition':
+        return LEGEND_MATCH_COLOR if value == query_condition else LEGEND_NON_MATCH_COLOR
+    if value_kind == 'subgroup':
+        return LEGEND_MATCH_COLOR if value in query_subgroups else LEGEND_NON_MATCH_COLOR
+    if value_kind == 'axis':
+        return LEGEND_MATCH_COLOR if value in query_axes else LEGEND_NON_MATCH_COLOR
+    return 'black'
 
 
 def _wrap_legend_label(
@@ -969,8 +1152,6 @@ def _label_groups(artifact: GeometryArtifact) -> dict[str, list[int]]:
 def _label_marker(artifact: GeometryArtifact, idx: int) -> str:
     if _is_background_outlier_point(artifact, idx):
         return 'x'
-    if _is_same_condition_wrong_axis_point(artifact, idx):
-        return 'D'
     return 'x' if not artifact.is_gold[idx] else 'o'
 
 
@@ -1271,9 +1452,16 @@ def _draw_artifact_figure_title(
     from matplotlib.offsetbox import AnchoredOffsetbox, HPacker, TextArea
 
     prefix, subgroup_text, axis_suffix = _artifact_figure_title_parts(artifact)
+    query_id_prefix, condition_with_sep = prefix.split(' - ', 1)
+    condition, _ = condition_with_sep.rsplit(' / ', 1)
     title_box = HPacker(
         children=[
-            TextArea(prefix, textprops={'fontsize': fontsize, 'color': 'black'}),
+            TextArea(f'{query_id_prefix} - ', textprops={'fontsize': fontsize, 'color': 'black'}),
+            TextArea(
+                condition,
+                textprops={'fontsize': fontsize, 'color': QUERY_TITLE_CONDITION_COLOR},
+            ),
+            TextArea(' / ', textprops={'fontsize': fontsize, 'color': 'black'}),
             TextArea(
                 subgroup_text,
                 textprops={'fontsize': fontsize, 'color': QUERY_TITLE_SUBGROUP_COLOR},

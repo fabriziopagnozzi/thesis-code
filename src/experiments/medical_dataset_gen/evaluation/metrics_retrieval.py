@@ -320,8 +320,4 @@ class DiversifiedRankingIndexMetrics:
 
 def _is_query_near_miss_distractor(query_qrels: dict[str, QrelRecord], chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
-    return (
-        row is not None
-        and not row.is_gold
-        and row.cluster_role not in {'background_outlier', 'same_condition_wrong_axis'}
-    )
+    return row is not None and not row.is_gold and row.cluster_role not in {'background_outlier'}

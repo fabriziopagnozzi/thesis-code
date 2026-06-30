@@ -323,8 +323,43 @@ class MethodsComparisonKernelsCfg(ConfigModel):
     )
 
 
+class LambdaSelectionMetricCfg(ConfigModel):
+    metric: str
+    enabled: bool = True
+    weight: PositiveFloat = 1.0
+    higher_is_better: bool | None = None
+
+
+type LambdaSelectionMissingMetricPolicy = Literal['skip', 'error']
+type LambdaSelectionTieBreak = Literal['lower_lambda', 'higher_lambda']
+
+
+class LambdaSelectionCfg(ConfigModel):
+    primary_metric: str | None = None
+    primary_higher_is_better: bool | None = None
+    primary_tolerance: NonNegativeFloat = 0.01
+    missing_metric_policy: LambdaSelectionMissingMetricPolicy = 'skip'
+    tie_break: LambdaSelectionTieBreak = 'lower_lambda'
+    metrics: list[LambdaSelectionMetricCfg] = Field(
+        default_factory=lambda: [
+            LambdaSelectionMetricCfg(metric='MeanFacetHitRate@k', weight=0.40),
+            LambdaSelectionMetricCfg(metric='MeanFacetRecall@k', weight=0.25),
+            LambdaSelectionMetricCfg(metric='F1@k', weight=0.20),
+            LambdaSelectionMetricCfg(metric='DistractorRate', weight=0.10, higher_is_better=False),
+            LambdaSelectionMetricCfg(metric='AnswerROUGE1F1@k', weight=0.05),
+        ]
+    )
+
+    @model_validator(mode='after')
+    def _validate_enabled_metrics(self) -> LambdaSelectionCfg:
+        if not any(metric.enabled for metric in self.metrics):
+            raise ValueError('evaluation.lambda_selection.metrics must contain an enabled metric')
+        return self
+
+
 class EvaluationCfg(ConfigModel):
     workers: PositiveInt | None = None
+    lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
     fac_loc_mmr_comparison_kernels: MethodsComparisonKernelsCfg = Field(
         default_factory=MethodsComparisonKernelsCfg
     )

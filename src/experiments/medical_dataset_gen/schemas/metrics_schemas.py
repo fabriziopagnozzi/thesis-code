@@ -15,7 +15,6 @@ class RougeNgramBundle(TypedDict):
 
 class PreparedAnswerRougeRefs(TypedDict):
     answer_ngrams: RougeNgramBundle
-    facet_rouge1_ngrams: list[NgramCounter]
 
 
 @dataclass(frozen=True)
@@ -45,8 +44,6 @@ METRIC_NAME_TO_FIELD: dict[str, MetricFieldSpec] = {
     'jac': MetricFieldSpec('jaccard_vs_topk', higher_is_better=True),
     'AnswerROUGE1Recall@k': MetricFieldSpec('answer_rouge1_recall', higher_is_better=True),
     'AnswerROUGE1Precision@k': MetricFieldSpec('answer_rouge1_precision', higher_is_better=True),
+    'AnswerROUGE1F1@k': MetricFieldSpec('answer_rouge1_f1', higher_is_better=True),
     'AnswerROUGE2Recall@k': MetricFieldSpec('answer_rouge2_recall', higher_is_better=True),
-    'MacroFacetAnswerROUGE1Recall@k': MetricFieldSpec(
-        'macro_facet_answer_rouge1_recall', higher_is_better=True
-    ),
 }

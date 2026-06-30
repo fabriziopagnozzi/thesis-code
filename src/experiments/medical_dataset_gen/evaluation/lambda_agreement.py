@@ -21,8 +21,8 @@ _LAMBDA_PAIR_AGREEMENT_EVAL_METRICS = [
     'alpha-nDCG@k',
     'AnswerROUGE1Recall@k',
     'AnswerROUGE1Precision@k',
+    'AnswerROUGE1F1@k',
     'AnswerROUGE2Recall@k',
-    'MacroFacetAnswerROUGE1Recall@k',
 ]
 
 _LAMBDA_PAIR_AGREEMENT_DIAGNOSTIC_METRICS = [

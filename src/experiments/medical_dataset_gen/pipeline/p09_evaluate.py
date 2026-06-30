@@ -185,17 +185,31 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'calibration_warning',
         'n_topk_retrieved_facets',
     ]
+    agg_exprs: list[pl.Expr] = [
+        pl.col('query_id').n_unique().alias('n_queries'),
+        pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
+        pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
+        pl.col('gold_precision').mean().alias('Precision@k'),
+        pl.col('gold_recall').mean().alias('Recall@k'),
+        pl.col('gold_f1').mean().alias('F1@k'),
+        pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
+        pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
+    ]
+    optional_rouge_exprs = [
+        ('answer_rouge1_recall', 'AnswerROUGE1Recall@k'),
+        ('answer_rouge1_precision', 'AnswerROUGE1Precision@k'),
+        ('answer_rouge1_f1', 'AnswerROUGE1F1@k'),
+        ('answer_rouge2_recall', 'AnswerROUGE2Recall@k'),
+    ]
+    agg_exprs.extend(
+        pl.col(source_col).mean().alias(target_col)
+        for source_col, target_col in optional_rouge_exprs
+        if source_col in results.columns
+    )
     return (
         results
         .group_by(*slice_columns, 'strategy', 'lam', 'k')
-        .agg(
-            pl.col('query_id').n_unique().alias('n_queries'),
-            pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
-            pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
-            pl.col('gold_precision').mean().alias('Precision@k'),
-            pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
-            pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
-        )
+        .agg(agg_exprs)
         .sort(*slice_columns, 'k', 'strategy', 'lam')
     )
 
@@ -462,8 +476,8 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
     optional_rouge_exprs = [
         ('answer_rouge1_recall', 'AnswerROUGE1Recall@k'),
         ('answer_rouge1_precision', 'AnswerROUGE1Precision@k'),
+        ('answer_rouge1_f1', 'AnswerROUGE1F1@k'),
         ('answer_rouge2_recall', 'AnswerROUGE2Recall@k'),
-        ('macro_facet_answer_rouge1_recall', 'MacroFacetAnswerROUGE1Recall@k'),
     ]
     agg_polars_exprs.extend(
         pl.col(source_col).mean().alias(target_col)
@@ -489,8 +503,8 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'alpha-nDCG@k',
         'AnswerROUGE1Recall@k',
         'AnswerROUGE1Precision@k',
+        'AnswerROUGE1F1@k',
         'AnswerROUGE2Recall@k',
-        'MacroFacetAnswerROUGE1Recall@k',
         'DistractorRate',
         'NearMissDistractorRate',
         'BackgroundOutlierRate',

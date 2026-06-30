@@ -121,6 +121,7 @@ def build_plot_jobs(
         'results_df': results_df,
         'agreement_df': agreement_df,
         'out_dir': out_dir,
+        'lambda_selection': cfg.evaluation.lambda_selection,
     }
     return [
         (plot_name, build_plot_callable(plot_name, plot_context))
