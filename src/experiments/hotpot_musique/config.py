@@ -7,7 +7,6 @@ from helpers.query_algorithms import ScoringFunction
 
 type DatasetName = Literal['hotpotqa_distractor', 'musique', '2wikimultihopqa']
 
-type EmbeddingModelName = Literal['multi-qa-mpnet-base-cos-v1']
 type EmbeddingChunkMode = Literal['sentence', 'document', 'word_window', 'token_window']
 """
 Chunking strategy
@@ -22,7 +21,7 @@ Chunking strategy
 class ExperimentConfig:
     dataset: DatasetName = 'hotpotqa_distractor'
     dataset_path: str = 'datasets/full-data/HotpotQA/hotpot_dev_distractor_v1.json'
-    embedding_model: EmbeddingModelName = 'multi-qa-mpnet-base-cos-v1'
+    embedding_model: str = 'multi-qa-mpnet-base-cos-v1'
 
     scoring_functions: list[ScoringFunction] = field(
         default_factory=lambda: [

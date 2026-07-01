@@ -29,6 +29,7 @@ dependencies = [
 	"rouge-score>=0.1.2",
 	"pypdf>=6.12.2",
 	"tabulate>=0.10.0",
+	"peft>=0.19.1",
 ]
 [dependency-groups]
 dev = [
@@ -43,7 +44,7 @@ dev = [
 
 
 [tool.taskipy.tasks]
-# -- Synthetic Medical Dataset Generation ---------------------------------------------------------
+# -- Synthetic Medical Dataset Generation ----------------------------------------------------------------------------
 synth_pipeline = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline"
 
 # Specific pipeline runnable scripts
@@ -81,7 +82,7 @@ mimic_filter_queries = "./memlimit.sh python -m experiments.mimic.queries.c_filt
 
 # Utils
 mimic_lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"~/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
-# -----------------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]

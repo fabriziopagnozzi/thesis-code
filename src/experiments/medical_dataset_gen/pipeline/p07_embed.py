@@ -47,6 +47,7 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
         model_name=cfg.embeddings.model_name,
         batch_size=cfg.embeddings.batch_size,
         query_prompt=cfg.embeddings.query_prompt,
+        document_prompt=cfg.embeddings.document_prompt,
         device=cfg.embeddings.device,
         devices=cfg.embeddings.devices,
     )
@@ -104,8 +105,10 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
             )
         meta = {
             'dataset_schema_version': cfg.dataset_schema_version,
-            'backend': 'sentence_transformers',
+            'backend': 'medcpt' if cfg.embeddings.model_name == 'ncbi/MedCPT' else 'sentence_transformers',
             'model_name': cfg.embeddings.model_name,
+            'query_prompt': cfg.embeddings.query_prompt,
+            'document_prompt': cfg.embeddings.document_prompt,
             'dimension': int(dim),
             'normalized': cfg.embeddings.normalize,
             'device': cfg.embeddings.device,

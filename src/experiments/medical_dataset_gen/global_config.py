@@ -29,6 +29,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     PlanCalibrationMode,
 )
 from helpers.dir_paths import ROOT_DIR
+from helpers.embedder import EmbeddingModelName
 
 type SyntheticMedicalDatasetTableName = Literal[
     'query_plans',
@@ -122,12 +123,8 @@ class DistractorSpec(ConfigModel):
         if len(self.changes) != len(set(self.changes)):
             raise ValueError('DistractorSpec.changes must not contain duplicates')
         if 'axis' in self.changes and 'axis_value_bin' in self.changes:
-            raise ValueError(
-                'DistractorSpec.changes cannot include both axis and axis_value_bin'
-            )
-        if 'axis_value_bin' in self.changes and not {'condition', 'subgroup'} & set(
-            self.changes
-        ):
+            raise ValueError('DistractorSpec.changes cannot include both axis and axis_value_bin')
+        if 'axis_value_bin' in self.changes and not {'condition', 'subgroup'} & set(self.changes):
             raise ValueError(
                 'DistractorSpec.changes=axis_value_bin requires condition or subgroup to change too'
             )
@@ -336,11 +333,12 @@ class GenerationCfg(ConfigModel):
 
 
 class EmbeddingCfg(ConfigModel):
-    model_name: str = 'multi-qa-mpnet-base-cos-v1'
+    model_name: EmbeddingModelName = 'multi-qa-mpnet-base-cos-v1'
     batch_size: PositiveInt = 64
     device: str = 'cuda'
     devices: list[str] = Field(default_factory=list)
     query_prompt: str | None = None
+    document_prompt: str | None = None
     normalize: bool = True
 
 

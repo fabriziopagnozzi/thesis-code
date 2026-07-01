@@ -50,6 +50,7 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
         model_name=cfg.embeddings.model_name,
         batch_size=cfg.embeddings.batch_size,
         query_prompt=cfg.embeddings.query_prompt,
+        document_prompt=cfg.embeddings.document_prompt,
         device=cfg.embeddings.device,
         devices=cfg.embeddings.devices,
     )
