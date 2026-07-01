@@ -152,18 +152,26 @@ def is_query_gold(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
 
 def get_qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, LightweightQrelRecord]]:
     result: dict[str, dict[str, LightweightQrelRecord]] = defaultdict(dict)
+    qrel_columns = set(qrels.columns)
+    cluster_id_expr = (
+        pl.col('cluster_id').cast(pl.String)
+        if 'cluster_id' in qrel_columns
+        else pl.lit(None, dtype=pl.String).alias('cluster_id')
+    )
 
     for row in qrels.select(
         'query_id',
         'chunk_id',
         'facet_id',
+        cluster_id_expr,
         'cluster_role',
         'axis',
         'is_gold',
     ).iter_rows(named=False):
-        query_id, chunk_id, facet_id, cluster_role, axis, is_gold = row
+        query_id, chunk_id, facet_id, cluster_id, cluster_role, axis, is_gold = row
         result[str(query_id)][str(chunk_id)] = LightweightQrelRecord(
             facet_id=None if facet_id is None else str(facet_id),
+            cluster_id=None if cluster_id is None else str(cluster_id),
             cluster_role=None if cluster_role is None else str(cluster_role),
             axis=None if axis is None else str(axis),
             is_gold=bool(is_gold),

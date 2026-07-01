@@ -58,6 +58,7 @@ class LightweightChunkRecord:
 @dataclass(frozen=True, slots=True)
 class LightweightQrelRecord:
     facet_id: str | None
+    cluster_id: str | None
     cluster_role: str | None
     axis: str | None
     is_gold: bool

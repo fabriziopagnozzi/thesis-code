@@ -64,7 +64,7 @@ class GlobalCfg(ConfigModel):
     result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] = Field(default_factory=dict)
 
 
-type DistractorChange = Literal['condition', 'subgroup', 'axis_value_bin', 'value_bin']
+type DistractorChange = Literal['condition', 'subgroup', 'axis', 'axis_value_bin']
 
 
 class DistractorSpec(ConfigModel):
@@ -111,9 +111,9 @@ class DistractorSpec(ConfigModel):
                 raise ValueError(
                     'axis_config.value_bin is only allowed when axis_config.axis="same"'
                 )
-            changes.append('axis_value_bin')
+            changes.append('axis')
         elif value_bin == 'different':
-            changes.append('value_bin')
+            changes.append('axis_value_bin')
         normalized['changes'] = changes
         return normalized
 
@@ -121,13 +121,15 @@ class DistractorSpec(ConfigModel):
     def _validate_changes(self) -> DistractorSpec:
         if len(self.changes) != len(set(self.changes)):
             raise ValueError('DistractorSpec.changes must not contain duplicates')
-        if 'axis_value_bin' in self.changes and 'value_bin' in self.changes:
+        if 'axis' in self.changes and 'axis_value_bin' in self.changes:
             raise ValueError(
-                'DistractorSpec.changes cannot include both axis_value_bin and value_bin'
+                'DistractorSpec.changes cannot include both axis and axis_value_bin'
             )
-        if 'value_bin' in self.changes and not {'condition', 'subgroup'} & set(self.changes):
+        if 'axis_value_bin' in self.changes and not {'condition', 'subgroup'} & set(
+            self.changes
+        ):
             raise ValueError(
-                'DistractorSpec.changes=value_bin requires condition or subgroup to change too'
+                'DistractorSpec.changes=axis_value_bin requires condition or subgroup to change too'
             )
         return self
 
@@ -137,18 +139,18 @@ class DistractorSpec(ConfigModel):
     def changes_subgroup(self) -> bool:
         return 'subgroup' in self.changes
 
+    def changes_axis(self) -> bool:
+        return 'axis' in self.changes
+
     def changes_axis_value_bin(self) -> bool:
         return 'axis_value_bin' in self.changes
-
-    def changes_value_bin(self) -> bool:
-        return 'value_bin' in self.changes
 
 
 class BackgroundDistractorSpec(DistractorSpec):
     size: int = Field(default=8, ge=1)
     num_clusters: int = Field(default=1, ge=1)
     changes: list[DistractorChange] = Field(
-        default_factory=lambda: ['condition', 'subgroup', 'axis_value_bin'],
+        default_factory=lambda: ['condition', 'subgroup', 'axis'],
         min_length=1,
     )
 
@@ -177,7 +179,7 @@ class ChunkPoolsCfg(ConfigModel):
                 DistractorSpec(size=3, changes=['subgroup']),
                 DistractorSpec(size=2, changes=['condition']),
                 DistractorSpec(size=2, changes=['condition', 'subgroup']),
-                DistractorSpec(size=1, changes=['subgroup', 'axis_value_bin']),
+                DistractorSpec(size=1, changes=['subgroup', 'axis']),
             ],
         )
     )

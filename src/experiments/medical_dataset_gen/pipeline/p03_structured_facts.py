@@ -307,10 +307,18 @@ def _resolve_distractor_fields(
 
     axis = target.axis
     value_bin = target.value_bin
-    if spec.changes_axis_value_bin():
+    if spec.changes_axis():
         axis = _cycled_non_query_axis(plan, target.facet_id, scope, selection_idx)
-        value_bin = _cycled_axis_bin(ontology, axis, None, plan.query_id, target.facet_id, scope)
-    elif spec.changes_value_bin():
+        value_bin = _cycled_axis_bin(
+            ontology,
+            axis,
+            None,
+            plan.query_id,
+            target.facet_id,
+            scope,
+            selection_idx,
+        )
+    elif spec.changes_axis_value_bin():
         value_bin = _cycled_axis_bin(
             ontology,
             axis,
@@ -318,6 +326,7 @@ def _resolve_distractor_fields(
             plan.query_id,
             target.facet_id,
             scope,
+            selection_idx,
         )
 
     return condition_id, condition_display, subgroup_id, subgroup, axis, value_bin
@@ -377,6 +386,7 @@ def _cycled_axis_bin(
     query_id: str,
     target_facet_id: str,
     scope: str,
+    local_idx: int,
 ) -> str:
     bins = [
         value_bin
@@ -386,7 +396,7 @@ def _cycled_axis_bin(
     if not bins:
         raise ValueError(f'no eligible value bins are available for axis {axis!r}')
     offset = _stable_seed(query_id, target_facet_id, scope, 'value_bin') % len(bins)
-    return bins[offset]
+    return bins[(offset + local_idx) % len(bins)]
 
 
 def _distractor_cluster_id(
@@ -399,14 +409,14 @@ def _distractor_cluster_id(
 
 
 def _distractor_type_slug(spec: DistractorSpec) -> str:
-    axis_slug = 'diff' if spec.changes_axis_value_bin() else 'same'
-    value_slug = 'diff' if spec.changes_value_bin() else 'same'
+    axis_slug = 'diff' if spec.changes_axis() else 'same'
+    value_slug = 'diff' if spec.changes_axis_value_bin() else 'same'
     parts = [
         f'c_{"diff" if spec.changes_condition() else "same"}',
         f's_{"diff" if spec.changes_subgroup() else "same"}',
         f'a_{axis_slug}',
     ]
-    if not spec.changes_axis_value_bin():
+    if not spec.changes_axis():
         parts.append(f'v_{value_slug}')
     return '__'.join(parts)
 

@@ -48,6 +48,7 @@ _QREL_COLUMNS = [
     'query_id',
     'chunk_id',
     'facet_id',
+    'cluster_id',
     'cluster_role',
     'axis',
     'is_gold',
@@ -89,7 +90,7 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
         paths, 'chunk_memberships', _MEMBERSHIP_COLUMNS
     )
     queries = load_selected_parquet_columns(paths, 'queries', _QUERY_COLUMNS)
-    qrels = load_selected_parquet_columns(paths, 'qrels', _QREL_COLUMNS)
+    qrels = load_selected_parquet_columns(paths, 'qrels', _QREL_COLUMNS, optional_columns=['cluster_id'])
     geometry = load_selected_parquet_columns(paths, 'geometry_stats', _GEOMETRY_WORKER_COLUMNS)
 
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays_mmap_ids(paths)

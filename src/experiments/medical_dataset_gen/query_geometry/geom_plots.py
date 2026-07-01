@@ -1289,8 +1289,13 @@ def _distractor_type_sort_key(distractor_type: str) -> tuple[int, str]:
         'c_same__s_diff__a_same__v_same': 0,
         'c_diff__s_same__a_same__v_same': 1,
         'c_diff__s_diff__a_same__v_same': 2,
-        'c_same__s_diff__a_diff': 3,
-        'hard_distractor': 4,
+        'c_same__s_diff__a_same__v_diff': 3,
+        'c_diff__s_same__a_same__v_diff': 4,
+        'c_diff__s_diff__a_same__v_diff': 5,
+        'c_same__s_diff__a_diff': 6,
+        'c_diff__s_same__a_diff': 7,
+        'c_diff__s_diff__a_diff': 8,
+        'hard_distractor': 9,
     }
     return (order.get(distractor_type, len(order)), distractor_type)
 
