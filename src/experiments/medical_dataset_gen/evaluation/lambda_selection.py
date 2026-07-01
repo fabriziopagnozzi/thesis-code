@@ -32,7 +32,6 @@ LambdaSelectionMetricRow = TypedDict(
         'DistractorRate': NotRequired[float],
         'NearMissDistractorRate': NotRequired[float],
         'BackgroundOutlierRate': NotRequired[float],
-        'SameConditionWrongAxisRate': NotRequired[float],
         'PrimaryAxisRate': NotRequired[float],
         'CalibratedFacetRate': NotRequired[float],
         'RedundantGoldRate': NotRequired[float],

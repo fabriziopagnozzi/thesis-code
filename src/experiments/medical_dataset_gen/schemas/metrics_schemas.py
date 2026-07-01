@@ -36,9 +36,6 @@ METRIC_NAME_TO_FIELD: dict[str, MetricFieldSpec] = {
     'DistractorRate': MetricFieldSpec('distractor_rate', higher_is_better=False),
     'NearMissDistractorRate': MetricFieldSpec('near_miss_distractor_rate', higher_is_better=False),
     'BackgroundOutlierRate': MetricFieldSpec('background_outlier_rate', higher_is_better=False),
-    'SameConditionWrongAxisRate': MetricFieldSpec(
-        'same_condition_wrong_axis_rate', higher_is_better=False
-    ),
     'PrimaryAxisRate': MetricFieldSpec('primary_axis_rate', higher_is_better=False),
     'CalibratedFacetRate': MetricFieldSpec('calibrated_facet_rate', higher_is_better=False),
     'RedundantGoldRate': MetricFieldSpec('redundant_gold_rate', higher_is_better=False),

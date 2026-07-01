@@ -1,4 +1,5 @@
 from collections import Counter
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -8,6 +9,8 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
 )
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     ChunkDocumentRecord,
+    LightweightChunkRecord,
+    LightweightQrelRecord,
     QrelRecord,
 )
 
@@ -16,8 +19,8 @@ ALPHA_NDCG_REDUNDANCY = 0.5
 
 def compute_retrieval_metrics(
     selected_chunk_ids: list[str],
-    chunk_by_id: dict[str, ChunkDocumentRecord],
-    query_qrels: dict[str, QrelRecord],
+    chunk_by_id: Mapping[str, ChunkDocumentRecord | LightweightChunkRecord],
+    query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
     facet_to_gold: dict[str, list[str]],
     all_gold_ids: set[str],
     primary_axis: str,
@@ -27,13 +30,11 @@ def compute_retrieval_metrics(
     facet_coverage_metrics = _facet_coverage_metrics(selected_chunk_ids, facet_to_gold)
     # Keep the benchmark's headline metric symmetric across facet presence,
     # set purity, and total gold recovery.
-    clean_facet_f1 = harmonic_mean_many(
-        [
-            float(facet_coverage_metrics['facet_coverage']),
-            float(relevance['gold_precision']),
-            float(relevance['gold_recall']),
-        ]
-    )
+    clean_facet_f1 = harmonic_mean_many([
+        float(facet_coverage_metrics['facet_coverage']),
+        float(relevance['gold_precision']),
+        float(relevance['gold_recall']),
+    ])
     diversified_ranking = _diversified_ranking_metrics(
         selected_chunk_ids, query_qrels, facet_to_gold, all_gold_ids
     )
@@ -81,7 +82,7 @@ def _relevance_metrics(
 
 def _redundancy_metrics(
     selected_chunk_ids: list[str],
-    query_qrels: dict[str, QrelRecord],
+    query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
     all_gold_ids: set[str],
     primary_axis: str,
     calibrated_primary_facet_id: str,
@@ -96,12 +97,6 @@ def _redundancy_metrics(
         for chunk_id in non_gold_ids
         if (qrel := query_qrels.get(chunk_id)) is not None
         and qrel.cluster_role == 'background_outlier'
-    )
-    same_condition_wrong_axis_count = sum(
-        1
-        for chunk_id in non_gold_ids
-        if (qrel := query_qrels.get(chunk_id)) is not None
-        and qrel.cluster_role == 'same_condition_wrong_axis'
     )
     near_miss_distractor_count = sum(
         1 for chunk_id in non_gold_ids if _is_query_near_miss_distractor(query_qrels, chunk_id)
@@ -135,9 +130,6 @@ def _redundancy_metrics(
             near_miss_distractor_count / n_selected if n_selected else 0.0
         ),
         'background_outlier_rate': background_outlier_count / n_selected if n_selected else 0.0,
-        'same_condition_wrong_axis_rate': (
-            same_condition_wrong_axis_count / n_selected if n_selected else 0.0
-        ),
         'primary_axis_rate': float(primary_axis_rate),
         'calibrated_facet_rate': calibrated_facet_count / n_selected if n_selected else 0.0,
         'redundant_gold_rate': redundant_gold_count / n_selected if n_selected else 0.0,
@@ -145,13 +137,12 @@ def _redundancy_metrics(
         'n_selected_non_gold': non_gold_count,
         'n_selected_near_miss_distractors': near_miss_distractor_count,
         'n_selected_background_outliers': background_outlier_count,
-        'n_selected_same_condition_wrong_axis': same_condition_wrong_axis_count,
     }
 
 
 def _diversified_ranking_metrics(
     selected_chunk_ids: list[str],
-    query_qrels: dict[str, QrelRecord],
+    query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
     facet_to_gold: dict[str, list[str]],
     all_gold_ids: set[str],
 ) -> dict[str, float]:
@@ -232,7 +223,7 @@ class DiversifiedRankingIndexMetrics:
     def facet_mrr(
         cls,
         selected_chunk_ids: list[str],
-        query_qrels: dict[str, QrelRecord],
+        query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
         facet_ids: list[str],
         all_gold_ids: set[str],
     ) -> float:
@@ -255,7 +246,7 @@ class DiversifiedRankingIndexMetrics:
     def alpha_ndcg(
         cls,
         selected_chunk_ids: list[str],
-        query_qrels: dict[str, QrelRecord],
+        query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
         facet_to_gold: dict[str, list[str]],
         all_gold_ids: set[str],
         alpha: float,
@@ -294,7 +285,7 @@ class DiversifiedRankingIndexMetrics:
     def _alpha_dcg(
         cls,
         selected_chunk_ids: list[str],
-        query_qrels: dict[str, QrelRecord],
+        query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
         all_gold_ids: set[str],
         alpha: float,
     ) -> float:
@@ -335,10 +326,8 @@ class DiversifiedRankingIndexMetrics:
         return labels
 
 
-def _is_query_near_miss_distractor(query_qrels: dict[str, QrelRecord], chunk_id: str) -> bool:
+def _is_query_near_miss_distractor(
+    query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord], chunk_id: str
+) -> bool:
     row = query_qrels.get(chunk_id)
-    return (
-        row is not None
-        and not row.is_gold
-        and row.cluster_role not in {'background_outlier', 'same_condition_wrong_axis'}
-    )
+    return row is not None and not row.is_gold and row.cluster_role != 'background_outlier'

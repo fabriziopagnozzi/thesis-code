@@ -48,13 +48,14 @@ STRATEGY_STYLE: dict[str, dict[str, str]] = {
 }
 
 # Marker size for raw-lambda figures that draw one curve per k.
-FOR_LAMBDA_K_CURVE_MARKER_SIZE = 3.0
+FOR_LAMBDA_K_CURVE_MARKER_SIZE = 0.25
 
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {
     'MeanFacetHitRate@k': 'MeanFacetHitRate@k',
     'MeanFacetRecall@k': 'FacetRecall@k',
     'CleanFacetF1@k': 'CleanFacetF1@k',
+    'Precision@k': 'Precision@k',
     'DistractorRate': 'DistractorRate@k',
     'F1@k': 'F1@k',
     'Recall@k': 'Recall@k',
@@ -63,7 +64,6 @@ PLOT_METRIC_TITLES = {
     'AnswerROUGE2Recall@k': 'Answer ROUGE-2 Recall@k',
     'NearMissDistractorRate': 'NearMissDistractorRate',
     'BackgroundOutlierRate': 'BackgroundOutlierRate',
-    'SameConditionWrongAxisRate': 'SameConditionWrongAxisRate',
     'PrimaryAxisRate': 'PrimaryAxisRate',
     'CalibratedFacetRate': 'CalibratedFacetRate',
     'RedundantGoldRate': 'RedundantGoldRate',
@@ -114,9 +114,9 @@ PLOTTED_MAIN_METRIC_NAMES = [
     'CleanFacetF1@k',
     'MeanFacetHitRate@k',
     'MeanFacetRecall@k',
-    'DistractorRate',
-    'F1@k',
+    'Precision@k',
     'Recall@k',
+    'F1@k',
     'alpha-nDCG@k',
     'AnswerROUGE1F1@k',
     'AnswerROUGE2Recall@k',
@@ -127,7 +127,6 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
     'DistractorRate',
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
-    'SameConditionWrongAxisRate',
     'PrimaryAxisRate',
     'CalibratedFacetRate',
     'RedundantGoldRate',

@@ -28,15 +28,15 @@ from experiments.medical_dataset_gen.query_geometry.dim_reduction import (
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryArtifact,
+    GeometryChunkLike,
     GeometryGlobalLambdaKey,
     GeometryIndexMaps,
+    GeometryQrelLike,
     GeometryQueryLambdaKey,
+    GeometryQueryLike,
     GeometrySelection,
 )
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
-    ChunkDocumentRecord,
-    QrelRecord,
-    QueryRecord,
     RetrievalStrategy,
 )
 
@@ -167,8 +167,7 @@ def ranked_queries_for_query_geometry(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base
-        .with_columns(
+        base.with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -199,8 +198,7 @@ def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[s
     n_best, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
     best_ids = ranked['query_id'].head(n_best).to_list()
     bad_ids = (
-        ranked
-        .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
+        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
         .head(n_bad)
         .to_list()
     )
@@ -257,8 +255,7 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
             sort_cols.append('alpha_ndcg')
             descending.append(True)
         best = (
-            sub
-            .group_by('query_id', 'lam')
+            sub.group_by('query_id', 'lam')
             .agg(agg_exprs)
             .sort(sort_cols, descending=descending)
             .group_by('query_id')
@@ -285,8 +282,8 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
 def build_query_artifact(
     cfg: ExperimentCfg,
     qid: str,
-    query: QueryRecord,
-    query_qrels: dict[str, QrelRecord],
+    query: GeometryQueryLike,
+    query_qrels: dict[str, GeometryQrelLike],
     chunk_vectors: NDArray[np.float32],
     query_vectors: NDArray[np.float32],
     chunk_ids: list[str],
@@ -314,7 +311,7 @@ def build_query_artifact(
     query_vector = query_vectors[qidx]
     sim_matrix = candidate_vectors @ candidate_vectors.T
     k = min(cfg.query_geometry.plot_k, len(topn_global))
-    candidate_chunk_ids = [chunk_ids[int(i)] for i in topn_global]
+    candidate_chunk_ids = [str(chunk_ids[int(i)]) for i in topn_global]
     labels, label_ids, roles, is_gold = candidate_labels(
         candidate_chunk_ids,
         query_qrels,
@@ -377,9 +374,9 @@ def build_query_artifact(
 
 def candidate_labels(
     candidate_chunk_ids: list[str],
-    query_qrels: dict[str, QrelRecord],
-    chunk_by_id: dict[str, ChunkDocumentRecord],
-    query: QueryRecord,
+    query_qrels: dict[str, GeometryQrelLike],
+    chunk_by_id: dict[str, GeometryChunkLike],
+    query: GeometryQueryLike,
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
     facet_labels = facet_label_map(query)
     labels: list[str] = []
@@ -406,7 +403,7 @@ def candidate_labels(
     return labels, label_ids, roles, gold_flags
 
 
-def distractor_label(qrel: QrelRecord, chunk: ChunkDocumentRecord | None) -> str:
+def distractor_label(qrel: GeometryQrelLike, chunk: GeometryChunkLike | None) -> str:
     target = distractor_target_label(chunk)
     if qrel.cluster_role == 'background_outlier':
         cluster_suffix = background_cluster_suffix(qrel.cluster_id)
@@ -414,7 +411,7 @@ def distractor_label(qrel: QrelRecord, chunk: ChunkDocumentRecord | None) -> str
     return target
 
 
-def distractor_target_label(chunk: ChunkDocumentRecord | None) -> str:
+def distractor_target_label(chunk: GeometryChunkLike | None) -> str:
     if chunk is None:
         return facet_surface_label(
             condition='unknown condition',
@@ -436,7 +433,7 @@ def background_cluster_suffix(cluster_id: str | None) -> str:
     return f' ({suffix.replace("_", " ")})'
 
 
-def facet_label_map(query: QueryRecord) -> dict[str, str]:
+def facet_label_map(query: GeometryQueryLike) -> dict[str, str]:
     if query.facets_json is None:
         return {}
     facets = json.loads(query.facets_json)
@@ -636,8 +633,7 @@ def _first_sorted_lambdas(
         return df
     sort_cols, desc = _available_sort(df, preferred_sort_cols, preferred_sort_desc)
     return (
-        df
-        .sort(
+        df.sort(
             [*group_cols, *sort_cols],
             descending=[False] * len(group_cols) + desc,
         )

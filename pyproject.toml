@@ -27,7 +27,6 @@ dependencies = [
 	"plotly>=6.7.0",
 	"mteb>=2.12.30",
 	"rouge-score>=0.1.2",
-	"apricot-select>=0.6.1",
 	"pypdf>=6.12.2",
 	"tabulate>=0.10.0",
 ]

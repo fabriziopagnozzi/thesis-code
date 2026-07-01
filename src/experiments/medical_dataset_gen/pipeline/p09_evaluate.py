@@ -10,6 +10,7 @@ just nearest-neighbor accuracy.
 from __future__ import annotations
 
 import argparse
+import gc
 import multiprocessing as mp
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -24,6 +25,7 @@ from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
     get_evaluation_worker_count,
     get_evaluation_worker_state,
     init_evaluation_worker,
+    load_selected_parquet_columns,
 )
 from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
 from experiments.medical_dataset_gen.evaluation.metrics_answer import (
@@ -48,7 +50,7 @@ from experiments.medical_dataset_gen.global_config import (
 )
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     EvaluationResultRow,
-    QueryRecord,
+    LightweightQueryRecord,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
@@ -66,6 +68,15 @@ EVALUATION_STEP_NAMES = set[EvaluationStep](get_args(EvaluationStep.__value__))
 EVALUATION_STEP_ALIASES: dict[str, EvaluationStep] = {
     'lambda_pair_agreement': 'lambda_agreement',
 }
+_PARENT_QUERY_COLUMNS = ['query_id']
+_PARENT_QREL_COLUMNS = ['query_id', 'chunk_id', 'facet_id', 'is_gold']
+_PARENT_GEOMETRY_COLUMNS = [
+    'query_id',
+    'passes_filter',
+    'pool_scope',
+    'calibration_warning',
+    'n_topk_retrieved_facets',
+]
 
 
 def run_evaluate(
@@ -80,9 +91,9 @@ def run_evaluate(
     aggregated_eval_stats_df: pl.DataFrame | None = None
 
     if 'evaluation_results' in requested_steps:
-        queries = read_parquet(paths, 'queries')
-        qrels = read_parquet(paths, 'qrels')
-        geometry = read_parquet(paths, 'geometry_stats')
+        queries = load_selected_parquet_columns(paths, 'queries', _PARENT_QUERY_COLUMNS)
+        qrels = load_selected_parquet_columns(paths, 'qrels', _PARENT_QREL_COLUMNS)
+        geometry = load_selected_parquet_columns(paths, 'geometry_stats', _PARENT_GEOMETRY_COLUMNS)
         assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
 
         facet_gold = build_query_to_facet_gold_map(qrels)
@@ -98,26 +109,29 @@ def run_evaluate(
                 strict=True,
             )
         }
+        geometry_dimensions = geometry.select(
+            'query_id',
+            'calibration_warning',
+            'n_topk_retrieved_facets',
+        )
+        query_ids_to_evaluate = _get_query_ids_to_evaluate(
+            queries=queries,
+            facet_gold=facet_gold,
+            gold_by_query=gold_by_query,
+            pass_map=pass_map,
+            only_pass_geometry=cfg.retrieval.only_pass_geometry,
+        )
+        del queries, qrels, geometry, facet_gold, gold_by_query, pass_map
+        gc.collect()
 
         eval_results_df = pl.DataFrame(
             _evaluate_queries(
                 cfg,
                 paths,
-                _get_query_ids_to_evaluate(
-                    queries=queries,
-                    facet_gold=facet_gold,
-                    gold_by_query=gold_by_query,
-                    pass_map=pass_map,
-                    only_pass_geometry=cfg.retrieval.only_pass_geometry,
-                ),
+                query_ids_to_evaluate,
             )
         )
         if not eval_results_df.is_empty():
-            geometry_dimensions = geometry.select(
-                'query_id',
-                'calibration_warning',
-                'n_topk_retrieved_facets',
-            )
             eval_results_df = eval_results_df.join(
                 geometry_dimensions,
                 on='query_id',
@@ -193,7 +207,6 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('gold_precision').mean().alias('Precision@k'),
         pl.col('gold_recall').mean().alias('Recall@k'),
         pl.col('gold_f1').mean().alias('F1@k'),
-        pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
         pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
         pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
@@ -270,7 +283,7 @@ def _evaluate_queries(
     chunksize = get_evaluation_chunksize(len(query_ids), worker_count)
 
     if worker_count == 1:
-        init_evaluation_worker(cfg.model_dump(mode='python'), paths.exp_name)
+        init_evaluation_worker(cfg, paths.exp_name)
         iterator = map(_evaluate_query, query_ids)
     else:
         print(f'[evaluate] scoring {len(query_ids):,} queries with {worker_count} workers')
@@ -280,7 +293,7 @@ def _evaluate_queries(
             max_workers=worker_count,
             mp_context=worker_context,
             initializer=init_evaluation_worker,
-            initargs=(cfg.model_dump(mode='python'), paths.exp_name),
+            initargs=(cfg, paths.exp_name),
         )
         iterator = executor.map(_evaluate_query, query_ids, chunksize=chunksize)
 
@@ -302,7 +315,7 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
         raise RuntimeError('evaluation worker was not initialized')
 
     cfg: ExperimentCfg = worker_state['cfg']
-    query: QueryRecord | None = worker_state['queries_by_id'].get(qid)
+    query: LightweightQueryRecord | None = worker_state['queries_by_id'].get(qid)
     if query is None:
         return []
     if cfg.retrieval.only_pass_geometry and not bool(worker_state['pass_map'].get(qid, False)):
@@ -439,8 +452,7 @@ def _get_query_ids_to_evaluate(
     query_ids: list[str] = []
 
     for query in queries.iter_rows(named=True):
-        query_row = QueryRecord.model_validate(query)
-        qid = query_row.query_id
+        qid = str(query['query_id'])
 
         if only_pass_geometry and not bool(pass_map.get(qid, False)):
             continue
@@ -469,7 +481,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('distractor_rate').mean().alias('DistractorRate'),
         pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
         pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
-        pl.col('same_condition_wrong_axis_rate').mean().alias('SameConditionWrongAxisRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
         pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
         pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
@@ -513,7 +524,6 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'DistractorRate',
         'NearMissDistractorRate',
         'BackgroundOutlierRate',
-        'SameConditionWrongAxisRate',
         'PrimaryAxisRate',
         'CalibratedFacetRate',
         'RedundantGoldRate',
@@ -541,7 +551,9 @@ def parse_evaluation_steps(raw_value: str | None) -> set[EvaluationStep] | None:
     if unknown_steps:
         available = ', '.join(sorted(EVALUATION_STEP_NAMES))
         unknown = ', '.join(unknown_steps)
-        raise ValueError(f'Unknown evaluation step name(s): {unknown}. Available steps: {available}')
+        raise ValueError(
+            f'Unknown evaluation step name(s): {unknown}. Available steps: {available}'
+        )
 
     return cast(set[EvaluationStep], normalized_steps)
 

@@ -30,7 +30,6 @@ _LAMBDA_PAIR_AGREEMENT_DIAGNOSTIC_METRICS = [
     'DistractorRate',
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
-    'SameConditionWrongAxisRate',
     'PrimaryAxisRate',
     'CalibratedFacetRate',
     'RedundantGoldRate',

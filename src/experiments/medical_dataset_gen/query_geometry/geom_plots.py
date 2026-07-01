@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 from textwrap import fill
@@ -35,8 +36,6 @@ from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     QUERY_OVERVIEW_LEGEND_BBOX_TO_ANCHOR_X,
     QUERY_OVERVIEW_LEGEND_FONT_SIZE,
     QUERY_OVERVIEW_LEGEND_WRAP_WIDTH,
-    SAME_CONDITION_WRONG_AXIS_LABEL_ID,
-    SAME_CONDITION_WRONG_AXIS_ROLE,
     UNSELECTED_DATA_POINT_COLOR,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
@@ -47,6 +46,7 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalS
 
 LEGEND_CHILD_INDENT = '    '
 LEGEND_HEADER_LABEL = 'Primary Condition / Subgroup / Clinical Axis\n'
+BACKGROUND_OUTLIER_LEGEND_PREFIX = 'background outlier: '
 LEGEND_MATCH_COLOR = 'black'
 LEGEND_NON_MATCH_COLOR = '#9A9A9A'
 QUERY_TITLE_CONDITION_COLOR = '#9C7A00'
@@ -578,7 +578,7 @@ def _format_legend_label(artifact: GeometryArtifact, label: str) -> str:
     if label == LEGEND_HEADER_LABEL:
         return label
     indent = LEGEND_CHILD_INDENT if _is_child_legend_label(artifact, label) else ''
-    return _wrap_legend_label(label, indent=indent)
+    return _wrap_legend_label(_display_legend_label_text(label), indent=indent)
 
 
 def _style_legend_text(
@@ -656,12 +656,12 @@ def _legend_label_fragment_lines(
         return None
     rendered_label = raw_label if display_label is None else display_label
     indent = LEGEND_CHILD_INDENT if _is_child_legend_label(artifact, raw_label) else ''
-    parts = raw_label.split(' / ', 2)
+    display_raw_label = _display_legend_label_text(raw_label)
+    parts = display_raw_label.split(' / ', 2)
     if len(parts) != 3:
         return [[(line, 'black')] for line in rendered_label.splitlines()]
     condition, subgroup, axis_part = parts
     axis, axis_suffix = _split_axis_suffix(axis_part)
-    legend_entry_matches_query_facet = _legend_entry_matches_query_facet(artifact, raw_label)
     raw_fragments: LegendTextFragments = [
         (
             condition,
@@ -669,7 +669,6 @@ def _legend_label_fragment_lines(
                 artifact,
                 'condition',
                 condition,
-                legend_entry_matches_query_facet=legend_entry_matches_query_facet,
             ),
         ),
         (
@@ -678,7 +677,6 @@ def _legend_label_fragment_lines(
                 artifact,
                 'subgroup',
                 subgroup,
-                legend_entry_matches_query_facet=legend_entry_matches_query_facet,
             ),
         ),
         (
@@ -687,7 +685,6 @@ def _legend_label_fragment_lines(
                 artifact,
                 'axis',
                 axis,
-                legend_entry_matches_query_facet=legend_entry_matches_query_facet,
             ),
         ),
     ]
@@ -703,7 +700,6 @@ def _legend_label_fragment_lines(
                         artifact,
                         'condition',
                         condition,
-                        legend_entry_matches_query_facet=legend_entry_matches_query_facet,
                     ),
                 ),
                 (' / ', 'black'),
@@ -713,7 +709,6 @@ def _legend_label_fragment_lines(
                         artifact,
                         'subgroup',
                         subgroup,
-                        legend_entry_matches_query_facet=legend_entry_matches_query_facet,
                     ),
                 ),
                 (' / ', 'black'),
@@ -723,13 +718,19 @@ def _legend_label_fragment_lines(
                         artifact,
                         'axis',
                         axis,
-                        legend_entry_matches_query_facet=legend_entry_matches_query_facet,
                     ),
                 ),
                 (axis_suffix, LEGEND_NON_MATCH_COLOR if axis_suffix else 'black'),
             ]
         ]
     return [_color_display_legend_line(line, raw_fragments) for line in rendered_label.splitlines()]
+
+
+def _display_legend_label_text(label: str) -> str:
+    if not label.startswith(BACKGROUND_OUTLIER_LEGEND_PREFIX):
+        return label
+    without_prefix = label.removeprefix(BACKGROUND_OUTLIER_LEGEND_PREFIX)
+    return re.sub(r'\s+\((?:c|co|cluster\s*)\d+\)$', '', without_prefix)
 
 
 def _color_display_legend_line(
@@ -739,30 +740,58 @@ def _color_display_legend_line(
     fragments: LegendTextFragments = []
     cursor = 0
     while cursor < len(line):
-        match = next(
-            (
-                (fragment, color)
-                for fragment, color in raw_fragments
-                if fragment and line.startswith(fragment, cursor)
-            ),
-            None,
-        )
+        match = _legend_display_fragment_match(line, cursor, raw_fragments)
         if match is not None:
             fragment, color = match
-            fragments.append((fragment, color))
+            _append_legend_text_fragment(fragments, fragment, color)
             cursor += len(fragment)
             continue
-        next_match_start = min(
-            (
-                index
-                for fragment, _ in raw_fragments
-                if fragment and (index := line.find(fragment, cursor + 1)) != -1
-            ),
-            default=len(line),
-        )
-        fragments.append((line[cursor:next_match_start], 'black'))
-        cursor = next_match_start
+        _append_legend_text_fragment(fragments, line[cursor], 'black')
+        cursor += 1
     return fragments
+
+
+def _legend_display_fragment_match(
+    line: str,
+    cursor: int,
+    raw_fragments: LegendTextFragments,
+) -> tuple[str, str] | None:
+    full_match = next(
+        (
+            (fragment, color)
+            for fragment, color in raw_fragments
+            if fragment and line.startswith(fragment, cursor)
+        ),
+        None,
+    )
+    if full_match is not None:
+        return full_match
+
+    line_suffix = line[cursor:]
+    partial_matches = [
+        (line_suffix[:match_len], color)
+        for fragment, color in raw_fragments
+        if fragment
+        for match_len in range(min(len(fragment), len(line_suffix)), 1, -1)
+        if line_suffix[:match_len].strip()
+        and not line_suffix[:match_len][0].isspace()
+        and line_suffix[:match_len] in fragment
+    ]
+    return max(partial_matches, key=lambda item: len(item[0]), default=None)
+
+
+def _append_legend_text_fragment(
+    fragments: LegendTextFragments,
+    fragment: str,
+    color: str,
+) -> None:
+    if not fragment:
+        return
+    if fragments and fragments[-1][1] == color:
+        previous_fragment, _ = fragments[-1]
+        fragments[-1] = (previous_fragment + fragment, color)
+        return
+    fragments.append((fragment, color))
 
 
 def _split_axis_suffix(axis_part: str) -> tuple[str, str]:
@@ -776,11 +805,7 @@ def _legend_value_color(
     artifact: GeometryArtifact,
     value_kind: str,
     value: str,
-    *,
-    legend_entry_matches_query_facet: bool,
 ) -> str:
-    if not legend_entry_matches_query_facet:
-        return LEGEND_NON_MATCH_COLOR
     query_condition = str(
         artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
     )
@@ -796,28 +821,6 @@ def _legend_value_color(
     if value_kind == 'axis':
         return LEGEND_MATCH_COLOR if value in query_axes else LEGEND_NON_MATCH_COLOR
     return 'black'
-
-
-def _legend_entry_matches_query_facet(artifact: GeometryArtifact, label: str) -> bool:
-    return label in _artifact_facet_labels(artifact)
-
-
-def _artifact_facet_labels(artifact: GeometryArtifact) -> set[str]:
-    facet_label_map = getattr(artifact, 'facets_by_id', None)
-    if facet_label_map:
-        return set(facet_label_map.values())
-    facets_json = artifact.query.facets_json
-    if not facets_json:
-        return set()
-    facet_labels: set[str] = set()
-    condition = str(
-        artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
-    )
-    for facet in json.loads(facets_json):
-        subgroup = str(facet.get('subgroup_label') or 'unknown subgroup')
-        axis = str(facet.get('axis') or 'unknown axis')
-        facet_labels.add(f'{condition} / {subgroup} / {axis.replace("_", " ")}')
-    return facet_labels
 
 
 def _wrap_legend_label(
@@ -1242,12 +1245,6 @@ def _is_background_outlier_point(artifact: GeometryArtifact, idx: int) -> bool:
     return label_id == BACKGROUND_OUTLIER_LABEL_ID or role == BACKGROUND_OUTLIER_ROLE
 
 
-def _is_same_condition_wrong_axis_point(artifact: GeometryArtifact, idx: int) -> bool:
-    label_id = artifact.label_ids[idx]
-    role = artifact.roles[idx]
-    return label_id == SAME_CONDITION_WRONG_AXIS_LABEL_ID or role == SAME_CONDITION_WRONG_AXIS_ROLE
-
-
 def _distractor_type_for_index(artifact: GeometryArtifact, idx: int) -> str:
     chunk_id = artifact.candidate_chunk_ids[idx]
     qrel = artifact.qrel_by_chunk_id.get(chunk_id)
@@ -1289,10 +1286,10 @@ def _cluster_id_for_label(artifact: GeometryArtifact, label: str) -> str | None:
 
 def _distractor_type_sort_key(distractor_type: str) -> tuple[int, str]:
     order = {
-        'same_axis_wrong_condition': 0,
-        'same_condition_wrong_axis': 1,
-        'same_condition_wrong_subgroup': 2,
-        'same_subgroup_wrong_condition': 3,
+        'c_same__s_diff__a_same__v_same': 0,
+        'c_diff__s_same__a_same__v_same': 1,
+        'c_diff__s_diff__a_same__v_same': 2,
+        'c_same__s_diff__a_diff': 3,
         'hard_distractor': 4,
     }
     return (order.get(distractor_type, len(order)), distractor_type)

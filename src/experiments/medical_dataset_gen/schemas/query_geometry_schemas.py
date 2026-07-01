@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Container
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict
 
@@ -25,6 +26,41 @@ type GeometryGlobalLambdaKey = tuple[RetrievalStrategy, int]
 type GeometryQueryLambdaKey = tuple[str, RetrievalStrategy, int]
 
 
+@dataclass(frozen=True, slots=True)
+class GeometryQueryRecord:
+    query_id: str
+    query_type: str
+    condition_id: str | None
+    condition_display: str | None
+    primary_axis: str
+    secondary_axis: str
+    facets_json: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryChunkRecord:
+    condition_id: str | None
+    condition_display: str | None
+    subgroup_id: str | None
+    subgroup_label: str | None
+    axis: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryQrelRecord:
+    facet_id: str | None
+    target_facet_id: str | None
+    cluster_id: str | None
+    cluster_role: str | None
+    is_gold: bool
+    distractor_type: str | None
+
+
+type GeometryQueryLike = QueryRecord | GeometryQueryRecord
+type GeometryChunkLike = ChunkDocumentRecord | GeometryChunkRecord
+type GeometryQrelLike = QrelRecord | GeometryQrelRecord
+
+
 class GeometrySelection(BenchmarkModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -36,7 +72,7 @@ class GeometryArtifact(BenchmarkModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     query_id: str
-    query: QueryRecord
+    query: GeometryQueryLike
     pool_scope: ChunkPoolScope
     candidate_chunk_ids: list[str]
     candidate_vectors: NDArray[np.float32]
@@ -57,8 +93,8 @@ class GeometryArtifact(BenchmarkModel):
     lambda_values_by_strategy: dict[RetrievalStrategy, list[float]]
     mmr_window: int | None
     k: int
-    chunk_by_id: dict[str, ChunkDocumentRecord]
-    qrel_by_chunk_id: dict[str, QrelRecord]
+    chunk_by_id: dict[str, GeometryChunkLike]
+    qrel_by_chunk_id: dict[str, GeometryQrelLike]
     selection_group: str | None = None
 
 
@@ -180,17 +216,17 @@ class RenderedGeometryResult(TypedDict):
 
 class GeometryIndexMaps(TypedDict):
     query_id_to_idx: dict[str, int]
-    chunk_by_id: dict[str, ChunkDocumentRecord]
+    chunk_by_id: dict[str, GeometryChunkLike]
     chunks_by_source_query: dict[str, list[int]]
 
 
 class EmbeddingGeometryWorkerState(TypedDict):
     cfg: ExperimentCfg
-    queries_by_id: dict[str, QueryRecord]
-    qrels_by_query_chunk: dict[str, dict[str, QrelRecord]]
+    queries_by_id: dict[str, GeometryQueryLike]
+    qrels_by_query_chunk: dict[str, dict[str, GeometryQrelLike]]
     chunk_vectors: NDArray[np.float32]
     query_vectors: NDArray[np.float32]
-    chunk_ids: list[str]
+    chunk_ids: Container[object]
     maps: GeometryIndexMaps
     query_best_lambdas: dict[GeometryQueryLambdaKey, float]
     global_best_lambdas: dict[GeometryGlobalLambdaKey, float]

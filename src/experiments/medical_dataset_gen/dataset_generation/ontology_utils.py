@@ -160,6 +160,22 @@ def other_subgroups(
     ]
 
 
+def outlier_subgroups(
+    ontology: MedicalOntology, excluded_ids: set[str]
+) -> list[tuple[SubgroupKey, SubgroupOntology]]:
+    return [
+        (sid, subgroup)
+        for sid, subgroup in ontology.subgroups.items()
+        if sid not in excluded_ids and _is_outlier_eligible_subgroup(sid, subgroup)
+    ]
+
+
+def _is_outlier_eligible_subgroup(subgroup_id: str, subgroup: SubgroupOntology) -> bool:
+    if subgroup_id.startswith('no_'):
+        return False
+    return not (subgroup.axis == 'comorbidity' and subgroup.level_id == 'absent')
+
+
 def other_conditions(
     ontology: MedicalOntology, excluded_id: str
 ) -> list[tuple[ConditionKey, ConditionOntology]]:

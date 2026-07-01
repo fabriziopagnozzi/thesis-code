@@ -26,7 +26,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkPoolScope,
     ClinicalAxis,
     ConditionKey,
-    DistractorStr,
     PlanCalibrationMode,
 )
 from helpers.dir_paths import ROOT_DIR
@@ -65,38 +64,101 @@ class GlobalCfg(ConfigModel):
     result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] = Field(default_factory=dict)
 
 
-class LocalDistractorConfigCfg(ConfigModel):
-    same_condition_wrong_subgroup: int = Field(default=0, ge=0)
-    same_subgroup_wrong_condition: int = Field(default=0, ge=0)
-    same_axis_wrong_condition: int = Field(default=0, ge=0)
-    same_condition_wrong_axis: int = Field(default=0, ge=0)
-
-    def point_distractor_counts(self) -> dict[DistractorStr, int]:
-        return {
-            'same_condition_wrong_subgroup': self.same_condition_wrong_subgroup,
-            'same_subgroup_wrong_condition': self.same_subgroup_wrong_condition,
-            'same_axis_wrong_condition': self.same_axis_wrong_condition,
-            'same_condition_wrong_axis': self.same_condition_wrong_axis,
-        }
-
-    def total_point_distractors(self) -> int:
-        return sum(self.point_distractor_counts().values())
-
-    def total_chunks(self) -> int:
-        return self.total_point_distractors()
+type DistractorChange = Literal['condition', 'subgroup', 'axis_value_bin', 'value_bin']
 
 
-class BackgroundOutliersCfg(ConfigModel):
-    size: PositiveInt = 8
-    num_clusters_per_query: int = Field(default=1, ge=0)
+class DistractorSpec(ConfigModel):
+    size: int = Field(ge=1)
+    changes: list[DistractorChange] = Field(min_length=1)
 
-    def total_chunks(self) -> int:
-        return self.size * self.num_clusters_per_query
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize_legacy_same_different_spec(cls, data: object) -> object:
+        if not isinstance(data, dict) or 'changes' in data:
+            return data
+        if not {'condition', 'subgroup', 'axis_config'} <= set(data):
+            return data
+
+        axis_config = data['axis_config']
+        if not isinstance(axis_config, dict):
+            return data
+
+        condition_value = data['condition']
+        subgroup_value = data['subgroup']
+        axis_value = axis_config.get('axis')
+        value_bin = axis_config.get('value_bin')
+        allowed_values = {'same', 'different'}
+        if condition_value not in allowed_values:
+            raise ValueError('condition must be "same" or "different"')
+        if subgroup_value not in allowed_values:
+            raise ValueError('subgroup must be "same" or "different"')
+        if axis_value not in allowed_values:
+            raise ValueError('axis_config.axis must be "same" or "different"')
+        if value_bin is not None and value_bin not in allowed_values:
+            raise ValueError('axis_config.value_bin must be "same" or "different"')
+
+        normalized = dict(data)
+        normalized.pop('condition')
+        normalized.pop('subgroup')
+        normalized.pop('axis_config')
+        changes: list[DistractorChange] = []
+        if condition_value == 'different':
+            changes.append('condition')
+        if subgroup_value == 'different':
+            changes.append('subgroup')
+        if axis_value == 'different':
+            if value_bin is not None:
+                raise ValueError(
+                    'axis_config.value_bin is only allowed when axis_config.axis="same"'
+                )
+            changes.append('axis_value_bin')
+        elif value_bin == 'different':
+            changes.append('value_bin')
+        normalized['changes'] = changes
+        return normalized
+
+    @model_validator(mode='after')
+    def _validate_changes(self) -> DistractorSpec:
+        if len(self.changes) != len(set(self.changes)):
+            raise ValueError('DistractorSpec.changes must not contain duplicates')
+        if 'axis_value_bin' in self.changes and 'value_bin' in self.changes:
+            raise ValueError(
+                'DistractorSpec.changes cannot include both axis_value_bin and value_bin'
+            )
+        if 'value_bin' in self.changes and not {'condition', 'subgroup'} & set(self.changes):
+            raise ValueError(
+                'DistractorSpec.changes=value_bin requires condition or subgroup to change too'
+            )
+        return self
+
+    def changes_condition(self) -> bool:
+        return 'condition' in self.changes
+
+    def changes_subgroup(self) -> bool:
+        return 'subgroup' in self.changes
+
+    def changes_axis_value_bin(self) -> bool:
+        return 'axis_value_bin' in self.changes
+
+    def changes_value_bin(self) -> bool:
+        return 'value_bin' in self.changes
+
+
+class BackgroundDistractorSpec(DistractorSpec):
+    size: int = Field(default=8, ge=1)
+    num_clusters: int = Field(default=1, ge=1)
+    changes: list[DistractorChange] = Field(
+        default_factory=lambda: ['condition', 'subgroup', 'axis_value_bin'],
+        min_length=1,
+    )
 
 
 class LocalChunkPoolCfg(ConfigModel):
     size: PositiveInt
-    distractors: LocalDistractorConfigCfg = Field(default_factory=LocalDistractorConfigCfg)
+    distractors: list[DistractorSpec] = Field(default_factory=list)
+
+    def total_distractor_chunks(self) -> int:
+        return sum(spec.size for spec in self.distractors)
 
 
 class NicheChunkPoolCfg(LocalChunkPoolCfg):
@@ -111,49 +173,48 @@ class ChunkPoolsCfg(ConfigModel):
     primary_calibrated: LocalChunkPoolCfg = Field(
         default_factory=lambda: LocalChunkPoolCfg(
             size=24,
-            distractors=LocalDistractorConfigCfg(
-                same_condition_wrong_subgroup=3,
-                same_subgroup_wrong_condition=2,
-                same_axis_wrong_condition=2,
-                same_condition_wrong_axis=1,
-            ),
+            distractors=[
+                DistractorSpec(size=3, changes=['subgroup']),
+                DistractorSpec(size=2, changes=['condition']),
+                DistractorSpec(size=2, changes=['condition', 'subgroup']),
+                DistractorSpec(size=1, changes=['subgroup', 'axis_value_bin']),
+            ],
         )
     )
     other_primary: LocalChunkPoolCfg = Field(
         default_factory=lambda: LocalChunkPoolCfg(
             size=20,
-            distractors=LocalDistractorConfigCfg(
-                same_condition_wrong_subgroup=2,
-                same_subgroup_wrong_condition=2,
-                same_axis_wrong_condition=2,
-                same_condition_wrong_axis=0,
-            ),
+            distractors=[
+                DistractorSpec(size=2, changes=['subgroup']),
+                DistractorSpec(size=2, changes=['condition']),
+                DistractorSpec(size=2, changes=['condition', 'subgroup']),
+            ],
         )
     )
     secondary: LocalChunkPoolCfg = Field(
         default_factory=lambda: LocalChunkPoolCfg(
             size=14,
-            distractors=LocalDistractorConfigCfg(
-                same_condition_wrong_subgroup=2,
-                same_subgroup_wrong_condition=2,
-                same_axis_wrong_condition=2,
-                same_condition_wrong_axis=0,
-            ),
+            distractors=[
+                DistractorSpec(size=2, changes=['subgroup']),
+                DistractorSpec(size=2, changes=['condition']),
+                DistractorSpec(size=2, changes=['condition', 'subgroup']),
+            ],
         )
     )
     niche: NicheChunkPoolCfg = Field(
         default_factory=lambda: NicheChunkPoolCfg(
             size=4,
             num_clusters_per_query=0,
-            distractors=LocalDistractorConfigCfg(
-                same_condition_wrong_subgroup=2,
-                same_subgroup_wrong_condition=2,
-                same_axis_wrong_condition=2,
-                same_condition_wrong_axis=0,
-            ),
+            distractors=[
+                DistractorSpec(size=2, changes=['subgroup']),
+                DistractorSpec(size=2, changes=['condition']),
+                DistractorSpec(size=2, changes=['condition', 'subgroup']),
+            ],
         )
     )
-    background_outliers: BackgroundOutliersCfg = Field(default_factory=BackgroundOutliersCfg)
+    background_outliers: list[BackgroundDistractorSpec] = Field(
+        default_factory=lambda: [BackgroundDistractorSpec()]
+    )
 
     def gold_chunks_per_query(self) -> int:
         return (
@@ -165,14 +226,17 @@ class ChunkPoolsCfg(ConfigModel):
 
     def point_distractor_chunks_per_query(self) -> int:
         return (
-            self.primary_calibrated.distractors.total_chunks()
-            + self.other_primary.distractors.total_chunks()
-            + (2 - self.niche.num_clusters_per_query) * self.secondary.distractors.total_chunks()
-            + self.niche.num_clusters_per_query * self.niche.distractors.total_chunks()
+            self.primary_calibrated.total_distractor_chunks()
+            + self.other_primary.total_distractor_chunks()
+            + (2 - self.niche.num_clusters_per_query) * self.secondary.total_distractor_chunks()
+            + self.niche.num_clusters_per_query * self.niche.total_distractor_chunks()
         )
 
+    def background_outlier_chunks_per_query(self) -> int:
+        return sum(spec.size * spec.num_clusters for spec in self.background_outliers)
+
     def total_distractor_chunks(self) -> int:
-        return self.point_distractor_chunks_per_query() + self.background_outliers.total_chunks()
+        return self.point_distractor_chunks_per_query() + self.background_outlier_chunks_per_query()
 
 
 class GenerationLlmConfig(ConfigModel):
@@ -290,17 +354,21 @@ class LambdaGridCfg(ConfigModel):
         return self
 
     def values(self) -> list[float]:
-        return sorted(
-            {float(round(value, 6)) for value in np.linspace(self.start, self.stop, self.num_values)}
-        )
+        return sorted({
+            float(round(value, 6)) for value in np.linspace(self.start, self.stop, self.num_values)
+        })
 
 
 class RetrievalCfg(ConfigModel):
     pool_scope: ChunkPoolScope = 'query_local'
     candidate_pool_n: PositiveInt = 300
     k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
-    lambdas_mmr: LambdaGridCfg
-    lambdas_fac_loc: LambdaGridCfg
+    lambdas_mmr: LambdaGridCfg = Field(
+        default_factory=lambda: LambdaGridCfg(start=0.02, stop=0.98, num_values=30)
+    )
+    lambdas_fac_loc: LambdaGridCfg = Field(
+        default_factory=lambda: LambdaGridCfg(start=0.02, stop=0.40, num_values=30)
+    )
     strategies: set[Literal['top_k', 'mmr', 'fac_loc']] = Field(
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
     )
@@ -311,7 +379,7 @@ class RetrievalCfg(ConfigModel):
     def lambda_values_for_strategy(
         self,
         strategy: Literal['top_k', 'mmr', 'fac_loc'],
-    ) -> list[float | None]:
+    ) -> list[float] | list[None]:
         if strategy == 'top_k':
             return [None]
         if strategy == 'mmr':
@@ -428,7 +496,7 @@ class QueryGeometryCfg(ConfigModel):
 
 
 class ExperimentCfg(ConfigModel):
-    dataset_schema_version: Literal[2]
+    dataset_schema_version: Literal[2] = 2
     global_: GlobalCfg = Field(alias='global')
     generation: GenerationCfg = Field(default_factory=GenerationCfg)
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)

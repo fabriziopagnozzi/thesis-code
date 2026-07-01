@@ -20,11 +20,11 @@ from experiments.medical_dataset_gen.global_config import (
     MethodsComparisonKernelsCfg,
     unreachable_code,
 )
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightQrelRecord
 from experiments.medical_dataset_gen.schemas.generation_schemas import ChunkPoolScope
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     ChunkMembershipRecord,
-    QrelRecord,
     QueryIdToFacetMap,
     QueryIdToQrels,
     QueryRecord,
@@ -140,7 +140,8 @@ def select_indices(
             k=k,
             lam=0.5 if lam is None else lam,
         )
-    raise ValueError(f'Unsupported strategy: {strategy}')
+
+    unreachable_code(f'Unsupported strategy: {strategy}')
 
 
 # Qrels utils
@@ -149,12 +150,24 @@ def is_query_gold(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
     return row is not None and row.is_gold
 
 
-def get_qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, QrelRecord]]:
-    result: dict[str, dict[str, QrelRecord]] = defaultdict(dict)
+def get_qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, LightweightQrelRecord]]:
+    result: dict[str, dict[str, LightweightQrelRecord]] = defaultdict(dict)
 
-    for row in qrels.iter_rows(named=True):
-        qrel_record = QrelRecord.model_validate(row)
-        result[qrel_record.query_id][qrel_record.chunk_id] = qrel_record
+    for row in qrels.select(
+        'query_id',
+        'chunk_id',
+        'facet_id',
+        'cluster_role',
+        'axis',
+        'is_gold',
+    ).iter_rows(named=False):
+        query_id, chunk_id, facet_id, cluster_role, axis, is_gold = row
+        result[str(query_id)][str(chunk_id)] = LightweightQrelRecord(
+            facet_id=None if facet_id is None else str(facet_id),
+            cluster_role=None if cluster_role is None else str(cluster_role),
+            axis=None if axis is None else str(axis),
+            is_gold=bool(is_gold),
+        )
 
     return result
 
@@ -162,11 +175,18 @@ def get_qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, QrelRec
 def build_query_to_facet_gold_map(qrels: pl.DataFrame) -> QueryIdToFacetMap:
     result: QueryIdToFacetMap = defaultdict(lambda: defaultdict(list))
 
-    for row in qrels.filter(pl.col('is_gold')).iter_rows(named=True):
-        qrel = QrelRecord.model_validate(row)
-        if qrel.facet_id is None:
-            raise ValueError(f'gold qrel {qrel.chunk_id!r} has no facet_id')
-        result[qrel.query_id][qrel.facet_id].append(qrel.chunk_id)
+    for query_id, chunk_id, facet_id in (
+        qrels.filter(pl.col('is_gold'))
+        .select(
+            'query_id',
+            'chunk_id',
+            'facet_id',
+        )
+        .iter_rows(named=False)
+    ):
+        if facet_id is None:
+            raise ValueError(f'gold qrel {chunk_id!r} has no facet_id')
+        result[str(query_id)][str(facet_id)].append(str(chunk_id))
 
     return result
 
@@ -240,4 +260,14 @@ def load_embedding_arrays(
     query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
     chunk_ids = [str(value) for value in np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')]
     query_ids = [str(value) for value in np.load(paths.embeddings_query_ids_path, mmap_mode='r')]
+    return chunk_vectors, query_vectors, chunk_ids, query_ids
+
+
+def load_embedding_arrays_mmap_ids(
+    paths: MedicalDatasetGenPaths,
+) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.str_], NDArray[np.str_]]:
+    chunk_vectors = np.load(paths.embeddings_chunk_vectors_path, mmap_mode='r')
+    query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
+    chunk_ids = np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')
+    query_ids = np.load(paths.embeddings_query_ids_path, mmap_mode='r')
     return chunk_vectors, query_vectors, chunk_ids, query_ids

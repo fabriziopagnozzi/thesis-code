@@ -16,39 +16,49 @@ generation:
         primary_calibrated:
             size: 24
             distractors:
-                same_condition_wrong_subgroup: 3
-                same_subgroup_wrong_condition: 2
-                same_axis_wrong_condition: 2
-                same_condition_wrong_axis: 1
+                - size: 3
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
+                - size: 1
+                  changes: [subgroup, axis_value_bin]
 
         other_primary:
             size: 20
             distractors:
-                same_condition_wrong_subgroup: 2
-                same_subgroup_wrong_condition: 2
-                same_axis_wrong_condition: 2
-                same_condition_wrong_axis: 0
+                - size: 2
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
 
         secondary:
             size: 14
             distractors:
-                same_condition_wrong_subgroup: 2
-                same_subgroup_wrong_condition: 2
-                same_axis_wrong_condition: 2
-                same_condition_wrong_axis: 0
+                - size: 2
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
 
         niche:
             size: 4 # Gold documents in each niche facet; must stay below secondary.size.
             num_clusters_per_query: 1 # Number (0-2) of complementary facets made deliberately sparse.
             distractors:
-                same_condition_wrong_subgroup: 2
-                same_subgroup_wrong_condition: 2
-                same_axis_wrong_condition: 2
-                same_condition_wrong_axis: 0
+                - size: 2
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
 
         background_outliers:
-            size: 8 # Chunks in each coherent non-gold clinical island.
-            num_clusters_per_query: 1
+            - size: 8 # Chunks in each coherent non-gold clinical island.
+              num_clusters: 1
 
         chunk_min_words: 25
         chunk_max_words: 200

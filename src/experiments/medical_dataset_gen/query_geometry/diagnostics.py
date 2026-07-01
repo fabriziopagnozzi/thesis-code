@@ -17,10 +17,8 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometry2DPoint,
     EmbeddingGeometryQueryStats,
     GeometryArtifact,
-)
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
-    ChunkDocumentRecord,
-    QrelRecord,
+    GeometryChunkLike,
+    GeometryQrelLike,
 )
 
 
@@ -209,7 +207,7 @@ def string_codes(labels: list[str]) -> NDArray[np.int32]:
 def make_geom_point_row(
     artifact: GeometryArtifact,
     chunk_id: str | None,
-    row: QrelRecord | ChunkDocumentRecord | dict[object, object],
+    row: GeometryQrelLike | GeometryChunkLike | dict[object, object],
     idx: int | None,
     point_kind: str,
     rank: int,
@@ -226,9 +224,9 @@ def make_geom_point_row(
     selected_fac_loc: bool,
 ) -> EmbeddingGeometry2DPoint:
     _ = idx
-    facet_id = row.facet_id if isinstance(row, QrelRecord) else None
-    target_facet_id = row.target_facet_id if isinstance(row, QrelRecord) else None
-    distractor_type = row.distractor_type if isinstance(row, QrelRecord) else None
+    facet_id = getattr(row, 'facet_id', None)
+    target_facet_id = getattr(row, 'target_facet_id', None)
+    distractor_type = getattr(row, 'distractor_type', None)
     return {
         'query_id': artifact.query_id,
         'selection_group': artifact.selection_group,

@@ -7,19 +7,22 @@ artifacts that downstream plots and evaluation checks consume.
 from __future__ import annotations
 
 import argparse
+import gc
 import multiprocessing as mp
 import sys
 from collections.abc import Container
 from concurrent.futures import ProcessPoolExecutor
 from typing import cast
 
+import numpy as np
 import polars as pl
 from tqdm import tqdm
 
+from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
+    load_selected_parquet_columns,
+)
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     assert_pool_scope_match,
-    build_index_maps,
-    load_embedding_arrays,
 )
 from experiments.medical_dataset_gen.global_config import (
     ExperimentCfg,
@@ -50,6 +53,7 @@ from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
 from experiments.medical_dataset_gen.query_geometry.geom_worker_handler import (
     get_geom_worker_state,
     init_query_geometry_worker,
+    load_selected_parquet_columns_if_exists,
     query_geometry_worker_count,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
@@ -58,11 +62,29 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometryWorkerState,
     RenderedGeometryResult,
 )
-from experiments.medical_dataset_gen.utils.io_utils import (
-    read_parquet,
-    read_parquet_if_exists_else_empty_df,
-    write_parquet,
-)
+from experiments.medical_dataset_gen.utils.io_utils import write_parquet
+
+_PARENT_QUERY_COLUMNS = ['query_id']
+_PARENT_GEOMETRY_COLUMNS = [
+    'query_id',
+    'pool_scope',
+    'passes_filter',
+    'topk_dominant_count',
+    'in_minus_cross_similarity',
+    'n_distractors_in_pool',
+]
+_PARENT_EVAL_RESULTS_COLUMNS = [
+    'query_id',
+    'pool_scope',
+    'strategy',
+    'k',
+    'facet_coverage',
+    'gold_precision',
+    'distractor_rate',
+    'weighted_facet_coverage',
+    'alpha_ndcg',
+    'lam',
+]
 
 
 def run_query_geom_plots(
@@ -90,16 +112,27 @@ def run_query_geom_plots(
         print(f'[query_geometry] skipping; missing required artifacts: {missing}')
         return pl.DataFrame()
 
-    chunk_documents = read_parquet(paths, 'chunk_documents')
-    chunk_memberships = read_parquet(paths, 'chunk_memberships')
-    queries = read_parquet(paths, 'queries')
-    geometry = read_parquet_if_exists_else_empty_df(paths, 'geometry_stats')
-    eval_results = read_parquet_if_exists_else_empty_df(paths, 'evaluation_results')
+    queries = load_selected_parquet_columns(paths, 'queries', _PARENT_QUERY_COLUMNS)
+    geometry = load_selected_parquet_columns_if_exists(
+        paths,
+        'geometry_stats',
+        required_columns=['query_id'],
+        optional_columns=[col for col in _PARENT_GEOMETRY_COLUMNS if col != 'query_id'],
+    )
+    eval_results = load_selected_parquet_columns_if_exists(
+        paths,
+        'evaluation_results',
+        required_columns=['query_id', 'strategy', 'k'],
+        optional_columns=[
+            col for col in _PARENT_EVAL_RESULTS_COLUMNS if col not in {'query_id', 'strategy', 'k'}
+        ],
+    )
     assert_pool_scope_match(geometry, cfg.retrieval.pool_scope, table_name='geometry_stats')
     assert_pool_scope_match(eval_results, cfg.retrieval.pool_scope, table_name='evaluation_results')
 
-    _, _, chunk_ids, query_ids = load_embedding_arrays(paths)
-    maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
+    query_id_set = {
+        str(query_id) for query_id in np.load(paths.embeddings_query_ids_path, mmap_mode='r')
+    }
     selected_query_groups = choose_query_groups(cfg, queries, geometry, eval_results)
 
     selected_query_ids: list[str] = []
@@ -113,7 +146,7 @@ def run_query_geom_plots(
     )
     for group, group_query_ids in selected_query_groups.items():
         for qid in group_query_ids:
-            if qid not in maps['query_id_to_idx']:
+            if qid not in query_id_set:
                 continue
             selected_query_ids.append(qid)
             selected_query_group_by_id[qid] = group
@@ -124,13 +157,16 @@ def run_query_geom_plots(
     out_dir = paths.figures_dir / 'query_geometry'
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    del queries, geometry, eval_results, query_id_set, selected_query_groups
+    gc.collect()
+
     all_point_rows: list[EmbeddingGeometry2DPoint] = []
     all_stat_rows: list[EmbeddingGeometryQueryStats] = []
 
     worker_count = query_geometry_worker_count(len(selected_query_ids))
     if worker_count == 1:
         init_query_geometry_worker(
-            cfg_dump=cfg.model_dump(mode='python'),
+            cfg=cfg,
             exp_name=paths.exp_name,
             out_dir=str(out_dir),
             query_group_by_id=selected_query_group_by_id,
@@ -159,7 +195,7 @@ def run_query_geom_plots(
             mp_context=worker_context,
             initializer=init_query_geometry_worker,
             initargs=(
-                cfg.model_dump(mode='python'),
+                cfg,
                 paths.exp_name,
                 str(out_dir),
                 selected_query_group_by_id,

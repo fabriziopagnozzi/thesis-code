@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from rouge_score import rouge_scorer
@@ -9,6 +10,7 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import harmonic_
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     ChunkDocumentRecord,
+    LightweightChunkRecord,
 )
 from experiments.medical_dataset_gen.schemas.metrics_schemas import (
     PreparedAnswerRougeRefs,
@@ -66,7 +68,7 @@ def compute_answer_rouge_metrics(
 def prepare_answer_rouge_scorer(
     query_text: str,
     candidate_chunk_ids: list[str],
-    chunk_by_id: dict[str, ChunkDocumentRecord],
+    chunk_by_id: Mapping[str, ChunkDocumentRecord | LightweightChunkRecord],
     answer_refs: AnswerReferenceTexts,
 ) -> AnswerRougeScorer:
     query_terms = _get_answer_terms(query_text)
@@ -107,7 +109,7 @@ def _is_answer_valid_token(token: str) -> bool:
 
 def _preprocess_candidate_chunk_texts(
     candidate_chunk_ids: list[str],
-    chunk_by_id: dict[str, ChunkDocumentRecord],
+    chunk_by_id: Mapping[str, ChunkDocumentRecord | LightweightChunkRecord],
     query_terms: set[str],
 ) -> dict[str, str]:
     result: dict[str, str] = {}

@@ -174,10 +174,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             query_qrels=query_qrels,
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
-            expected_background_chunks=(
-                cfg.generation.chunk_pools.background_outliers.num_clusters_per_query
-                * cfg.generation.chunk_pools.background_outliers.size
-            ),
+            expected_background_chunks=cfg.generation.chunk_pools.background_outlier_chunks_per_query(),
         )
 
         diagnostics = _topk_vs_facloc_diagnostics(
@@ -594,7 +591,7 @@ def _is_query_near_miss_distractor(query_qrels: QueryIdToQrels, chunk_id: str) -
     return (
         row is not None
         and not row.is_gold
-        and row.cluster_role not in {'background_outlier', 'same_condition_wrong_axis'}
+        and row.cluster_role != 'background_outlier'
     )
 
 
