@@ -109,6 +109,7 @@ class GeometryFilterStatsRow(BenchmarkModel):
     query_id: str
     evidence_profile_id: str
     pool_id: str
+    cohort_contrast_family: str
     pool_scope: ChunkPoolScope
     pool_size: int
     topk_k: int

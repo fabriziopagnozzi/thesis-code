@@ -209,6 +209,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'pool_id': query.pool_id,
                 'condition_id': query.condition_id,
                 'cohort_contrast_id': query.cohort_contrast_id,
+                'cohort_contrast_family': query.cohort_contrast_family,
                 'cohort_dimension_id': query.cohort_dimension_id,
                 'template_id': query.template_id,
                 'calibration_warning': calibration_warning_by_query.get(qid, False),
@@ -253,6 +254,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
         df.group_by(
             'condition_id',
             'cohort_dimension_id',
+            'cohort_contrast_family',
             'cohort_contrast_id',
             'primary_axis',
             'secondary_axis',

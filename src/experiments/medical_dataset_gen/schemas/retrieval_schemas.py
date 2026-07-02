@@ -9,6 +9,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ClinicalAxis,
     ClusterRole,
+    CohortContrastFamily,
     DataSplit,
     QueryType,
     SubgroupAxis,
@@ -63,6 +64,7 @@ class QueryRecord(BenchmarkModel):
     condition_display: str | None = None
     split: DataSplit
     cohort_contrast_id: str
+    cohort_contrast_family: CohortContrastFamily
     cohort_dimension_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis

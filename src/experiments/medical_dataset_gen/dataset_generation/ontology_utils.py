@@ -10,6 +10,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AxisPairProfile,
     ClinicalAxis,
     CohortContrast,
+    CohortContrastFamily,
     ConditionKey,
     ConditionOntology,
     MedicalOntology,
@@ -27,6 +28,15 @@ class ResolvedAxisPairGenerationPolicy:
     allowed_primary_axes: frozenset[ClinicalAxis]
     blocked_profile_ids: frozenset[str]
     rationale: str | None
+
+
+@dataclass(frozen=True)
+class ResolvedCohortContrast:
+    id: str
+    family: CohortContrastFamily
+    dimension_id: str
+    cohort_a_id: str
+    cohort_b_id: str
 
 
 def load_ontology(cfg: ExperimentCfg) -> MedicalOntology:
@@ -53,22 +63,59 @@ def make_subgroup_pairs_for_condition(
     condition_id: ConditionKey,
 ) -> list[
     tuple[
-        CohortContrast, tuple[SubgroupKey, SubgroupOntology], tuple[SubgroupKey, SubgroupOntology]
+        ResolvedCohortContrast,
+        tuple[SubgroupKey, SubgroupOntology],
+        tuple[SubgroupKey, SubgroupOntology],
     ]
 ]:
-    allowed_comorbidity_contrasts = set(
-        ontology.conditions[condition_id].allowed_comorbidity_contrast_ids
-    )
-    return [
-        (
-            contrast,
-            (contrast.cohort_a_id, ontology.subgroups[contrast.cohort_a_id]),
-            (contrast.cohort_b_id, ontology.subgroups[contrast.cohort_b_id]),
+    condition = ontology.conditions[condition_id]
+    allowed_comorbidity_contrasts = set(condition.allowed_comorbidity_contrast_ids)
+    resolved: list[
+        tuple[
+            ResolvedCohortContrast,
+            tuple[SubgroupKey, SubgroupOntology],
+            tuple[SubgroupKey, SubgroupOntology],
+        ]
+    ] = []
+    for contrast in ontology.cohort_contrasts:
+        if _is_global_demographic_contrast(ontology, contrast):
+            family: CohortContrastFamily = 'demographic'
+        elif contrast.id in allowed_comorbidity_contrasts:
+            family = 'comorbidity_present_absent'
+        else:
+            continue
+        resolved.append(
+            (
+                ResolvedCohortContrast(
+                    id=contrast.id,
+                    family=family,
+                    dimension_id=contrast.dimension_id,
+                    cohort_a_id=contrast.cohort_a_id,
+                    cohort_b_id=contrast.cohort_b_id,
+                ),
+                (contrast.cohort_a_id, ontology.subgroups[contrast.cohort_a_id]),
+                (contrast.cohort_b_id, ontology.subgroups[contrast.cohort_b_id]),
+            )
         )
-        for contrast in ontology.cohort_contrasts
-        if _is_global_demographic_contrast(ontology, contrast)
-        or contrast.id in allowed_comorbidity_contrasts
-    ]
+
+    for contrast in condition.allowed_distinct_comorbidity_contrasts:
+        cohort_a = ontology.subgroups[contrast.cohort_a_id]
+        cohort_b = ontology.subgroups[contrast.cohort_b_id]
+        dimension_id = f'{cohort_a.dimension_id}_vs_{cohort_b.dimension_id}'
+        resolved.append(
+            (
+                ResolvedCohortContrast(
+                    id=contrast.id,
+                    family='distinct_comorbidity',
+                    dimension_id=dimension_id,
+                    cohort_a_id=contrast.cohort_a_id,
+                    cohort_b_id=contrast.cohort_b_id,
+                ),
+                (contrast.cohort_a_id, cohort_a),
+                (contrast.cohort_b_id, cohort_b),
+            )
+        )
+    return resolved
 
 
 def _is_global_demographic_contrast(

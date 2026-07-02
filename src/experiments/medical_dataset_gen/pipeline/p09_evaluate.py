@@ -194,6 +194,7 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
     slice_columns = [
         'condition_id',
         'cohort_dimension_id',
+        'cohort_contrast_family',
         'cohort_contrast_id',
         'primary_axis',
         'secondary_axis',
@@ -406,6 +407,7 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                         'template_id': query.template_id,
                         'condition_id': query.condition_id,
                         'cohort_dimension_id': query.cohort_dimension_id,
+                        'cohort_contrast_family': query.cohort_contrast_family,
                         'cohort_contrast_id': query.cohort_contrast_id,
                         'primary_axis': query.primary_axis,
                         'secondary_axis': query.secondary_axis,

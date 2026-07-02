@@ -432,6 +432,88 @@ def _is_comorbidity_present_absent_contrast(cohorts: list[SubgroupOntology]) -> 
     return {cohort.level_id for cohort in cohorts} == {'present', 'absent'}
 
 
+def _validate_distinct_comorbidity_contrasts(
+    condition_id: str,
+    condition: ConditionOntology,
+    subgroups: dict[SubgroupKey, SubgroupOntology],
+    contrast_by_id: dict[str, CohortContrast],
+) -> None:
+    contrast_ids = [contrast.id for contrast in condition.allowed_distinct_comorbidity_contrasts]
+    if len(contrast_ids) != len(set(contrast_ids)):
+        raise ValueError(
+            f'condition {condition_id!r} repeats allowed distinct comorbidity contrast ids'
+        )
+
+    present_absent_id_by_present_subgroup: dict[str, str] = {}
+    for contrast in contrast_by_id.values():
+        cohorts = {
+            contrast.cohort_a_id: subgroups[contrast.cohort_a_id],
+            contrast.cohort_b_id: subgroups[contrast.cohort_b_id],
+        }
+        if not _is_comorbidity_present_absent_contrast(list(cohorts.values())):
+            continue
+        present_id = next(
+            subgroup_id
+            for subgroup_id, subgroup in cohorts.items()
+            if subgroup.level_id == 'present'
+        )
+        present_absent_id_by_present_subgroup[present_id] = contrast.id
+
+    allowed_present_absent_ids = set(condition.allowed_comorbidity_contrast_ids)
+    for contrast in condition.allowed_distinct_comorbidity_contrasts:
+        if contrast.cohort_a_id == contrast.cohort_b_id:
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                'uses the same cohort twice'
+            )
+        unknown_cohorts = {
+            subgroup_id
+            for subgroup_id in (contrast.cohort_a_id, contrast.cohort_b_id)
+            if subgroup_id not in subgroups
+        }
+        if unknown_cohorts:
+            unknown = ', '.join(sorted(unknown_cohorts))
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                f'references unknown cohorts: {unknown}'
+            )
+
+        cohort_a = subgroups[contrast.cohort_a_id]
+        cohort_b = subgroups[contrast.cohort_b_id]
+        if cohort_a.axis != 'comorbidity' or cohort_b.axis != 'comorbidity':
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                'must use comorbidity cohorts'
+            )
+        if cohort_a.level_id != 'present' or cohort_b.level_id != 'present':
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                'must use present comorbidity cohorts'
+            )
+        if cohort_a.dimension_id == cohort_b.dimension_id:
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                'must compare different comorbidity dimensions'
+            )
+
+        required_present_absent_ids = {
+            present_absent_id_by_present_subgroup.get(contrast.cohort_a_id),
+            present_absent_id_by_present_subgroup.get(contrast.cohort_b_id),
+        }
+        if None in required_present_absent_ids:
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                'uses a present cohort without a matching present/absent contrast'
+            )
+        missing_allowlist_ids = required_present_absent_ids - allowed_present_absent_ids
+        if missing_allowlist_ids:
+            missing = ', '.join(sorted(str(item) for item in missing_allowlist_ids))
+            raise ValueError(
+                f'condition {condition_id!r} distinct comorbidity contrast {contrast.id!r} '
+                f'requires allowlisted present/absent contrasts: {missing}'
+            )
+
+
 def _validate_absent_subgroup_surface_forms(subgroups: dict[SubgroupKey, SubgroupOntology]) -> None:
     subgroups_by_dimension: dict[str, list[SubgroupOntology]] = {}
     for subgroup in subgroups.values():

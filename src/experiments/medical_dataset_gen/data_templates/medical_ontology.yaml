@@ -9,6 +9,13 @@ conditions:
             - immunosuppression_present_vs_absent
             - malignancy_present_vs_absent
             - autoimmune_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: immunosuppression_vs_malignancy
+              cohort_a_id: immunosuppression
+              cohort_b_id: malignancy
+            - id: immunosuppression_vs_autoimmune_disease
+              cohort_a_id: immunosuppression
+              cohort_b_id: autoimmune_disease
         terms:
             - encephalitis
             - myelitis
@@ -143,6 +150,16 @@ conditions:
             - immunosuppression_present_vs_absent
             - atrial_fibrillation_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: copd_vs_atrial_fibrillation
+              cohort_a_id: copd
+              cohort_b_id: atrial_fibrillation
+            - id: copd_vs_frailty
+              cohort_a_id: copd
+              cohort_b_id: frailty
+            - id: immunosuppression_vs_frailty
+              cohort_a_id: immunosuppression
+              cohort_b_id: frailty
         terms:
             - pneumonia
             - oxygen requirement
@@ -277,6 +294,16 @@ conditions:
             - atrial_fibrillation_present_vs_absent
             - frailty_present_vs_absent
             - peripheral_vascular_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: atrial_fibrillation_vs_peripheral_vascular_disease
+              cohort_a_id: atrial_fibrillation
+              cohort_b_id: peripheral_vascular_disease
+            - id: atrial_fibrillation_vs_diabetes
+              cohort_a_id: atrial_fibrillation
+              cohort_b_id: uncomplicated_diabetes
+            - id: frailty_vs_diabetes
+              cohort_a_id: frailty
+              cohort_b_id: uncomplicated_diabetes
         terms:
             - ischemic stroke
             - antiplatelet therapy
@@ -411,6 +438,16 @@ conditions:
             - ckd_present_vs_absent
             - copd_present_vs_absent
             - atrial_fibrillation_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: ckd_vs_atrial_fibrillation
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: atrial_fibrillation
+            - id: copd_vs_ckd
+              cohort_a_id: copd
+              cohort_b_id: chronic_kidney_disease
+            - id: diabetes_vs_atrial_fibrillation
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: atrial_fibrillation
         terms:
             - heart failure
             - diuresis
@@ -545,6 +582,13 @@ conditions:
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
             - malignancy_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: immunosuppression_vs_malignancy
+              cohort_a_id: immunosuppression
+              cohort_b_id: malignancy
+            - id: ckd_vs_immunosuppression
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: immunosuppression
         terms:
             - bacterial meningitis
             - meningeal inflammation
@@ -677,6 +721,10 @@ conditions:
         allowed_comorbidity_contrast_ids:
             - immunosuppression_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: immunosuppression_vs_frailty
+              cohort_a_id: immunosuppression
+              cohort_b_id: frailty
         terms:
             - multiple sclerosis relapse
             - demyelinating flare
@@ -811,6 +859,16 @@ conditions:
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
             - peripheral_vascular_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: diabetes_vs_immunosuppression
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: immunosuppression
+            - id: diabetes_vs_peripheral_vascular_disease
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: peripheral_vascular_disease
+            - id: ckd_vs_immunosuppression
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: immunosuppression
         terms:
             - spinal epidural abscess
             - back pain
@@ -944,6 +1002,13 @@ conditions:
             - ckd_present_vs_absent
             - obesity_present_vs_absent
             - malignancy_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: malignancy_vs_obesity
+              cohort_a_id: malignancy
+              cohort_b_id: obesity
+            - id: malignancy_vs_ckd
+              cohort_a_id: malignancy
+              cohort_b_id: chronic_kidney_disease
         terms:
             - pulmonary embolism
             - anticoagulation
@@ -1079,6 +1144,16 @@ conditions:
             - obesity_present_vs_absent
             - atrial_fibrillation_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: ckd_vs_atrial_fibrillation
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: atrial_fibrillation
+            - id: obesity_vs_frailty
+              cohort_a_id: obesity
+              cohort_b_id: frailty
+            - id: atrial_fibrillation_vs_frailty
+              cohort_a_id: atrial_fibrillation
+              cohort_b_id: frailty
         terms:
             - COPD exacerbation
             - bronchodilators
@@ -1212,6 +1287,13 @@ conditions:
             - diabetes_present_vs_absent
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: ckd_vs_immunosuppression
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: immunosuppression
+            - id: diabetes_vs_ckd
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: chronic_kidney_disease
         terms:
             - infective endocarditis
             - bacteremia
@@ -1347,6 +1429,16 @@ conditions:
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
             - peripheral_vascular_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: diabetes_vs_peripheral_vascular_disease
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: peripheral_vascular_disease
+            - id: diabetes_vs_ckd
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: chronic_kidney_disease
+            - id: immunosuppression_vs_ckd
+              cohort_a_id: immunosuppression
+              cohort_b_id: chronic_kidney_disease
         terms:
             - osteomyelitis
             - bone infection
@@ -1482,6 +1574,17 @@ conditions:
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
             - dementia_present_vs_absent
+            - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: diabetes_vs_ckd
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: chronic_kidney_disease
+            - id: immunosuppression_vs_ckd
+              cohort_a_id: immunosuppression
+              cohort_b_id: chronic_kidney_disease
+            - id: dementia_vs_frailty
+              cohort_a_id: dementia
+              cohort_b_id: frailty
         terms:
             - pyelonephritis
             - urosepsis
@@ -1616,6 +1719,16 @@ conditions:
             - immunosuppression_present_vs_absent
             - obesity_present_vs_absent
             - peripheral_vascular_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: ckd_vs_peripheral_vascular_disease
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: peripheral_vascular_disease
+            - id: obesity_vs_peripheral_vascular_disease
+              cohort_a_id: obesity
+              cohort_b_id: peripheral_vascular_disease
+            - id: immunosuppression_vs_ckd
+              cohort_a_id: immunosuppression
+              cohort_b_id: chronic_kidney_disease
         terms:
             - diabetic foot infection
             - wound care
@@ -1751,6 +1864,13 @@ conditions:
             - ckd_present_vs_absent
             - malignancy_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: ckd_vs_malignancy
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: malignancy
+            - id: diabetes_vs_frailty
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: frailty
         terms:
             - hepatic encephalopathy
             - cirrhosis
@@ -1884,6 +2004,13 @@ conditions:
             - diabetes_present_vs_absent
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: ckd_vs_immunosuppression
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: immunosuppression
+            - id: diabetes_vs_ckd
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: chronic_kidney_disease
         terms:
             - lupus nephritis
             - immune-mediated kidney injury
@@ -2019,6 +2146,16 @@ conditions:
             - obesity_present_vs_absent
             - immunosuppression_present_vs_absent
             - peripheral_vascular_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: diabetes_vs_obesity
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: obesity
+            - id: diabetes_vs_peripheral_vascular_disease
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: peripheral_vascular_disease
+            - id: immunosuppression_vs_peripheral_vascular_disease
+              cohort_a_id: immunosuppression
+              cohort_b_id: peripheral_vascular_disease
         terms:
             - cellulitis
             - soft tissue infection
@@ -2151,6 +2288,10 @@ conditions:
         allowed_comorbidity_contrast_ids:
             - immunosuppression_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: immunosuppression_vs_frailty
+              cohort_a_id: immunosuppression
+              cohort_b_id: frailty
         terms:
             - ulcerative colitis flare
             - bloody diarrhea
@@ -2286,6 +2427,13 @@ conditions:
             - ckd_present_vs_absent
             - obesity_present_vs_absent
             - liver_disease_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: obesity_vs_diabetes
+              cohort_a_id: obesity
+              cohort_b_id: uncomplicated_diabetes
+            - id: ckd_vs_chronic_liver_disease
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: chronic_liver_disease
         terms:
             - acute pancreatitis
             - lipase elevation
@@ -2420,6 +2568,13 @@ conditions:
             - ckd_present_vs_absent
             - obesity_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: diabetes_vs_obesity
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: obesity
+            - id: ckd_vs_frailty
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: frailty
         terms:
             - acute cholecystitis
             - right upper quadrant pain
@@ -2554,6 +2709,13 @@ conditions:
             - immunosuppression_present_vs_absent
             - malignancy_present_vs_absent
             - frailty_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: immunosuppression_vs_malignancy
+              cohort_a_id: immunosuppression
+              cohort_b_id: malignancy
+            - id: frailty_vs_ckd
+              cohort_a_id: frailty
+              cohort_b_id: chronic_kidney_disease
         terms:
             - complicated diverticulitis
             - left lower quadrant pain
@@ -2688,6 +2850,16 @@ conditions:
             - malignancy_present_vs_absent
             - atrial_fibrillation_present_vs_absent
             - liver_disease_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: chronic_liver_disease_vs_atrial_fibrillation
+              cohort_a_id: chronic_liver_disease
+              cohort_b_id: atrial_fibrillation
+            - id: ckd_vs_malignancy
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: malignancy
+            - id: ckd_vs_atrial_fibrillation
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: atrial_fibrillation
         terms:
             - upper gastrointestinal bleeding
             - melena
@@ -2822,6 +2994,16 @@ conditions:
             - ckd_present_vs_absent
             - immunosuppression_present_vs_absent
             - autoimmune_present_vs_absent
+        allowed_distinct_comorbidity_contrasts:
+            - id: diabetes_vs_immunosuppression
+              cohort_a_id: uncomplicated_diabetes
+              cohort_b_id: immunosuppression
+            - id: ckd_vs_autoimmune_disease
+              cohort_a_id: chronic_kidney_disease
+              cohort_b_id: autoimmune_disease
+            - id: immunosuppression_vs_autoimmune_disease
+              cohort_a_id: immunosuppression
+              cohort_b_id: autoimmune_disease
         terms:
             - septic arthritis
             - joint infection

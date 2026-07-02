@@ -74,6 +74,7 @@ class LightweightQueryRecord:
     condition_id: str | None
     cohort_dimension_id: str
     cohort_contrast_id: str
+    cohort_contrast_family: str
     primary_axis: str
     secondary_axis: str
     dominant_primary_facet_id: str
