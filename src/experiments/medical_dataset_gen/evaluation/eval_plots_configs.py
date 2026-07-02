@@ -4,7 +4,7 @@ from typing import Literal, get_args
 
 import polars as pl
 
-from experiments.medical_dataset_gen.global_config import LambdaSelectionCfg
+from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
 
 type EvalPlotCallContext = dict[str, pl.DataFrame | Path | LambdaSelectionCfg]
 

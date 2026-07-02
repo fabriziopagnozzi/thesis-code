@@ -4,7 +4,7 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     pair_kernel_polars_expr,
     sigmoid_polars_expr,
 )
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     MethodsComparisonKernelMetricCfg,
     MethodsComparisonKernelsCfg,
 )

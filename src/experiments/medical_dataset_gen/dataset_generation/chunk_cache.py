@@ -20,13 +20,13 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import v
 from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
-from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkState,
     ClinicalFact,
     MedicalOntology,
 )
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
 GENERATION_CACHE_VERSION = 10
 REWRITE_CACHE_VERSION = 2

@@ -20,10 +20,6 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     resolve_axis_pair_generation_policy,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
     AxisPairProfile,
@@ -37,6 +33,14 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanSpec,
     QueryType,
     SubgroupOntology,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
@@ -353,9 +357,7 @@ def _split_for_profile(evidence_profile_id: str) -> DataSplit:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

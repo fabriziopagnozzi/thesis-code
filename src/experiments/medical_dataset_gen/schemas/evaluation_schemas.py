@@ -8,11 +8,11 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Json
 
-from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerFact,
     BenchmarkModel,
 )
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,

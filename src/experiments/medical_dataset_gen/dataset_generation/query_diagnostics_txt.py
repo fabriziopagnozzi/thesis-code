@@ -17,11 +17,10 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     load_embedding_arrays,
     select_indices,
 )
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
-    MedicalDatasetGenPaths,
-    load_config,
 )
+from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths, load_config
 
 _QUERY_COLUMNS = [
     'query_id',
@@ -1529,20 +1528,16 @@ def _counter_top(counter: Counter[str]) -> tuple[str | None, int]:
 
 def _snapshot_lambdas(cfg: ExperimentCfg) -> dict[str, list[float]]:
     return {
-        'mmr': _snapshot_lambda_values(
-            [
-                float(value)
-                for value in cfg.retrieval.lambda_values_for_strategy('mmr')
-                if value is not None
-            ]
-        ),
-        'fac_loc': _snapshot_lambda_values(
-            [
-                float(value)
-                for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
-                if value is not None
-            ]
-        ),
+        'mmr': _snapshot_lambda_values([
+            float(value)
+            for value in cfg.retrieval.lambda_values_for_strategy('mmr')
+            if value is not None
+        ]),
+        'fac_loc': _snapshot_lambda_values([
+            float(value)
+            for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
+            if value is not None
+        ]),
     }
 
 

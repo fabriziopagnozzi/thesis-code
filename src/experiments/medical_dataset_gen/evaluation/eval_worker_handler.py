@@ -11,11 +11,6 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     get_qrels_by_query_chunk,
     load_embedding_arrays_mmap_ids,
 )
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    SyntheticMedicalDatasetTableName,
-)
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     AnswerReferenceTexts,
     EmbeddingIdArray,
@@ -23,6 +18,11 @@ from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     EvaluationWorkerState,
     LightweightChunkRecord,
     LightweightQueryRecord,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    SyntheticMedicalDatasetTableName,
 )
 from experiments.medical_dataset_gen.utils.io_utils import json_loads
 
@@ -90,7 +90,9 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
         paths, 'chunk_memberships', _MEMBERSHIP_COLUMNS
     )
     queries = load_selected_parquet_columns(paths, 'queries', _QUERY_COLUMNS)
-    qrels = load_selected_parquet_columns(paths, 'qrels', _QREL_COLUMNS, optional_columns=['cluster_id'])
+    qrels = load_selected_parquet_columns(
+        paths, 'qrels', _QREL_COLUMNS, optional_columns=['cluster_id']
+    )
     geometry = load_selected_parquet_columns(paths, 'geometry_stats', _GEOMETRY_WORKER_COLUMNS)
 
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays_mmap_ids(paths)

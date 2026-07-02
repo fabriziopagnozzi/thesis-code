@@ -4,8 +4,10 @@ import argparse
 from collections.abc import Callable
 from typing import Literal, get_args
 
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config_from_cli,
     paths_for,

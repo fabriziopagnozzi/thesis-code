@@ -19,7 +19,6 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
 from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
-from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkRow,
@@ -27,6 +26,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
 )
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from helpers.ollama_client import generate
 
 _SECTION_HEADER_RE = re.compile(

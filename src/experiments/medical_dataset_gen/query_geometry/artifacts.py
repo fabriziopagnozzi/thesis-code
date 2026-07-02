@@ -9,6 +9,7 @@ consistent with the rest of the pipeline.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import cast
 
 import numpy as np
@@ -20,15 +21,16 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
-from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.query_geometry.dim_reduction import (
     cluster_features,
     hdbscan_labels,
     reduce_for_plot,
 )
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryArtifact,
     GeometryChunkLike,
+    GeometryEmbeddingIdArray,
     GeometryGlobalLambdaKey,
     GeometryIndexMaps,
     GeometryQrelLike,
@@ -282,10 +284,10 @@ def build_query_artifact(
     cfg: ExperimentCfg,
     qid: str,
     query: GeometryQueryLike,
-    query_qrels: dict[str, GeometryQrelLike],
+    query_qrels: Mapping[str, GeometryQrelLike],
     chunk_vectors: NDArray[np.float32],
     query_vectors: NDArray[np.float32],
-    chunk_ids: list[str],
+    chunk_ids: GeometryEmbeddingIdArray,
     maps: GeometryIndexMaps,
     query_best_lambdas: dict[GeometryQueryLambdaKey, float],
     global_best_lambdas: dict[GeometryGlobalLambdaKey, float],
@@ -373,8 +375,8 @@ def build_query_artifact(
 
 def candidate_labels(
     candidate_chunk_ids: list[str],
-    query_qrels: dict[str, GeometryQrelLike],
-    chunk_by_id: dict[str, GeometryChunkLike],
+    query_qrels: Mapping[str, GeometryQrelLike],
+    chunk_by_id: Mapping[str, GeometryChunkLike],
     query: GeometryQueryLike,
 ) -> tuple[list[str], list[str], list[str], list[bool]]:
     facet_labels = facet_label_map(query)

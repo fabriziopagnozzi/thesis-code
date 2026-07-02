@@ -14,10 +14,6 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     render_answer_template,
     render_query_template,
 )
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
     AnswerFact,
@@ -33,6 +29,14 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 from helpers.ollama_client import generate
@@ -292,9 +296,7 @@ def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

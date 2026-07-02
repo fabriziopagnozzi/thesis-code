@@ -19,13 +19,6 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     other_conditions,
     outlier_subgroups,
 )
-from experiments.medical_dataset_gen.global_config import (
-    BackgroundDistractorSpec,
-    ChunkPoolsCfg,
-    DistractorSpec,
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
     AcuteClinicalCoursePayload,
@@ -43,6 +36,17 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     SubgroupAxis,
     TreatmentDurationAxisValues,
     TreatmentDurationPayload,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    BackgroundDistractorSpec,
+    ChunkPoolsCfg,
+    DistractorSpec,
+    ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
@@ -389,9 +393,7 @@ def _cycled_axis_bin(
     local_idx: int,
 ) -> str:
     bins = [
-        value_bin
-        for value_bin in get_axis_bins(ontology, axis)
-        if value_bin != excluded_value_bin
+        value_bin for value_bin in get_axis_bins(ontology, axis) if value_bin != excluded_value_bin
     ]
     if not bins:
         raise ValueError(f'no eligible value bins are available for axis {axis!r}')
@@ -449,8 +451,7 @@ def make_background_outlier_facts(
             cluster_id = f'{plan.pool_id}_bg_s{spec_idx + 1:02d}_c{cluster_idx + 1:02d}'
             for local_idx in range(spec.size):
                 reuse_scope = (
-                    f'distractor:background_clinical_cluster:{scope}:'
-                    f'cluster_{cluster_idx + 1:02d}'
+                    f'distractor:background_clinical_cluster:{scope}:cluster_{cluster_idx + 1:02d}'
                 )
                 rows.append(
                     make_base_fact(
@@ -682,9 +683,7 @@ def _stable_seed(*values: object) -> int:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

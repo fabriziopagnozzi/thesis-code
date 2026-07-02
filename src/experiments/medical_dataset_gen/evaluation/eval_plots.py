@@ -30,7 +30,7 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     select_best_lambda_rows,
 )
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
-from experiments.medical_dataset_gen.global_config import LambdaSelectionCfg
+from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
 

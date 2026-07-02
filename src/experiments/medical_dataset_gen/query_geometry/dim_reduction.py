@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.global_config import ExperimentCfg
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
 
 def reduce_for_plot(

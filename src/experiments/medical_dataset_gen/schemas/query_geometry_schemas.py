@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Container
+from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict
@@ -9,12 +9,12 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.global_config import ExperimentCfg
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ChunkPoolScope,
 )
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
@@ -24,6 +24,7 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
 
 type GeometryGlobalLambdaKey = tuple[RetrievalStrategy, int]
 type GeometryQueryLambdaKey = tuple[str, RetrievalStrategy, int]
+type GeometryEmbeddingIdArray = Sequence[object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +94,8 @@ class GeometryArtifact(BenchmarkModel):
     lambda_values_by_strategy: dict[RetrievalStrategy, list[float]]
     mmr_window: int | None
     k: int
-    chunk_by_id: dict[str, GeometryChunkLike]
-    qrel_by_chunk_id: dict[str, GeometryQrelLike]
+    chunk_by_id: Mapping[str, GeometryChunkLike]
+    qrel_by_chunk_id: Mapping[str, GeometryQrelLike]
     selection_group: str | None = None
 
 
@@ -216,17 +217,17 @@ class RenderedGeometryResult(TypedDict):
 
 class GeometryIndexMaps(TypedDict):
     query_id_to_idx: dict[str, int]
-    chunk_by_id: dict[str, GeometryChunkLike]
+    chunk_by_id: Mapping[str, GeometryChunkLike]
     chunks_by_source_query: dict[str, list[int]]
 
 
 class EmbeddingGeometryWorkerState(TypedDict):
     cfg: ExperimentCfg
-    queries_by_id: dict[str, GeometryQueryLike]
-    qrels_by_query_chunk: dict[str, dict[str, GeometryQrelLike]]
+    queries_by_id: Mapping[str, GeometryQueryLike]
+    qrels_by_query_chunk: Mapping[str, Mapping[str, GeometryQrelLike]]
     chunk_vectors: NDArray[np.float32]
     query_vectors: NDArray[np.float32]
-    chunk_ids: Container[object]
+    chunk_ids: GeometryEmbeddingIdArray
     maps: GeometryIndexMaps
     query_best_lambdas: dict[GeometryQueryLambdaKey, float]
     global_best_lambdas: dict[GeometryGlobalLambdaKey, float]

@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from collections.abc import Container
+from collections.abc import Container, Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,18 +13,22 @@ from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     load_embedding_arrays_mmap_ids,
 )
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.query_geometry.artifacts import build_best_lambda_maps
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+)
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometryWorkerState,
     GeometryChunkRecord,
+    GeometryEmbeddingIdArray,
     GeometryIndexMaps,
     GeometryQrelRecord,
     GeometryQueryRecord,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    SyntheticMedicalDatasetTableName,
 )
 
 type MMapEmbeddingIdArray = NDArray[Any]
@@ -158,7 +162,7 @@ def init_query_geometry_worker(
         'qrels_by_query_chunk': build_lightweight_geometry_qrels_by_query_chunk(qrels),
         'chunk_vectors': chunk_vectors,
         'query_vectors': query_vectors,
-        'chunk_ids': chunk_ids,
+        'chunk_ids': cast(GeometryEmbeddingIdArray, chunk_ids),
         'maps': maps,
         'query_best_lambdas': query_best_lambdas,
         'global_best_lambdas': global_best_lambdas,
@@ -173,7 +177,7 @@ def init_query_geometry_worker(
 
 def load_selected_parquet_columns_if_exists(
     paths: MedicalDatasetGenPaths,
-    table: str,
+    table: SyntheticMedicalDatasetTableName,
     *,
     required_columns: list[str],
     optional_columns: list[str],
@@ -236,7 +240,7 @@ def build_lightweight_geometry_query_map(queries: pl.DataFrame) -> dict[str, Geo
 
 def build_lightweight_geometry_chunk_map(
     chunk_documents: pl.DataFrame,
-) -> dict[str, GeometryChunkRecord]:
+) -> Mapping[str, GeometryChunkRecord]:
     result: dict[str, GeometryChunkRecord] = {}
     for row in chunk_documents.iter_rows(named=True):
         result[str(row['chunk_id'])] = GeometryChunkRecord(
@@ -253,7 +257,7 @@ def build_lightweight_geometry_chunk_map(
 
 def build_lightweight_geometry_qrels_by_query_chunk(
     qrels: pl.DataFrame,
-) -> dict[str, dict[str, GeometryQrelRecord]]:
+) -> Mapping[str, dict[str, GeometryQrelRecord]]:
     result: dict[str, dict[str, GeometryQrelRecord]] = defaultdict(dict)
     for row in qrels.iter_rows(named=True):
         result[str(row['query_id'])][str(row['chunk_id'])] = GeometryQrelRecord(

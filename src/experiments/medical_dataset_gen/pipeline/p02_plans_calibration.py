@@ -15,16 +15,20 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.pipeline.p03_structured_facts import make_gold_fact
 from experiments.medical_dataset_gen.pipeline.p05_queries_answers import render_query
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,
     QueryPlan,
     QueryPlanFacet,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
@@ -462,9 +466,7 @@ def _calibration_row_without_embeddings(plan: QueryPlan) -> dict[str, object]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

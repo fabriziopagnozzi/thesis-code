@@ -6,9 +6,6 @@ from random import Random
 
 import yaml
 
-from experiments.medical_dataset_gen.global_config import (
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
     CareIntensityPayload,
@@ -19,6 +16,9 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
 )
 
 _TEMPLATE_DATA_DIR = MedicalDatasetGenPaths.root / 'data_templates'

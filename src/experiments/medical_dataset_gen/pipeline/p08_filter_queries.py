@@ -29,10 +29,9 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
     GeometryFilterCfg,
-    MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryFilterStatsRow,
@@ -43,6 +42,11 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QueryIdToQrels,
     QueryRecord,
     TopKDiagnosticsByK,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     json_dumps,
@@ -588,11 +592,7 @@ def _is_background_outlier(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
 
 def _is_query_near_miss_distractor(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
-    return (
-        row is not None
-        and not row.is_gold
-        and row.cluster_role != 'background_outlier'
-    )
+    return row is not None and not row.is_gold and row.cluster_role != 'background_outlier'
 
 
 def _mean_same_cluster_similarity(
@@ -650,9 +650,7 @@ def _topk_vs_facloc_diagnostics(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

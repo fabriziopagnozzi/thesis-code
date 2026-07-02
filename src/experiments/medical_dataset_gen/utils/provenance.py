@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import TypedDict, cast
 from uuid import uuid4
 
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_utils import (
     SYNTH_MEDICAL_DATASET_TABLE_NAMES,
-    ExperimentCfg,
     MedicalDatasetGenPaths,
     SyntheticMedicalDatasetTableName,
 )

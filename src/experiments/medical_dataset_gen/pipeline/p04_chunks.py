@@ -38,14 +38,18 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_text,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkRow,
     ClinicalFact,
     MedicalOntology,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
@@ -599,9 +603,7 @@ def _write_normalized_chunks(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

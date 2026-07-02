@@ -24,13 +24,6 @@ from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     assert_pool_scope_match,
 )
-from experiments.medical_dataset_gen.global_config import (
-    ExperimentCfg,
-    MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
-    setup_logging,
-)
 from experiments.medical_dataset_gen.query_geometry.artifacts import (
     build_query_artifact,
     choose_query_groups,
@@ -56,11 +49,20 @@ from experiments.medical_dataset_gen.query_geometry.geom_worker_handler import (
     load_selected_parquet_columns_if_exists,
     query_geometry_worker_count,
 )
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+)
 from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     EmbeddingGeometry2DPoint,
     EmbeddingGeometryQueryStats,
     EmbeddingGeometryWorkerState,
     RenderedGeometryResult,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
+    setup_logging,
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 

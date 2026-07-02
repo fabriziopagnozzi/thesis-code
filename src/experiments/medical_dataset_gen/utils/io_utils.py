@@ -4,7 +4,7 @@ from typing import Any
 
 import polars as pl
 
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SyntheticMedicalDatasetTableName,
 )

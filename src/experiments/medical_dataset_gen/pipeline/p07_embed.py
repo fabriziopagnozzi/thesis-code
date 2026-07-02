@@ -7,9 +7,13 @@ import numpy as np
 import pyarrow.parquet as pq
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
+    load_config_from_cli,
+    paths_for,
 )
 
 
@@ -105,7 +109,9 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
             )
         meta = {
             'dataset_schema_version': cfg.dataset_schema_version,
-            'backend': 'medcpt' if cfg.embeddings.model_name == 'ncbi/MedCPT' else 'sentence_transformers',
+            'backend': 'medcpt'
+            if cfg.embeddings.model_name == 'ncbi/MedCPT'
+            else 'sentence_transformers',
             'model_name': cfg.embeddings.model_name,
             'query_prompt': cfg.embeddings.query_prompt,
             'document_prompt': cfg.embeddings.document_prompt,
@@ -156,9 +162,7 @@ def _fill_embedding_memmaps(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.global_config import (
-        load_config_from_cli,
-        paths_for,
+    from experiments.medical_dataset_gen.utils.global_utils import (
         setup_logging,
     )
 

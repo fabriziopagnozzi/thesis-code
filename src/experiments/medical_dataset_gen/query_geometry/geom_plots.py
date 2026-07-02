@@ -58,7 +58,9 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     strategy_order: tuple[RetrievalStrategy, ...] = ('top_k', 'mmr', 'fac_loc')
-    strategies = [strategy for strategy in strategy_order if strategy in artifact.selections]
+    strategies = list[RetrievalStrategy]([
+        strategy for strategy in strategy_order if strategy in artifact.selections
+    ])
     if not strategies:
         return
 
@@ -109,7 +111,7 @@ def plot_full_strategy_selection_overlay(
     import matplotlib.pyplot as plt
 
     lambda_values_by_strategy = {
-        strategy: _artifact_lambda_values(artifact, strategy) for strategy in ['mmr', 'fac_loc']
+        strategy: _artifact_lambda_values(artifact, strategy) for strategy in ('mmr', 'fac_loc')
     }
     if not any(lambda_values_by_strategy.values()):
         return
@@ -556,7 +558,9 @@ def _draw_wrapped_side_legend(ax: Any) -> None:
     )
 
 
-def _draw_facet_family_side_legend(ax: Any, artifact: GeometryArtifact) -> tuple[Any | None, list[str]]:
+def _draw_facet_family_side_legend(
+    ax: Any, artifact: GeometryArtifact
+) -> tuple[Any | None, list[str]]:
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
         return None, []
@@ -620,7 +624,7 @@ def _style_legend_text(
             )
             for line in fragment_lines
         ]
-        packed = VPacker(children=line_boxes, align='left', pad=0, sep=0)
+        packed = VPacker(children=line_boxes, align='left', pad=0, sep=0)  # type: ignore
         fig.add_artist(
             AnnotationBbox(
                 packed,
@@ -637,9 +641,7 @@ def _style_legend_text(
 type LegendTextFragments = list[tuple[str, str]]
 
 
-def _legend_label_fragments(
-    artifact: GeometryArtifact, label: str
-) -> LegendTextFragments | None:
+def _legend_label_fragments(artifact: GeometryArtifact, label: str) -> LegendTextFragments | None:
     lines = _legend_label_fragment_lines(artifact, label)
     if lines is None:
         return None
@@ -1498,7 +1500,9 @@ def artifact_title_prefix(artifact: GeometryArtifact) -> str:
 
 
 def _artifact_figure_title_parts(artifact: GeometryArtifact) -> tuple[str, str, str]:
-    condition = artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
+    condition = (
+        artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
+    )
     subgroup_labels = _artifact_subgroup_labels(artifact)
     axis_labels = (
         str(artifact.query.primary_axis).replace('_', ' '),

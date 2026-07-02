@@ -41,16 +41,18 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
-from experiments.medical_dataset_gen.global_config import (
+from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
+    EvaluationResultRow,
+    LightweightQueryRecord,
+)
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
+)
+from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config_from_cli,
     paths_for,
     setup_logging,
-)
-from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
-    EvaluationResultRow,
-    LightweightQueryRecord,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
