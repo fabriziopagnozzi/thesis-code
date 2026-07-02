@@ -32,6 +32,9 @@ def build_geometry_points_row(artifact: GeometryArtifact) -> list[EmbeddingGeome
     # Append all the chunks
     for idx, chunk_id in enumerate(artifact.candidate_chunk_ids):
         row = artifact.qrel_by_chunk_id.get(chunk_id, artifact.chunk_by_id[chunk_id])
+        hdbscan_label = (
+            int(artifact.cluster_labels[idx]) if artifact.cluster_labels is not None else None
+        )
         geom_points.append(
             make_geom_point_row(
                 artifact=artifact,
@@ -47,7 +50,7 @@ def build_geometry_points_row(artifact: GeometryArtifact) -> list[EmbeddingGeome
                 label_id=artifact.label_ids[idx],
                 cluster_role=artifact.roles[idx],
                 is_gold=bool(artifact.is_gold[idx]),
-                hdbscan_label=int(artifact.cluster_labels[idx]),
+                hdbscan_label=hdbscan_label,
                 selected_top_k=idx in selected_sets.get('top_k', set()),
                 selected_mmr=idx in selected_sets.get('mmr', set()),
                 selected_fac_loc=idx in selected_sets.get('fac_loc', set()),
@@ -87,12 +90,6 @@ def query_stats(artifact: GeometryArtifact) -> EmbeddingGeometryQueryStats:
     }
     gold_silhouette = gold_silhouette_cosine(artifact)
     in_sim, cross_sim = in_cross_similarity(artifact)
-    cluster_labels = artifact.cluster_labels
-    hidden_label_codes = string_codes(artifact.label_ids)
-    ari, nmi = cluster_agreement(hidden_label_codes, cluster_labels)
-    non_noise = [int(x) for x in cluster_labels if int(x) != -1]
-    n_clusters = len(set(non_noise))
-    noise_rate = float(np.mean(cluster_labels == -1)) if len(cluster_labels) else 0.0
     gold_mask = np.array(artifact.is_gold, dtype=bool)
     distractor_mask = ~gold_mask
 
@@ -114,11 +111,16 @@ def query_stats(artifact: GeometryArtifact) -> EmbeddingGeometryQueryStats:
         'in_minus_cross_similarity': in_sim - cross_sim,
         'query_to_gold_mean': masked_mean(artifact.sim_to_query, gold_mask),
         'query_to_distractor_mean': masked_mean(artifact.sim_to_query, distractor_mask),
-        'hdbscan_n_clusters': n_clusters,
-        'hdbscan_noise_rate': noise_rate,
-        'hdbscan_ari_hidden': ari,
-        'hdbscan_nmi_hidden': nmi,
     }
+    cluster_labels = artifact.cluster_labels
+    if cluster_labels is not None:
+        hidden_label_codes = string_codes(artifact.label_ids)
+        ari, nmi = cluster_agreement(hidden_label_codes, cluster_labels)
+        non_noise = [int(x) for x in cluster_labels if int(x) != -1]
+        row['hdbscan_n_clusters'] = len(set(non_noise))
+        row['hdbscan_noise_rate'] = float(np.mean(cluster_labels == -1)) if len(cluster_labels) else 0.0
+        row['hdbscan_ari_hidden'] = ari
+        row['hdbscan_nmi_hidden'] = nmi
     for strategy, summary in selected_summaries.items():
         row[f'{strategy}_n_facets_selected'] = summary['n_facets_selected']
         row[f'{strategy}_gold_precision'] = summary['gold_precision']

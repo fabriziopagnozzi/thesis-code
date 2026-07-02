@@ -425,6 +425,7 @@ class QueryGeometryCfg(ConfigModel):
     query_selection: Literal['mixed', 'best'] = 'mixed'
     candidate_pool_n: PositiveInt | None = None
     plot_k: PositiveInt = 10
+    compute_clusters: bool = True
     reduction: Literal['umap', 'pca'] = 'umap'
     pca_dims: PositiveInt | None = None
     umap_metric: Literal['cosine', 'euclidean'] = 'cosine'

@@ -578,7 +578,7 @@ def plot_metrics_distributions(
     plt.close(fig)
 
 
-def plot_delta_vs_topk_metrics_for_k_for_lambda(
+def plot_delta_vs_topk_metrics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
@@ -603,7 +603,7 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
     k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
 
     fig, axes = _grid_figure(
-        'delta_vs_topk_metrics_for_k_for_lambda',
+        'delta_vs_topk_metrics_k_curves_for_lambda',
         rows=len(metrics),
         cols=len(diversity_strategies),
         sharex=False,
@@ -676,14 +676,9 @@ def plot_delta_vs_topk_metrics_for_k_for_lambda(
             frameon=False,
             bbox_to_anchor=(0.5, 0.0),
         )
-    _figure_note(
-        fig,
-        'Raw lambda axes are strategy-specific; compare methods by trend, not equal raw lambda.',
-        y=0.035,
-    )
-    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(
-        out_dir / 'delta_vs_topk_metrics_for_k_for_lambda.png',
+        out_dir / 'delta_vs_topk_metrics_k_curves_for_lambda.png',
         dpi=140,
         bbox_inches='tight',
     )
@@ -1421,16 +1416,7 @@ def plot_diagnostics_at_best_lambda_for_k(
         'Selection diagnostics - configured lambda* within strategy x k',
         fontsize=12,
     )
-    _figure_note(
-        fig,
-        _best_lambda_note(
-            stats_df,
-            [s for s in strategies if s != 'top_k'],
-            k_values,
-            lambda_selection,
-        ),
-    )
-    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(out_dir / 'diagnostics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
@@ -1519,7 +1505,17 @@ def plot_answer_metrics_at_best_lambda_for_k(
     for ax in axes.flatten()[len(metrics) :]:
         ax.set_visible(False)
 
-    _figure_legend(fig, axes.flatten())
+    handles, labels = _first_legend_handles(axes)
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc='lower center',
+            ncol=min(len(labels), 5),
+            fontsize=9,
+            frameon=False,
+            bbox_to_anchor=(0.5, 0.005),
+        )
     fig.suptitle(
         'Auxiliary answer-token ROUGE diagnostics - lambda* path per strategy',
         fontsize=12,
@@ -1527,8 +1523,9 @@ def plot_answer_metrics_at_best_lambda_for_k(
     _figure_note(
         fig,
         lambda_selection_policy_note(lambda_selection),
+        y=0.065,
     )
-    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    fig.tight_layout(rect=(0, 0.16, 1, 1))
     fig.savefig(out_dir / 'answer_metrics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
@@ -2170,7 +2167,7 @@ class GainOverTopkFooterLayout:
     values_per_line: int
 
 
-def _delta_vs_topk_metrics_for_k_for_lambda_geometry(
+def _delta_vs_topk_metrics_k_curves_for_lambda_geometry(
     n_k_values: int, n_groups: int
 ) -> GainOverTopkGeometry:
     import numpy as np
@@ -2182,12 +2179,12 @@ def _delta_vs_topk_metrics_for_k_for_lambda_geometry(
     k_gap = max(0.9, min(2.2, group_span * 0.16))
     k_positions = (np.arange(n_k_values, dtype=float) * (group_span + k_gap)).tolist()
     bar_width = slot_width * 0.96
-    first_center = k_positions[0] + _delta_vs_topk_metrics_for_k_for_lambda_offset(
+    first_center = k_positions[0] + _delta_vs_topk_metrics_k_curves_for_lambda_offset(
         group_idx=0,
         n_groups=n_groups,
         slot_width=slot_width,
     )
-    last_center = k_positions[-1] + _delta_vs_topk_metrics_for_k_for_lambda_offset(
+    last_center = k_positions[-1] + _delta_vs_topk_metrics_k_curves_for_lambda_offset(
         group_idx=n_groups - 1,
         n_groups=n_groups,
         slot_width=slot_width,
@@ -2202,13 +2199,13 @@ def _delta_vs_topk_metrics_for_k_for_lambda_geometry(
     )
 
 
-def _delta_vs_topk_metrics_for_k_for_lambda_offset(
+def _delta_vs_topk_metrics_k_curves_for_lambda_offset(
     *, group_idx: int, n_groups: int, slot_width: float
 ) -> float:
     return (group_idx - n_groups / 2 + 0.5) * slot_width
 
 
-def _delta_vs_topk_metrics_for_k_for_lambda_footer_layout(
+def _delta_vs_topk_metrics_k_curves_for_lambda_footer_layout(
     lambda_values: list[float],
 ) -> GainOverTopkFooterLayout:
     values_per_line = 35

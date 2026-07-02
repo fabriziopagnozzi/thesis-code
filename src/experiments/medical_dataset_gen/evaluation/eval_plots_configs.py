@@ -26,7 +26,7 @@ type EvalPlotFileName = Literal[
     'diagnostics_at_best_lambda_for_k',
     # -------------------------------------------
     # deltas
-    'delta_vs_topk_metrics_for_k_for_lambda',
+    'delta_vs_topk_metrics_k_curves_for_lambda',
     'delta_vs_topk_metrics_at_best_lambda_for_k',
     # -------------------------------------------
     # profiles at best lambda
@@ -39,6 +39,37 @@ type EvalPlotFileName = Literal[
     # -------------------------------------------
 ]
 EVAL_PLOT_FILE_NAMES = set[EvalPlotFileName](get_args(EvalPlotFileName.__value__))
+
+# Default ordered list of evaluation plots to generate and save in the evaluation stage.
+DEFAULT_ENABLED_EVAL_PLOT_NAMES: list[EvalPlotFileName] = [
+    'metrics_at_best_lambda_for_k',
+    'metrics_k_curves_for_lambda',
+    # 'metrics_heatmap_k_lambda_grid',
+    # 'metrics_heatmap_k_lambda_grid_html',
+    'metrics_distributions',
+    'delta_vs_topk_metrics_k_curves_for_lambda',
+    'delta_vs_topk_metrics_at_best_lambda_for_k',
+    'diagnostics_at_best_lambda_for_k',
+    'diagnostics_k_curves_for_lambda',
+    'profiles_metrics_by_k_at_best_lambda',
+    'profiles_diagnostics_by_k_at_best_lambda',
+    # 'lambda_agreement',
+    # 'metrics_at_agreeing_lambda_wrt_best_lambda',
+    'answer_metrics_at_best_lambda_for_k',
+    'answer_metrics_k_curves_for_lambda',
+]
+
+ANSWER_ROUGE_EVAL_PLOT_FILE_NAMES = {
+    'answer_metrics_at_best_lambda_for_k',
+    'answer_metrics_k_curves_for_lambda',
+}
+
+UNKNOWN_DEFAULT_ENABLED_EVAL_PLOT_NAMES = sorted(
+    set(DEFAULT_ENABLED_EVAL_PLOT_NAMES) - EVAL_PLOT_FILE_NAMES
+)
+if UNKNOWN_DEFAULT_ENABLED_EVAL_PLOT_NAMES:
+    unknown = ', '.join(UNKNOWN_DEFAULT_ENABLED_EVAL_PLOT_NAMES)
+    raise ValueError(f'Unknown default-enabled evaluation plot name(s): {unknown}')
 
 # Shared line colors, labels, and line styles for retrieval strategies across figures.
 STRATEGY_STYLE: dict[str, dict[str, str]] = {
@@ -94,17 +125,22 @@ class PlotGridLayout:
 # - `plot_metrics_heatmap_k_lambda_grid_html(...)` is plotly-based.
 # - `plot_lambda_agreement(...)` depends on lambda counts and shared y-axis behavior.
 DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
-    'metrics_at_best_lambda_for_k': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
+    # -------------------------------------------
+    # Fixed rows/cols layout: adjust configs based on how many metrics you define in
+    'metrics_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.2, 3.4, 1.4),
+    'delta_vs_topk_metrics_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.83, 3.4, 1.4),
+    'answer_metrics_at_best_lambda_for_k': PlotGridLayout(1, 3, 4.2, 3.4, 1.4),
+    'diagnostics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
+    # -------------------------------------------
+    # Dynamically adapted rows/cols based on num of subplots to handle
     'metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
+    'delta_vs_topk_metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 1.0, 2.9, 1.8),
+    'answer_metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     'diagnostics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
-    'metrics_distributions': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
-    'delta_vs_topk_metrics_for_k_for_lambda': PlotGridLayout(1, 1, 1.0, 2.9, 1.8),
-    'delta_vs_topk_metrics_at_best_lambda_for_k': PlotGridLayout(4, 3, 4.83, 3.4, 1.4),
+    # ---
     'profiles_metrics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
     'profiles_diagnostics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
-    'diagnostics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
-    'answer_metrics_at_best_lambda_for_k': PlotGridLayout(1, 3, 4.2, 3.4, 1.4),
-    'answer_metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
+    'metrics_distributions': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
     'lambda_agreement': PlotGridLayout(1, 1, 1.0, 1.0, 1.7),
     'metrics_at_agreeing_lambda_wrt_best_lambda': PlotGridLayout(2, 1, 1.0, 1.0, 1.6),
 }
@@ -115,13 +151,13 @@ PLOTTED_MAIN_METRIC_NAMES = [
     'FacetCoveragePurity@k',
     'AllFacetCleanRate@k',
     'FacetCoverage@k',
-    'MeanFacetRecall@k',
     'Precision@k',
     'Recall@k',
-    'F1@k',
     'alpha-nDCG@k',
-    'AnswerROUGE1F1@k',
-    'AnswerROUGE2Recall@k',
+    # 'MeanFacetRecall@k',
+    # 'F1@k',
+    # 'AnswerROUGE1F1@k',
+    # 'AnswerROUGE2Recall@k',
 ]
 
 # Diagnostic metrics used to explain wins, failures, and retrieval behavior.
@@ -130,18 +166,18 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
     'PrimaryAxisRate',
-    'CalibratedFacetRate',
     'RedundantGoldRate',
     'fac',
     'avg_cos',
     'jac',
+    # 'CalibratedFacetRate',
 ]
 
 # Answer-overlap metrics used only in the auxiliary answer-ROUGE plots.
 PLOTTED_ANSWER_ROUGE_METRIC_NAMES = [
     'AnswerROUGE1Recall@k',
-    'AnswerROUGE1Precision@k',
     'AnswerROUGE2Recall@k',
+    'AnswerROUGE1Precision@k',  # this is too low like emilia said in the 30/06 call, see how to treat it better
 ]
 
 type PlotMetricSpec = tuple[str, str, str, bool]

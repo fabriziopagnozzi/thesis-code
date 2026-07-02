@@ -9,6 +9,8 @@ from typing import cast
 import polars as pl
 
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
+    ANSWER_ROUGE_EVAL_PLOT_FILE_NAMES,
+    DEFAULT_ENABLED_EVAL_PLOT_NAMES,
     EVAL_PLOT_FILE_NAMES,
     EvalPlotCallContext,
     EvalPlotFileName,
@@ -67,9 +69,7 @@ def run_eval_plots(
     selected_job_names = (
         [name for name, _ in plot_jobs if name in selected_plots]
         if selected_plots is not None
-        else [
-            name for name, _ in plot_jobs
-        ]  # default: ALL metrics (except the ROUGE if the cfg.retrieval.compute_answer_rouge is False)
+        else [name for name, _ in plot_jobs]
     )
 
     for plot_name, plot_callable in plot_jobs:
@@ -111,12 +111,10 @@ def build_plot_jobs(
     agreement_df: pl.DataFrame,
     out_dir: Path,
 ) -> list[tuple[EvalPlotFileName, Callable[[], None]]]:
-    sorted_plot_names: list[EvalPlotFileName] = sorted(EVAL_PLOT_FILE_NAMES)
-
     available_plot_names: list[EvalPlotFileName] = [
         plot_name
-        for plot_name in sorted_plot_names
-        if cfg.retrieval.compute_answer_rouge or not plot_name.startswith('answer_rouge_')
+        for plot_name in DEFAULT_ENABLED_EVAL_PLOT_NAMES
+        if cfg.retrieval.compute_answer_rouge or plot_name not in ANSWER_ROUGE_EVAL_PLOT_FILE_NAMES
     ]
     plot_context: EvalPlotCallContext = {
         'stats_df': stats_df,

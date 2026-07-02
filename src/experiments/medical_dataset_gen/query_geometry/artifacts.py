@@ -332,7 +332,9 @@ def build_query_artifact(
         cfg,
         np.vstack([candidate_vectors, query_vector[None, :]]).astype(np.float32),
     )
-    cluster_labels = hdbscan_labels(cfg, cluster_features(cfg, candidate_vectors))
+    cluster_labels: NDArray[np.int32] | None = None
+    if cfg.query_geometry.compute_clusters:
+        cluster_labels = hdbscan_labels(cfg, cluster_features(cfg, candidate_vectors))
 
     return GeometryArtifact(
         query_id=qid,

@@ -311,11 +311,21 @@ def plot_query_overview_4panel(
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
     rank_legend, rank_legend_labels = _draw_facet_family_side_legend(ax_rank, artifact)
 
-    _plot_discovered_clusters_ax(ax_cluster, artifact, include_title_prefix=False)
-    _draw_wrapped_side_legend(ax_cluster)
-    for ax in axes.ravel():
+    if artifact.cluster_labels is not None:
+        _plot_discovered_clusters_ax(ax_cluster, artifact, include_title_prefix=False)
+        _draw_wrapped_side_legend(ax_cluster)
+    else:
+        ax_cluster.set_axis_off()
+    for ax in np.ravel(axes):
         ax.set_box_aspect(1)
-    fig.subplots_adjust(left=0.055, right=0.94, top=0.88, bottom=0.06, wspace=0.78, hspace=0.30)
+    fig.subplots_adjust(
+        left=0.055,
+        right=0.94,
+        top=0.88,
+        bottom=0.06,
+        wspace=0.78,
+        hspace=0.30,
+    )
     _draw_artifact_figure_title(fig, artifact, fontsize=14)
     _style_legend_text(
         map_legend,
@@ -340,9 +350,11 @@ def plot_cluster_quality_overview(stats: pl.DataFrame, out_dir: Path) -> None:
         ('gold_silhouette_cosine', 'Gold-facet silhouette'),
         ('mean_in_facet_similarity', 'Mean in-facet cosine'),
         ('mean_cross_facet_similarity', 'Mean cross-facet cosine'),
-        ('hdbscan_ari_hidden', 'HDBSCAN ARI vs hidden labels'),
-        ('hdbscan_noise_rate', 'HDBSCAN noise rate'),
     ]
+    if 'hdbscan_ari_hidden' in stats.columns:
+        cols.append(('hdbscan_ari_hidden', 'HDBSCAN ARI vs hidden labels'))
+    if 'hdbscan_noise_rate' in stats.columns:
+        cols.append(('hdbscan_noise_rate', 'HDBSCAN noise rate'))
     fig, axes = plt.subplots(1, len(cols), figsize=(4.1 * len(cols), 4.2))
     for ax, (col, title) in zip(axes, cols, strict=True):
         values = stats[col].drop_nulls().to_list() if col in stats.columns else []
@@ -1325,6 +1337,11 @@ def _plot_discovered_clusters_ax(
     include_title_prefix: bool = True,
 ) -> None:
     import matplotlib.pyplot as plt
+
+    if artifact.cluster_labels is None:
+        ax.text(0.5, 0.5, 'cluster computation disabled', ha='center', va='center')
+        ax.set_axis_off()
+        return
 
     coords = artifact.coords
     cluster_labels = artifact.cluster_labels

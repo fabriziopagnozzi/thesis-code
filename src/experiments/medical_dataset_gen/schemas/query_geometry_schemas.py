@@ -88,7 +88,7 @@ class GeometryArtifact(BenchmarkModel):
     roles: list[str]
     is_gold: list[bool]
     facets_by_id: dict[str, str]
-    cluster_labels: NDArray[np.int32]
+    cluster_labels: NDArray[np.int32] | None
     selections: dict[RetrievalStrategy, GeometrySelection]
     selection_variants: dict[RetrievalStrategy, list[GeometrySelection]]
     lambda_values_by_strategy: dict[RetrievalStrategy, list[float]]
