@@ -26,6 +26,11 @@ type ClusterRole = Literal[
 ]
 
 type QueryType = Literal['prioritized_subgroup_comparison']
+type CohortContrastFamily = Literal[
+    'demographic',
+    'comorbidity_present_absent',
+    'distinct_comorbidity',
+]
 
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 
@@ -54,6 +59,7 @@ class QueryOutputRow(TypedDict):
     subgroup_b_id: str
     subgroup_b_label: str
     cohort_contrast_id: str
+    cohort_contrast_family: CohortContrastFamily
     cohort_dimension_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
@@ -196,21 +202,6 @@ type ConditionAxisValues = Annotated[
 ]
 
 
-class ConditionOntology(BenchmarkModel):
-    display: str
-    allowed_comorbidity_contrast_ids: list[str] = Field(default_factory=list)
-    terms: list[str]
-    presentations: list[str]
-    axis_values: dict[ClinicalAxis, ConditionAxisValues]
-
-    @model_validator(mode='after')
-    def _axis_keys_match_payloads(self) -> ConditionOntology:
-        for axis, values in self.axis_values.items():
-            if axis != values.axis:
-                raise ValueError(f'axis_values key {axis!r} does not match payload {values.axis!r}')
-        return self
-
-
 class SubgroupOntology(BenchmarkModel):
     dimension_id: str
     level_id: str
@@ -242,6 +233,30 @@ class CohortContrast(BenchmarkModel):
     dimension_id: str
     cohort_a_id: str
     cohort_b_id: str
+
+
+class DistinctComorbidityContrast(BenchmarkModel):
+    id: str
+    cohort_a_id: str
+    cohort_b_id: str
+
+
+class ConditionOntology(BenchmarkModel):
+    display: str
+    allowed_comorbidity_contrast_ids: list[str] = Field(default_factory=list)
+    allowed_distinct_comorbidity_contrasts: list[DistinctComorbidityContrast] = Field(
+        default_factory=list
+    )
+    terms: list[str]
+    presentations: list[str]
+    axis_values: dict[ClinicalAxis, ConditionAxisValues]
+
+    @model_validator(mode='after')
+    def _axis_keys_match_payloads(self) -> ConditionOntology:
+        for axis, values in self.axis_values.items():
+            if axis != values.axis:
+                raise ValueError(f'axis_values key {axis!r} does not match payload {values.axis!r}')
+        return self
 
 
 class AxisPairProfile(BenchmarkModel):
@@ -359,6 +374,12 @@ class MedicalOntology(BenchmarkModel):
                         f'condition {condition_id!r} allows non-comorbidity present/absent '
                         f'contrast {contrast_id!r}'
                     )
+            _validate_distinct_comorbidity_contrasts(
+                condition_id,
+                condition,
+                self.subgroups,
+                contrast_by_id,
+            )
 
         for contrast in self.cohort_contrasts:
             cohorts = [self.subgroups[contrast.cohort_a_id], self.subgroups[contrast.cohort_b_id]]
@@ -505,6 +526,7 @@ class QueryLogicalForm(BenchmarkModel):
     subgroups: list[str]
     axes: list[ClinicalAxis]
     facets: list[str]
+    cohort_contrast_family: CohortContrastFamily
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
     dominant_primary_facet_id: str
@@ -515,6 +537,7 @@ class QueryLogicalForm(BenchmarkModel):
 class QueryPlanSpec(BenchmarkModel):
     evidence_profile_id: str
     cohort_contrast_id: str
+    cohort_contrast_family: CohortContrastFamily
     cohort_dimension_id: str
     axis_a: ClinicalAxis
     axis_b: ClinicalAxis
@@ -557,6 +580,7 @@ class QueryPlan(BenchmarkModel):
     subgroup_b_level_id: str
     subgroup_b_is_reference: bool
     cohort_contrast_id: str
+    cohort_contrast_family: CohortContrastFamily
     cohort_dimension_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
@@ -611,6 +635,7 @@ class QueryPlan(BenchmarkModel):
             'subgroup_b_id': self.subgroup_b_id,
             'subgroup_b_label': self.subgroup_b_label,
             'cohort_contrast_id': self.cohort_contrast_id,
+            'cohort_contrast_family': self.cohort_contrast_family,
             'cohort_dimension_id': self.cohort_dimension_id,
             'primary_axis': self.primary_axis,
             'secondary_axis': self.secondary_axis,

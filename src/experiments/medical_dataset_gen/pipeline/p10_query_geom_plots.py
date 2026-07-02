@@ -41,7 +41,7 @@ from experiments.medical_dataset_gen.query_geometry.geom_plots import (
 )
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
     GEOM_PLOT_FILE_NAMES,
-    GeomPlotFileName,
+    GeomPlotName,
 )
 from experiments.medical_dataset_gen.query_geometry.geom_worker_handler import (
     get_geom_worker_state,
@@ -92,7 +92,7 @@ _PARENT_EVAL_RESULTS_COLUMNS = [
 def run_query_geom_plots(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
-    selected_plots: set[GeomPlotFileName] | None = None,
+    selected_plots: set[GeomPlotName] | None = None,
 ) -> pl.DataFrame:
     required_paths = [
         paths.table_path('chunk_documents'),
@@ -289,13 +289,13 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
 
 
 def _should_render_plot(
-    selected_plot_names: Container[GeomPlotFileName] | None,
-    plot_name: GeomPlotFileName,
+    selected_plot_names: Container[GeomPlotName] | None,
+    plot_name: GeomPlotName,
 ) -> bool:
     return selected_plot_names is None or plot_name in selected_plot_names
 
 
-def parse_plot_names(raw_value: str | None) -> set[GeomPlotFileName] | None:
+def parse_plot_names(raw_value: str | None) -> set[GeomPlotName] | None:
     if raw_value is None:
         return None
     plot_names: set[str] = {part.strip() for part in raw_value.split(',') if part.strip()}
@@ -309,12 +309,12 @@ def parse_plot_names(raw_value: str | None) -> set[GeomPlotFileName] | None:
             unknown = ', '.join(unknown_plots)
             raise ValueError(f'Unknown plot name(s): {unknown}. Available plots: {available}')
 
-    return cast(set[GeomPlotFileName] | None, plot_names)
+    return cast(set[GeomPlotName] | None, plot_names)
 
 
 def parse_geom_plots_cli_args(
     argv: list[str],
-) -> tuple[ExperimentCfg, set[GeomPlotFileName] | None]:
+) -> tuple[ExperimentCfg, set[GeomPlotName] | None]:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         '--plots',

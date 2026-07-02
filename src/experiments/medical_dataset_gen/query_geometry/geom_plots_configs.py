@@ -1,38 +1,81 @@
-from typing import Literal, get_args
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Final, Literal, get_args
+
+from experiments.medical_dataset_gen.schemas.generation_schemas import ClusterRole
 
 # Canonical geometry-plot names used by the CLI selector and plot dispatch.
-type GeomPlotFileName = Literal[
+type GeomPlotName = Literal[
     'cluster_quality_overview',
     'full_strategy_selection_overlay',
     'query_overview_4panel',
     'strategy_overlay',
 ]
-GEOM_PLOT_FILE_NAMES = set[GeomPlotFileName](get_args(GeomPlotFileName.__value__))
+GEOM_PLOT_FILE_NAMES = set[GeomPlotName](get_args(GeomPlotName.__value__))
 
-UNSELECTED_DATA_POINT_COLOR = '#a1a1a1'
 
-BACKGROUND_OUTLIER_LABEL_ID = 'background_clinical_cluster'
-BACKGROUND_OUTLIER_ROLE = 'background_outlier'
-BACKGROUND_OUTLIER_COLOR = '#d62728'
-BACKGROUND_OUTLIER_MAP_MARKER_SIZE = 64
-BACKGROUND_OUTLIER_SIMILARITY_MAP_MARKER_SIZE = 82
-BACKGROUND_OUTLIER_RANK_MARKER_SIZE = 60
-BACKGROUND_OUTLIER_SELECTION_UNSELECTED_MARKER_SIZE = 50
-BACKGROUND_OUTLIER_SELECTION_SELECTED_MARKER_SIZE = 68
+@dataclass(frozen=True, slots=True)
+class GeomPlotsSettings:
+    unselected_data_point_color: str = '#a1a1a1'
 
-QUERY_OVERVIEW_FIGURE_SIZE = (21, 16)
-QUERY_OVERVIEW_LEGEND_WRAP_WIDTH = 70
-QUERY_OVERVIEW_LEGEND_FONT_SIZE = 7
-QUERY_OVERVIEW_LEGEND_BBOX_TO_ANCHOR_X = 1.02
+    background_outlier_label_id: str = 'background_clinical_cluster'
+    background_outlier_role: str = 'background_outlier'
+    background_outlier_color: str = '#d62728'
+    background_outlier_map_marker_size: int = 64
+    background_outlier_similarity_map_marker_size: int = 82
+    background_outlier_rank_marker_size: int = 60
+    background_outlier_selection_unselected_marker_size: int = 50
+    background_outlier_selection_selected_marker_size: int = 68
 
-FULL_STRATEGY_PANEL_SIZE_IN = 5.00
-FULL_STRATEGY_PANEL_GAP_X_IN = 1.00
-FULL_STRATEGY_PANEL_GAP_Y_IN = 1.25
-FULL_STRATEGY_LEFT_MARGIN_IN = 0.50
-FULL_STRATEGY_RIGHT_MARGIN_IN = 0.40
-FULL_STRATEGY_BOTTOM_MARGIN_IN = 0.42
-FULL_STRATEGY_TOP_MARGIN_IN = 0.90
-FULL_STRATEGY_COLORBAR_WIDTH_IN = 0.28
-FULL_STRATEGY_COLORBAR_GAP_IN = 0.16
-FULL_STRATEGY_LEGEND_WIDTH_IN = 4.75
-FULL_STRATEGY_LEGEND_GAP_IN = 0.90
+    full_strategy_panel_size_in: float = 2.50
+    full_strategy_panel_gap_x_in: float = 1.00
+    full_strategy_panel_gap_y_in: float = 1.25
+    full_strategy_left_margin_in: float = 0.50
+    full_strategy_right_margin_in: float = 0.40
+    full_strategy_bottom_margin_in: float = 0.42
+    full_strategy_top_margin_in: float = 0.90
+    full_strategy_colorbar_width_in: float = 0.28
+    full_strategy_colorbar_gap_in: float = 0.16
+    full_strategy_legend_width_in: float = 4.75
+    full_strategy_legend_gap_in: float = 0.90
+    full_strategy_overlay_legend_fontsize: int = 7
+
+    strategy_overlay_legend_fontsize: int = 5
+
+    query_overview_figure_size: tuple[int, int] = (14, 14)
+    query_overview_legend_wrap_width: int = 60
+    query_overview_legend_font_size: int = 10
+    query_overview_legend_bbox_to_anchor_x: float = 1.00
+    query_title_condition_color: str = '#9C7A00'
+    query_title_subgroup_color: str = '#7B2CBF'
+    query_title_axis_color: str = '#2D6A4F'
+
+    legend_match_color: str = 'black'
+    legend_non_match_color: str = '#9A9A9A'
+    legend_child_indent: str = '     '
+    legend_header_label: str = 'Primary Condition / Subgroup / Clinical Axis\n'
+    background_outlier_legend_prefix: str = 'background outlier: '
+    distractor_mix_legend_prefix: str = '__distractor_mix__:'
+    background_outlier_mix_legend_prefix: str = '__background_outlier_mix__:'
+    background_outlier_legend_color: str = '#4A4A4A'
+
+    gold_facet_role_labels: dict[ClusterRole, str] = field(
+        default_factory=lambda: dict({
+            'dominant_primary_gold': 'Dominant primary',
+            'primary_gold': 'Other primary',
+            'secondary_gold': 'Secondary',
+            'niche_gold': 'Niche',
+        })
+    )
+    gold_facet_role_order: dict[ClusterRole, int] = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            'gold_facet_role_order',
+            dict({role: index for index, role in enumerate(self.gold_facet_role_labels)}),
+        )
+
+
+SETTINGS: Final = GeomPlotsSettings()

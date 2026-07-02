@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotName
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ChunkPoolScope,
@@ -36,6 +36,7 @@ class GeometryQueryRecord:
     primary_axis: str
     secondary_axis: str
     facets_json: str | None = None
+    query_text: str = ''
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,4 +236,4 @@ class EmbeddingGeometryWorkerState(TypedDict):
     query_group_by_id: dict[str, str]
     query_dir_name_by_id: dict[str, str]
     k_values: list[int]
-    selected_plot_names: Container[GeomPlotFileName] | None
+    selected_plot_names: Container[GeomPlotName] | None

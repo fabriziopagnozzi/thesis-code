@@ -14,7 +14,7 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     load_embedding_arrays_mmap_ids,
 )
 from experiments.medical_dataset_gen.query_geometry.artifacts import build_best_lambda_maps
-from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotFileName
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotName
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
 )
@@ -41,6 +41,7 @@ _QUERY_COLUMNS = [
     'primary_axis',
     'secondary_axis',
     'facets_json',
+    'query_text',
 ]
 _CHUNK_COLUMNS = [
     'chunk_id',
@@ -118,7 +119,7 @@ def init_query_geometry_worker(
     out_dir: str,
     query_group_by_id: dict[str, str],
     query_dir_name_by_id: dict[str, str],
-    selected_plot_names: Container[GeomPlotFileName] | None,
+    selected_plot_names: Container[GeomPlotName] | None,
 ) -> None:
     os.environ.setdefault('MPLBACKEND', 'Agg')
     paths = MedicalDatasetGenPaths(exp_name, result_dir_overrides=cfg.global_.result_dir_overrides)
@@ -233,6 +234,7 @@ def build_lightweight_geometry_query_map(queries: pl.DataFrame) -> dict[str, Geo
             primary_axis=str(row['primary_axis']),
             secondary_axis=str(row['secondary_axis']),
             facets_json=None if row['facets_json'] is None else str(row['facets_json']),
+            query_text=str(row.get('query_text') or ''),
         )
         result[query.query_id] = query
     return result
