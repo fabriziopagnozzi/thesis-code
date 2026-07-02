@@ -42,22 +42,18 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [
-    'CleanFacetF1@k',
-    'MeanFacetHitRate@k',
+    'FacetCoveragePurity@k',
+    'AllFacetCleanRate@k',
+    'FacetCoverage@k',
     'Precision@k',
     'DistractorRate',
     'MeanFacetRecall@k',
     'alpha-nDCG@k',
-    'CFF1',
-    'FC',
-    'GP',
-    'DR',
-    'WFC',
-    'alpha_nDCG',
 ]
-_STATS_BEST_DESC = [True, True, True, False, True, True, True, True, False, True, True, True]
+_STATS_BEST_DESC = [True, True, True, True, False, True, True]
 _QUERY_BEST_SORT = [
-    'clean_facet_f1',
+    'facet_coverage_purity',
+    'all_facet_clean',
     'facet_coverage',
     'gold_precision',
     'distractor_rate',
@@ -65,7 +61,7 @@ _QUERY_BEST_SORT = [
     'alpha_ndcg',
     'gold_recall',
 ]
-_QUERY_BEST_DESC = [True, True, True, False, True, True, True]
+_QUERY_BEST_DESC = [True, True, True, True, False, True, True, True]
 
 _QUERY_SELECTION_SORT = [
     'selection_score',
@@ -167,7 +163,8 @@ def ranked_queries_for_query_geometry(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base.with_columns(
+        base
+        .with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -198,7 +195,8 @@ def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[s
     n_best, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
     best_ids = ranked['query_id'].head(n_best).to_list()
     bad_ids = (
-        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
+        ranked
+        .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
         .head(n_bad)
         .to_list()
     )
@@ -255,7 +253,8 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
             sort_cols.append('alpha_ndcg')
             descending.append(True)
         best = (
-            sub.group_by('query_id', 'lam')
+            sub
+            .group_by('query_id', 'lam')
             .agg(agg_exprs)
             .sort(sort_cols, descending=descending)
             .group_by('query_id')
@@ -633,7 +632,8 @@ def _first_sorted_lambdas(
         return df
     sort_cols, desc = _available_sort(df, preferred_sort_cols, preferred_sort_desc)
     return (
-        df.sort(
+        df
+        .sort(
             [*group_cols, *sort_cols],
             descending=[False] * len(group_cols) + desc,
         )

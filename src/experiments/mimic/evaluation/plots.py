@@ -874,7 +874,6 @@ def _best_lam_rows(stats_df: pl.DataFrame, strategy: str, k_values: list[int]) -
 
 def _stratum_best_sort(df: pl.DataFrame) -> tuple[list[str], list[bool]]:
     candidates = [
-        ('MeanFacetHitRate@k', True),
         ('FacetCoverage@k', True),
         ('Precision@k', True),
         ('DistractorRate', False),

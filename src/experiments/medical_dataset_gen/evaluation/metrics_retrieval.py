@@ -5,7 +5,6 @@ import numpy as np
 
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     harmonic_mean,
-    harmonic_mean_many,
 )
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     ChunkDocumentRecord,
@@ -25,16 +24,17 @@ def compute_retrieval_metrics(
     all_gold_ids: set[str],
     primary_axis: str,
     calibrated_primary_facet_id: str,
+    all_clean_rate_precision_threshold: float,
 ) -> dict[str, float | int]:
     relevance = _relevance_metrics(selected_chunk_ids, all_gold_ids)
     facet_coverage_metrics = _facet_coverage_metrics(selected_chunk_ids, facet_to_gold)
-    # Keep the benchmark's headline metric symmetric across facet presence,
-    # set purity, and total gold recovery.
-    clean_facet_f1 = harmonic_mean_many([
-        float(facet_coverage_metrics['facet_coverage']),
-        float(relevance['gold_precision']),
-        float(relevance['gold_recall']),
-    ])
+    facet_coverage_purity = float(facet_coverage_metrics['facet_coverage']) * float(
+        relevance['gold_precision']
+    )
+    all_facet_clean = float(
+        float(facet_coverage_metrics['facet_coverage']) == 1.0
+        and float(relevance['gold_precision']) >= all_clean_rate_precision_threshold
+    )
     diversified_ranking = _diversified_ranking_metrics(
         selected_chunk_ids, query_qrels, facet_to_gold, all_gold_ids
     )
@@ -52,7 +52,8 @@ def compute_retrieval_metrics(
     return {
         **relevance,
         **facet_coverage_metrics,
-        'clean_facet_f1': float(clean_facet_f1),
+        'facet_coverage_purity': float(facet_coverage_purity),
+        'all_facet_clean': float(all_facet_clean),
         **diversified_ranking,
         **redundancy,
         'n_unique_hadms': len({row.admission_id for row in selected_rows if row.admission_id}),

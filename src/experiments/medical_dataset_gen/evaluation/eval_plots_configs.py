@@ -52,9 +52,10 @@ FOR_LAMBDA_K_CURVE_MARKER_SIZE = 0.25
 
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {
-    'MeanFacetHitRate@k': 'MeanFacetHitRate@k',
+    'FacetCoverage@k': 'FacetCoverage@k',
     'MeanFacetRecall@k': 'FacetRecall@k',
-    'CleanFacetF1@k': 'CleanFacetF1@k',
+    'FacetCoveragePurity@k': 'FacetCoveragePurity@k',
+    'AllFacetCleanRate@k': 'AllFacetCleanRate@k',
     'Precision@k': 'Precision@k',
     'DistractorRate': 'DistractorRate@k',
     'F1@k': 'F1@k',
@@ -93,12 +94,12 @@ class PlotGridLayout:
 # - `plot_metrics_heatmap_k_lambda_grid_html(...)` is plotly-based.
 # - `plot_lambda_agreement(...)` depends on lambda counts and shared y-axis behavior.
 DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
-    'metrics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
+    'metrics_at_best_lambda_for_k': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
     'metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     'diagnostics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
-    'metrics_distributions': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
+    'metrics_distributions': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
     'delta_vs_topk_metrics_for_k_for_lambda': PlotGridLayout(1, 1, 1.0, 2.9, 1.8),
-    'delta_vs_topk_metrics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.83, 3.4, 1.4),
+    'delta_vs_topk_metrics_at_best_lambda_for_k': PlotGridLayout(4, 3, 4.83, 3.4, 1.4),
     'profiles_metrics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
     'profiles_diagnostics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
     'diagnostics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
@@ -111,8 +112,9 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
 
 # Main benchmark metrics shown in the primary strategy-comparison figures.
 PLOTTED_MAIN_METRIC_NAMES = [
-    'CleanFacetF1@k',
-    'MeanFacetHitRate@k',
+    'FacetCoveragePurity@k',
+    'AllFacetCleanRate@k',
+    'FacetCoverage@k',
     'MeanFacetRecall@k',
     'Precision@k',
     'Recall@k',

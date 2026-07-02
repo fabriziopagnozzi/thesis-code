@@ -7,7 +7,7 @@ import polars as pl
 
 from experiments.medical_dataset_gen.global_config import LambdaSelectionCfg
 
-LAMBDA_SELECTION_MAXIMIZING_METRIC = 'CleanFacetF1@k'
+LAMBDA_SELECTION_MAXIMIZING_METRIC = 'FacetCoveragePurity@k'
 
 LambdaSelectionMetricRow = TypedDict(
     'LambdaSelectionMetricRow',
@@ -20,9 +20,10 @@ LambdaSelectionMetricRow = TypedDict(
         'Recall@k': NotRequired[float],
         'F1@k': NotRequired[float],
         'MAP@k': NotRequired[float],
-        'MeanFacetHitRate@k': NotRequired[float],
+        'FacetCoverage@k': NotRequired[float],
         'MeanFacetRecall@k': NotRequired[float],
-        'CleanFacetF1@k': NotRequired[float],
+        'FacetCoveragePurity@k': NotRequired[float],
+        'AllFacetCleanRate@k': NotRequired[float],
         'FacetMRR@k': NotRequired[float],
         'alpha-nDCG@k': NotRequired[float],
         'AnswerROUGE1Recall@k': NotRequired[float],
@@ -85,7 +86,7 @@ def select_best_lambda_row_frame(
         return None
 
     rows = list(_iter_metric_rows(lambda_df))
-    best_idx = _select_best_by_clean_facet_f1(rows, cfg=cfg)
+    best_idx = _select_best_by_primary_metric(rows, cfg=cfg)
     return lambda_df.slice(best_idx, 1) if best_idx is not None else None
 
 
@@ -102,7 +103,7 @@ def lambda_selection_short_label(cfg: LambdaSelectionCfg) -> str:
     return f'lambda* = argmax {LAMBDA_SELECTION_MAXIMIZING_METRIC} (ties -> {tie_break})'
 
 
-def _select_best_by_clean_facet_f1(
+def _select_best_by_primary_metric(
     rows: list[LambdaSelectionMetricRow],
     *,
     cfg: LambdaSelectionCfg,
@@ -113,8 +114,7 @@ def _select_best_by_clean_facet_f1(
         primary_value = row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC)
         if primary_value is None:
             raise ValueError(
-                'Lambda-selection metric is unavailable: '
-                f'{LAMBDA_SELECTION_MAXIMIZING_METRIC}'
+                f'Lambda-selection metric is unavailable: {LAMBDA_SELECTION_MAXIMIZING_METRIC}'
             )
         lambda_rank = _lambda_tie_break_rank(row, cfg)
         candidate = (

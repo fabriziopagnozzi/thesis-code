@@ -201,9 +201,10 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
     ]
     agg_exprs: list[pl.Expr] = [
         pl.col('query_id').n_unique().alias('n_queries'),
-        pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
+        pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
         pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
-        pl.col('clean_facet_f1').mean().alias('CleanFacetF1@k'),
+        pl.col('facet_coverage_purity').mean().alias('FacetCoveragePurity@k'),
+        pl.col('all_facet_clean').mean().alias('AllFacetCleanRate@k'),
         pl.col('gold_precision').mean().alias('Precision@k'),
         pl.col('gold_recall').mean().alias('Recall@k'),
         pl.col('gold_f1').mean().alias('F1@k'),
@@ -421,6 +422,9 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                         all_gold_ids=query_all_gold,
                         primary_axis=query.primary_axis,
                         calibrated_primary_facet_id=query.calibrated_primary_facet_id,
+                        all_clean_rate_precision_threshold=(
+                            cfg.evaluation.all_clean_rate_precision_threshold
+                        ),
                     ),
                     **(
                         answer_rouge_scorer.score(selected_chunk_ids)
@@ -473,9 +477,10 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('gold_recall').mean().alias('Recall@k'),
         pl.col('gold_f1').mean().alias('F1@k'),
         pl.col('average_precision_at_k').mean().alias('MAP@k'),
-        pl.col('facet_coverage').mean().alias('MeanFacetHitRate@k'),
+        pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
         pl.col('weighted_facet_coverage').mean().alias('MeanFacetRecall@k'),
-        pl.col('clean_facet_f1').mean().alias('CleanFacetF1@k'),
+        pl.col('facet_coverage_purity').mean().alias('FacetCoveragePurity@k'),
+        pl.col('all_facet_clean').mean().alias('AllFacetCleanRate@k'),
         pl.col('facet_mrr_at_k').mean().alias('FacetMRR@k'),
         pl.col('alpha_ndcg').mean().alias('alpha-nDCG@k'),
         pl.col('distractor_rate').mean().alias('DistractorRate'),
@@ -512,9 +517,10 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'Recall@k',
         'F1@k',
         'MAP@k',
-        'MeanFacetHitRate@k',
+        'FacetCoverage@k',
         'MeanFacetRecall@k',
-        'CleanFacetF1@k',
+        'FacetCoveragePurity@k',
+        'AllFacetCleanRate@k',
         'FacetMRR@k',
         'alpha-nDCG@k',
         'AnswerROUGE1Recall@k',

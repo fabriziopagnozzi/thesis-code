@@ -1657,7 +1657,7 @@ def _available_metrics(
 
 
 def _main_metric_grid_figure(n_metrics: int) -> tuple[Figure, NDArray[Any]]:
-    """Compatibility wrapper for the standard 3x2 main-metric grid."""
+    """Compatibility wrapper for the standard 4x3 main-metric grid."""
     del n_metrics
     return _grid_figure('metrics_at_best_lambda_for_k', sharex=True)
 

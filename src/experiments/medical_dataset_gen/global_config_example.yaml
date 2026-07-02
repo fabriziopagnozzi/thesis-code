@@ -110,15 +110,16 @@ geometry_filter:
   min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
 
 evaluation:
+  all_clean_rate_precision_threshold: 0.8 # Minimum Precision@k required, with full facet coverage, for AllFacetCleanRate@k.
   lambda_selection:
-    tie_break: lower_lambda # Representative lambda always maximizes CleanFacetF1@k; use this only to break exact ties.
+    tie_break: lower_lambda # Representative lambda always maximizes FacetCoveragePurity@k; use this only to break exact ties.
   fac_loc_mmr_comparison_kernels:
     lambda_max: 0.80 # Ignore near-top-k lambda pairs in the FacLoc/MMR agreement sweep.
     agreement_alpha: 3.0 # Exponent applied to the inverse quality-kernel penalty; larger is more aggressive.
     kernel_floor: 0.05 # Caps the maximum penalty and prevents division by zero.
     pair_aggregation: geometric_mean # How to combine FacLoc and MMR kernel scores into one pair score.
     metrics:
-      - summary_metric: CleanFacetF1@k
+      - summary_metric: FacetCoverage@k
         enabled: true
         weight: 1.0
         target_gain_vs_topk: 0.08 # Soft threshold for "meaningfully better than top-k".

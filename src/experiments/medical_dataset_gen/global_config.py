@@ -18,6 +18,7 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
+    field_validator,
     model_validator,
 )
 
@@ -28,30 +29,9 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ConditionKey,
     PlanCalibrationMode,
 )
+from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 from helpers.dir_paths import ROOT_DIR
 from helpers.embedder import EmbeddingModelName
-
-type SyntheticMedicalDatasetTableName = Literal[
-    'query_plans',
-    'query_plan_calibration',
-    'clinical_facts',
-    'chunk_documents',
-    'chunk_memberships',
-    'queries',
-    'gold_answers',
-    'qrels',
-    'generation_rejects',
-    'embeddings',
-    'geometry_stats',
-    'geometry_slice_stats',
-    'evaluation_results',
-    'evaluation_stats',
-    'evaluation_slice_stats',
-    'lambda_pair_agreement',
-    'query_geometry_points',
-    'query_geometry_stats',
-]
-SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTableName.__value__))
 
 
 class ConfigModel(BaseModel):
@@ -400,13 +380,20 @@ class GeometryFilterCfg(ConfigModel):
 
 
 class MethodsComparisonKernelMetricCfg(ConfigModel):
-    summary_metric: str = 'MeanFacetHitRate@k'
+    summary_metric: str = 'FacetCoverage@k'
     enabled: bool = True
     weight: PositiveFloat = 1.0
     target_gain_vs_topk: float = 0.08
     gain_bandwidth: PositiveFloat = 0.01
     target_lower_bound_vs_topk: float = 0.03
     lower_bound_bandwidth: PositiveFloat = 0.0075
+
+    @field_validator('summary_metric')
+    @classmethod
+    def _validate_summary_metric(cls, value: str) -> str:
+        if value not in METRIC_NAME_TO_FIELD:
+            raise ValueError(f'unknown evaluation summary_metric: {value}')
+        return value
 
 
 type KernelAggregationStrategy = Literal['geometric_mean', 'arithmetic_mean', 'minimum']
@@ -428,50 +415,10 @@ type LambdaSelectionTieBreak = Literal['lower_lambda', 'higher_lambda']
 class LambdaSelectionCfg(ConfigModel):
     tie_break: LambdaSelectionTieBreak = 'lower_lambda'
 
-    @model_validator(mode='before')
-    @classmethod
-    def _drop_deprecated_fields(cls, data: object) -> object:
-        if not isinstance(data, dict):
-            return data
-
-        normalized = dict(data)
-        deprecated_primary_metric = normalized.get('primary_metric')
-        if deprecated_primary_metric not in (None, 'CleanFacetF1@k'):
-            raise ValueError(
-                'evaluation.lambda_selection.primary_metric is deprecated; '
-                'lambda selection now always maximizes CleanFacetF1@k'
-            )
-
-        deprecated_primary_direction = normalized.get('primary_higher_is_better')
-        if deprecated_primary_direction not in (None, True):
-            raise ValueError(
-                'evaluation.lambda_selection.primary_higher_is_better is deprecated; '
-                'CleanFacetF1@k is always maximized'
-            )
-
-        deprecated_metrics = normalized.get('metrics')
-        if deprecated_metrics not in (None, []):
-            enabled_metrics = [
-                metric_cfg.get('metric')
-                for metric_cfg in deprecated_metrics
-                if isinstance(metric_cfg, dict) and metric_cfg.get('enabled', True)
-            ]
-            if enabled_metrics != ['CleanFacetF1@k']:
-                raise ValueError(
-                    'evaluation.lambda_selection.metrics is deprecated; '
-                    'lambda selection now always maximizes CleanFacetF1@k'
-                )
-
-        normalized.pop('primary_metric', None)
-        normalized.pop('primary_higher_is_better', None)
-        normalized.pop('primary_tolerance', None)
-        normalized.pop('missing_metric_policy', None)
-        normalized.pop('metrics', None)
-        return normalized
-
 
 class EvaluationCfg(ConfigModel):
     workers: PositiveInt | None = None
+    all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
     fac_loc_mmr_comparison_kernels: MethodsComparisonKernelsCfg = Field(
         default_factory=MethodsComparisonKernelsCfg
@@ -520,6 +467,31 @@ class ExperimentCfg(ConfigModel):
                 f'({local_pool_size} chunks)'
             )
         return self
+
+
+# Utils ----------------------------------------------------------------------
+
+type SyntheticMedicalDatasetTableName = Literal[
+    'query_plans',
+    'query_plan_calibration',
+    'clinical_facts',
+    'chunk_documents',
+    'chunk_memberships',
+    'queries',
+    'gold_answers',
+    'qrels',
+    'generation_rejects',
+    'embeddings',
+    'geometry_stats',
+    'geometry_slice_stats',
+    'evaluation_results',
+    'evaluation_stats',
+    'evaluation_slice_stats',
+    'lambda_pair_agreement',
+    'query_geometry_points',
+    'query_geometry_stats',
+]
+SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTableName.__value__))
 
 
 class MedicalDatasetGenPaths:
