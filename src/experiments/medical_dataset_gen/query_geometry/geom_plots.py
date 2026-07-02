@@ -47,6 +47,9 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalS
 LEGEND_CHILD_INDENT = '    '
 LEGEND_HEADER_LABEL = 'Primary Condition / Subgroup / Clinical Axis\n'
 BACKGROUND_OUTLIER_LEGEND_PREFIX = 'background outlier: '
+DISTRACTOR_MIX_LEGEND_PREFIX = '__distractor_mix__:'
+BACKGROUND_OUTLIER_MIX_LEGEND_PREFIX = '__background_outlier_mix__:'
+BACKGROUND_OUTLIER_LEGEND_COLOR = '#4A4A4A'
 LEGEND_MATCH_COLOR = 'black'
 LEGEND_NON_MATCH_COLOR = '#9A9A9A'
 QUERY_TITLE_CONDITION_COLOR = '#9C7A00'
@@ -58,9 +61,9 @@ def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     strategy_order: tuple[RetrievalStrategy, ...] = ('top_k', 'mmr', 'fac_loc')
-    strategies = list[RetrievalStrategy]([
-        strategy for strategy in strategy_order if strategy in artifact.selections
-    ])
+    strategies = list[RetrievalStrategy](
+        [strategy for strategy in strategy_order if strategy in artifact.selections]
+    )
     if not strategies:
         return
 
@@ -729,6 +732,10 @@ def _legend_label_fragment_lines(
 
 
 def _display_legend_label_text(label: str) -> str:
+    if label.startswith(DISTRACTOR_MIX_LEGEND_PREFIX):
+        return label.removeprefix(DISTRACTOR_MIX_LEGEND_PREFIX).split(':', maxsplit=1)[1]
+    if label.startswith(BACKGROUND_OUTLIER_MIX_LEGEND_PREFIX):
+        return label.removeprefix(BACKGROUND_OUTLIER_MIX_LEGEND_PREFIX)
     if not label.startswith(BACKGROUND_OUTLIER_LEGEND_PREFIX):
         return label
     without_prefix = label.removeprefix(BACKGROUND_OUTLIER_LEGEND_PREFIX)
@@ -880,12 +887,20 @@ def _ordered_facet_family_legend_entries(
         if facet_label is not None:
             entries.append((facet_label, legend_handles[facet_label]))
             added_labels.add(facet_label)
-        for label in _sorted_distractor_labels(
+        distractor_labels = _sorted_distractor_labels(
             artifact,
             distractor_labels_by_facet_id.get(facet_id, []),
-        ):
-            entries.append((label, legend_handles[label]))
-            added_labels.add(label)
+        )
+        distractor_entry = _distractor_mix_legend_entry(
+            artifact,
+            legend_handles,
+            labels=distractor_labels,
+            facet_id=facet_id,
+        )
+        if distractor_entry is not None:
+            entries.append(distractor_entry)
+            added_labels.add(distractor_entry[0])
+            added_labels.update(distractor_labels)
 
     for label in sorted(gold_label_by_facet_id.values(), key=str.lower):
         if label in added_labels:
@@ -896,23 +911,51 @@ def _ordered_facet_family_legend_entries(
     for facet_id in sorted(distractor_labels_by_facet_id):
         if facet_id in ordered_facet_id_set:
             continue
-        for label in _sorted_distractor_labels(artifact, distractor_labels_by_facet_id[facet_id]):
-            if label in added_labels:
-                continue
-            entries.append((label, legend_handles[label]))
-            added_labels.add(label)
+        distractor_labels = _sorted_distractor_labels(
+            artifact,
+            [
+                label
+                for label in distractor_labels_by_facet_id[facet_id]
+                if label not in added_labels
+            ],
+        )
+        distractor_entry = _distractor_mix_legend_entry(
+            artifact,
+            legend_handles,
+            labels=distractor_labels,
+            facet_id=facet_id,
+        )
+        if distractor_entry is not None:
+            entries.append(distractor_entry)
+            added_labels.add(distractor_entry[0])
+            added_labels.update(distractor_labels)
 
-    for label in sorted(extra_labels, key=str.lower):
-        if label in added_labels:
-            continue
-        entries.append((label, legend_handles[label]))
-        added_labels.add(label)
+    extra_distractor_entry = _distractor_mix_legend_entry(
+        artifact,
+        legend_handles,
+        labels=[
+            label for label in sorted(extra_labels, key=str.lower) if label not in added_labels
+        ],
+        facet_id='unassigned',
+    )
+    if extra_distractor_entry is not None:
+        entries.append(extra_distractor_entry)
+        added_labels.add(extra_distractor_entry[0])
+        added_labels.update(extra_labels)
 
-    for label in _sorted_background_labels(artifact, background_labels):
-        if label in added_labels:
-            continue
-        entries.append((label, legend_handles[label]))
-        added_labels.add(label)
+    background_entry = _background_outlier_mix_legend_entry(
+        artifact,
+        legend_handles,
+        labels=[
+            label
+            for label in _sorted_background_labels(artifact, background_labels)
+            if label not in added_labels
+        ],
+    )
+    if background_entry is not None:
+        entries.append(background_entry)
+        added_labels.add(background_entry[0])
+        added_labels.update(background_labels)
 
     for label, handle in legend_handles.items():
         if label in added_labels:
@@ -951,6 +994,8 @@ def _legend_header_handle() -> Any:
 
 
 def _is_child_legend_label(artifact: GeometryArtifact, label: str) -> bool:
+    if label.startswith(DISTRACTOR_MIX_LEGEND_PREFIX):
+        return True
     idx = _first_index_for_label(artifact, label)
     if idx is None:
         return False
@@ -972,6 +1017,131 @@ def _sorted_background_labels(artifact: GeometryArtifact, labels: list[str]) -> 
         labels,
         key=lambda label: ((_cluster_id_for_label(artifact, label) or label), label.lower()),
     )
+
+
+def _distractor_mix_legend_entry(
+    artifact: GeometryArtifact,
+    legend_handles: dict[str, Any],
+    *,
+    labels: list[str],
+    facet_id: str,
+) -> tuple[str, Any] | None:
+    labels = [label for label in labels if label in legend_handles]
+    if not labels:
+        return None
+    counts_by_type: dict[str, int] = defaultdict(int)
+    label_groups = _label_groups(artifact)
+    for label in labels:
+        first_idx = label_groups[label][0]
+        counts_by_type[_distractor_type_for_index(artifact, first_idx)] += len(label_groups[label])
+    summary = ', '.join(
+        f'{counts_by_type[distractor_type]}[{_distractor_type_change_label(distractor_type)}]'
+        for distractor_type in sorted(counts_by_type, key=_distractor_type_sort_key)
+    )
+    raw_label = f'{DISTRACTOR_MIX_LEGEND_PREFIX}{facet_id}:outliers: {summary}'
+    return raw_label, _x_legend_handle(_handle_color(legend_handles[labels[0]]), raw_label)
+
+
+def _background_outlier_mix_legend_entry(
+    artifact: GeometryArtifact,
+    legend_handles: dict[str, Any],
+    *,
+    labels: list[str],
+) -> tuple[str, Any] | None:
+    labels = [label for label in labels if label in legend_handles]
+    if not labels:
+        return None
+    cluster_sizes_by_type: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    label_groups = _label_groups(artifact)
+    for label in labels:
+        first_idx = label_groups[label][0]
+        distractor_type = _distractor_type_for_index(artifact, first_idx)
+        cluster_id = _cluster_id_for_index(artifact, first_idx) or label
+        cluster_sizes_by_type[distractor_type][cluster_id] += len(label_groups[label])
+    summary_parts = []
+    for distractor_type in sorted(cluster_sizes_by_type, key=_distractor_type_sort_key):
+        cluster_sizes = list(cluster_sizes_by_type[distractor_type].values())
+        change_label = _distractor_type_change_label(distractor_type)
+        if len(cluster_sizes) > 1 and len(set(cluster_sizes)) == 1:
+            summary_parts.append(f'{len(cluster_sizes)}x{cluster_sizes[0]}[{change_label}]')
+        else:
+            summary_parts.append(f'{sum(cluster_sizes)}[{change_label}]')
+    raw_label = (
+        f'{BACKGROUND_OUTLIER_MIX_LEGEND_PREFIX}background outliers: {", ".join(summary_parts)}'
+    )
+    return raw_label, _circled_x_legend_handle(BACKGROUND_OUTLIER_LEGEND_COLOR, raw_label)
+
+
+def _distractor_type_change_label(distractor_type: str) -> str:
+    parts = dict(part.split('_', maxsplit=1) for part in distractor_type.split('__') if '_' in part)
+    changes = []
+    if parts.get('c') == 'diff':
+        changes.append('condition')
+    if parts.get('s') == 'diff':
+        changes.append('subgroup')
+    if parts.get('a') == 'diff':
+        changes.append('axis')
+    elif parts.get('v') == 'diff':
+        changes.append('axis_value_bin')
+    return ', '.join(changes) if changes else distractor_type
+
+
+def _x_legend_handle(color: Any, label: str) -> Any:
+    from matplotlib.lines import Line2D
+
+    return Line2D(
+        [0],
+        [0],
+        marker='x',
+        color=color,
+        linestyle='none',
+        markersize=6,
+        markeredgewidth=1.15,
+        label=label,
+    )
+
+
+def _circled_x_legend_handle(color: Any, label: str) -> Any:
+    from matplotlib.lines import Line2D
+
+    circle = Line2D(
+        [0],
+        [0],
+        marker='o',
+        color=color,
+        markerfacecolor='none',
+        linestyle='none',
+        markersize=6,
+        markeredgewidth=1.0,
+        label=label,
+    )
+    x_marker = Line2D(
+        [0],
+        [0],
+        marker='x',
+        color=color,
+        linestyle='none',
+        markersize=5,
+        markeredgewidth=1.0,
+        label=label,
+    )
+    return (circle, x_marker)
+
+
+def _handle_color(handle: Any) -> Any:
+    if hasattr(handle, 'get_color'):
+        color = handle.get_color()
+        if color is not None:
+            return color
+    if hasattr(handle, 'get_facecolor'):
+        facecolor = handle.get_facecolor()
+        if len(facecolor):
+            return facecolor[0]
+    if hasattr(handle, 'get_edgecolor'):
+        edgecolor = handle.get_edgecolor()
+        if len(edgecolor):
+            return edgecolor[0]
+    return BACKGROUND_OUTLIER_COLOR
 
 
 def _plot_query_map_ax(
@@ -1197,11 +1367,13 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
         for index, facet_id in enumerate(_ordered_facet_ids(artifact))
         if facet_id in gold_label_by_facet_id
     }
-    background_cluster_ids = sorted({
-        _cluster_id_for_index(artifact, indices[0]) or label
-        for label, indices in label_groups.items()
-        if _is_background_outlier_point(artifact, indices[0])
-    })
+    background_cluster_ids = sorted(
+        {
+            _cluster_id_for_index(artifact, indices[0]) or label
+            for label, indices in label_groups.items()
+            if _is_background_outlier_point(artifact, indices[0])
+        }
+    )
     background_cmap = plt.get_cmap('Dark2')  # type: ignore
     background_palette = {
         cluster_id: background_cmap(i % max(1, background_cmap.N))
@@ -1472,12 +1644,14 @@ def _add_axes_in_inches(
     width: float,
     height: float,
 ) -> Any:
-    return fig.add_axes([
-        left / fig_width,
-        bottom / fig_height,
-        width / fig_width,
-        height / fig_height,
-    ])
+    return fig.add_axes(
+        [
+            left / fig_width,
+            bottom / fig_height,
+            width / fig_width,
+            height / fig_height,
+        ]
+    )
 
 
 def _draw_query_marker_at(ax: Any, query_coord: NDArray[np.float32]) -> None:

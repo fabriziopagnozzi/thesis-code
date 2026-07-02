@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-from typing import Literal, get_args
+from typing import Literal, cast, get_args
 
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
@@ -63,7 +63,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGES_SET, default=None)
-    parser.add_argument('--only', choices=PIPELINE_STAGES_SET, default=None)
+    parser.add_argument('--stages', default=None)
     parser.add_argument('--release-llm', type=bool, default=None)
     parser.add_argument('--no-log-tee', action='store_true')
     args, _ = parser.parse_known_args()
@@ -72,17 +72,22 @@ def main() -> None:
 
     paths = paths_for(cfg)
 
-    if args.only:
-        start_idx = _stage_index(args.only)
-        stop_idx = _stage_index(args.only)
+    if args.stages is not None:
+        if args.from_stage or args.to_stage:
+            parser.error('--stages cannot be combined with --from or --to')
+        selected_stages = _parse_stages_arg(parser, args.stages)
     else:
         start_idx = _stage_index(args.from_stage) if args.from_stage else 0
         stop_idx = _stage_index(args.to_stage) if args.to_stage else len(STAGES_TO_FNS_SORTED) - 1
 
-    if stop_idx < start_idx:
-        raise ValueError('--to must be the same as or later than --from')
+        if stop_idx < start_idx:
+            raise ValueError('--to must be the same as or later than --from')
 
-    selected_stages = [name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]
+        selected_stages = [name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]
+    selected_stage_set = set(selected_stages)
+    stages_to_run = [(name, fn) for name, fn in STAGES_TO_FNS_SORTED if name in selected_stage_set]
+    selected_stages = [name for name, _ in stages_to_run]
+
     provenance = PipelineProvenance(cfg=cfg, paths=paths, stages=selected_stages)
     if not args.no_log_tee:
         setup_logging(paths, provenance.run_id)
@@ -90,7 +95,7 @@ def main() -> None:
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
     print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
-    for name, fn in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]:
+    for name, fn in stages_to_run:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
         print(f'\n=== Stage: {name} ===')
@@ -105,6 +110,32 @@ def _stage_index(name: str) -> int:
         if stage_name == name:
             return i
     raise KeyError(name)
+
+
+def _parse_stages_arg(parser: argparse.ArgumentParser, raw_stages: str) -> list[PipelineStage]:
+    stages = [stage.strip() for stage in raw_stages.split(',')]
+    if not stages or any(not stage for stage in stages):
+        parser.error('--stages must be a comma-separated list of stage names')
+
+    invalid_stages = [stage for stage in stages if stage not in PIPELINE_STAGES_SET]
+    if invalid_stages:
+        parser.error(
+            '--stages contains invalid stage name(s): '
+            + ', '.join(invalid_stages)
+            + '. Valid stages: '
+            + ', '.join(name for name, _ in STAGES_TO_FNS_SORTED)
+        )
+
+    seen: set[str] = set()
+    duplicate_stages: list[str] = []
+    for stage in stages:
+        if stage in seen and stage not in duplicate_stages:
+            duplicate_stages.append(stage)
+        seen.add(stage)
+    if duplicate_stages:
+        parser.error('--stages contains duplicate stage name(s): ' + ', '.join(duplicate_stages))
+
+    return [cast(PipelineStage, stage) for stage in stages]
 
 
 def _release_ollama(cfg: ExperimentCfg) -> None:

@@ -19,7 +19,7 @@ The orchestrator in [pipeline/__main__.py](./src/experiments/medical_dataset_gen
 
 - `--to <stage>`
 - `--from <stage>`
-- `--only <stage>`
+- `--stages <stage1,stage2,...>`
 - `--release-llm <bool>`
 - `--no-log-tee`
 
@@ -37,7 +37,7 @@ Example: regenerate only geometry plots from existing artifacts:
 ```bash
 uv run python -m experiments.medical_dataset_gen.pipeline \
   --exp <experiment_name> \
-  --only geom_plots
+  --stages geom_plots
 ```
 
 ## Stage Order

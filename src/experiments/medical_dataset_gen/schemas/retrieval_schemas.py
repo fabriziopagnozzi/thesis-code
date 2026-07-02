@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightQrelRecord
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ClinicalAxis,
@@ -14,6 +13,10 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryType,
     SubgroupAxis,
 )
+
+if TYPE_CHECKING:
+    from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightQrelRecord
+
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
 type ChunkSupport = Literal['positive', 'background_outlier', 'hard_negative']

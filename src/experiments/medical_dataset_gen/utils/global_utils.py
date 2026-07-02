@@ -108,6 +108,8 @@ def resolve_experiment_name(
 
 
 def load_config(exp: str | None = None) -> ExperimentCfg:
+    from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+
     exp_name = exp or os.getenv('EXP') or os.getenv('EXP_NAME')
     if exp_name is None:
         raise ValueError(
