@@ -110,7 +110,7 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
                 query_offset = query_end
                 if bool(semantic_gate['passes_semantic_gate']):
                     updated.append(
-                        _with_calibrated_query(
+                        _with_dominant_primary_query(
                             cfg,
                             plan,
                             selected_facet_id=selected_facet_id,
@@ -181,17 +181,19 @@ def _select_calibration(
             start, end = offsets[facet.facet_id]
             values = similarities[start:end]
             p25, median, p75 = np.percentile(values, [25, 50, 75])
-            facet_stats.append({
-                'facet_id': facet.facet_id,
-                'subgroup_id': facet.subgroup_id,
-                'axis': facet.axis,
-                'value_bin': facet.value_bin,
-                'priority': facet.priority,
-                'mean_query_sim': float(values.mean()),
-                'p25_query_sim': float(p25),
-                'median_query_sim': float(median),
-                'p75_query_sim': float(p75),
-            })
+            facet_stats.append(
+                {
+                    'facet_id': facet.facet_id,
+                    'subgroup_id': facet.subgroup_id,
+                    'axis': facet.axis,
+                    'value_bin': facet.value_bin,
+                    'priority': facet.priority,
+                    'mean_query_sim': float(values.mean()),
+                    'p25_query_sim': float(p25),
+                    'median_query_sim': float(median),
+                    'p75_query_sim': float(p75),
+                }
+            )
         primary_stats = [row for row in facet_stats if row['priority'] == 'primary']
         secondary_stats = [row for row in facet_stats if row['priority'] == 'secondary']
         primary_axis_margin = min(float(row['p25_query_sim']) for row in primary_stats) - max(
@@ -200,15 +202,17 @@ def _select_calibration(
         primary_cohort_mean_gap = abs(
             float(primary_stats[0]['mean_query_sim']) - float(primary_stats[1]['mean_query_sim'])
         )
-        candidate_rows.append({
-            'template_id': template_id,
-            'template_index': template_index,
-            'primary_axis_probe_margin': primary_axis_margin,
-            'primary_cohort_mean_gap': primary_cohort_mean_gap,
-            'secondary_mean_query_sim': float(
-                np.mean([float(row['mean_query_sim']) for row in secondary_stats])
-            ),
-        })
+        candidate_rows.append(
+            {
+                'template_id': template_id,
+                'template_index': template_index,
+                'primary_axis_probe_margin': primary_axis_margin,
+                'primary_cohort_mean_gap': primary_cohort_mean_gap,
+                'secondary_mean_query_sim': float(
+                    np.mean([float(row['mean_query_sim']) for row in secondary_stats])
+                ),
+            }
+        )
         candidate_facet_stats.append(facet_stats)
 
     selected_index = max(
@@ -241,9 +245,9 @@ def _select_calibration(
             'secondary_axis': plan.secondary_axis,
             'previous_template_id': plan.template_id,
             'selected_template_id': str(selected_candidate['template_id']),
-            'previous_calibrated_primary_facet_id': plan.calibrated_primary_facet_id,
-            'calibrated_primary_facet_id': str(selected_facet['facet_id']),
-            'calibrated_primary_subgroup_id': str(selected_facet['subgroup_id']),
+            'previous_dominant_primary_facet_id': plan.dominant_primary_facet_id,
+            'dominant_primary_facet_id': str(selected_facet['facet_id']),
+            'dominant_primary_subgroup_id': str(selected_facet['subgroup_id']),
             'probe_chunks_per_facet': probe_n,
             'selected_mean_query_sim': float(selected_facet['mean_query_sim']),
             'selected_probe_margin': primary_cohort_margin,
@@ -382,7 +386,7 @@ def _probe_facet_separation(
     }
 
 
-def _with_calibrated_query(
+def _with_dominant_primary_query(
     cfg: ExperimentCfg,
     plan: QueryPlan,
     *,
@@ -397,14 +401,14 @@ def _with_calibrated_query(
             facet.model_copy(
                 update={
                     'cluster_role': (
-                        'calibrated_primary_gold'
+                        'dominant_primary_gold'
                         if selected
                         else 'primary_gold'
                         if primary
                         else facet.cluster_role
                     ),
                     'target_gold_chunks': (
-                        cfg.generation.chunk_pools.primary_calibrated.size
+                        cfg.generation.chunk_pools.dominant_primary.size
                         if selected
                         else cfg.generation.chunk_pools.other_primary.size
                         if primary
@@ -413,13 +417,11 @@ def _with_calibrated_query(
                 }
             )
         )
-    logical = plan.logical_form.model_copy(
-        update={'calibrated_primary_facet_id': selected_facet_id}
-    )
+    logical = plan.logical_form.model_copy(update={'dominant_primary_facet_id': selected_facet_id})
     return plan.model_copy(
         update={
             'template_id': selected_template_id,
-            'calibrated_primary_facet_id': selected_facet_id,
+            'dominant_primary_facet_id': selected_facet_id,
             'gold_chunks_total': sum(f.target_gold_chunks for f in facets),
             'facets': facets,
             'logical_form': logical,
@@ -435,10 +437,10 @@ def _calibration_row_without_embeddings(plan: QueryPlan) -> dict[str, object]:
         'secondary_axis': plan.secondary_axis,
         'previous_template_id': plan.template_id,
         'selected_template_id': plan.template_id,
-        'previous_calibrated_primary_facet_id': plan.calibrated_primary_facet_id,
-        'calibrated_primary_facet_id': plan.calibrated_primary_facet_id,
-        'calibrated_primary_subgroup_id': next(
-            f.subgroup_id for f in plan.facets if f.facet_id == plan.calibrated_primary_facet_id
+        'previous_dominant_primary_facet_id': plan.dominant_primary_facet_id,
+        'dominant_primary_facet_id': plan.dominant_primary_facet_id,
+        'dominant_primary_subgroup_id': next(
+            f.subgroup_id for f in plan.facets if f.facet_id == plan.dominant_primary_facet_id
         ),
         'probe_chunks_per_facet': 0,
         'selected_mean_query_sim': None,

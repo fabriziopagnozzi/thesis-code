@@ -76,7 +76,7 @@ class LightweightQueryRecord:
     cohort_contrast_id: str
     primary_axis: str
     secondary_axis: str
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
     split: str
     query_text: str = ''
 

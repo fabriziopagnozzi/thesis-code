@@ -211,7 +211,7 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('gold_recall').mean().alias('Recall@k'),
         pl.col('gold_f1').mean().alias('F1@k'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
-        pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
+        pl.col('dominant_facet_rate').mean().alias('DominantFacetRate'),
         pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
     ]
     optional_rouge_exprs = [
@@ -226,8 +226,7 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         if source_col in results.columns
     )
     return (
-        results
-        .group_by(*slice_columns, 'strategy', 'lam', 'k')
+        results.group_by(*slice_columns, 'strategy', 'lam', 'k')
         .agg(agg_exprs)
         .sort(*slice_columns, 'k', 'strategy', 'lam')
     )
@@ -398,48 +397,50 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                 selected_local = selected_indices_list_max_k[:k]
                 selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
 
-                eval_result_rows.append({
-                    'query_id': qid,
-                    'evidence_profile_id': query.evidence_profile_id,
-                    'pool_id': query.pool_id,
-                    'query_type': query.query_type,
-                    'template_id': query.template_id,
-                    'condition_id': query.condition_id,
-                    'cohort_dimension_id': query.cohort_dimension_id,
-                    'cohort_contrast_id': query.cohort_contrast_id,
-                    'primary_axis': query.primary_axis,
-                    'secondary_axis': query.secondary_axis,
-                    'calibrated_primary_facet_id': query.calibrated_primary_facet_id,
-                    'split': query.split,
-                    'strategy': strategy,
-                    'k': k,
-                    'lam': lam,
-                    'pool_scope': cfg.retrieval.pool_scope,
-                    'pool_size': len(candidate_chunk_ids),
-                    **compute_retrieval_metrics(
-                        selected_chunk_ids=selected_chunk_ids,
-                        chunk_by_id=maps['chunk_by_id'],
-                        query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
-                        facet_to_gold=query_facet_gold,
-                        all_gold_ids=query_all_gold,
-                        primary_axis=query.primary_axis,
-                        calibrated_primary_facet_id=query.calibrated_primary_facet_id,
-                        all_clean_rate_precision_threshold=(
-                            cfg.evaluation.all_clean_rate_precision_threshold
+                eval_result_rows.append(
+                    {
+                        'query_id': qid,
+                        'evidence_profile_id': query.evidence_profile_id,
+                        'pool_id': query.pool_id,
+                        'query_type': query.query_type,
+                        'template_id': query.template_id,
+                        'condition_id': query.condition_id,
+                        'cohort_dimension_id': query.cohort_dimension_id,
+                        'cohort_contrast_id': query.cohort_contrast_id,
+                        'primary_axis': query.primary_axis,
+                        'secondary_axis': query.secondary_axis,
+                        'dominant_primary_facet_id': query.dominant_primary_facet_id,
+                        'split': query.split,
+                        'strategy': strategy,
+                        'k': k,
+                        'lam': lam,
+                        'pool_scope': cfg.retrieval.pool_scope,
+                        'pool_size': len(candidate_chunk_ids),
+                        **compute_retrieval_metrics(
+                            selected_chunk_ids=selected_chunk_ids,
+                            chunk_by_id=maps['chunk_by_id'],
+                            query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
+                            facet_to_gold=query_facet_gold,
+                            all_gold_ids=query_all_gold,
+                            primary_axis=query.primary_axis,
+                            dominant_primary_facet_id=query.dominant_primary_facet_id,
+                            all_clean_rate_precision_threshold=(
+                                cfg.evaluation.all_clean_rate_precision_threshold
+                            ),
                         ),
-                    ),
-                    **(
-                        answer_rouge_scorer.score(selected_chunk_ids)
-                        if answer_rouge_scorer is not None
-                        else {}
-                    ),
-                    **compute_retrieval_diagnostics(
-                        selected_local,
-                        sim_to_query,
-                        sim_matrix,
-                        topk_local_indices=topk_full[:k] if strategy != 'top_k' else None,
-                    ),
-                })
+                        **(
+                            answer_rouge_scorer.score(selected_chunk_ids)
+                            if answer_rouge_scorer is not None
+                            else {}
+                        ),
+                        **compute_retrieval_diagnostics(
+                            selected_local,
+                            sim_to_query,
+                            sim_matrix,
+                            topk_local_indices=topk_full[:k] if strategy != 'top_k' else None,
+                        ),
+                    }
+                )
             # end for k in valid_k_values
         # end for lam in lam_values
     # end for strategy in strategies
@@ -489,7 +490,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('near_miss_distractor_rate').mean().alias('NearMissDistractorRate'),
         pl.col('background_outlier_rate').mean().alias('BackgroundOutlierRate'),
         pl.col('primary_axis_rate').mean().alias('PrimaryAxisRate'),
-        pl.col('calibrated_facet_rate').mean().alias('CalibratedFacetRate'),
+        pl.col('dominant_facet_rate').mean().alias('DominantFacetRate'),
         pl.col('redundant_gold_rate').mean().alias('RedundantGoldRate'),
         pl.col('fac_cov_score').mean().alias('fac'),
         pl.col('avg_cos').mean().alias('avg_cos'),
@@ -533,7 +534,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'NearMissDistractorRate',
         'BackgroundOutlierRate',
         'PrimaryAxisRate',
-        'CalibratedFacetRate',
+        'DominantFacetRate',
         'RedundantGoldRate',
         'fac',
         'avg_cos',

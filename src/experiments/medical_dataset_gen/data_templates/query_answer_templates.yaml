@@ -3,10 +3,10 @@ query_templates:
     template: "For patients with {condition}, compare {subgroup_a} and {subgroup_b}. Start by summarizing {primary_axis_label}; for each cohort, identify {primary_axis_focus}. Then add a short {secondary_axis_label} summary for the same two cohorts."
 
   - id: primary_endpoint_assessment
-    template: "In the {condition} records, compare {subgroup_a} with {subgroup_b} with respect to {primary_axis_label}. Separate the cohorts and identify {primary_axis_focus}; include {secondary_axis_label} afterward as context."
+    template: "In the {condition} records, compare {primary_axis_label} for {subgroup_a} versus {subgroup_b}. Separate the cohorts and identify {primary_axis_focus}; include {secondary_axis_label} afterward as context."
 
   - id: primary_clinical_contrast
-    template: "For a cohort summary of {condition}, contrast {subgroup_a} with {subgroup_b} by first summarizing {primary_axis_label}. For each cohort, determine {primary_axis_focus}, and then briefly note the {secondary_axis_label} pattern."
+    template: "For a cohort summary of {condition}, contrast {subgroup_a} versus {subgroup_b} by first summarizing {primary_axis_label}. For each cohort, determine {primary_axis_focus}, and then briefly note the {secondary_axis_label} pattern."
 
   - id: chart_review_focus_then_context
     template: "Review the {condition} cases for {subgroup_a} versus {subgroup_b}. Lead with the {primary_axis_label} findings, including {primary_axis_focus} for each cohort, and use {secondary_axis_label} only as follow-up context."

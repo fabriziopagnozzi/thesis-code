@@ -5,6 +5,10 @@ patient_defaults:
 conditions:
     encephalitis_myelitis:
         display: encephalitis or myelitis
+        allowed_comorbidity_contrast_ids:
+            - immunosuppression_present_vs_absent
+            - malignancy_present_vs_absent
+            - autoimmune_present_vs_absent
         terms:
             - encephalitis
             - myelitis
@@ -134,6 +138,11 @@ conditions:
             - new focal neurologic deficits and inflammatory cerebrospinal fluid findings
     pneumonia:
         display: pneumonia
+        allowed_comorbidity_contrast_ids:
+            - copd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - atrial_fibrillation_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - pneumonia
             - oxygen requirement
@@ -263,6 +272,11 @@ conditions:
             - dyspnea, leukocytosis, and lobar consolidation on imaging
     ischemic_stroke:
         display: ischemic stroke
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - atrial_fibrillation_present_vs_absent
+            - frailty_present_vs_absent
+            - peripheral_vascular_present_vs_absent
         terms:
             - ischemic stroke
             - antiplatelet therapy
@@ -392,6 +406,11 @@ conditions:
             - hemiparesis and imaging evidence of acute infarction
     heart_failure:
         display: acute decompensated heart failure
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - copd_present_vs_absent
+            - atrial_fibrillation_present_vs_absent
         terms:
             - heart failure
             - diuresis
@@ -522,6 +541,10 @@ conditions:
             - worsening orthopnea with increasing lower-extremity edema
     bacterial_meningitis:
         display: bacterial meningitis
+        allowed_comorbidity_contrast_ids:
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - malignancy_present_vs_absent
         terms:
             - bacterial meningitis
             - meningeal inflammation
@@ -651,6 +674,9 @@ conditions:
             - sepsis physiology with meningismus and altered mental status
     multiple_sclerosis_relapse:
         display: multiple sclerosis relapse
+        allowed_comorbidity_contrast_ids:
+            - immunosuppression_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - multiple sclerosis relapse
             - demyelinating flare
@@ -780,6 +806,11 @@ conditions:
             - worsening neurologic symptoms without signs of acute infection
     spinal_epidural_abscess:
         display: spinal epidural abscess
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - peripheral_vascular_present_vs_absent
         terms:
             - spinal epidural abscess
             - back pain
@@ -909,6 +940,10 @@ conditions:
             - back pain with neurologic deficits and elevated inflammatory markers
     pulmonary_embolism:
         display: pulmonary embolism
+        allowed_comorbidity_contrast_ids:
+            - ckd_present_vs_absent
+            - obesity_present_vs_absent
+            - malignancy_present_vs_absent
         terms:
             - pulmonary embolism
             - anticoagulation
@@ -1039,6 +1074,11 @@ conditions:
             - a new oxygen requirement and imaging-confirmed pulmonary embolism
     copd_exacerbation:
         display: acute COPD exacerbation
+        allowed_comorbidity_contrast_ids:
+            - ckd_present_vs_absent
+            - obesity_present_vs_absent
+            - atrial_fibrillation_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - COPD exacerbation
             - bronchodilators
@@ -1168,6 +1208,10 @@ conditions:
             - acute bronchospasm with hypoxemia above baseline oxygen needs
     infective_endocarditis:
         display: infective endocarditis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
         terms:
             - infective endocarditis
             - bacteremia
@@ -1298,6 +1342,11 @@ conditions:
             - positive blood cultures and echocardiographic findings concerning for endocarditis
     osteomyelitis:
         display: osteomyelitis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - peripheral_vascular_present_vs_absent
         terms:
             - osteomyelitis
             - bone infection
@@ -1428,6 +1477,11 @@ conditions:
             - localized swelling and tenderness with suspected osteomyelitis
     pyelonephritis_sepsis:
         display: pyelonephritis with sepsis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - dementia_present_vs_absent
         terms:
             - pyelonephritis
             - urosepsis
@@ -1557,6 +1611,11 @@ conditions:
             - pyelonephritis complicated by bacteremia and systemic inflammatory response
     diabetic_foot_infection:
         display: diabetic foot infection
+        allowed_comorbidity_contrast_ids:
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - obesity_present_vs_absent
+            - peripheral_vascular_present_vs_absent
         terms:
             - diabetic foot infection
             - wound care
@@ -1687,6 +1746,11 @@ conditions:
             - progressive foot erythema, pain, and wound-care complexity
     cirrhosis_encephalopathy:
         display: cirrhosis with hepatic encephalopathy
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - malignancy_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - hepatic encephalopathy
             - cirrhosis
@@ -1816,6 +1880,10 @@ conditions:
             - worsening mentation in the setting of chronic liver disease
     lupus_nephritis:
         display: lupus nephritis flare
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
         terms:
             - lupus nephritis
             - immune-mediated kidney injury
@@ -1946,6 +2014,11 @@ conditions:
             - nephritic urine findings and volume overload during lupus flare
     severe_cellulitis:
         display: severe cellulitis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - obesity_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - peripheral_vascular_present_vs_absent
         terms:
             - cellulitis
             - soft tissue infection
@@ -2075,6 +2148,9 @@ conditions:
             - cellulitis with fever, leukocytosis, and impaired ambulation
     ulcerative_colitis_flare:
         display: ulcerative colitis flare
+        allowed_comorbidity_contrast_ids:
+            - immunosuppression_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - ulcerative colitis flare
             - bloody diarrhea
@@ -2205,6 +2281,11 @@ conditions:
             - frequent bloody stools, cramping, and worsening inflammatory bowel disease activity
     acute_pancreatitis:
         display: acute pancreatitis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - obesity_present_vs_absent
+            - liver_disease_present_vs_absent
         terms:
             - acute pancreatitis
             - lipase elevation
@@ -2334,6 +2415,11 @@ conditions:
             - pancreatitis with nausea, poor oral intake, and systemic inflammatory response
     acute_cholecystitis:
         display: acute cholecystitis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - obesity_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - acute cholecystitis
             - right upper quadrant pain
@@ -2463,6 +2549,11 @@ conditions:
             - abdominal pain with vomiting and a positive sonographic Murphy sign
     complicated_diverticulitis:
         display: complicated diverticulitis
+        allowed_comorbidity_contrast_ids:
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - malignancy_present_vs_absent
+            - frailty_present_vs_absent
         terms:
             - complicated diverticulitis
             - left lower quadrant pain
@@ -2592,6 +2683,11 @@ conditions:
             - abdominal pain with ileus, inflammatory markers, and concern for complicated diverticulitis
     upper_gastrointestinal_bleeding:
         display: upper gastrointestinal bleeding
+        allowed_comorbidity_contrast_ids:
+            - ckd_present_vs_absent
+            - malignancy_present_vs_absent
+            - atrial_fibrillation_present_vs_absent
+            - liver_disease_present_vs_absent
         terms:
             - upper gastrointestinal bleeding
             - melena
@@ -2721,6 +2817,11 @@ conditions:
             - black stools, weakness, and concern for upper gastrointestinal hemorrhage
     septic_arthritis:
         display: septic arthritis
+        allowed_comorbidity_contrast_ids:
+            - diabetes_present_vs_absent
+            - ckd_present_vs_absent
+            - immunosuppression_present_vs_absent
+            - autoimmune_present_vs_absent
         terms:
             - septic arthritis
             - joint infection

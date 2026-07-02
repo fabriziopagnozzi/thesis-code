@@ -118,7 +118,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
         query_qrels = qrels_by_query_chunk.get(qid, {})
         if not query_facets:
             continue
-        calibrated_facet_id = query.calibrated_primary_facet_id
+        dominant_facet_id = query.dominant_primary_facet_id
         facet_meta = {
             str(facet['facet_id']): (str(facet['subgroup_id']), str(facet['axis']))
             for facet in json.loads(query.facets_json or '[]')
@@ -132,7 +132,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
             query_facets=query_facets,
-            calibrated_facet_id=calibrated_facet_id,
+            dominant_facet_id=dominant_facet_id,
             primary_axis=query.primary_axis,
             k_values=diagnostic_k_values,
         )
@@ -148,7 +148,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             k=primary_k,
         )
         n_topk_retrieved_facets = len(topk_retrieved_facets)
-        calibrated_topk_count = int(primary_topk['calibrated_primary_count'])
+        dominant_primary_topk_count = int(primary_topk['dominant_primary_count'])
         primary_axis_topk_count = int(primary_topk['primary_axis_count'])
         all_facet_rank = _rank_where_all_facets_first_covered(
             topn_chunk_ids=topn_chunk_ids,
@@ -219,9 +219,9 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'n_facets_present': n_facets_present,
                 'all_facets_present': n_facets_present == len(query_facets),
                 'topk_dominant_count': topk_dominant,
-                'calibrated_primary_facet_id': calibrated_facet_id,
-                'calibrated_primary_topk_count': calibrated_topk_count,
-                'calibrated_primary_topk_fraction': primary_topk['calibrated_primary_fraction'],
+                'dominant_primary_facet_id': dominant_facet_id,
+                'dominant_primary_topk_count': dominant_primary_topk_count,
+                'dominant_primary_topk_fraction': primary_topk['dominant_primary_fraction'],
                 'primary_axis': query.primary_axis,
                 'secondary_axis': query.secondary_axis,
                 'primary_axis_topk_count': primary_axis_topk_count,
@@ -250,8 +250,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)
     slice_stats = (
-        df
-        .group_by(
+        df.group_by(
             'condition_id',
             'cohort_dimension_id',
             'cohort_contrast_id',
@@ -329,13 +328,15 @@ def _strict_gate_failures(
 
 
 def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
-    return sorted({
-        int(k)
-        for k in [
-            *cfg.retrieval.k_values,
-            cfg.geometry_filter.topk_k,
-        ]
-    })
+    return sorted(
+        {
+            int(k)
+            for k in [
+                *cfg.retrieval.k_values,
+                cfg.geometry_filter.topk_k,
+            ]
+        }
+    )
 
 
 def _topk_diagnostics_by_k(
@@ -343,7 +344,7 @@ def _topk_diagnostics_by_k(
     topn_chunk_ids: list[str],
     query_qrels: QueryIdToQrels,
     query_facets: FacetIdToGoldChunks,
-    calibrated_facet_id: str,
+    dominant_facet_id: str,
     primary_axis: str,
     k_values: list[int],
 ) -> TopKDiagnosticsByK:
@@ -358,7 +359,7 @@ def _topk_diagnostics_by_k(
         n_selected = min(k, len(topn_chunk_ids))
         denominator = max(n_selected, 1)
         most_common_count = counts.most_common(1)[0][1] if counts else 0
-        calibrated_count = counts.get(calibrated_facet_id, 0)
+        dominant_count = counts.get(dominant_facet_id, 0)
         primary_axis_count = sum(
             count
             for facet_id, count in counts.items()
@@ -381,8 +382,8 @@ def _topk_diagnostics_by_k(
             'dominant_fraction': most_common_count / denominator,
             'primary_axis_count': primary_axis_count,
             'primary_axis_fraction': primary_axis_count / denominator,
-            'calibrated_primary_count': calibrated_count,
-            'calibrated_primary_fraction': calibrated_count / denominator,
+            'dominant_primary_count': dominant_count,
+            'dominant_primary_fraction': dominant_count / denominator,
             'n_retrieved_facets': len(retrieved_facets),
             'facet_coverage': len(retrieved_facets) / n_facets if n_facets else 0.0,
             'all_facets_covered': len(retrieved_facets) == n_facets,
@@ -399,8 +400,8 @@ def _flatten_topk_diagnostics(topk_by_k: TopKDiagnosticsByK) -> dict[str, object
         flat[f'{prefix}_dominant_fraction'] = row['dominant_fraction']
         flat[f'{prefix}_primary_axis_count'] = row['primary_axis_count']
         flat[f'{prefix}_primary_axis_fraction'] = row['primary_axis_fraction']
-        flat[f'{prefix}_calibrated_primary_count'] = row['calibrated_primary_count']
-        flat[f'{prefix}_calibrated_primary_fraction'] = row['calibrated_primary_fraction']
+        flat[f'{prefix}_dominant_primary_count'] = row['dominant_primary_count']
+        flat[f'{prefix}_dominant_primary_fraction'] = row['dominant_primary_fraction']
         flat[f'{prefix}_n_retrieved_facets'] = row['n_retrieved_facets']
         flat[f'{prefix}_facet_coverage'] = row['facet_coverage']
         flat[f'{prefix}_all_facets_covered'] = row['all_facets_covered']

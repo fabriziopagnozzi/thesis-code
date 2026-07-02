@@ -36,7 +36,7 @@ _QUERY_COLUMNS = [
     'pool_id',
     'primary_axis',
     'secondary_axis',
-    'calibrated_primary_facet_id',
+    'dominant_primary_facet_id',
     'split',
     'n_facets',
     'facets_json',
@@ -65,7 +65,7 @@ _PLAN_COLUMNS = [
     'pool_id',
     'primary_axis',
     'secondary_axis',
-    'calibrated_primary_facet_id',
+    'dominant_primary_facet_id',
     'n_facets',
     'gold_chunks_total',
     'distractor_chunks',
@@ -79,9 +79,9 @@ _CALIBRATION_COLUMNS = [
     'secondary_axis',
     'previous_template_id',
     'selected_template_id',
-    'previous_calibrated_primary_facet_id',
-    'calibrated_primary_facet_id',
-    'calibrated_primary_subgroup_id',
+    'previous_dominant_primary_facet_id',
+    'dominant_primary_facet_id',
+    'dominant_primary_subgroup_id',
     'probe_chunks_per_facet',
     'selected_mean_query_sim',
     'selected_probe_margin',
@@ -203,6 +203,7 @@ def build_text_diagnostics(
     top_chunk_texts: int,
     representative_chunks_per_label: int,
     max_representative_chunks: int,
+    simple: bool = False,
 ) -> str:
     query_ids = _dedupe(query_ids)
     comparison_query_ids = _dedupe(comparison_query_ids)
@@ -297,6 +298,8 @@ def build_text_diagnostics(
         for query_id in query_ids
         if query_id in present_query_ids and query_id not in comparison_present
     ]
+    if simple:
+        return _render_simple_diagnostics(render_ctx, target_present)
     return _render_diagnostics(render_ctx, target_present, comparison_present)
 
 
@@ -425,6 +428,37 @@ def _render_diagnostics(
     return '\n'.join(lines).rstrip() + '\n'
 
 
+def _render_simple_diagnostics(ctx: _RenderContext, query_ids: list[str]) -> str:
+    lines: list[str] = []
+    for idx, query_id in enumerate(query_ids):
+        if idx > 0:
+            lines.append('')
+        _render_simple_query(lines, ctx, query_id)
+    return '\n'.join(lines).rstrip() + '\n'
+
+
+def _render_simple_query(lines: list[str], ctx: _RenderContext, query_id: str) -> None:
+    query = ctx.queries_by_id[query_id]
+    ranked_rows = _annotated_ranked_rows(ctx, query_id)
+    facet_labels = _facet_labels(_facets(query))
+
+    _h1(lines, f'QUERY {query_id}')
+    lines.append('')
+    lines.append('Query text:')
+    lines.append(str(query.get('query_text') or '').strip())
+
+    _h2(lines, f'Candidate Chunk Texts In Query-Similarity Order ({len(ranked_rows)})')
+    for row in ranked_rows:
+        _render_chunk_text(
+            lines,
+            row,
+            facet_labels,
+            ctx.chunk_text_chars,
+            compact=False,
+            simple=True,
+        )
+
+
 def _render_query(
     lines: list[str],
     ctx: _RenderContext,
@@ -438,8 +472,8 @@ def _render_query(
     ranked_rows = _annotated_ranked_rows(ctx, query_id)
     facets = _facets(query)
     facet_labels = _facet_labels(facets)
-    calibrated_facet_id = str(query.get('calibrated_primary_facet_id') or '')
-    calibrated_target = _calibrated_target_chunks(facets, calibrated_facet_id)
+    dominant_facet_id = str(query.get('dominant_primary_facet_id') or '')
+    dominant_target = _dominant_target_chunks(facets, dominant_facet_id)
 
     _h1(lines, f'{heading_prefix} QUERY {query_id}')
     lines.append('')
@@ -458,8 +492,8 @@ def _render_query(
             ('subgroup_b', query.get('subgroup_b_label')),
             ('primary_axis', query.get('primary_axis')),
             ('secondary_axis', query.get('secondary_axis')),
-            ('calibrated_primary_facet_id', calibrated_facet_id),
-            ('calibrated_primary_target_gold_chunks', calibrated_target),
+            ('dominant_primary_facet_id', dominant_facet_id),
+            ('dominant_primary_target_gold_chunks', dominant_target),
         ],
     )
 
@@ -492,16 +526,16 @@ def _render_query(
                 ('previous_template_id', calibration.get('previous_template_id')),
                 ('selected_template_id', calibration.get('selected_template_id')),
                 (
-                    'previous_calibrated_primary_facet_id',
-                    calibration.get('previous_calibrated_primary_facet_id'),
+                    'previous_dominant_primary_facet_id',
+                    calibration.get('previous_dominant_primary_facet_id'),
                 ),
                 (
-                    'calibrated_primary_facet_id',
-                    calibration.get('calibrated_primary_facet_id'),
+                    'dominant_primary_facet_id',
+                    calibration.get('dominant_primary_facet_id'),
                 ),
                 (
-                    'calibrated_primary_subgroup_id',
-                    calibration.get('calibrated_primary_subgroup_id'),
+                    'dominant_primary_subgroup_id',
+                    calibration.get('dominant_primary_subgroup_id'),
                 ),
                 ('probe_chunks_per_facet', calibration.get('probe_chunks_per_facet')),
                 ('selected_mean_query_sim', calibration.get('selected_mean_query_sim')),
@@ -573,18 +607,18 @@ def _render_query(
         _kv(lines, _plot_stat_items(plot_stats, compact=ctx.detail == 'compact'))
 
     _h2(lines, 'Recomputed Top-K Coverage')
-    coverage_rows = _topk_coverage_rows(ctx, query_id, ranked_rows, facets, calibrated_facet_id)
+    coverage_rows = _topk_coverage_rows(ctx, query_id, ranked_rows, facets, dominant_facet_id)
     _table(
         lines,
         coverage_rows,
         [
             'k',
-            'k_lt_calibrated_target',
+            'k_lt_dominant_target',
             'gold',
             'non_gold',
             'facets_hit',
             'n_facets_hit',
-            'calibrated_facet_count',
+            'dominant_facet_count',
             'top_facet',
             'facet_counts',
             'distractor_counts',
@@ -597,10 +631,10 @@ def _render_query(
         lines,
         [
             ('rank_where_all_gold_facets_first_covered', all_facet_rank),
-            ('calibrated_target_gold_chunks', calibrated_target),
+            ('dominant_target_gold_chunks', dominant_target),
             (
-                'all_facets_covered_before_calibrated_exhausted',
-                _lt(all_facet_rank, calibrated_target),
+                'all_facets_covered_before_dominant_exhausted',
+                _lt(all_facet_rank, dominant_target),
             ),
         ],
     )
@@ -694,9 +728,9 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
             'topk_k',
             'n_facets_present',
             'topk_dominant_count',
-            'calibrated_primary_facet_id',
-            'calibrated_primary_topk_count',
-            'calibrated_primary_topk_fraction',
+            'dominant_primary_facet_id',
+            'dominant_primary_topk_count',
+            'dominant_primary_topk_fraction',
             'primary_axis_topk_count',
             'primary_axis_topk_fraction',
             'n_topk_retrieved_facets',
@@ -727,9 +761,9 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'n_facets_present',
         'all_facets_present',
         'topk_dominant_count',
-        'calibrated_primary_facet_id',
-        'calibrated_primary_topk_count',
-        'calibrated_primary_topk_fraction',
+        'dominant_primary_facet_id',
+        'dominant_primary_topk_count',
+        'dominant_primary_topk_fraction',
         'primary_axis_topk_count',
         'primary_axis_topk_fraction',
         'n_topk_retrieved_facets',
@@ -826,11 +860,11 @@ def _topk_coverage_rows(
     query_id: str,
     ranked_rows: list[dict[str, Any]],
     facets: list[dict[str, Any]],
-    calibrated_facet_id: str,
+    dominant_facet_id: str,
 ) -> list[dict[str, Any]]:
     del query_id
     top_ks = _diagnostic_top_ks(ctx, len(ranked_rows))
-    calibrated_target = _calibrated_target_chunks(facets, calibrated_facet_id)
+    dominant_target = _dominant_target_chunks(facets, dominant_facet_id)
     rows = []
     for k in top_ks:
         selected = ranked_rows[:k]
@@ -843,18 +877,20 @@ def _topk_coverage_rows(
             if not row.get('is_gold')
         )
         top_facet, _top_facet_count = _counter_top(facet_counts)
-        rows.append({
-            'k': k,
-            'k_lt_calibrated_target': _lt(k, calibrated_target),
-            'gold': sum(1 for row in selected if row.get('is_gold')),
-            'non_gold': sum(1 for row in selected if not row.get('is_gold')),
-            'facets_hit': ', '.join(sorted(facet_counts)),
-            'n_facets_hit': len(facet_counts),
-            'calibrated_facet_count': facet_counts.get(calibrated_facet_id, 0),
-            'top_facet': top_facet,
-            'facet_counts': _json(dict(sorted(facet_counts.items()))),
-            'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
-        })
+        rows.append(
+            {
+                'k': k,
+                'k_lt_dominant_target': _lt(k, dominant_target),
+                'gold': sum(1 for row in selected if row.get('is_gold')),
+                'non_gold': sum(1 for row in selected if not row.get('is_gold')),
+                'facets_hit': ', '.join(sorted(facet_counts)),
+                'n_facets_hit': len(facet_counts),
+                'dominant_facet_count': facet_counts.get(dominant_facet_id, 0),
+                'top_facet': top_facet,
+                'facet_counts': _json(dict(sorted(facet_counts.items()))),
+                'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
+            }
+        )
     return rows
 
 
@@ -871,18 +907,20 @@ def _facet_rank_rows(
         facet_rows = by_facet.get(facet_id, [])
         sims = [float(row['sim_to_query']) for row in facet_rows]
         ranks = [int(row['rank']) for row in facet_rows]
-        rows.append({
-            'facet_id': facet_id,
-            'label': _facet_label(facet),
-            'role': facet.get('cluster_role'),
-            'target_gold_chunks': facet.get('target_gold_chunks'),
-            'first_rank': min(ranks) if ranks else None,
-            'first_five_ranks': ', '.join(str(rank) for rank in sorted(ranks)[:5]),
-            'n_in_pool': len(facet_rows),
-            'mean_query_sim': float(np.mean(sims)) if sims else None,
-            'max_query_sim': max(sims) if sims else None,
-            'min_query_sim': min(sims) if sims else None,
-        })
+        rows.append(
+            {
+                'facet_id': facet_id,
+                'label': _facet_label(facet),
+                'role': facet.get('cluster_role'),
+                'target_gold_chunks': facet.get('target_gold_chunks'),
+                'first_rank': min(ranks) if ranks else None,
+                'first_five_ranks': ', '.join(str(rank) for rank in sorted(ranks)[:5]),
+                'n_in_pool': len(facet_rows),
+                'mean_query_sim': float(np.mean(sims)) if sims else None,
+                'max_query_sim': max(sims) if sims else None,
+                'min_query_sim': min(sims) if sims else None,
+            }
+        )
     return rows
 
 
@@ -896,24 +934,25 @@ def _render_composition(lines: list[str], composition_df: pl.DataFrame, *, detai
         ('By label id', ['label_id']),
     ]
     if detail == 'full':
-        groups.extend([
-            ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
-            (
-                'By condition/subgroup/axis/value',
-                ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
-            ),
-            (
-                'By text generation and soft warnings',
-                ['text_generation_source', 'validation_soft_warning_count'],
-            ),
-        ])
+        groups.extend(
+            [
+                ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
+                (
+                    'By condition/subgroup/axis/value',
+                    ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
+                ),
+                (
+                    'By text generation and soft warnings',
+                    ['text_generation_source', 'validation_soft_warning_count'],
+                ),
+            ]
+        )
 
     for title, keys in groups:
         lines.append('')
         lines.append(f'{title}:')
         group = (
-            composition_df
-            .group_by(keys)
+            composition_df.group_by(keys)
             .agg(
                 pl.len().alias('n'),
                 pl.col('rank').min().alias('first_rank'),
@@ -972,18 +1011,20 @@ def _render_embedding_separability(
                 centroids[facet_id] = centroid
         else:
             sims = np.asarray([], dtype=np.float32)
-        per_facet_rows.append({
-            'facet_id': facet_id,
-            'label': _facet_label(facet),
-            'role': facet.get('cluster_role'),
-            'n': len(ids),
-            'mean_query_sim': float(sims.mean()) if len(sims) else None,
-            'max_query_sim': float(sims.max()) if len(sims) else None,
-            'min_query_sim': float(sims.min()) if len(sims) else None,
-            'query_to_centroid': float(centroids[facet_id] @ query_vector)
-            if facet_id in centroids
-            else None,
-        })
+        per_facet_rows.append(
+            {
+                'facet_id': facet_id,
+                'label': _facet_label(facet),
+                'role': facet.get('cluster_role'),
+                'n': len(ids),
+                'mean_query_sim': float(sims.mean()) if len(sims) else None,
+                'max_query_sim': float(sims.max()) if len(sims) else None,
+                'min_query_sim': float(sims.min()) if len(sims) else None,
+                'query_to_centroid': float(centroids[facet_id] @ query_vector)
+                if facet_id in centroids
+                else None,
+            }
+        )
     lines.append('')
     lines.append('Per-facet query similarity:')
     _table(
@@ -1034,11 +1075,13 @@ def _render_selection_snapshot(
     sim_matrix = candidate_vectors @ candidate_vectors.T
     snapshot_ks = [
         value
-        for value in _dedupe([
-            *ctx.cfg.retrieval.k_values,
-            ctx.cfg.query_geometry.plot_k,
-            ctx.cfg.geometry_filter.topk_k,
-        ])
+        for value in _dedupe(
+            [
+                *ctx.cfg.retrieval.k_values,
+                ctx.cfg.query_geometry.plot_k,
+                ctx.cfg.geometry_filter.topk_k,
+            ]
+        )
         if value <= len(ranked_rows)
     ]
     lambdas_by_strategy = _snapshot_lambdas(ctx.cfg)
@@ -1089,25 +1132,26 @@ def _render_selection_snapshot(
 
     if ctx.eval_results.height > 0 and 'query_id' in ctx.eval_results.columns:
         eval_rows = (
-            ctx.eval_results
-            .filter(pl.col('query_id') == query_id)
-            .select([
-                col
-                for col in [
-                    'strategy',
-                    'lam',
-                    'k',
-                    'gold_precision',
-                    'facet_coverage',
-                    'weighted_facet_coverage',
-                    'distractor_rate',
-                    'primary_axis_rate',
-                    'max_facet_concentration',
-                    'avg_cos',
-                    'jaccard_vs_topk',
+            ctx.eval_results.filter(pl.col('query_id') == query_id)
+            .select(
+                [
+                    col
+                    for col in [
+                        'strategy',
+                        'lam',
+                        'k',
+                        'gold_precision',
+                        'facet_coverage',
+                        'weighted_facet_coverage',
+                        'distractor_rate',
+                        'primary_axis_rate',
+                        'max_facet_concentration',
+                        'avg_cos',
+                        'jaccard_vs_topk',
+                    ]
+                    if col in ctx.eval_results.columns
                 ]
-                if col in ctx.eval_results.columns
-            ])
+            )
             .sort(['k', 'strategy', 'lam'])
         )
         if eval_rows.height:
@@ -1158,6 +1202,7 @@ def _render_chunk_text(
     chunk_text_chars: int,
     *,
     compact: bool,
+    simple: bool = False,
 ) -> None:
     lines.append('')
     lines.append(
@@ -1188,6 +1233,24 @@ def _render_chunk_text(
         lines.append('text: ' + text)
         return
 
+    if simple:
+        metadata = [
+            ('cluster_role', row.get('cluster_role')),
+            ('is_gold', row.get('is_gold')),
+            ('condition', row.get('condition_display')),
+            ('subgroup', row.get('subgroup_label')),
+            ('axis', row.get('axis')),
+            ('value_bin', row.get('value_bin')),
+            ('note_style', row.get('note_style')),
+        ]
+        _kv(lines, metadata)
+        text = str(row.get('text') or '').strip()
+        if chunk_text_chars > 0 and len(text) > chunk_text_chars:
+            text = text[:chunk_text_chars].rstrip() + ' ... [truncated]'
+        lines.append('text:')
+        lines.append(text)
+        return
+
     metadata = [
         ('label', _label_for_row(row, facet_labels)),
         ('is_gold', row.get('is_gold')),
@@ -1201,20 +1264,22 @@ def _render_chunk_text(
         ('validation_soft_warning_count', row.get('validation_soft_warning_count')),
     ]
     if not compact:
-        metadata.extend([
-            ('facet_id', row.get('facet_id')),
-            ('target_facet_id', row.get('target_facet_id')),
-            ('cluster_id', row.get('cluster_id')),
-            ('patient_age', row.get('patient_age')),
-            ('patient_sex', row.get('patient_sex')),
-            ('note_style', row.get('note_style')),
-            ('approx_words', row.get('approx_words')),
-            ('text_generation_source', row.get('text_generation_source')),
-            ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
-            ('fact_id', row.get('fact_id')),
-            ('must_mention', row.get('must_mention')),
-            ('must_not_mention', row.get('must_not_mention')),
-        ])
+        metadata.extend(
+            [
+                ('facet_id', row.get('facet_id')),
+                ('target_facet_id', row.get('target_facet_id')),
+                ('cluster_id', row.get('cluster_id')),
+                ('patient_age', row.get('patient_age')),
+                ('patient_sex', row.get('patient_sex')),
+                ('note_style', row.get('note_style')),
+                ('approx_words', row.get('approx_words')),
+                ('text_generation_source', row.get('text_generation_source')),
+                ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
+                ('fact_id', row.get('fact_id')),
+                ('must_mention', row.get('must_mention')),
+                ('must_not_mention', row.get('must_not_mention')),
+            ]
+        )
     _kv(lines, metadata)
     text = str(row.get('text') or '').strip()
     if chunk_text_chars > 0 and len(text) > chunk_text_chars:
@@ -1379,13 +1444,15 @@ def _rank_candidate_pools(
         rows = []
         for rank, local_idx in enumerate(order, start=1):
             chunk_idx = int(candidate_indices[int(local_idx)])
-            rows.append({
-                'rank': rank,
-                'chunk_id': str(idx_to_chunk_id[chunk_idx]),
-                'chunk_idx': chunk_idx,
-                'sim_to_query': float(sims[int(local_idx)]),
-                'candidate_pool_size_before_topn': len(candidate_indices),
-            })
+            rows.append(
+                {
+                    'rank': rank,
+                    'chunk_id': str(idx_to_chunk_id[chunk_idx]),
+                    'chunk_idx': chunk_idx,
+                    'sim_to_query': float(sims[int(local_idx)]),
+                    'candidate_pool_size_before_topn': len(candidate_indices),
+                }
+            )
         ranked[query_id] = rows
     return ranked
 
@@ -1456,9 +1523,9 @@ def _facet_label(facet: dict[str, Any]) -> str:
     return f'{subgroup} / {axis} / {value_bin}'
 
 
-def _calibrated_target_chunks(facets: list[dict[str, Any]], calibrated_facet_id: str) -> int | None:
+def _dominant_target_chunks(facets: list[dict[str, Any]], dominant_facet_id: str) -> int | None:
     for facet in facets:
-        if facet.get('facet_id') == calibrated_facet_id:
+        if facet.get('facet_id') == dominant_facet_id:
             value = facet.get('target_gold_chunks')
             return int(value) if value is not None else None
     return None
@@ -1528,16 +1595,20 @@ def _counter_top(counter: Counter[str]) -> tuple[str | None, int]:
 
 def _snapshot_lambdas(cfg: ExperimentCfg) -> dict[str, list[float]]:
     return {
-        'mmr': _snapshot_lambda_values([
-            float(value)
-            for value in cfg.retrieval.lambda_values_for_strategy('mmr')
-            if value is not None
-        ]),
-        'fac_loc': _snapshot_lambda_values([
-            float(value)
-            for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
-            if value is not None
-        ]),
+        'mmr': _snapshot_lambda_values(
+            [
+                float(value)
+                for value in cfg.retrieval.lambda_values_for_strategy('mmr')
+                if value is not None
+            ]
+        ),
+        'fac_loc': _snapshot_lambda_values(
+            [
+                float(value)
+                for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
+                if value is not None
+            ]
+        ),
     }
 
 
@@ -1661,7 +1732,7 @@ def _kv(lines: list[str], items: list[tuple[str, Any]]) -> None:
 _TABLE_MAX_WIDTHS = {
     'facet_id': 28,
     'target_facet_id': 28,
-    'calibrated_primary_facet_id': 28,
+    'dominant_primary_facet_id': 28,
     'top_facet': 28,
     'label': 42,
     'facet_counts': 50,
@@ -1816,6 +1887,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument('--top-k', action='append', type=int, default=[])
     parser.add_argument('--top-ks', default='')
     parser.add_argument(
+        '--simple',
+        action='store_true',
+        help='Render only query text plus ranked chunk texts and metadata for the requested query ids.',
+    )
+    parser.add_argument(
         '--detail',
         choices=['compact', 'full'],
         default='compact',
@@ -1890,6 +1966,7 @@ if __name__ == '__main__':
         top_chunk_texts=args.top_chunk_texts,
         representative_chunks_per_label=args.representative_chunks_per_label,
         max_representative_chunks=args.max_representative_chunks,
+        simple=args.simple,
     )
 
     out_path = args.out or _default_out_path(paths, requested_query_ids, args.from_plot_group)

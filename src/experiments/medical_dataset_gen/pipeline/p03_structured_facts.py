@@ -126,13 +126,15 @@ def _assert_query_local_chunk_reuse_keys(query_id: str, facts: list[ClinicalFact
             continue
         duplicate_count += 1
         if len(duplicate_examples) < 5:
-            duplicate_examples.append({
-                'chunk_reuse_key': fact.chunk_reuse_key,
-                'previous_fact_id': previous.fact_id,
-                'previous_cluster_id': previous.cluster_id,
-                'fact_id': fact.fact_id,
-                'cluster_id': fact.cluster_id,
-            })
+            duplicate_examples.append(
+                {
+                    'chunk_reuse_key': fact.chunk_reuse_key,
+                    'previous_fact_id': previous.fact_id,
+                    'previous_cluster_id': previous.cluster_id,
+                    'fact_id': fact.fact_id,
+                    'cluster_id': fact.cluster_id,
+                }
+            )
 
     if duplicate_count:
         raise RuntimeError(
@@ -193,8 +195,8 @@ def _local_distractor_config_for_facet(
     chunk_pools: ChunkPoolsCfg,
     facet: QueryPlanFacet,
 ) -> list[DistractorSpec]:
-    if facet.cluster_role == 'calibrated_primary_gold':
-        return chunk_pools.primary_calibrated.distractors
+    if facet.cluster_role == 'dominant_primary_gold':
+        return chunk_pools.dominant_primary.distractors
     if facet.cluster_role == 'primary_gold':
         return chunk_pools.other_primary.distractors
     if facet.cluster_role == 'niche_gold':
@@ -560,7 +562,7 @@ def make_base_fact(
         pool_id=plan.pool_id,
         primary_axis=plan.primary_axis,
         secondary_axis=plan.secondary_axis,
-        calibrated_primary_facet_id=plan.calibrated_primary_facet_id,
+        dominant_primary_facet_id=plan.dominant_primary_facet_id,
         fact_id=fact_id,
         chunk_reuse_key=reuse_key,
         facet_id=support_facet_id,

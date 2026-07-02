@@ -15,8 +15,8 @@ cohort_evidence_templates:
         - "At admission, {subgroup_phrase} was an active comorbidity."
         - "{pronoun_cap} had a history of {subgroup_phrase}."
     comorbidity_reference:
-        - "{pronoun_cap} had {subgroup_phrase}."
-        - "Baseline assessment confirmed {subgroup_phrase}."
+        - "Baseline comorbidity review documented {subgroup_phrase}."
+        - "Admission history noted {subgroup_phrase}."
 
 axis_sentence_templates:
     treatment_duration:

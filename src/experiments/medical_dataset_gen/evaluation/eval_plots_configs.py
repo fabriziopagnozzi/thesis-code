@@ -97,7 +97,7 @@ PLOT_METRIC_TITLES = {
     'NearMissDistractorRate': 'NearMissDistractorRate',
     'BackgroundOutlierRate': 'BackgroundOutlierRate',
     'PrimaryAxisRate': 'PrimaryAxisRate',
-    'CalibratedFacetRate': 'CalibratedFacetRate',
+    'DominantFacetRate': 'DominantFacetRate',
     'RedundantGoldRate': 'RedundantGoldRate',
     'fac': 'Facility-Location Objective',
     'avg_cos': 'Average Query Cosine',
@@ -170,7 +170,7 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
     'fac',
     'avg_cos',
     'jac',
-    # 'CalibratedFacetRate',
+    # 'DominantFacetRate',
 ]
 
 # Answer-overlap metrics used only in the auxiliary answer-ROUGE plots.

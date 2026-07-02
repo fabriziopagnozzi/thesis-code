@@ -37,7 +37,7 @@ _QUERY_COLUMNS = [
     'cohort_contrast_id',
     'primary_axis',
     'secondary_axis',
-    'calibrated_primary_facet_id',
+    'dominant_primary_facet_id',
     'split',
     'query_text',
 ]
@@ -263,7 +263,7 @@ def build_lightweight_query_map(queries: pl.DataFrame) -> dict[str, LightweightQ
             cohort_contrast_id=str(row['cohort_contrast_id']),
             primary_axis=str(row['primary_axis']),
             secondary_axis=str(row['secondary_axis']),
-            calibrated_primary_facet_id=str(row['calibrated_primary_facet_id']),
+            dominant_primary_facet_id=str(row['dominant_primary_facet_id']),
             split=str(row['split']),
             query_text=str(row.get('query_text') or ''),
         )

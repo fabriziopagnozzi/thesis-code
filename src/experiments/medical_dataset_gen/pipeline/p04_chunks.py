@@ -494,8 +494,7 @@ def _write_normalized_chunks(
         return chunk_documents, chunk_memberships
 
     duplicate_text_keys = (
-        chunk_rows
-        .group_by('chunk_reuse_key')
+        chunk_rows.group_by('chunk_reuse_key')
         .agg(pl.col('text').n_unique().alias('n_texts'))
         .filter(pl.col('n_texts') > 1)
     )
@@ -512,8 +511,7 @@ def _write_normalized_chunks(
     }
 
     with_doc_id = chunk_rows.with_columns(
-        pl
-        .col('chunk_reuse_key')
+        pl.col('chunk_reuse_key')
         .replace_strict(doc_key_to_id, return_dtype=pl.String)
         .alias('chunk_id'),
         pl.col('chunk_id').alias('membership_id'),
@@ -556,7 +554,7 @@ def _write_normalized_chunks(
         'pool_id',
         'primary_axis',
         'secondary_axis',
-        'calibrated_primary_facet_id',
+        'dominant_primary_facet_id',
         'fact_id',
         'facet_id',
         'target_facet_id',
@@ -570,18 +568,16 @@ def _write_normalized_chunks(
     ]
 
     chunk_documents = (
-        with_doc_id
-        .select([col for col in doc_cols if col in with_doc_id.columns])
+        with_doc_id.select([col for col in doc_cols if col in with_doc_id.columns])
         .unique(subset=['chunk_id'], keep='first', maintain_order=True)
         .sort('chunk_id')
     )
-    chunk_memberships = with_doc_id.select([
-        col for col in membership_cols if col in with_doc_id.columns
-    ])
+    chunk_memberships = with_doc_id.select(
+        [col for col in membership_cols if col in with_doc_id.columns]
+    )
 
     duplicate_memberships = (
-        chunk_memberships
-        .group_by('query_id', 'chunk_id')
+        chunk_memberships.group_by('query_id', 'chunk_id')
         .agg(pl.len().alias('n'))
         .filter(pl.col('n') > 1)
     )

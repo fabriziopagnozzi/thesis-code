@@ -23,7 +23,7 @@ def compute_retrieval_metrics(
     facet_to_gold: dict[str, list[str]],
     all_gold_ids: set[str],
     primary_axis: str,
-    calibrated_primary_facet_id: str,
+    dominant_primary_facet_id: str,
     all_clean_rate_precision_threshold: float,
 ) -> dict[str, float | int]:
     relevance = _relevance_metrics(selected_chunk_ids, all_gold_ids)
@@ -43,7 +43,7 @@ def compute_retrieval_metrics(
         query_qrels=query_qrels,
         all_gold_ids=all_gold_ids,
         primary_axis=primary_axis,
-        calibrated_primary_facet_id=calibrated_primary_facet_id,
+        dominant_primary_facet_id=dominant_primary_facet_id,
         n_selected_gold=int(relevance['n_selected_gold']),
         n_facet_hits=int(facet_coverage_metrics['n_unique_gold_facets']),
     )
@@ -86,7 +86,7 @@ def _redundancy_metrics(
     query_qrels: Mapping[str, QrelRecord | LightweightQrelRecord],
     all_gold_ids: set[str],
     primary_axis: str,
-    calibrated_primary_facet_id: str,
+    dominant_primary_facet_id: str,
     n_selected_gold: int,
     n_facet_hits: int,
 ) -> dict[str, float | int]:
@@ -122,7 +122,7 @@ def _redundancy_metrics(
         else 0.0
     )
     primary_axis_rate = primary_axis_count / n_selected if n_selected else 0.0
-    calibrated_facet_count = selected_facet_counts.get(calibrated_primary_facet_id, 0)
+    dominant_facet_count = selected_facet_counts.get(dominant_primary_facet_id, 0)
     redundant_gold_count = max(0, n_selected_gold - n_facet_hits)
 
     return {
@@ -132,7 +132,7 @@ def _redundancy_metrics(
         ),
         'background_outlier_rate': background_outlier_count / n_selected if n_selected else 0.0,
         'primary_axis_rate': float(primary_axis_rate),
-        'calibrated_facet_rate': calibrated_facet_count / n_selected if n_selected else 0.0,
+        'dominant_facet_rate': dominant_facet_count / n_selected if n_selected else 0.0,
         'redundant_gold_rate': redundant_gold_count / n_selected if n_selected else 0.0,
         'max_facet_concentration': float(max_facet_concentration),
         'n_selected_non_gold': non_gold_count,
@@ -178,11 +178,13 @@ def _facet_coverage_metrics(
     n_facet_hits = len(facet_hits)
     facet_coverage = n_facet_hits / n_facets if n_facets else 0.0
     mean_facet_recall = (
-        np.mean([
-            len(selected & gold_ids) / len(gold_ids)
-            for gold_ids in facet_gold_sets.values()
-            if gold_ids
-        ])
+        np.mean(
+            [
+                len(selected & gold_ids) / len(gold_ids)
+                for gold_ids in facet_gold_sets.values()
+                if gold_ids
+            ]
+        )
         if facet_gold_sets
         else 0.0
     )

@@ -115,9 +115,9 @@ class GeometryFilterStatsRow(BenchmarkModel):
     n_facets_present: int
     all_facets_present: bool
     topk_dominant_count: int
-    calibrated_primary_facet_id: str
-    calibrated_primary_topk_count: int
-    calibrated_primary_topk_fraction: float
+    dominant_primary_facet_id: str
+    dominant_primary_topk_count: int
+    dominant_primary_topk_fraction: float
     primary_axis: str
     secondary_axis: str
     primary_axis_topk_count: int

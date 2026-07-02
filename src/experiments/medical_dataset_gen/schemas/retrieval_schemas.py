@@ -36,7 +36,7 @@ class QrelRecord(BenchmarkModel):
     pool_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
     chunk_id: str
     fact_id: str | None = None
     facet_id: str | None = None
@@ -66,7 +66,7 @@ class QueryRecord(BenchmarkModel):
     cohort_dimension_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
     facets_json: str | None = None
     query_text: str = ''
 
@@ -96,7 +96,7 @@ class ChunkMembershipRecord(BenchmarkModel):
     pool_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
 
 
 class TopKDiagnostics(TypedDict):
@@ -104,8 +104,8 @@ class TopKDiagnostics(TypedDict):
     dominant_fraction: float
     primary_axis_count: int
     primary_axis_fraction: float
-    calibrated_primary_count: int
-    calibrated_primary_fraction: float
+    dominant_primary_count: int
+    dominant_primary_fraction: float
     n_retrieved_facets: int
     facet_coverage: float
     all_facets_covered: bool

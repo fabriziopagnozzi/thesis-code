@@ -32,7 +32,7 @@ _LAMBDA_PAIR_AGREEMENT_DIAGNOSTIC_METRICS = [
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
     'PrimaryAxisRate',
-    'CalibratedFacetRate',
+    'DominantFacetRate',
     'RedundantGoldRate',
     'fac',
     'avg_cos',
@@ -325,21 +325,23 @@ def _attach_strategy_kernel_columns(
     if paired_df.is_empty():
         return stats_df.with_columns(pl.lit(0.0).alias('kernel_score'))
 
-    summary = paired_df.group_by('k', 'lam').agg(*[
-        expr
-        for result_col in result_cols
-        for expr in (
-            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
-            .mean()
-            .alias(f'mean_delta__{result_col}'),
-            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
-            .std(ddof=1)
-            .alias(f'std_delta__{result_col}'),
-            (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
-            .count()
-            .alias(f'n_delta__{result_col}'),
-        )
-    ])
+    summary = paired_df.group_by('k', 'lam').agg(
+        *[
+            expr
+            for result_col in result_cols
+            for expr in (
+                (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
+                .mean()
+                .alias(f'mean_delta__{result_col}'),
+                (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
+                .std(ddof=1)
+                .alias(f'std_delta__{result_col}'),
+                (pl.col(f'strategy__{result_col}') - pl.col(f'topk__{result_col}'))
+                .count()
+                .alias(f'n_delta__{result_col}'),
+            )
+        ]
+    )
 
     kernel_exprs: list[pl.Expr] = []
     weighted_kernel_sum: pl.Expr | None = None
@@ -349,8 +351,7 @@ def _attach_strategy_kernel_columns(
         gain_expr = pl.col(f'mean_delta__{result_col}') * direction
         count_expr = pl.col(f'n_delta__{result_col}').cast(pl.Float64)
         ci_half_width_expr = (
-            pl
-            .when(count_expr >= 2.0)
+            pl.when(count_expr >= 2.0)
             .then(1.96 * pl.col(f'std_delta__{result_col}') / count_expr.sqrt())
             .otherwise(pl.lit(float('nan')))
         )
@@ -361,11 +362,13 @@ def _attach_strategy_kernel_columns(
             (lower95_expr - float(metric_cfg.target_lower_bound_vs_topk))
             / float(metric_cfg.lower_bound_bandwidth)
         )
-        kernel_exprs.extend([
-            gain_expr.alias(f'gain_vs_topk__{metric_cfg.summary_metric}'),
-            lower95_expr.alias(f'lower95_gain_vs_topk__{metric_cfg.summary_metric}'),
-            kernel_expr.alias(f'kernel__{metric_cfg.summary_metric}'),
-        ])
+        kernel_exprs.extend(
+            [
+                gain_expr.alias(f'gain_vs_topk__{metric_cfg.summary_metric}'),
+                lower95_expr.alias(f'lower95_gain_vs_topk__{metric_cfg.summary_metric}'),
+                kernel_expr.alias(f'kernel__{metric_cfg.summary_metric}'),
+            ]
+        )
         weight = float(metric_cfg.weight)
         weighted_component = kernel_expr * weight
         weighted_kernel_sum = (

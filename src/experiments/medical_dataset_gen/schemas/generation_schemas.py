@@ -17,7 +17,7 @@ type ClinicalAxis = Literal[
 CLINICAL_AXIS_LIST = list[ClinicalAxis](get_args(ClinicalAxis.__value__))
 
 type ClusterRole = Literal[
-    'calibrated_primary_gold',
+    'dominant_primary_gold',
     'primary_gold',
     'secondary_gold',
     'niche_gold',
@@ -57,7 +57,7 @@ class QueryOutputRow(TypedDict):
     cohort_dimension_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
     split: DataSplit
     n_facets: int
     facets_json: str
@@ -198,6 +198,7 @@ type ConditionAxisValues = Annotated[
 
 class ConditionOntology(BenchmarkModel):
     display: str
+    allowed_comorbidity_contrast_ids: list[str] = Field(default_factory=list)
     terms: list[str]
     presentations: list[str]
     axis_values: dict[ClinicalAxis, ConditionAxisValues]
@@ -324,17 +325,47 @@ class MedicalOntology(BenchmarkModel):
     @model_validator(mode='after')
     def _validate_references(self) -> MedicalOntology:
         declared_axes = set(self.clinical_axes)
+        contrast_by_id: dict[str, CohortContrast] = {}
+        for contrast in self.cohort_contrasts:
+            if contrast.id in contrast_by_id:
+                raise ValueError(f'duplicate cohort contrast id: {contrast.id!r}')
+            contrast_by_id[contrast.id] = contrast
+
         for condition_id, condition in self.conditions.items():
             if set(condition.axis_values) != declared_axes:
                 raise ValueError(f'condition {condition_id!r} must define every clinical axis')
             for axis, values in condition.axis_values.items():
                 if set(values.bins) != set(self.clinical_axes[axis].bins):
                     raise ValueError(f'condition {condition_id!r} has incomplete bins for {axis!r}')
+            allowed_ids = condition.allowed_comorbidity_contrast_ids
+            if len(allowed_ids) != len(set(allowed_ids)):
+                raise ValueError(
+                    f'condition {condition_id!r} repeats allowed comorbidity contrast ids'
+                )
+            unknown_allowed = set(allowed_ids) - set(contrast_by_id)
+            if unknown_allowed:
+                unknown = ', '.join(sorted(unknown_allowed))
+                raise ValueError(
+                    f'condition {condition_id!r} allows unknown comorbidity contrasts: {unknown}'
+                )
+            for contrast_id in allowed_ids:
+                contrast = contrast_by_id[contrast_id]
+                cohorts = [
+                    self.subgroups[contrast.cohort_a_id],
+                    self.subgroups[contrast.cohort_b_id],
+                ]
+                if not _is_comorbidity_present_absent_contrast(cohorts):
+                    raise ValueError(
+                        f'condition {condition_id!r} allows non-comorbidity present/absent '
+                        f'contrast {contrast_id!r}'
+                    )
 
         for contrast in self.cohort_contrasts:
             cohorts = [self.subgroups[contrast.cohort_a_id], self.subgroups[contrast.cohort_b_id]]
             if any(cohort.dimension_id != contrast.dimension_id for cohort in cohorts):
                 raise ValueError(f'contrast {contrast.id!r} mixes cohort dimensions')
+
+        _validate_absent_subgroup_surface_forms(self.subgroups)
 
         declared_pairs = {frozenset(pair.axes) for pair in self.axis_pairs}
         expected_pairs = {frozenset(pair) for pair in combinations(declared_axes, 2)}
@@ -362,6 +393,95 @@ class MedicalOntology(BenchmarkModel):
         return self
 
 
+_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset(
+    {
+        'complicated',
+        'metastatic',
+        'mild',
+        'uncomplicated',
+    }
+)
+
+
+def _is_comorbidity_present_absent_contrast(cohorts: list[SubgroupOntology]) -> bool:
+    if len(cohorts) != 2:
+        return False
+    if any(cohort.axis != 'comorbidity' for cohort in cohorts):
+        return False
+    return {cohort.level_id for cohort in cohorts} == {'present', 'absent'}
+
+
+def _validate_absent_subgroup_surface_forms(subgroups: dict[SubgroupKey, SubgroupOntology]) -> None:
+    subgroups_by_dimension: dict[str, list[SubgroupOntology]] = {}
+    for subgroup in subgroups.values():
+        subgroups_by_dimension.setdefault(subgroup.dimension_id, []).append(subgroup)
+
+    for dimension_id, dimension_subgroups in subgroups_by_dimension.items():
+        present_terms = [
+            term
+            for subgroup in dimension_subgroups
+            if subgroup.axis == 'comorbidity' and subgroup.level_id == 'present'
+            for term in _negative_subtype_banned_terms(subgroup)
+        ]
+        if not present_terms:
+            continue
+        for subgroup in dimension_subgroups:
+            if subgroup.axis != 'comorbidity' or subgroup.level_id != 'absent':
+                continue
+            for form in _subgroup_human_forms(subgroup):
+                normalized = _normalize_subgroup_text(form)
+                if not _looks_like_negative_subgroup_form(normalized):
+                    continue
+                matched = next((term for term in present_terms if term in normalized), None)
+                if matched is not None:
+                    raise ValueError(
+                        f'absent subgroup for {dimension_id!r} uses negative subtype wording: '
+                        f'{form!r}; use the broad category instead'
+                    )
+
+
+def _negative_subtype_banned_terms(subgroup: SubgroupOntology) -> list[str]:
+    terms: list[str] = []
+    for form in _subgroup_human_forms(subgroup):
+        term = _positive_subgroup_core_term(form)
+        if term is None:
+            continue
+        first_word = term.split(maxsplit=1)[0]
+        if first_word in _BANNED_NEGATIVE_SUBTYPE_MODIFIERS or ' without ' in f' {term} ':
+            terms.append(term)
+    return terms
+
+
+def _subgroup_human_forms(subgroup: SubgroupOntology) -> list[str]:
+    return [subgroup.label, *subgroup.aliases, *subgroup.surface_phrases]
+
+
+def _positive_subgroup_core_term(text: str) -> str | None:
+    normalized = _normalize_subgroup_text(text)
+    prefixes = (
+        'patients with ',
+        'patient with ',
+        'with ',
+        'history of ',
+    )
+    for prefix in prefixes:
+        if normalized.startswith(prefix):
+            return normalized.removeprefix(prefix).strip()
+    return normalized or None
+
+
+def _looks_like_negative_subgroup_form(text: str) -> bool:
+    return (
+        text.startswith(('no ', 'without ', 'patients without ', 'patient without '))
+        or ' no ' in f' {text} '
+        or ' without ' in f' {text} '
+    )
+
+
+def _normalize_subgroup_text(text: str) -> str:
+    return ' '.join(str(text).casefold().replace('-', ' ').split())
+
+
 class QueryPlanFacet(BenchmarkModel):
     facet_id: str
     condition_id: ConditionKey
@@ -387,7 +507,7 @@ class QueryLogicalForm(BenchmarkModel):
     facets: list[str]
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
 
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
@@ -440,7 +560,7 @@ class QueryPlan(BenchmarkModel):
     cohort_dimension_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
     n_facets: int
     gold_chunks_total: int
     distractor_chunks: int
@@ -494,7 +614,7 @@ class QueryPlan(BenchmarkModel):
             'cohort_dimension_id': self.cohort_dimension_id,
             'primary_axis': self.primary_axis,
             'secondary_axis': self.secondary_axis,
-            'calibrated_primary_facet_id': self.calibrated_primary_facet_id,
+            'dominant_primary_facet_id': self.dominant_primary_facet_id,
             'split': self.split,
             'n_facets': self.n_facets,
             'facets_json': facets_json,
@@ -532,7 +652,7 @@ class ClinicalFact(BenchmarkModel):
     pool_id: str
     primary_axis: ClinicalAxis
     secondary_axis: ClinicalAxis
-    calibrated_primary_facet_id: str
+    dominant_primary_facet_id: str
     fact_id: str
     chunk_reuse_key: str
     facet_id: str | None

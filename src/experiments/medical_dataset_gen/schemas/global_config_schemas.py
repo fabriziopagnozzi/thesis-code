@@ -143,7 +143,7 @@ class ChunkPoolsCfg(ConfigModel):
     chunk_max_words: PositiveInt = 90
     chunk_word_tolerance: PositiveInt = 2
 
-    primary_calibrated: LocalChunkPoolCfg = Field(
+    dominant_primary: LocalChunkPoolCfg = Field(
         default_factory=lambda: LocalChunkPoolCfg(
             size=24,
             distractors=[
@@ -191,7 +191,7 @@ class ChunkPoolsCfg(ConfigModel):
 
     def gold_chunks_per_query(self) -> int:
         return (
-            self.primary_calibrated.size
+            self.dominant_primary.size
             + self.other_primary.size
             + (2 - self.niche.num_clusters_per_query) * self.secondary.size
             + self.niche.num_clusters_per_query * self.niche.size
@@ -199,7 +199,7 @@ class ChunkPoolsCfg(ConfigModel):
 
     def point_distractor_chunks_per_query(self) -> int:
         return (
-            self.primary_calibrated.total_distractor_chunks()
+            self.dominant_primary.total_distractor_chunks()
             + self.other_primary.total_distractor_chunks()
             + (2 - self.niche.num_clusters_per_query) * self.secondary.total_distractor_chunks()
             + self.niche.num_clusters_per_query * self.niche.total_distractor_chunks()
@@ -425,7 +425,7 @@ class QueryGeometryCfg(ConfigModel):
     query_selection: Literal['mixed', 'best'] = 'mixed'
     candidate_pool_n: PositiveInt | None = None
     plot_k: PositiveInt = 10
-    compute_clusters: bool = True
+    compute_clusters: bool = False
     reduction: Literal['umap', 'pca'] = 'umap'
     pca_dims: PositiveInt | None = None
     umap_metric: Literal['cosine', 'euclidean'] = 'cosine'

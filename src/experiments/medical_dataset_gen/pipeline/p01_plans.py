@@ -16,7 +16,7 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axis_pair_profiles,
     get_selected_conditions,
     load_ontology,
-    make_subgroup_pairs,
+    make_subgroup_pairs_for_condition,
     resolve_axis_pair_generation_policy,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
@@ -50,13 +50,13 @@ QUERY_TYPE: QueryType = 'prioritized_subgroup_comparison'
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     conditions = get_selected_conditions(ontology, cfg.global_.conditions)
-    contrasts = make_subgroup_pairs(ontology)
     axis_pairs = list(combinations(CLINICAL_AXIS_LIST, 2))
     specs: list[QueryPlanSpec] = []
     plans: list[QueryPlan] = []
     next_query_number = 1
 
     for condition_key, condition in conditions:
+        contrasts = make_subgroup_pairs_for_condition(ontology, condition_key)
         for contrast, (cohort_a_id, cohort_a), (cohort_b_id, cohort_b) in contrasts:
             for axis_a, axis_b in axis_pairs:
                 policy = resolve_axis_pair_generation_policy(
@@ -100,24 +100,26 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     )
                     specs.append(spec)
                     if len(primary_axes) == 2:
-                        plans.extend((
-                            _materialize_plan(
-                                cfg,
-                                ontology,
-                                spec,
-                                axis_a,
-                                axis_b,
-                                query_id=f'q{next_query_number}',
-                            ),
-                            _materialize_plan(
-                                cfg,
-                                ontology,
-                                spec,
-                                axis_b,
-                                axis_a,
-                                query_id=f'q{next_query_number + 1}',
-                            ),
-                        ))
+                        plans.extend(
+                            (
+                                _materialize_plan(
+                                    cfg,
+                                    ontology,
+                                    spec,
+                                    axis_a,
+                                    axis_b,
+                                    query_id=f'q{next_query_number}',
+                                ),
+                                _materialize_plan(
+                                    cfg,
+                                    ontology,
+                                    spec,
+                                    axis_b,
+                                    axis_a,
+                                    query_id=f'q{next_query_number + 1}',
+                                ),
+                            )
+                        )
                         next_query_number += 2
                         continue
 
@@ -259,11 +261,11 @@ def _materialize_plan(
     for index, (cohort_id, cohort, axis) in enumerate(raw_facets, start=1):
         facet_id = f'{query_id}_f{index}'
         is_primary = axis == primary_axis
-        is_calibrated = is_primary and cohort_id == selected_subgroup_id
+        is_dominant = is_primary and cohort_id == selected_subgroup_id
         is_niche = index in niche_indices
         target = (
-            cfg.generation.chunk_pools.primary_calibrated.size
-            if is_calibrated
+            cfg.generation.chunk_pools.dominant_primary.size
+            if is_dominant
             else cfg.generation.chunk_pools.other_primary.size
             if is_primary
             else cfg.generation.chunk_pools.niche.size
@@ -284,8 +286,8 @@ def _materialize_plan(
                 value_bin=bin_by_cohort_axis[(cohort_id, axis)],
                 cluster_id=f'{pool_id}_c{index}',
                 cluster_role=(
-                    'calibrated_primary_gold'
-                    if is_calibrated
+                    'dominant_primary_gold'
+                    if is_dominant
                     else 'primary_gold'
                     if is_primary
                     else 'niche_gold'
@@ -296,8 +298,8 @@ def _materialize_plan(
                 priority='primary' if is_primary else 'secondary',
             )
         )
-    calibrated_id = next(
-        facet.facet_id for facet in facets if facet.cluster_role == 'calibrated_primary_gold'
+    dominant_id = next(
+        facet.facet_id for facet in facets if facet.cluster_role == 'dominant_primary_gold'
     )
     template_ids = query_template_ids()
     template_id = template_ids[_stable_int(query_key, 'template') % len(template_ids)]
@@ -309,7 +311,7 @@ def _materialize_plan(
         facets=[facet.facet_id for facet in facets],
         primary_axis=primary_axis,
         secondary_axis=secondary_axis,
-        calibrated_primary_facet_id=calibrated_id,
+        dominant_primary_facet_id=dominant_id,
     )
     return QueryPlan(
         query_id=query_id,
@@ -328,7 +330,7 @@ def _materialize_plan(
         cohort_dimension_id=spec.cohort_dimension_id,
         primary_axis=primary_axis,
         secondary_axis=secondary_axis,
-        calibrated_primary_facet_id=calibrated_id,
+        dominant_primary_facet_id=dominant_id,
         n_facets=4,
         gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
         distractor_chunks=cfg.generation.total_distractor_chunks(),

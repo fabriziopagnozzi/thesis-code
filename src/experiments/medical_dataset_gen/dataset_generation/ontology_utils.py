@@ -48,13 +48,17 @@ def get_selected_conditions(
     return items[:n_conditions]
 
 
-def make_subgroup_pairs(
+def make_subgroup_pairs_for_condition(
     ontology: MedicalOntology,
+    condition_id: ConditionKey,
 ) -> list[
     tuple[
         CohortContrast, tuple[SubgroupKey, SubgroupOntology], tuple[SubgroupKey, SubgroupOntology]
     ]
 ]:
+    allowed_comorbidity_contrasts = set(
+        ontology.conditions[condition_id].allowed_comorbidity_contrast_ids
+    )
     return [
         (
             contrast,
@@ -62,7 +66,19 @@ def make_subgroup_pairs(
             (contrast.cohort_b_id, ontology.subgroups[contrast.cohort_b_id]),
         )
         for contrast in ontology.cohort_contrasts
+        if _is_global_demographic_contrast(ontology, contrast)
+        or contrast.id in allowed_comorbidity_contrasts
     ]
+
+
+def _is_global_demographic_contrast(
+    ontology: MedicalOntology,
+    contrast: CohortContrast,
+) -> bool:
+    return (
+        ontology.subgroups[contrast.cohort_a_id].axis == 'demographic'
+        and ontology.subgroups[contrast.cohort_b_id].axis == 'demographic'
+    )
 
 
 def get_axis_pair_profiles(
