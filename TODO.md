@@ -4,6 +4,7 @@
 
 * positive-vs-positive comorbidity contrasts. --> capire
 
+* Matematicamente spiegare perché coverage funziona solo con lambda molto aggressivi, minori di 0.40
 
 ## Secondary
 * Understand whether having a larger number of ontology bins is detrimental, although it does not seem to be.

@@ -41,7 +41,7 @@ class GeomPlotsSettings:
     full_strategy_legend_gap_in: float = 0.90
     full_strategy_overlay_legend_fontsize: int = 7
 
-    strategy_overlay_legend_fontsize: int = 5
+    strategy_overlay_legend_fontsize: int = 8
 
     query_overview_figure_size: tuple[int, int] = (14, 14)
     query_overview_legend_wrap_width: int = 60

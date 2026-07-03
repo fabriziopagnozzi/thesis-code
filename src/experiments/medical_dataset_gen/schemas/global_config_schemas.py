@@ -374,13 +374,13 @@ class GeometryFilterCfg(ConfigModel):
 
 
 class MethodsComparisonKernelMetricCfg(ConfigModel):
-    summary_metric: str = 'FacetCoverage@k'
+    summary_metric: str = 'FacetCoveragePurity@k'
     enabled: bool = True
     weight: PositiveFloat = 1.0
-    target_gain_vs_topk: float = 0.08
-    gain_bandwidth: PositiveFloat = 0.01
-    target_lower_bound_vs_topk: float = 0.03
-    lower_bound_bandwidth: PositiveFloat = 0.0075
+    target_gain_vs_topk: float = 0.35
+    gain_bandwidth: PositiveFloat = 0.0065
+    target_lower_bound_vs_topk: float = 0.3
+    lower_bound_bandwidth: PositiveFloat = 0.0065
 
     @field_validator('summary_metric')
     @classmethod
@@ -394,8 +394,8 @@ type KernelAggregationStrategy = Literal['geometric_mean', 'arithmetic_mean', 'm
 
 
 class MethodsComparisonKernelsCfg(ConfigModel):
-    lambda_max: NonNegativeFloat = 0.80
-    agreement_alpha: PositiveFloat = 3.0
+    lambda_max: NonNegativeFloat = 0.75
+    agreement_alpha: PositiveFloat = 2.5
     kernel_floor: float = Field(default=0.05, gt=0, le=1)
     pair_aggregation: KernelAggregationStrategy = 'geometric_mean'
     metrics: list[MethodsComparisonKernelMetricCfg] = Field(
