@@ -4,9 +4,10 @@ import argparse
 import io
 import os
 import sys
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NoReturn, get_args
+from typing import TYPE_CHECKING, Literal, NoReturn, cast, get_args
 from uuid import uuid4
 
 import yaml
@@ -52,9 +53,19 @@ class MedicalDatasetGenPaths:
     ):
         self.exp_name = exp_name
         self.experiment_dir = self.results_dir / exp_name
+        if not exp_name:
+            raise ValueError('experiment name cannot be empty')
+        exp_path = Path(exp_name)
+        exp_parts = exp_path.parts
+        if len(exp_parts) > 2:
+            raise ValueError(f'subexperiments support only one nesting level: {exp_name!r}')
+        parent_exp_name = exp_parts[0] if len(exp_parts) == 2 else exp_path.name
+        self.parent_experiment_dir = self.results_dir / parent_exp_name
         self.logs_dir = self.experiment_dir / '_logs'
         self.figures_dir = self.experiment_dir / '_figures'
         self.config_path = self.experiment_dir / '_config.yaml'
+        self.parent_config_path = self.parent_experiment_dir / '_config.yaml'
+        self.subconfig_path = self.experiment_dir / '_subconfig.yaml'
         self.result_dir_overrides = dict(result_dir_overrides or {})
         self.embeddings_chunk_vectors_path = self.experiment_dir / 'embeddings_chunk_vectors.npy'
         self.embeddings_query_vectors_path = self.experiment_dir / 'embeddings_query_vectors.npy'
@@ -88,15 +99,36 @@ class MedicalDatasetGenPaths:
     def get_result_dir(self, table: SyntheticMedicalDatasetTableName) -> Path:
         return self.table_path(table).parent
 
+    def config_source_paths(self) -> tuple[Path, ...]:
+        if self.is_subexperiment():
+            return (self.parent_config_path, self.subconfig_path)
+        return (self.config_path,)
 
-def resolve_experiment_name(
-    exp_name: str, results_dir: Path = MedicalDatasetGenPaths.results_dir
-) -> str:
-    dir = results_dir / exp_name
+    def is_subexperiment(self) -> bool:
+        return len(Path(self.exp_name).parts) == 2
+
+
+def resolve_experiment_name(exp_name: str, results_dir: Path | None = None) -> str:
+    results_dir = results_dir or MedicalDatasetGenPaths.results_dir
+    exp_path = Path(exp_name)
+    if not exp_path.parts:
+        raise ValueError('experiment name cannot be empty')
+    if exp_path.is_absolute() or len(exp_path.parts) > 2:
+        raise ValueError(
+            f'experiment names are relative and support at most one child level: {exp_name!r}'
+        )
+
+    dir = results_dir / exp_path
     if dir.is_dir():
         return exp_name
 
-    matches = sorted(results_dir.glob(f'{exp_name}*'))
+    if len(exp_path.parts) == 2:
+        parent_prefix, child_prefix = exp_path.parts
+        parent_name = _resolve_experiment_dir_prefix(parent_prefix, results_dir).name
+        child_dir = _resolve_experiment_dir_prefix(child_prefix, results_dir / parent_name)
+        return f'{parent_name}/{child_dir.name}'
+
+    matches = sorted(path for path in results_dir.glob(f'{exp_name}*') if path.is_dir())
     if len(matches) == 1:
         return matches[0].name
     elif len(matches) > 1:
@@ -105,6 +137,41 @@ def resolve_experiment_name(
         )
     else:
         raise FileNotFoundError(f'no experiment directory prefixed {exp_name!r} in {results_dir}. ')
+
+
+def child_experiment_names(
+    parent_exp_name: str,
+    results_dir: Path | None = None,
+) -> list[str]:
+    results_dir = results_dir or MedicalDatasetGenPaths.results_dir
+    parent_name = resolve_experiment_name(parent_exp_name, results_dir=results_dir)
+    parent_path = results_dir / parent_name
+    if len(Path(parent_name).parts) != 1:
+        return []
+    return [
+        f'{parent_name}/{child_path.name}'
+        for child_path in sorted(parent_path.iterdir())
+        if child_path.is_dir() and (child_path / '_subconfig.yaml').is_file()
+    ]
+
+
+type YamlMapping = dict[str, object]
+
+
+def _resolve_experiment_dir_prefix(prefix: str, parent_dir: Path) -> Path:
+    exact_dir = parent_dir / prefix
+    if exact_dir.is_dir():
+        return exact_dir
+
+    matches = sorted(path for path in parent_dir.glob(f'{prefix}*') if path.is_dir())
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise RuntimeError(
+            f'{prefix!r} is an ambiguous prefix in {parent_dir}, '
+            f'found many matches: {[path.name for path in matches]}'
+        )
+    raise FileNotFoundError(f'no experiment directory prefixed {prefix!r} in {parent_dir}. ')
 
 
 def load_config(exp: str | None = None) -> ExperimentCfg:
@@ -118,18 +185,60 @@ def load_config(exp: str | None = None) -> ExperimentCfg:
         )
 
     exp_name = resolve_experiment_name(exp_name)
-    cfg_path = MedicalDatasetGenPaths(exp_name).config_path
-    if not cfg_path.exists():
-        raise FileNotFoundError(
-            f'missing experiment config: {cfg_path}. '
-            'Create it manually before running the pipeline.'
-        )
-
-    with open(cfg_path) as f:
-        raw = yaml.safe_load(f)
+    paths = MedicalDatasetGenPaths(exp_name)
+    raw = _load_raw_experiment_config(paths)
     cfg = ExperimentCfg.model_validate(raw)
     cfg.global_.output_experiment = exp_name
     return cfg
+
+
+def _load_raw_experiment_config(paths: MedicalDatasetGenPaths) -> YamlMapping:
+    if not paths.is_subexperiment():
+        return _read_yaml_mapping(
+            paths.config_path,
+            missing_message='Create it manually before running the pipeline.',
+        )
+
+    parent_raw = _read_yaml_mapping(
+        paths.parent_config_path,
+        missing_message='Subexperiments require a parent _config.yaml.',
+    )
+    sub_raw = _read_yaml_mapping(
+        paths.subconfig_path,
+        missing_message='Create _subconfig.yaml for the subexperiment overrides.',
+    )
+    if 'generation' in sub_raw:
+        raise ValueError(
+            f'{paths.subconfig_path} cannot override generation. '
+            'Subexperiments must keep the parent dataset distribution unchanged.'
+        )
+    return _deep_merge_config(parent_raw, sub_raw)
+
+
+def _read_yaml_mapping(path: Path, missing_message: str) -> YamlMapping:
+    if not path.exists():
+        raise FileNotFoundError(f'missing experiment config: {path}. {missing_message}')
+    with open(path) as file:
+        raw = yaml.safe_load(file)
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        raise ValueError(f'experiment config must be a YAML mapping: {path}')
+    return {str(key): value for key, value in raw.items()}
+
+
+def _deep_merge_config(base: YamlMapping, overrides: YamlMapping) -> YamlMapping:
+    merged = dict(base)
+    for key, override_value in overrides.items():
+        base_value = merged.get(key)
+        if isinstance(base_value, Mapping) and isinstance(override_value, Mapping):
+            merged[key] = _deep_merge_config(
+                {str(child_key): value for child_key, value in base_value.items()},
+                {str(child_key): value for child_key, value in override_value.items()},
+            )
+        else:
+            merged[key] = cast(object, override_value)
+    return merged
 
 
 def load_config_from_cli() -> ExperimentCfg:

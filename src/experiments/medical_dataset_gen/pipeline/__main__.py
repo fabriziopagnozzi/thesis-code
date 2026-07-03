@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
+import sys
 from collections.abc import Callable
 from typing import Literal, cast, get_args
 
@@ -9,7 +12,8 @@ from experiments.medical_dataset_gen.schemas.global_config_schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    load_config_from_cli,
+    child_experiment_names,
+    load_config,
     paths_for,
     setup_logging,
 )
@@ -61,14 +65,41 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--stages', default=None)
     parser.add_argument('--release-llm', type=bool, default=None)
     parser.add_argument('--no-log-tee', action='store_true')
+    parser.add_argument(
+        '--parent',
+        action='store_true',
+        help='Run the parent experiment itself even if child subexperiments exist.',
+    )
     args, _ = parser.parse_known_args()
 
-    cfg = load_config_from_cli()
+    if args.exp is None:
+        parser.error('missing experiment name; pass --exp or set EXP/EXP_NAME')
+
+    children = [] if args.parent else child_experiment_names(args.exp)
+    if children:
+        print(f'[pipeline] experiment={args.exp} has children: {children}')
+        for child_exp in children:
+            print(f'\n[pipeline] launching child experiment: {child_exp}')
+            subprocess.run(
+                [
+                    sys.executable,
+                    '-m',
+                    'experiments.medical_dataset_gen.pipeline',
+                    *sys.argv[1:],
+                    '--exp',
+                    child_exp,
+                ],
+                check=True,
+            )
+        return
+
+    cfg = load_config(args.exp)
 
     paths = paths_for(cfg)
 
@@ -92,6 +123,7 @@ def main() -> None:
     if not args.no_log_tee:
         setup_logging(paths, provenance.run_id)
 
+    print(f'[pipeline] running experiment: {paths.exp_name}')
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
     print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 

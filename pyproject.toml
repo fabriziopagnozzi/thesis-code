@@ -41,6 +41,7 @@ dev = [
 	"pandas-stubs",
 	"pyarrow-stubs",
 	"taskipy",
+	"pyright>=1.1.411",
 ]
 
 

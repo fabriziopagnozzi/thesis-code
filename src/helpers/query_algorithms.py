@@ -81,7 +81,11 @@ def fac_loc_greedy(
     k = min(k, n)
 
     selected: list[int] = []
+
+    # To identify which indices have already been picked from sim_to_query
     mask = np.ones(n, dtype=bool)
+
+    # m[i] == max over j in selected of sim_to_query[i, j]
     m = np.zeros(n, dtype=np.float64)
 
     for _ in range(k):
@@ -119,23 +123,25 @@ def fac_loc_lazy_greedy(
     initial_coverage = np.maximum(0, sim_matrix).sum(axis=0) / n
     initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
 
+    # heapq stores min-heap so we use negative value to simulate max-heap
     max_heap = [(-initial_gains[i], i, 0) for i in range(n)]
     heapq.heapify(max_heap)
 
-    # Lazy Greedy Selection
-    for step in range(k):
+    # Lazy Greedy Selection (exactly k times)
+    for curr_step in range(k):
         while True:
             # item with the highest historical gain
-            _, node_idx, last_update = heapq.heappop(max_heap)
+            _, node_idx, last_update_step = heapq.heappop(max_heap)
 
-            if last_update == step:
+            if last_update_step == curr_step:
                 selected.append(node_idx)
                 m = np.maximum(m, sim_matrix[:, node_idx])
                 break
 
-            marginal_cov = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
-            new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov
-            heapq.heappush(max_heap, (-new_gain, node_idx, step))
+            marginal_cov_gain = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
+            new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov_gain
+
+            heapq.heappush(max_heap, (-new_gain, node_idx, curr_step))  # guarantees heap property
 
     return np.array(selected, dtype=np.intp)
 

@@ -291,6 +291,7 @@ def plot_query_overview_4panel(
         legend_handles,
         title='Legend',
         fontsize=SETTINGS.query_overview_legend_font_size,
+        include_gold_chunk_counts=True,
     )
     for ax in np.ravel(axes):
         ax.set_box_aspect(1)
@@ -521,13 +522,21 @@ def _draw_selection_legend_panel(
     *,
     title: str = 'Legend',
     fontsize: int = 7,
+    include_gold_chunk_counts: bool = False,
 ) -> tuple[Any, list[str]]:
     ax.axis('off')
     ax.set_title(title, fontsize=9)
     legend_entries = _display_legend_entries(artifact, legend_handles)
     legend = ax.legend(
         [handle for _, handle in legend_entries],
-        [_format_legend_label(artifact, label) for label, _ in legend_entries],
+        [
+            _format_legend_label(
+                artifact,
+                label,
+                include_gold_chunk_counts=include_gold_chunk_counts,
+            )
+            for label, _ in legend_entries
+        ],
         fontsize=fontsize,
         frameon=False,
         loc='center left',
@@ -572,11 +581,19 @@ def _draw_facet_family_side_legend(
     return legend, [label for label, _ in legend_entries]
 
 
-def _format_legend_label(artifact: GeometryArtifact, label: str) -> str:
+def _format_legend_label(
+    artifact: GeometryArtifact,
+    label: str,
+    *,
+    include_gold_chunk_counts: bool = False,
+) -> str:
     if label == SETTINGS.legend_header_label:
         return label
     indent = SETTINGS.legend_child_indent if _is_child_legend_label(artifact, label) else ''
-    return _wrap_legend_label(_legend_display_text(artifact, label), indent=indent)
+    display_text = _legend_display_text(artifact, label)
+    if include_gold_chunk_counts:
+        display_text = _gold_facet_chunk_count_prefix(artifact, label) + display_text
+    return _wrap_legend_label(display_text, indent=indent)
 
 
 def _style_legend_text(
@@ -754,6 +771,14 @@ def _gold_facet_role_prefix_for_label(artifact: GeometryArtifact, label: str) ->
     cluster_role = _facet_cluster_role_by_id(artifact).get(facet_id)
     role_label = SETTINGS.gold_facet_role_labels.get(cluster_role)  # type: ignore
     return f'{role_label}: ' if role_label else ''
+
+
+def _gold_facet_chunk_count_prefix(artifact: GeometryArtifact, label: str) -> str:
+    idx = _first_index_for_label(artifact, label)
+    if idx is None or not artifact.is_gold[idx]:
+        return ''
+    chunk_count = len(_label_groups(artifact).get(label, []))
+    return f'[{chunk_count}] '
 
 
 def _facet_cluster_role_by_id(artifact: GeometryArtifact) -> dict[str, ClusterRole]:
