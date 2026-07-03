@@ -15,6 +15,8 @@ type EvalPlotFileName = Literal[
     'metrics_at_best_lambda_for_k',
     'metrics_heatmap_k_lambda_grid',
     'metrics_heatmap_k_lambda_grid_html',
+    'metrics_delta_vs_topk_k_curves_for_lambda',
+    'metrics_delta_vs_topk_at_best_lambda_for_k',
     'metrics_distributions',
     # -------------------------------------------
     # answer metrics
@@ -24,10 +26,6 @@ type EvalPlotFileName = Literal[
     # diagnostics
     'diagnostics_k_curves_for_lambda',
     'diagnostics_at_best_lambda_for_k',
-    # -------------------------------------------
-    # deltas
-    'delta_vs_topk_metrics_k_curves_for_lambda',
-    'delta_vs_topk_metrics_at_best_lambda_for_k',
     # -------------------------------------------
     # profiles at best lambda
     'profiles_metrics_by_k_at_best_lambda',
@@ -47,8 +45,8 @@ DEFAULT_ENABLED_EVAL_PLOT_NAMES: list[EvalPlotFileName] = [
     # 'metrics_heatmap_k_lambda_grid',
     # 'metrics_heatmap_k_lambda_grid_html',
     'metrics_distributions',
-    'delta_vs_topk_metrics_k_curves_for_lambda',
-    'delta_vs_topk_metrics_at_best_lambda_for_k',
+    'metrics_delta_vs_topk_k_curves_for_lambda',
+    'metrics_delta_vs_topk_at_best_lambda_for_k',
     'diagnostics_at_best_lambda_for_k',
     'diagnostics_k_curves_for_lambda',
     'profiles_metrics_by_k_at_best_lambda',
@@ -128,13 +126,13 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     # -------------------------------------------
     # Fixed rows/cols layout: adjust configs based on how many metrics you define in
     'metrics_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.2, 3.4, 1.4),
-    'delta_vs_topk_metrics_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.83, 3.4, 1.4),
+    'metrics_delta_vs_topk_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.83, 3.4, 1.4),
     'answer_metrics_at_best_lambda_for_k': PlotGridLayout(1, 3, 4.2, 3.4, 1.4),
     'diagnostics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
     # -------------------------------------------
     # Dynamically adapted rows/cols based on num of subplots to handle
     'metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
-    'delta_vs_topk_metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 1.0, 2.9, 1.8),
+    'metrics_delta_vs_topk_k_curves_for_lambda': PlotGridLayout(1, 1, 1.0, 2.9, 1.8),
     'answer_metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     'diagnostics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
     # ---

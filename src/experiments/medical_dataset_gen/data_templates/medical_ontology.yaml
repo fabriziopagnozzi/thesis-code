@@ -121,24 +121,24 @@ conditions:
                     ward_level:
                         - neurology-ward care with routine neurologic checks
                         - ward-level care for encephalitis or myelitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored neurologic care with lumbar-puncture support
+                        - step-down neurologic monitoring with frequent neurologic checks
                         - step-down monitoring during encephalitis or myelitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of encephalitis or myelitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level neurologic monitoring and organ support
-                        - ICU-level support for severe encephalitis or myelitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - neuro-ICU bed with continuous neurologic and airway-capable monitoring
+                        - ICU-bed management during encephalitis or myelitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated encephalitis or myelitis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during encephalitis or myelitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - several days of fever, confusion, and gait instability
             - headache, altered mental status, and lower-extremity weakness
@@ -265,24 +265,24 @@ conditions:
                     ward_level:
                         - medical-ward care with routine oxygen monitoring
                         - ward-level care for pneumonia with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - step-down respiratory monitoring with noninvasive support
+                        - step-down respiratory monitoring with frequent oxygen-assessment checks
                         - step-down monitoring during pneumonia management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of pneumonia
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level respiratory support
-                        - ICU-level support for severe pneumonia decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous respiratory monitoring and ventilatory capability
+                        - ICU-bed management during pneumonia care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated pneumonia treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during pneumonia treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - fever, productive cough, and worsening hypoxemia
             - a new oxygen requirement and bibasilar infiltrates
@@ -409,24 +409,24 @@ conditions:
                     ward_level:
                         - stroke-unit care with routine neurologic checks
                         - ward-level care for ischemic stroke with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored stroke care with procedural evaluation
+                        - monitored stroke-unit care with frequent neurologic checks
                         - step-down monitoring during ischemic stroke management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of ischemic stroke
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - neurocritical care with ICU-level monitoring
-                        - ICU-level support for severe ischemic stroke decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - neuro-ICU bed with continuous neurologic monitoring
+                        - ICU-bed management during ischemic stroke care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated ischemic stroke treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during ischemic stroke treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - acute dysarthria with unilateral weakness
             - new focal neurologic deficits at presentation
@@ -554,24 +554,24 @@ conditions:
                     ward_level:
                         - cardiology-ward care with routine fluid monitoring
                         - ward-level care for acute decompensated heart failure with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - telemetry care with invasive or procedural assessment
+                        - telemetry care with continuous rhythm and blood-pressure monitoring
                         - step-down monitoring during acute decompensated heart failure management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of acute decompensated heart failure
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - cardiac intensive care with hemodynamic support
-                        - ICU-level support for severe acute decompensated heart failure decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - cardiac ICU bed with continuous hemodynamic monitoring
+                        - ICU-bed management during acute decompensated heart failure care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated acute decompensated heart failure treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during acute decompensated heart failure treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - progressive volume overload with edema and exertional dyspnea
             - pulmonary congestion with elevated filling pressures
@@ -694,24 +694,24 @@ conditions:
                     ward_level:
                         - infectious-disease ward care with neurologic checks
                         - ward-level care for bacterial meningitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with repeated diagnostic procedures
+                        - step-down neurologic monitoring with frequent mental-status checks
                         - step-down monitoring during bacterial meningitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of bacterial meningitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level neurologic and sepsis support
-                        - ICU-level support for severe bacterial meningitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous neurologic and sepsis monitoring
+                        - ICU-bed management during bacterial meningitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated bacterial meningitis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during bacterial meningitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - fever, headache, neck stiffness, and photophobia
             - meningeal signs, confusion, and inflammatory cerebrospinal fluid findings
@@ -830,24 +830,24 @@ conditions:
                     ward_level:
                         - neurology-ward treatment with routine assessments
                         - ward-level care for multiple sclerosis relapse with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care during plasma-exchange procedures
+                        - monitored-bed care with frequent neurologic and line-site checks
                         - step-down monitoring during multiple sclerosis relapse management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of multiple sclerosis relapse
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe neurologic deterioration
-                        - ICU-level support for severe multiple sclerosis relapse decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous neurologic and airway-capable monitoring
+                        - ICU-bed management during multiple sclerosis relapse care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated multiple sclerosis relapse treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during multiple sclerosis relapse treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - new weakness, sensory change, and gait instability
             - a demyelinating flare causing leg weakness and urinary urgency
@@ -974,24 +974,24 @@ conditions:
                     ward_level:
                         - spine-ward care with routine neurologic monitoring
                         - ward-level care for spinal epidural abscess with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - procedural care surrounding drainage or decompression
+                        - monitored spine-service bed with frequent neurologic checks
                         - step-down monitoring during spinal epidural abscess management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of spinal epidural abscess
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe neurologic compromise
-                        - ICU-level support for severe spinal epidural abscess decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous neurologic and airway-capable monitoring
+                        - ICU-bed management during spinal epidural abscess care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated spinal epidural abscess treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during spinal epidural abscess treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - severe back pain, fever, and progressive leg weakness
             - an epidural infection with canal narrowing and concern for cord compression
@@ -1115,24 +1115,24 @@ conditions:
                     ward_level:
                         - medical-ward anticoagulation with routine monitoring
                         - ward-level care for pulmonary embolism with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - telemetry care with catheter-procedure evaluation
+                        - telemetry monitoring with serial blood-pressure and oxygenation checks
                         - step-down monitoring during pulmonary embolism management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of pulmonary embolism
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level cardiopulmonary support
-                        - ICU-level support for severe pulmonary embolism decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous cardiopulmonary monitoring
+                        - ICU-bed management during pulmonary embolism care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated pulmonary embolism treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during pulmonary embolism treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - acute dyspnea, pleuritic chest pain, and hypoxemia
             - tachycardia, imaging-confirmed pulmonary emboli, and concern for right-heart strain
@@ -1259,24 +1259,24 @@ conditions:
                     ward_level:
                         - pulmonary-ward care with routine respiratory checks
                         - ward-level care for acute COPD exacerbation with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - step-down care with noninvasive ventilation
+                        - step-down respiratory monitoring with ventilatory-capable observation
                         - step-down monitoring during acute COPD exacerbation management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of acute COPD exacerbation
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level ventilatory support
-                        - ICU-level support for severe acute COPD exacerbation decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous respiratory monitoring and ventilatory capability
+                        - ICU-bed management during acute COPD exacerbation care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated acute COPD exacerbation treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during acute COPD exacerbation treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - worsening dyspnea, wheezing, and increased sputum production
             - hypercapnia with increased work of breathing
@@ -1400,24 +1400,24 @@ conditions:
                     ward_level:
                         - infectious-disease ward care with routine culture monitoring
                         - ward-level care for infective endocarditis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with transesophageal or surgical evaluation
+                        - telemetry-capable monitored bed with serial cardiac assessment
                         - step-down monitoring during infective endocarditis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of infective endocarditis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for valvular or septic instability
-                        - ICU-level support for severe infective endocarditis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous cardiac and sepsis monitoring
+                        - ICU-bed management during infective endocarditis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated infective endocarditis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during infective endocarditis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - persistent bacteremia, fever, and concern for valvular infection
             - a new murmur, bloodstream infection, and embolic risk
@@ -1545,24 +1545,24 @@ conditions:
                     ward_level:
                         - medical-ward care with routine wound assessment
                         - ward-level care for osteomyelitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - procedural care for biopsy or debridement
+                        - monitored bed with frequent wound and perfusion checks
                         - step-down monitoring during osteomyelitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of osteomyelitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe infectious instability
-                        - ICU-level support for severe osteomyelitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous sepsis and soft-tissue monitoring
+                        - ICU-bed management during osteomyelitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated osteomyelitis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during osteomyelitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - focal bone pain, elevated inflammatory markers, and imaging concerning for infection
             - chronic wound changes with contiguous bone involvement
@@ -1690,24 +1690,24 @@ conditions:
                     ward_level:
                         - medical-ward care with routine renal monitoring
                         - ward-level care for pyelonephritis with sepsis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with urologic procedure evaluation
+                        - monitored bed with frequent renal and sepsis reassessment
                         - step-down monitoring during pyelonephritis with sepsis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of pyelonephritis with sepsis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level sepsis and organ support
-                        - ICU-level support for severe pyelonephritis with sepsis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous sepsis monitoring and organ-support capability
+                        - ICU-bed management during pyelonephritis with sepsis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated pyelonephritis with sepsis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during pyelonephritis with sepsis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - fever, flank pain, hypotension, and urinary tract infection
             - urosepsis with leukocytosis and acute kidney injury
@@ -1835,24 +1835,24 @@ conditions:
                     ward_level:
                         - medical-ward care with routine wound management
                         - ward-level care for diabetic foot infection with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - procedural care for debridement and vascular assessment
+                        - monitored bed with frequent limb and perfusion checks
                         - step-down monitoring during diabetic foot infection management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of diabetic foot infection
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe infection
-                        - ICU-level support for severe diabetic foot infection decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous infection and perfusion monitoring
+                        - ICU-bed management during diabetic foot infection care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated diabetic foot infection treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during diabetic foot infection treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - plantar ulceration with cellulitis and concern for deep soft-tissue infection
             - an infected diabetic foot wound with drainage and offloading needs
@@ -1976,24 +1976,24 @@ conditions:
                     ward_level:
                         - hepatology-ward care with routine mentation checks
                         - ward-level care for cirrhosis with hepatic encephalopathy with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with endoscopic or procedural support
+                        - monitored bed with frequent abdominal and volume-status checks
                         - step-down monitoring during cirrhosis with hepatic encephalopathy management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of cirrhosis with hepatic encephalopathy
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for hepatic decompensation
-                        - ICU-level support for severe cirrhosis with hepatic encephalopathy decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous mentation and hemodynamic monitoring
+                        - ICU-bed management during cirrhosis with hepatic encephalopathy care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated cirrhosis with hepatic encephalopathy treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during cirrhosis with hepatic encephalopathy treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - confusion, asterixis, and decompensated cirrhosis
             - hepatic encephalopathy with sleep-wake reversal and poor orientation
@@ -2117,24 +2117,24 @@ conditions:
                     ward_level:
                         - nephrology-ward care with routine laboratory monitoring
                         - ward-level care for lupus nephritis flare with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with renal biopsy or infusion support
+                        - monitored bed with frequent renal and blood-pressure checks
                         - step-down monitoring during lupus nephritis flare management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of lupus nephritis flare
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe renal or systemic instability
-                        - ICU-level support for severe lupus nephritis flare decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous renal and hemodynamic monitoring
+                        - ICU-bed management during lupus nephritis flare care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated lupus nephritis flare treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during lupus nephritis flare treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - proteinuria, edema, and immune-mediated kidney injury
             - worsening renal function and active lupus serologies
@@ -2261,24 +2261,24 @@ conditions:
                     ward_level:
                         - medical-ward care with routine limb assessment
                         - ward-level care for severe cellulitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - procedural care for repeated surgical evaluation
+                        - monitored bed with frequent skin and perfusion checks
                         - step-down monitoring during severe cellulitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of severe cellulitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe soft-tissue infection
-                        - ICU-level support for severe cellulitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous soft-tissue and sepsis monitoring
+                        - ICU-bed management during cellulitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated severe cellulitis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during severe cellulitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - limb erythema, swelling, pain, and systemic inflammatory signs
             - rapidly progressive soft-tissue infection without a drainable abscess
@@ -2398,24 +2398,24 @@ conditions:
                     ward_level:
                         - gastroenterology-ward care with routine monitoring
                         - ward-level care for ulcerative colitis flare with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with endoscopic or infusion support
+                        - monitored bed with frequent abdominal and infusion-safety checks
                         - step-down monitoring during ulcerative colitis flare management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of ulcerative colitis flare
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe colitis complications
-                        - ICU-level support for severe ulcerative colitis flare decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous abdominal and hemodynamic monitoring
+                        - ICU-bed management during ulcerative colitis flare care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated ulcerative colitis flare treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during ulcerative colitis flare treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - bloody diarrhea, abdominal pain, and elevated inflammatory markers
             - severe colitis with dehydration and poor oral intake
@@ -2539,24 +2539,24 @@ conditions:
                     ward_level:
                         - medical-ward pancreatitis care with routine fluid and pain monitoring
                         - ward-level care for acute pancreatitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored care with procedural imaging or nutrition support
+                        - monitored bed with frequent abdominal and nutrition-tolerance checks
                         - step-down monitoring during acute pancreatitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of acute pancreatitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for pancreatitis-related organ dysfunction
-                        - ICU-level support for severe acute pancreatitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous abdominal and organ-support monitoring
+                        - ICU-bed management during acute pancreatitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated acute pancreatitis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during acute pancreatitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - epigastric pain radiating to the back with vomiting and lipase elevation
             - severe abdominal pain with ileus and inflammatory pancreatitis findings
@@ -2680,24 +2680,24 @@ conditions:
                     ward_level:
                         - surgical-ward care with routine abdominal and fever monitoring
                         - ward-level care for acute cholecystitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored procedural care surrounding cholecystostomy or operative evaluation
+                        - monitored surgical bed with frequent abdominal and drain-site checks
                         - step-down monitoring during acute cholecystitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of acute cholecystitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe biliary sepsis or instability
-                        - ICU-level support for severe acute cholecystitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous biliary-sepsis and hemodynamic monitoring
+                        - ICU-bed management during acute cholecystitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated acute cholecystitis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during acute cholecystitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - right upper quadrant pain, fever, and gallbladder wall thickening
             - biliary colic progressing to fever, leukocytosis, and poor oral intake
@@ -2821,24 +2821,24 @@ conditions:
                     ward_level:
                         - medical-surgical ward care with routine abdominal monitoring
                         - ward-level care for complicated diverticulitis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored procedural care for image-guided drainage or repeated surgical evaluation
+                        - monitored surgical bed with frequent abdominal and drain-site checks
                         - step-down monitoring during complicated diverticulitis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of complicated diverticulitis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for severe abdominal sepsis
-                        - ICU-level support for severe complicated diverticulitis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous abdominal-sepsis monitoring
+                        - ICU-bed management during complicated diverticulitis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during diverticulitis with complications
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during diverticulitis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - left lower quadrant pain, fever, and leukocytosis from diverticulitis
             - diverticulitis with a pericolic abscess and worsening abdominal tenderness
@@ -2965,24 +2965,24 @@ conditions:
                     ward_level:
                         - ward-level bleeding care with serial hemoglobin monitoring
                         - ward-level care for upper gastrointestinal bleeding with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored procedural care with urgent endoscopic support
+                        - monitored bed with serial hemoglobin and hemodynamic checks
                         - step-down monitoring during upper gastrointestinal bleeding management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of upper gastrointestinal bleeding
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for hemorrhagic instability
-                        - ICU-level support for severe upper gastrointestinal bleeding decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous hemodynamic and transfusion monitoring
+                        - ICU-bed management during upper gastrointestinal bleeding care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated upper gastrointestinal bleeding treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during upper gastrointestinal bleeding treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - melena, symptomatic anemia, and orthostatic dizziness
             - hematemesis with tachycardia and acute blood-loss symptoms
@@ -3109,24 +3109,24 @@ conditions:
                     ward_level:
                         - orthopedic-ward care with routine joint and antibiotic monitoring
                         - ward-level care for septic arthritis with routine monitoring
-                        - general inpatient management with scheduled laboratory and bedside reassessment
-                        - standard floor care with therapy evaluation and discharge planning
-                        - routine hospital monitoring without need for high-acuity support
-                        - ward-based medication adjustment and clinical observation
+                        - general ward-bed management with scheduled laboratory review
+                        - standard floor care coordinated with therapy and discharge planning
+                        - routine ward-bed management with standard nursing assessments
+                        - floor-based medication adjustment with scheduled bedside reassessment
                     monitored_or_procedural:
-                        - monitored procedural care surrounding washout or drainage support
+                        - monitored orthopedic bed with frequent joint and drain-site checks
                         - step-down monitoring during septic arthritis management
-                        - procedure-supported care with closer bedside observation
-                        - telemetry or monitored-unit care for evolving clinical needs
-                        - monitored inpatient management while evaluating complications of septic arthritis
-                        - higher-frequency nursing assessment around diagnostic or therapeutic procedures
+                        - step-down-unit observation with higher-frequency bedside checks
+                        - telemetry or monitored-unit care with scheduled rhythm and vital-sign review
+                        - monitored inpatient management in a step-down or telemetry-capable setting
+                        - higher-frequency nursing assessment in a monitored bed
                     intensive_care:
-                        - ICU-level support for septic instability from joint infection
-                        - ICU-level support for severe septic arthritis decompensation
-                        - critical care management for shock, respiratory failure, or unstable physiology
+                        - ICU bed with continuous joint-infection and sepsis monitoring
+                        - ICU-bed management during septic arthritis care with critical-care staffing
+                        - critical-care unit management with continuous monitoring and organ-support capability
                         - intensive monitoring with organ-support capability
-                        - high-acuity support during complicated septic arthritis treatment
-                        - ICU care after failure to remain stable on lower-acuity monitoring
+                        - ICU-level nursing and respiratory or hemodynamic support during septic arthritis treatment
+                        - ICU-bed care with continuous monitoring and rapid-response capability
         presentations:
             - an acutely swollen painful joint with fever and limited motion
             - septic knee with effusion, leukocytosis, and inability to bear weight
@@ -3662,38 +3662,40 @@ clinical_axes:
                 - clinical deterioration despite treatment
                 - refractory inpatient trajectory
     care_intensity:
-        label: care intensity
+        label: highest care setting
         allow_as_primary: true
-        query_focus: whether the patient required ward-level care, monitored or procedural care, or intensive care
+        query_focus: whether the admission stayed on a routine ward, required a step-down or telemetry-capable monitored bed, or required an ICU bed with critical-care monitoring
         exact_terms:
-            - care intensity
-            - level of care
+            - highest care setting
+            - inpatient care setting
+            - hospital unit level
         synonym_terms:
-            - monitoring needs
-            - inpatient resource use
+            - care-setting level
+            - monitored-bed requirement
+            - unit-level resource use
         bins:
             - ward_level
             - monitored_or_procedural
             - intensive_care
         bin_terms:
             ward_level:
-                - ward-level care
-                - routine inpatient monitoring
-                - routine ward-level management
-                - standard inpatient ward care
+                - routine ward-bed care
+                - general medical floor care
+                - standard ward-unit management
+                - floor-level inpatient care
             monitored_or_procedural:
-                - monitored or procedural care
-                - step-down or procedure-supported care
-                - monitored care with procedural support
-                - step-down or procedural care
-                - step-down or procedure-supported monitoring
-                - monitored inpatient management
+                - step-down or telemetry-capable monitoring
+                - monitored bed care
+                - step-down-unit observation
+                - telemetry-capable inpatient care
+                - higher-frequency monitored-bed assessment
+                - intermediate-care-unit monitoring
             intensive_care:
-                - intensive care
-                - ICU-level support
-                - ICU-level organ support
-                - critical care support
-                - ICU-level monitoring and support
+                - ICU-bed care
+                - critical-care unit management
+                - continuous ICU monitoring
+                - ICU-level nursing and respiratory or hemodynamic support
+                - critical-care monitoring with organ-support capability
 cohort_contrasts:
     - id: age_under_50_vs_50_to_75
       dimension_id: age_band
@@ -3877,6 +3879,8 @@ axis_pairs:
     - axes:
           - rehab_outcome
           - acute_clinical_course
+      allowed_primary_axes: []
+      rationale: discharge rehabilitation need and acute response trajectory were empirically too tightly coupled for stable multi-cluster retrieval, so this pair is suppressed in the bundled ontology rather than repeated as a config override.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -3895,6 +3899,9 @@ axis_pairs:
     - axes:
           - rehab_outcome
           - care_intensity
+      allowed_primary_axes:
+          - rehab_outcome
+      rationale: rehabilitation outcome remains the dominant discharge-time target because highest-care-setting-primary queries in this pair collapse too easily into a broad admission-severity narrative.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -3945,9 +3952,8 @@ axis_pairs:
     - axes:
           - complication_burden
           - care_intensity
-      allowed_primary_axes:
-          - care_intensity
-      rationale: care intensity yields a concrete resource-use signal, while complication burden is too correlated with overall admission severity to serve as the dominant retrieval target in this pairing.
+      allowed_primary_axes: []
+      rationale: complication burden and highest care setting both encode acute resource escalation, so this pair is suppressed until care-setting evidence shows stable separation from adverse-event burden.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -3966,6 +3972,9 @@ axis_pairs:
     - axes:
           - acute_clinical_course
           - care_intensity
+      allowed_primary_axes:
+          - acute_clinical_course
+      rationale: acute-course-primary queries remain usable, but highest-care-setting-primary queries for this pair collapse too easily into the same stabilization-versus-worsening narrative.
       profiles:
           - id: low_high
             cohort_a_bins:

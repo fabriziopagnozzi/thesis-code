@@ -164,7 +164,9 @@ def resolve_axis_pair_generation_policy(
 ) -> ResolvedAxisPairGenerationPolicy:
     pair = get_axis_pair_ontology(ontology, left, right)
     pair_profiles = get_axis_pair_profiles(ontology, left, right)
-    allowed_primary_axes = set(pair.allowed_primary_axes or pair.axes)
+    allowed_primary_axes = (
+        set(pair.axes) if pair.allowed_primary_axes is None else set(pair.allowed_primary_axes)
+    )
     blocked_profile_ids = set(pair.blocked_profile_ids)
     rationale = pair.rationale
     for override in pair.condition_overrides:

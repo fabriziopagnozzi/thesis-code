@@ -61,14 +61,14 @@ axis_sentence_templates:
             - "Serial assessment showed {axis_value}. The acute clinical course was therefore {axis_bin_term}."
     care_intensity:
         ward_level:
-            - "Throughout the admission, {pronoun} received {axis_value}. The highest care intensity remained {axis_bin_term}."
-            - "Management consisted of {axis_value}, without a need for higher-acuity support. This corresponded to {axis_bin_term}."
+            - "The highest hospital care setting was {axis_value}. This corresponded to {axis_bin_term}."
+            - "Care was delivered in {axis_value}. The recorded unit level was {axis_bin_term}."
         monitored_or_procedural:
-            - "The admission required {axis_value}. This level of monitoring and intervention represented {axis_bin_term}."
-            - "{pronoun_cap} received {axis_value}. This need defined the highest care intensity as {axis_bin_term}."
+            - "The highest hospital care setting was {axis_value}. This monitored-bed requirement represented {axis_bin_term}."
+            - "{pronoun_cap} was managed in {axis_value}. The recorded unit level was {axis_bin_term}."
         intensive_care:
-            - "Clinical needs escalated to {axis_value}. The highest care intensity was therefore {axis_bin_term}."
-            - "{pronoun_cap} required {axis_value} during the admission. This represented {axis_bin_term}."
+            - "The highest hospital care setting was {axis_value}. This corresponded to {axis_bin_term}."
+            - "{pronoun_cap} was managed in {axis_value}. The recorded unit level was {axis_bin_term}."
 
 duration_phrase_templates:
     - "{duration_days} days of {treatment}"
