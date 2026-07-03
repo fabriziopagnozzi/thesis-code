@@ -28,6 +28,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     ComplicationBurdenPayload,
     ConditionKey,
+    DiagnosticEvidencePayload,
     MedicalOntology,
     PatientSex,
     QueryPlan,
@@ -629,7 +630,9 @@ def _axis_payload(
         return ComplicationBurdenPayload(axis=axis, detail=detail)
     if axis == 'acute_clinical_course':
         return AcuteClinicalCoursePayload(axis=axis, detail=detail)
-    return CareIntensityPayload(axis='care_intensity', detail=detail)
+    if axis == 'care_intensity':
+        return CareIntensityPayload(axis=axis, detail=detail)
+    return DiagnosticEvidencePayload(axis='diagnostic_evidence_type', detail=detail)
 
 
 def _payload_required_phrase(payload: AxisFactPayload) -> str:

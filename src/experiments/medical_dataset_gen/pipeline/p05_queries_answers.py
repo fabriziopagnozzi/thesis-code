@@ -21,6 +21,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CareIntensityPayload,
     ClinicalAxis,
     ComplicationBurdenPayload,
+    DiagnosticEvidencePayload,
     GoldAnswerOutputRow,
     MedicalOntology,
     QueryOutputRow,
@@ -282,6 +283,8 @@ def _summarize_payload(value_bin: str, payload) -> str:
         return f'{_with_indefinite_article(bin_label)} trajectory: {payload.detail}'
     if isinstance(payload, CareIntensityPayload):
         return f'{_with_indefinite_article(bin_label)} level: {payload.detail}'
+    if isinstance(payload, DiagnosticEvidencePayload):
+        return f'{_with_indefinite_article(bin_label)} evidence source: {payload.detail}'
     raise TypeError(type(payload))
 
 

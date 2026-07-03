@@ -13,6 +13,7 @@ type ClinicalAxis = Literal[
     'complication_burden',
     'acute_clinical_course',
     'care_intensity',
+    'diagnostic_evidence_type',
 ]
 CLINICAL_AXIS_LIST = list[ClinicalAxis](get_args(ClinicalAxis.__value__))
 
@@ -112,12 +113,18 @@ class CareIntensityPayload(BenchmarkModel):
     detail: str
 
 
+class DiagnosticEvidencePayload(BenchmarkModel):
+    axis: Literal['diagnostic_evidence_type']
+    detail: str
+
+
 type AxisFactPayload = Annotated[
     TreatmentDurationPayload
     | RehabOutcomePayload
     | ComplicationBurdenPayload
     | AcuteClinicalCoursePayload
-    | CareIntensityPayload,
+    | CareIntensityPayload
+    | DiagnosticEvidencePayload,
     Field(discriminator='axis'),
 ]
 
@@ -131,6 +138,7 @@ def parse_axis_payload(value: str) -> AxisFactPayload:
         'complication_burden': ComplicationBurdenPayload,
         'acute_clinical_course': AcuteClinicalCoursePayload,
         'care_intensity': CareIntensityPayload,
+        'diagnostic_evidence_type': DiagnosticEvidencePayload,
     }
     try:
         model = model_by_axis[axis]
@@ -192,12 +200,18 @@ class CareIntensityAxisValues(BenchmarkModel):
     bins: dict[str, list[str]]
 
 
+class DiagnosticEvidenceAxisValues(BenchmarkModel):
+    axis: Literal['diagnostic_evidence_type']
+    bins: dict[str, list[str]]
+
+
 type ConditionAxisValues = Annotated[
     TreatmentDurationAxisValues
     | RehabOutcomeAxisValues
     | ComplicationBurdenAxisValues
     | AcuteClinicalCourseAxisValues
-    | CareIntensityAxisValues,
+    | CareIntensityAxisValues
+    | DiagnosticEvidenceAxisValues,
     Field(discriminator='axis'),
 ]
 
@@ -526,14 +540,27 @@ def _validate_absent_subgroup_surface_forms(subgroups: dict[SubgroupKey, Subgrou
             if subgroup.axis == 'comorbidity' and subgroup.level_id == 'present'
             for term in _negative_subtype_banned_terms(subgroup)
         ]
-        if not present_terms:
-            continue
         for subgroup in dimension_subgroups:
             if subgroup.axis != 'comorbidity' or subgroup.level_id != 'absent':
                 continue
             for form in _subgroup_human_forms(subgroup):
                 normalized = _normalize_subgroup_text(form)
                 if not _looks_like_negative_subgroup_form(normalized):
+                    continue
+                direct_modifier = next(
+                    (
+                        modifier
+                        for modifier in _BANNED_NEGATIVE_SUBTYPE_MODIFIERS
+                        if modifier in normalized.split()
+                    ),
+                    None,
+                )
+                if direct_modifier is not None:
+                    raise ValueError(
+                        f'absent subgroup for {dimension_id!r} uses negative subtype wording: '
+                        f'{form!r}; use the broad category instead'
+                    )
+                if not present_terms:
                     continue
                 matched = next((term for term in present_terms if term in normalized), None)
                 if matched is not None:

@@ -5,7 +5,7 @@ global:
   conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
 
 generation:
-  query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 10,880 queries with the bundled ontology).
+  query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 8,384 queries with the bundled ontology).
   ontology_path: null # Optional path to a custom ontology YAML.
   axis_pair_policy_overrides: [] # Optional config-layer pair gating applied after ontology policies, keyed by unordered axis pair.
 

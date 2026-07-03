@@ -12,6 +12,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkTemplateUtils,
     ClinicalFact,
     ComplicationBurdenPayload,
+    DiagnosticEvidencePayload,
     MedicalOntology,
     RehabOutcomePayload,
     TreatmentDurationPayload,
@@ -140,7 +141,12 @@ def _axis_sentence(
         axis_value = payload.outcome
     elif isinstance(
         payload,
-        (ComplicationBurdenPayload, AcuteClinicalCoursePayload, CareIntensityPayload),
+        (
+            ComplicationBurdenPayload,
+            AcuteClinicalCoursePayload,
+            CareIntensityPayload,
+            DiagnosticEvidencePayload,
+        ),
     ):
         axis_value = payload.detail
     else:

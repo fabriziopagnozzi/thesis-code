@@ -1,5 +1,7 @@
-# Primary
-* Keep fine tuning the medical ontology to produce meaningful queries.
+# Code - Primary
+* Data distribution
+    - formalize better and categorize different kinds of distributions and present results for each of these
+    - bottom line is that MMR behaves overall worse than FacLoc
 
 * Split validation/test data and tune hyperparameter lambda and see results
     - add "mode: exploring | testing" under "evaluation:" key
@@ -17,13 +19,25 @@
     - Fine tune the medical ontology somehow
     - use LLMs to rewrite chunks into a more natural clinical prose while retaining all the meaning --> drawback: expensive and time-consuming
 
-* Data distribution
-    - Should we formalize better and categorize different kinds of distributions and present results for each of these?
+---------
 
+# Writing - Primary
+* TASK: formulate current claims precisely, given the experiment results: write them down, half a dozen claims we're ready to do. 
+    - First, frame the benchmark properties (structure of queries, chunks, facets)
+    - then general settings used (model, k & lambda values...)
+    - then evaluation and diagnostics metrics and the rationale behind them.
+   
+    * Claims so far:
+        - FacLoc is overall a safer method across all lambda values - MMR can do worse than top-k because while it covers the space it can fall into distractors way more easily.
+        - consistely better than top-k across all lambda values
+            - claim that using validation/test data after tuning hyperparameter lambda FacLoc still seems to outperform MMR across all data distributions.
+        - depending on dataset distribution we get results and the trend overall on the main evaluation metric is that FacLoc performs almost always equally or better than top-k 
+        - MMR diversifies with balanced lambda values while FacLoc shows improvements only with low enough values (= high FacLoc weight)
+        - ... (maybe include also other results drawn from diagnostics, maybe how the hidden variables like the model, the geometry etc. have an impact on this)
 
 ---------
 
-# Secondary
+# Code - Secondary
 * Figure out if the current `FacetCoveragePurity@k` is the target evaluation metric for our benchmark, or if we have to include even more evaluation metrics inside of it.
 * Explain more formally and mathematically why coverage works only with very aggressive lambda values, < 0.40
 * Compare embedding_calibrarion with rotating.
@@ -34,23 +48,3 @@
 
 
 ---------
-
-# DONE
-
-## After 2026/07/03 call
-* _subconfig.yaml and subexperiments support for more explainability
-
-## After 2026/06/30 call
-* Improved an finalized query design
-
-* Fix ontology and avoid ambiguous wording that made some clinical axis (especially care_intensity) blend into others. Strengthened overall the ontology adding, for each primary condition, allowlists for the comorbidity positive vs. negative & positive vs. positive scenarios.
-
-* Granurarily configurable distractors/outliers both for the facet-attached distractors and the background outliers.
-
-* Design two kinds of new metrics:
-    - `FacetCoveragePurity@k` = `FacetCoverage@k` * `Precision@k`, combining our two goals: retrieving more query facets while avoiding distractors/outliers.
-    - `AllFacetCleanRate@k` = Percentage of queries that have `FacetCoverage@k` == 1 && `Precision@k` >= clean_rate_threshold (0.80)
-
-* In `lambda_selection.py` and the related global evaluation configs: deprecate the weighted average of metrics. Always use the `FacetCoveragePurity@k` metric as the maximizing metric, because it combines everything we want to achieve in the benchmark.
-
-* Made lots of experiments, 21 through 48.

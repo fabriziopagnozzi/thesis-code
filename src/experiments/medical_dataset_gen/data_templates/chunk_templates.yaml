@@ -44,7 +44,7 @@ axis_sentence_templates:
             - "During the admission, {pronoun} had {axis_value}. Overall, there was {axis_bin_term}."
             - "The hospital stay was free of a serious adverse event: {axis_value}. There was {axis_bin_term} during the admission."
         limited_complication:
-            - "During the admission, {pronoun} developed {axis_value}. This transient event did not require major escalation and represented {axis_bin_term}."
+            - "During the admission, {pronoun} developed {axis_value}. This transient event resolved before discharge and represented {axis_bin_term}."
             - "The in-hospital complication burden consisted of {axis_value}. This manageable event represented {axis_bin_term}."
         major_complication:
             - "The admission was complicated by {axis_value}. This serious event resulted in {axis_bin_term}."
@@ -57,18 +57,28 @@ axis_sentence_templates:
             - "Improvement was not immediate; {pronoun} had {axis_value}. This acute clinical course represented {axis_bin_term}."
             - "The early response remained incomplete, with {axis_value}. The acute clinical course was characterized by {axis_bin_term}."
         refractory_or_worsening:
-            - "During the admission, {pronoun} experienced {axis_value}. This failure to stabilize was consistent with {axis_bin_term} in the acute clinical course."
+            - "During the admission, {pronoun} experienced {axis_value}. This serial response pattern was consistent with {axis_bin_term} in the acute clinical course."
             - "Serial assessment showed {axis_value}. The acute clinical course was therefore {axis_bin_term}."
     care_intensity:
         ward_level:
             - "The highest hospital care setting was {axis_value}. This corresponded to {axis_bin_term}."
             - "Care was delivered in {axis_value}. The recorded unit level was {axis_bin_term}."
-        monitored_or_procedural:
+        monitored_bed:
             - "The highest hospital care setting was {axis_value}. This monitored-bed requirement represented {axis_bin_term}."
             - "{pronoun_cap} was managed in {axis_value}. The recorded unit level was {axis_bin_term}."
         intensive_care:
             - "The highest hospital care setting was {axis_value}. This corresponded to {axis_bin_term}."
             - "{pronoun_cap} was managed in {axis_value}. The recorded unit level was {axis_bin_term}."
+    diagnostic_evidence_type:
+        bedside_laboratory_pattern:
+            - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
+            - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
+        structural_visual_evidence:
+            - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
+            - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
+        specimen_or_specialized_test:
+            - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
+            - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
 
 duration_phrase_templates:
     - "{duration_days} days of {treatment}"
