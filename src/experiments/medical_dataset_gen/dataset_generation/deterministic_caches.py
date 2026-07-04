@@ -1,0 +1,414 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import time
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager, suppress
+from pathlib import Path
+from typing import TypedDict
+
+import polars as pl
+
+from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
+from helpers.embedder import MODEL_PROFILES
+
+# Bump when the persisted deterministic document cache schema changes.
+DETERMINISTIC_CHUNK_DOCUMENT_CACHE_VERSION = 1
+# Bump when deterministic rendering semantics change without a template/ontology file change.
+DETERMINISTIC_RENDER_VERSION = 1
+# Bump when the persisted chunk embedding cache schema or key semantics change.
+CHUNK_EMBEDDING_CACHE_VERSION = 1
+# Two hash characters keep each cache shard near 1/256 of a signature cache.
+CACHE_BUCKET_HEX_CHARS = 2
+
+
+class EmbeddingSignaturePayload(TypedDict):
+    cache_version: int
+    model_name: str
+    profile_mode: str
+    document_prompt: str | None
+    document_prompt_name: str | None
+    normalize: bool
+
+
+class ChunkEmbeddingCacheStats(TypedDict):
+    cache_path: str
+    embedding_signature: str
+    hits: int
+    misses: int
+
+
+def deterministic_render_signature(cfg: ExperimentCfg) -> str:
+    payload = {
+        'cache_version': DETERMINISTIC_CHUNK_DOCUMENT_CACHE_VERSION,
+        'deterministic_render_version': DETERMINISTIC_RENDER_VERSION,
+        'ontology_sha256': _file_fingerprint(_ontology_path(cfg)),
+        'chunk_templates_sha256': _file_fingerprint(_chunk_template_path()),
+        'chunk_min_words': cfg.generation.chunk_pools.chunk_min_words,
+        'chunk_max_words': cfg.generation.chunk_pools.chunk_max_words,
+        'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,
+    }
+    return _hash_json(payload)
+
+
+def deterministic_chunk_id(render_signature: str, chunk_reuse_key: str) -> str:
+    raw = json.dumps(
+        {
+            'render_signature': render_signature,
+            'chunk_reuse_key': chunk_reuse_key,
+        },
+        sort_keys=True,
+    )
+    return f'det_chunk_{hashlib.sha256(raw.encode()).hexdigest()[:20]}'
+
+
+def document_cache_bucket(chunk_id: str) -> str:
+    return _cache_bucket(chunk_id.removeprefix('det_chunk_'))
+
+
+def embedding_cache_bucket(chunk_embedding_cache_key: str) -> str:
+    return _cache_bucket(chunk_embedding_cache_key)
+
+
+def materialize_global_deterministic_documents(
+    paths: MedicalDatasetGenPaths,
+    render_signature: str,
+    documents: pl.DataFrame,
+) -> pl.DataFrame:
+    if documents.is_empty():
+        return documents
+
+    prepared = _prepare_global_documents(render_signature, documents).with_columns(
+        pl.Series(
+            '_cache_bucket',
+            [document_cache_bucket(str(value)) for value in documents['chunk_id'].to_list()],
+        )
+    )
+    for bucket in sorted(str(value) for value in prepared['_cache_bucket'].unique().to_list()):
+        bucket_rows = prepared.filter(pl.col('_cache_bucket') == bucket).drop('_cache_bucket')
+        cache_path = paths.deterministic_chunk_documents_bucket_path(render_signature, bucket)
+        lock_path = paths.deterministic_chunk_documents_lock_path(render_signature, bucket)
+        with _file_lock(lock_path):
+            existing = _read_parquet_if_exists(cache_path)
+            if not existing.is_empty():
+                _validate_document_cache(existing)
+            merged = _validated_unique_cache(
+                pl.concat([existing, bucket_rows], how='diagonal_relaxed')
+                if not existing.is_empty()
+                else bucket_rows,
+                key_column='chunk_id',
+                fingerprint_column='document_payload_sha256',
+                label='global deterministic chunk document cache',
+            )
+            _write_parquet_atomic(cache_path, merged)
+
+    return prepared.drop('_cache_bucket')
+
+
+def load_matching_deterministic_documents(
+    paths: MedicalDatasetGenPaths,
+    render_signature: str,
+    chunk_ids_by_bucket: Mapping[str, list[str]],
+) -> pl.DataFrame:
+    rows: list[pl.DataFrame] = []
+    for bucket, chunk_ids in sorted(chunk_ids_by_bucket.items()):
+        if not chunk_ids:
+            continue
+        cache_path = paths.deterministic_chunk_documents_bucket_path(render_signature, bucket)
+        if not cache_path.exists():
+            continue
+        matched = (
+            pl
+            .scan_parquet(cache_path)
+            .filter(pl.col('chunk_id').is_in(chunk_ids))
+            .collect(engine='streaming')
+        )
+        if not matched.is_empty():
+            _validate_document_cache(matched)
+            rows.append(matched)
+    return pl.concat(rows, how='diagonal_relaxed') if rows else pl.DataFrame()
+
+
+def chunk_embedding_signature_payload(cfg: ExperimentCfg) -> EmbeddingSignaturePayload:
+    profile = MODEL_PROFILES[cfg.embeddings.model_name]
+    return {
+        'cache_version': CHUNK_EMBEDDING_CACHE_VERSION,
+        'model_name': cfg.embeddings.model_name,
+        'profile_mode': profile.mode,
+        'document_prompt': (
+            cfg.embeddings.document_prompt
+            if cfg.embeddings.document_prompt is not None
+            else profile.document_prompt
+        ),
+        'document_prompt_name': profile.document_prompt_name
+        if cfg.embeddings.document_prompt is None
+        else None,
+        'normalize': cfg.embeddings.normalize,
+    }
+
+
+def chunk_embedding_signature(cfg: ExperimentCfg) -> str:
+    return _hash_json(chunk_embedding_signature_payload(cfg))
+
+
+def chunk_embedding_cache_key(
+    embedding_signature: str,
+    chunk_id: str,
+    text_sha256: str,
+) -> str:
+    return _hash_json({
+        'cache_version': CHUNK_EMBEDDING_CACHE_VERSION,
+        'embedding_signature': embedding_signature,
+        'chunk_id': chunk_id,
+        'text_sha256': text_sha256,
+    })
+
+
+def load_matching_chunk_embedding_cache(
+    paths: MedicalDatasetGenPaths,
+    embedding_signature: str,
+    keys_by_bucket: Mapping[str, list[str]],
+) -> pl.DataFrame:
+    rows: list[pl.DataFrame] = []
+    for bucket, cache_keys in sorted(keys_by_bucket.items()):
+        if not cache_keys:
+            continue
+        cache_path = paths.chunk_embeddings_bucket_path(embedding_signature, bucket)
+        if not cache_path.exists():
+            continue
+        matched = (
+            pl
+            .scan_parquet(cache_path)
+            .filter(pl.col('chunk_embedding_cache_key').is_in(cache_keys))
+            .collect(engine='streaming')
+        )
+        if not matched.is_empty():
+            _validate_embedding_cache(matched)
+            rows.append(matched)
+    return pl.concat(rows, how='diagonal_relaxed') if rows else pl.DataFrame()
+
+
+def append_chunk_embedding_cache_rows(
+    paths: MedicalDatasetGenPaths,
+    embedding_signature: str,
+    rows: pl.DataFrame,
+) -> None:
+    if rows.is_empty():
+        return
+    bucketed_rows = rows.with_columns(
+        pl.Series(
+            '_cache_bucket',
+            [
+                embedding_cache_bucket(str(value))
+                for value in rows['chunk_embedding_cache_key'].to_list()
+            ],
+        )
+    )
+    for bucket in sorted(str(value) for value in bucketed_rows['_cache_bucket'].unique().to_list()):
+        bucket_rows = bucketed_rows.filter(pl.col('_cache_bucket') == bucket).drop('_cache_bucket')
+        cache_path = paths.chunk_embeddings_bucket_path(embedding_signature, bucket)
+        lock_path = paths.chunk_embeddings_lock_path(embedding_signature, bucket)
+        with _file_lock(lock_path):
+            existing = _read_parquet_if_exists(cache_path)
+            if not existing.is_empty():
+                _validate_embedding_cache(existing)
+            merged = _validated_unique_cache(
+                pl.concat([existing, bucket_rows], how='diagonal_relaxed')
+                if not existing.is_empty()
+                else bucket_rows,
+                key_column='chunk_embedding_cache_key',
+                fingerprint_column='embedding_payload_sha256',
+                label='global chunk embedding cache',
+            )
+            _write_parquet_atomic(cache_path, merged)
+
+
+def text_sha256(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def row_payload_sha256(row: dict[str, object], excluded_columns: set[str] | None = None) -> str:
+    excluded = excluded_columns or set()
+    payload = {key: row[key] for key in sorted(row) if key not in excluded}
+    return _hash_json(payload)
+
+
+def _prepare_global_documents(render_signature: str, documents: pl.DataFrame) -> pl.DataFrame:
+    text_hashes = [text_sha256(str(value)) for value in documents['text'].to_list()]
+    prepared = documents.with_columns(
+        pl.lit(DETERMINISTIC_CHUNK_DOCUMENT_CACHE_VERSION).alias(
+            'deterministic_document_cache_version'
+        ),
+        pl.lit(render_signature).alias('render_signature'),
+        pl.Series('text_sha256', text_hashes),
+    )
+    payload_hashes = [
+        row_payload_sha256(row, excluded_columns={'document_payload_sha256'})
+        for row in prepared.to_dicts()
+    ]
+    return prepared.with_columns(pl.Series('document_payload_sha256', payload_hashes))
+
+
+def _validate_document_cache(cache: pl.DataFrame) -> None:
+    required_columns = {
+        'chunk_id',
+        'chunk_reuse_key',
+        'render_signature',
+        'text_sha256',
+        'text',
+        'document_payload_sha256',
+    }
+    _require_columns(cache, required_columns, 'global deterministic chunk document cache')
+    _validated_unique_cache(
+        cache,
+        key_column='chunk_id',
+        fingerprint_column='document_payload_sha256',
+        label='global deterministic chunk document cache',
+    )
+
+
+def _validate_embedding_cache(cache: pl.DataFrame) -> None:
+    required_columns = {
+        'chunk_embedding_cache_key',
+        'chunk_id',
+        'text_sha256',
+        'embedding_signature',
+        'dimension',
+        'embedding',
+        'embedding_payload_sha256',
+    }
+    _require_columns(cache, required_columns, 'global chunk embedding cache')
+    _validated_unique_cache(
+        cache,
+        key_column='chunk_embedding_cache_key',
+        fingerprint_column='embedding_payload_sha256',
+        label='global chunk embedding cache',
+    )
+
+
+def _validated_unique_cache(
+    cache: pl.DataFrame,
+    *,
+    key_column: str,
+    fingerprint_column: str,
+    label: str,
+) -> pl.DataFrame:
+    conflicts = (
+        cache
+        .group_by(key_column)
+        .agg(pl.col(fingerprint_column).n_unique().alias('n_fingerprints'))
+        .filter(pl.col('n_fingerprints') > 1)
+    )
+    if conflicts.height:
+        examples = conflicts[key_column].head(5).to_list()
+        raise RuntimeError(f'{label} has conflicting duplicate rows: {examples}')
+    return cache.unique(subset=[key_column], keep='first', maintain_order=True)
+
+
+def _require_columns(cache: pl.DataFrame, required_columns: set[str], label: str) -> None:
+    missing = sorted(required_columns - set(cache.columns))
+    if missing:
+        raise RuntimeError(f'{label} is missing required columns: {missing}')
+
+
+def _read_parquet_if_exists(path: Path) -> pl.DataFrame:
+    if not path.exists():
+        return pl.DataFrame()
+    return pl.read_parquet(path)
+
+
+def _write_parquet_atomic(path: Path, df: pl.DataFrame) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f'.{path.name}.{os.getpid()}.tmp')
+    df.write_parquet(tmp_path)
+    os.replace(tmp_path, path)
+
+
+@contextmanager
+def _file_lock(lock_path: Path, timeout_seconds: float = 600.0) -> Iterator[None]:
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout_seconds
+    fd = -1
+
+    while fd < 0:
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+        except FileExistsError:
+            if _lock_is_stale(lock_path):
+                with suppress(FileNotFoundError):
+                    lock_path.unlink()
+                continue
+
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f'timed out waiting for cache lock: {lock_path}') from None
+
+            time.sleep(0.2)
+
+    try:
+        yield
+    finally:
+        os.close(fd)
+        with suppress(FileNotFoundError):
+            lock_path.unlink()
+
+
+def _lock_is_stale(lock_path: Path) -> bool:
+    try:
+        raw_pid = lock_path.read_text().strip()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+
+    if not raw_pid.isdigit():
+        return True
+
+    pid = int(raw_pid)
+
+    if pid <= 0:
+        return True
+
+    # Do not treat our own process lock as stale.
+    if pid == os.getpid():
+        return False
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+
+    return False
+
+
+def _ontology_path(cfg: ExperimentCfg) -> Path:
+    if cfg.generation.ontology_path:
+        return Path(cfg.generation.ontology_path)
+    return MedicalDatasetGenPaths.default_ontology_path
+
+
+def _chunk_template_path() -> Path:
+    return MedicalDatasetGenPaths.root / 'data_templates' / 'chunk_templates.yaml'
+
+
+def _file_fingerprint(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, 'rb') as file:
+        for block in iter(lambda: file.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _hash_json(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def _cache_bucket(value: str) -> str:
+    if len(value) < CACHE_BUCKET_HEX_CHARS:
+        raise ValueError(f'cache key is too short to bucket: {value!r}')
+    return value[:CACHE_BUCKET_HEX_CHARS]

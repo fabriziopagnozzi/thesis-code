@@ -17,8 +17,9 @@
         - This process will turn out useful also later if we want to go back to the original MIMIC pipeline and make it work.
 
     - Fine tune the medical ontology somehow
+    
     - use LLMs to rewrite chunks into a more natural clinical prose while retaining all the meaning --> drawback: expensive and time-consuming
-
+    
 ---------
 
 # Writing - Primary

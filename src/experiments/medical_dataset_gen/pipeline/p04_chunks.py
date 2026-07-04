@@ -37,6 +37,11 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_text,
 )
+from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
+    deterministic_chunk_id,
+    deterministic_render_signature,
+    materialize_global_deterministic_documents,
+)
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkRow,
@@ -380,7 +385,12 @@ def _render_chunks_deterministic_parallel(
             kept_rows += len(rows)
 
     chunk_rows = _chunk_rows_frame(rows_all) if rows_all else pl.DataFrame()
-    chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
+    render_signature = deterministic_render_signature(cfg)
+    chunk_documents, chunk_memberships = _write_normalized_chunks(
+        paths,
+        chunk_rows,
+        render_signature=render_signature,
+    )
 
     write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
     if chunks_with_soft_warnings:
@@ -485,6 +495,7 @@ def _chunk_rows_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
 def _write_normalized_chunks(
     paths: MedicalDatasetGenPaths,
     chunk_rows: pl.DataFrame,
+    render_signature: str | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     if len(chunk_rows) == 0:
         chunk_documents = pl.DataFrame()
@@ -506,9 +517,7 @@ def _write_normalized_chunks(
         )
 
     doc_keys = chunk_rows.select('chunk_reuse_key').unique(maintain_order=True)
-    doc_key_to_id = {
-        key: chunk_id(idx) for idx, key in enumerate(doc_keys['chunk_reuse_key'].to_list())
-    }
+    doc_key_to_id = _doc_key_to_chunk_id(doc_keys['chunk_reuse_key'].to_list(), render_signature)
 
     with_doc_id = chunk_rows.with_columns(
         pl.col('chunk_reuse_key')
@@ -572,6 +581,12 @@ def _write_normalized_chunks(
         .unique(subset=['chunk_id'], keep='first', maintain_order=True)
         .sort('chunk_id')
     )
+    if render_signature is not None:
+        chunk_documents = materialize_global_deterministic_documents(
+            paths,
+            render_signature,
+            chunk_documents,
+        ).sort('chunk_id')
     chunk_memberships = with_doc_id.select(
         [col for col in membership_cols if col in with_doc_id.columns]
     )
@@ -596,6 +611,15 @@ def _write_normalized_chunks(
         f'{len(chunk_memberships):,} query membership(s)'
     )
     return chunk_documents, chunk_memberships
+
+
+def _doc_key_to_chunk_id(
+    chunk_reuse_keys: list[str],
+    render_signature: str | None,
+) -> dict[str, str]:
+    if render_signature is None:
+        return {key: chunk_id(idx) for idx, key in enumerate(chunk_reuse_keys)}
+    return {key: deterministic_chunk_id(render_signature, key) for key in chunk_reuse_keys}
 
 
 if __name__ == '__main__':

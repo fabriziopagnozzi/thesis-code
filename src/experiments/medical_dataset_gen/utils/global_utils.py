@@ -44,6 +44,7 @@ SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTab
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
     results_dir = root / '_results'
+    cache_dir = root / '_cache'
     default_ontology_path = root / 'data_templates' / 'medical_ontology.yaml'
 
     def __init__(
@@ -98,6 +99,36 @@ class MedicalDatasetGenPaths:
 
     def get_result_dir(self, table: SyntheticMedicalDatasetTableName) -> Path:
         return self.table_path(table).parent
+
+    def deterministic_chunk_documents_cache_dir(self, render_signature: str) -> Path:
+        return self.cache_dir / 'deterministic_chunk_documents' / render_signature
+
+    def deterministic_chunk_documents_bucket_path(
+        self,
+        render_signature: str,
+        bucket: str,
+    ) -> Path:
+        return self.deterministic_chunk_documents_cache_dir(render_signature) / f'{bucket}.parquet'
+
+    def deterministic_chunk_documents_lock_path(
+        self,
+        render_signature: str,
+        bucket: str,
+    ) -> Path:
+        return self.deterministic_chunk_documents_bucket_path(render_signature, bucket).with_suffix(
+            '.parquet.lock'
+        )
+
+    def chunk_embeddings_cache_dir(self, embedding_signature: str) -> Path:
+        return self.cache_dir / 'chunk_embeddings' / embedding_signature
+
+    def chunk_embeddings_bucket_path(self, embedding_signature: str, bucket: str) -> Path:
+        return self.chunk_embeddings_cache_dir(embedding_signature) / f'{bucket}.parquet'
+
+    def chunk_embeddings_lock_path(self, embedding_signature: str, bucket: str) -> Path:
+        return self.chunk_embeddings_bucket_path(embedding_signature, bucket).with_suffix(
+            '.parquet.lock'
+        )
 
     def config_source_paths(self) -> tuple[Path, ...]:
         if self.is_subexperiment():

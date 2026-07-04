@@ -3,59 +3,59 @@ name = "thesis"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-	"numpy",
-	"polars",
-	"jupyter",
-	"tqdm",
-	"huggingface-hub>=1.7.1",
-	"sentence-transformers>=4.1",
-	"torch",
-	"ijson>=3.5.0",
-	"duckdb>=1.5.1",
-	"lancedb>=0.30.2",
-	"ollama>=0.5",
-	"pyyaml>=6.0",
-	"pydantic>=2.0",
-	"pylance>=4.0.0",
-	"fastapi>=0.136.1",
-	"uvicorn>=0.46.0",
-	"python-multipart>=0.0.26",
-	"scikit-learn>=1.5",
-	"umap-learn>=0.5",
-	"hdbscan>=0.8",
-	"matplotlib>=3.9",
-	"plotly>=6.7.0",
-	"mteb>=2.12.30",
-	"rouge-score>=0.1.2",
-	"pypdf>=6.12.2",
-	"tabulate>=0.10.0",
-	"peft>=0.19.1",
-	"ruamel-yaml>=0.19.1",
+    "numpy",
+    "polars",
+    "jupyter",
+    "tqdm",
+    "huggingface-hub>=1.7.1",
+    "sentence-transformers>=4.1",
+    "torch",
+    "ijson>=3.5.0",
+    "duckdb>=1.5.1",
+    "lancedb>=0.30.2",
+    "ollama>=0.5",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "pylance>=4.0.0",
+    "fastapi>=0.136.1",
+    "uvicorn>=0.46.0",
+    "python-multipart>=0.0.26",
+    "scikit-learn>=1.5",
+    "umap-learn>=0.5",
+    "hdbscan>=0.8",
+    "matplotlib>=3.9",
+    "plotly>=6.7.0",
+    "mteb>=2.12.30",
+    "rouge-score>=0.1.2",
+    "pypdf>=6.12.2",
+    "tabulate>=0.10.0",
+    "peft>=0.19.1",
+    "ruamel-yaml>=0.19.1",
 ]
 [dependency-groups]
 dev = [
-	"ruff",
-	"pytest",
-	"ipykernel",
-	"matplotlib-stubs",
-	"pandas-stubs",
-	"pyarrow-stubs",
-	"taskipy",
-	"pyright>=1.1.411",
+    "ruff",
+    "pytest",
+    "ipykernel",
+    "matplotlib-stubs",
+    "pandas-stubs",
+    "pyarrow-stubs",
+    "taskipy",
+    "pyright>=1.1.411",
 ]
 
 
 [tool.taskipy.tasks]
 # -- Synthetic Medical Dataset Generation ----------------------------------------------------------------------------
-synth_pipeline = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline"
+pipeline = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline"
 
 # Specific pipeline runnable scripts
-synth_eval = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline.p09_evaluate"
-synth_eval_plots = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline.p11_eval_plots"
-synth_geom_plots = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline.p10_query_geom_plots"
-synth_query_diagnose = "./memlimit.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
+eval = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline.p09_evaluate"
+eval_plots = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline.p11_eval_plots"
+geom_plots = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline.p10_query_geom_plots"
+query_diagnose = "./memlimit.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
 
-# -- MIMIC src.Experiments ----------------------------------------------------------------------------
+# -- MIMIC Experiments ----------------------------------------------------------------------------
 # Chunking
 mimic_chunking_full = "./memlimit.sh python -m experiments.mimic.chunking.run_chunking_steps"
 mimic_conditions_stats = "./memlimit.sh python -m experiments.mimic.chunking.a_conditions_stats"
@@ -123,11 +123,11 @@ reportOptionalMemberAccess = false
 # reportUnknownMemberType = false
 # reportMissingTypeStubs = false
 exclude = [
-	"**/datasets/**",
-	"**/.venv/**",
-	"**/build/**",
-	"**/__pycache__",
-	"**/node_modules",
-	"**/.*",
+    "**/datasets/**",
+    "**/.venv/**",
+    "**/build/**",
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.*",
 ]
 executionEnvironments = [{ root = ".", extraPaths = ["./"] }]
