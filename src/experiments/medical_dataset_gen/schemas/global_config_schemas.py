@@ -410,9 +410,13 @@ class LambdaSelectionCfg(ConfigModel):
     tie_break: LambdaSelectionTieBreak = 'lower_lambda'
 
 
+type EvalPlotTheme = Literal['dark', 'light']
+
+
 class EvaluationCfg(ConfigModel):
     workers: PositiveInt | None = None
     all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+    plot_theme: EvalPlotTheme = 'light'
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
     fac_loc_mmr_comparison_kernels: MethodsComparisonKernelsCfg = Field(
         default_factory=MethodsComparisonKernelsCfg

@@ -3,21 +3,26 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import polars as pl
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
+    DEFAULT_EVAL_PLOT_THEME,
     DEFAULT_PLOT_GRID_LAYOUTS,
+    EVAL_PLOT_DIVERGING_CMAP,
+    EVAL_PLOT_HEATMAP_CMAP,
+    EVAL_PLOT_K_COLORMAP,
+    EVAL_PLOT_STRATEGY_STYLES,
+    EVAL_PLOT_THEMES,
     FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE,
     FOR_LAMBDA_K_CURVE_MARKER_SIZE,
     PLOT_METRIC_TITLES,
     PLOTTED_ANSWER_ROUGE_METRIC_NAMES,
     PLOTTED_DIAGNOSTIC_METRIC_NAMES,
     PLOTTED_MAIN_METRIC_NAMES,
-    STRATEGY_STYLE,
     EvalPlotFileName,
     NamedPlotMetric,
 )
@@ -31,7 +36,10 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     select_best_lambda_rows,
 )
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
-from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    EvalPlotTheme,
+    LambdaSelectionCfg,
+)
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
 
@@ -40,12 +48,14 @@ def plot_metrics_at_best_lambda_for_k(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Metric-vs-k lines.
 
     Top-k is shown as the baseline. Diversity methods show only the selected
     lambda* path for each k, with the exact lambda annotated at each marker.
     """
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
 
     k_values = sorted(stats_df['k'].unique().to_list())
@@ -95,7 +105,7 @@ def plot_metrics_at_best_lambda_for_k(
                 xs,
                 ys,
                 s=42,
-                facecolors='white',
+                facecolors=_theme_color('marker_facecolor'),
                 edgecolors=style['color'],
                 linewidths=1.4,
                 zorder=4,
@@ -135,8 +145,13 @@ def plot_metrics_at_best_lambda_for_k(
     plt.close(fig)
 
 
-def plot_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_metrics_k_curves_for_lambda(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+) -> None:
     """Main benchmark metrics as lambda changes."""
+    _set_active_plot_theme(plot_theme)
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
@@ -147,8 +162,13 @@ def plot_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> N
     )
 
 
-def plot_diagnostics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_diagnostics_k_curves_for_lambda(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+) -> None:
     """Diagnostic metrics as lambda changes."""
+    _set_active_plot_theme(plot_theme)
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
@@ -188,8 +208,7 @@ def _plot_lambda_sensitivity(
     ]
     if not metric_cols:
         return
-    cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
-    k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
+    k_colors = _k_colors(plt, k_values)
 
     fig, axes = _grid_figure(
         plot_name,
@@ -250,7 +269,7 @@ def _plot_lambda_sensitivity(
 
     handles, labels = axes[0][0].get_legend_handles_labels()
     if handles:
-        fig.legend(
+        legend = fig.legend(
             handles,
             labels,
             loc='lower center',
@@ -259,6 +278,7 @@ def _plot_lambda_sensitivity(
             frameon=False,
             bbox_to_anchor=(0.5, -0.01),
         )
+        _style_legend(legend)
     fig.suptitle(figure_title, fontsize=12)
     _figure_note(
         fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
@@ -272,18 +292,23 @@ def plot_metrics_heatmap_k_lambda_grid(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Static heatmaps across k x lambda for FacLoc, MMR, and FacLoc advantage."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.colors import Normalize, TwoSlopeNorm
 
+    _activate_plot_theme()
     heatmap_data = _build_strategy_lambda_heatmap_data(stats_df, results_df)
     if heatmap_data is None:
         return
     metric_matrices, k_values, lambda_axes = heatmap_data
     metrics = _available_metrics(stats_df, results_df)
-    fig = plt.figure(figsize=(15.5, 2.7 * len(metrics) + 1.8))
+    fig = plt.figure(
+        figsize=(15.5, 2.7 * len(metrics) + 1.8), facecolor=_theme_color('figure_facecolor')
+    )
     grid = fig.add_gridspec(
         nrows=len(metrics),
         ncols=7,
@@ -333,7 +358,7 @@ def plot_metrics_heatmap_k_lambda_grid(
                 matrix,
                 origin='lower',
                 aspect='auto',
-                cmap='viridis' if key != 'advantage' else 'RdBu_r',
+                cmap=EVAL_PLOT_HEATMAP_CMAP if key != 'advantage' else EVAL_PLOT_DIVERGING_CMAP,
                 norm=raw_norm if key != 'advantage' else adv_norm,
                 interpolation='nearest',
             )
@@ -384,6 +409,7 @@ def plot_metrics_heatmap_k_lambda_grid(
             'for lower-better metrics, positive still means FacLoc better.'
         ),
     )
+    _style_existing_axes(fig)
     fig.subplots_adjust(left=0.08, right=0.985, bottom=0.10, top=0.92)
     fig.savefig(out_dir / 'metrics_heatmap_k_lambda_grid.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
@@ -393,8 +419,10 @@ def plot_metrics_heatmap_k_lambda_grid_html(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Interactive HTML explorer for strategy-vs-lambda heatmaps."""
+    _set_active_plot_theme(plot_theme)
     import numpy as np
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -448,7 +476,9 @@ def plot_metrics_heatmap_k_lambda_grid_html(
                     z=matrix,
                     x=[f'{value:.2f}' for value in x_values],
                     y=[f'k={k}' for k in k_values],
-                    colorscale='Viridis' if key != 'advantage' else 'RdBu_r',
+                    colorscale=EVAL_PLOT_HEATMAP_CMAP
+                    if key != 'advantage'
+                    else EVAL_PLOT_DIVERGING_CMAP,
                     zmin=raw_min if key != 'advantage' else -advantage_abs_max,
                     zmax=raw_max if key != 'advantage' else advantage_abs_max,
                     zmid=0.0 if key == 'advantage' else None,
@@ -487,6 +517,10 @@ def plot_metrics_heatmap_k_lambda_grid_html(
 
     fig.update_layout(
         title=f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)}',
+        template=_active_theme()['plotly_template'],
+        paper_bgcolor=_theme_color('figure_facecolor'),
+        plot_bgcolor=_theme_color('axes_facecolor'),
+        font={'color': _theme_color('text_color')},
         updatemenus=[
             {
                 'buttons': button_defs,
@@ -504,8 +538,26 @@ def plot_metrics_heatmap_k_lambda_grid_html(
         ['FacLoc lambda', 'MMR lambda', 'normalized grid position'],
         start=1,
     ):
-        fig.update_xaxes(title_text=x_title, row=1, col=col_idx)
-        fig.update_yaxes(title_text='k', row=1, col=col_idx)
+        fig.update_xaxes(
+            title_text=x_title,
+            row=1,
+            col=col_idx,
+            gridcolor=_theme_color('grid_color'),
+            zerolinecolor=_theme_color('zero_line_color'),
+            linecolor=_theme_color('spine_color'),
+            tickfont={'color': _theme_color('tick_color')},
+            title_font={'color': _theme_color('text_color')},
+        )
+        fig.update_yaxes(
+            title_text='k',
+            row=1,
+            col=col_idx,
+            gridcolor=_theme_color('grid_color'),
+            zerolinecolor=_theme_color('zero_line_color'),
+            linecolor=_theme_color('spine_color'),
+            tickfont={'color': _theme_color('tick_color')},
+            title_font={'color': _theme_color('text_color')},
+        )
 
     fig.write_html(
         out_dir / 'metrics_heatmap_k_lambda_grid.html',
@@ -519,8 +571,10 @@ def plot_metrics_distributions(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Violin plots at the top-k best k and each strategy's configured lambda*."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -570,7 +624,12 @@ def plot_metrics_distributions(
                 body.set_alpha(0.65)
         medians = [float(np.median(values)) if values else float('nan') for values in data]
         ax.scatter(
-            range(len(strategies)), medians, color='white', edgecolors='black', s=42, zorder=4
+            range(len(strategies)),
+            medians,
+            color=_theme_color('marker_facecolor'),
+            edgecolors=_theme_color('figure_facecolor'),
+            s=42,
+            zorder=4,
         )
         ax.set_xticks(range(len(strategies)))
         ax.set_xticklabels(labels, fontsize=9, rotation=15)
@@ -590,11 +649,13 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Paired delta curves relative to top-k on each strategy's native lambda grid.
 
     For lower-is-better diagnostics, negative bars are favorable.
     """
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -607,8 +668,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     metrics = _available_metrics(stats_df, results_df)
     if not metrics:
         return
-    cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
-    k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
+    k_colors = _k_colors(plt, k_values)
 
     fig, axes = _grid_figure(
         'metrics_delta_vs_topk_k_curves_for_lambda',
@@ -673,7 +733,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
                 if np.any(ci > 0):
                     ax.fill_between(x, y - ci, y + ci, color=k_colors[k], alpha=0.12, linewidth=0)
 
-            ax.axhline(0, color='black', lw=0.8)
+            ax.axhline(0, color=_theme_color('zero_line_color'), lw=0.8)
             if row_idx == 0:
                 ax.set_title(style['label'], fontsize=10)
             if col_idx == 0:
@@ -691,7 +751,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
 
     handles, labels = _first_legend_handles(axes)
     if handles:
-        fig.legend(
+        legend = fig.legend(
             handles,
             labels,
             loc='lower center',
@@ -700,6 +760,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
             frameon=False,
             bbox_to_anchor=(0.5, 0.0),
         )
+        _style_legend(legend)
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(
         out_dir / 'metrics_delta_vs_topk_k_curves_for_lambda.png',
@@ -714,8 +775,10 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Paired delta bars using lambda* per strategy and k, with per-bar lambda labels."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -775,7 +838,7 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
                 color=style['color'],
             )
 
-        ax.axhline(0, color='black', lw=0.8)
+        ax.axhline(0, color=_theme_color('zero_line_color'), lw=0.8)
         ax.set_xticks(x)
         ax.set_xticklabels([f'k={k}' for k in k_values], fontsize=9)
         ax.set_title(
@@ -801,12 +864,19 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
     plt.close(fig)
 
 
-def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_lambda_agreement(
+    agreement_df: pl.DataFrame,
+    out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+) -> None:
     """Heatmaps of FacLoc-vs-MMR lambda pairs ranked by mean absolute metric disagreement."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.colors import LogNorm
     from matplotlib.patches import Rectangle
+
+    _activate_plot_theme()
 
     if agreement_df.is_empty():
         return
@@ -855,6 +925,9 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
         squeeze=False,
         sharey=True,
     )
+    _style_figure(fig)
+    for ax in axes.flatten():
+        _style_axis(ax)
     flat_axes = axes.flatten()
     fac_idx = {lam: idx for idx, lam in enumerate(fac_lams)}
     mmr_idx = {lam: idx for idx, lam in enumerate(mmr_lams)}
@@ -878,7 +951,7 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
             matrix,
             origin='lower',
             aspect='equal',
-            cmap='viridis_r',
+            cmap=f'{EVAL_PLOT_HEATMAP_CMAP}_r',
             interpolation='nearest',
             **image_kwargs,
         )
@@ -891,7 +964,7 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
                 1,
                 1,
                 fill=False,
-                edgecolor='white',
+                edgecolor=_theme_color('selection_color'),
                 linewidth=1.6,
                 zorder=4,
             )
@@ -901,8 +974,8 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
             best_fac_idx,
             marker='*',
             s=120,
-            facecolor='white',
-            edgecolor='black',
+            facecolor=_theme_color('selection_color'),
+            edgecolor=_theme_color('figure_facecolor'),
             linewidth=0.9,
             zorder=5,
         )
@@ -958,6 +1031,7 @@ def plot_lambda_agreement(agreement_df: pl.DataFrame, out_dir: Path) -> None:
             f'{lambda_cutoff_note}'
         ),
     )
+    _style_existing_axes(fig)
     fig.subplots_adjust(left=0.05, right=0.955, bottom=0.11, top=0.90, wspace=0.20)
     fig.savefig(out_dir / 'lambda_agreement_facloc_mmr.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
@@ -968,8 +1042,10 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
     agreement_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Per-k metric traces for the best-agreeing pair plus configured lambda* controls."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.ticker import FormatStrFormatter, MaxNLocator
@@ -1035,7 +1111,7 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
         [m.stats_col for m in diagnostic_metrics],
     )
     row_limits = [eval_ylim, eval_ylim, diagnostic_ylim, diagnostic_ylim]
-    control_facecolor = '#f4efe2'
+    control_facecolor = _theme_color('panel_highlight_facecolor')
 
     score_col = (
         'weighted_mean_abs_diff'
@@ -1052,8 +1128,8 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
 
         for row_idx, (row_title, metrics, is_control) in enumerate(row_specs):
             pair_row = control_row if is_control else agreement_row
-            fac_loc_lam = float(pair_row['fac_loc_lam'])
-            mmr_lam = float(pair_row['mmr_lam'])
+            fac_loc_lam = float(pair_row['fac_loc_lam'])  # type:ignore
+            mmr_lam = float(pair_row['mmr_lam'])  # type:ignore
             fac_loc_row = _strategy_k_lambda_row(
                 stats_df,
                 strategy='fac_loc',
@@ -1072,8 +1148,8 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
                 continue
             x_positions = np.arange(len(metrics))
             labels = [metric.title for metric in metrics]
-            mmr_values = [float(mmr_row[metric.stats_col]) for metric in metrics]
-            fac_loc_values = [float(fac_loc_row[metric.stats_col]) for metric in metrics]
+            mmr_values = [float(mmr_row[metric.stats_col]) for metric in metrics]  # type:ignore
+            fac_loc_values = [float(fac_loc_row[metric.stats_col]) for metric in metrics]  # type:ignore
             if is_control:
                 ax.set_facecolor(control_facecolor)
 
@@ -1117,7 +1193,7 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
                     '\n'.join([
                         f'k={k}',
                         f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                        f'{score_col}={float(agreement_row[score_col]):.3f}',
+                        f'{score_col}={float(agreement_row[score_col]):.3f}',  # type:ignore
                     ]),
                     fontsize=9,
                 )
@@ -1134,7 +1210,7 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
                     '\n'.join([
                         f'k={k}',
                         f'Agree: FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                        f'{score_col}={float(agreement_row[score_col]):.3f}',
+                        f'{score_col}={float(agreement_row[score_col]):.3f}',  # type:ignore
                     ]),
                     fontsize=9,
                 )
@@ -1149,7 +1225,7 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
 
     handles, labels = axes[0][0].get_legend_handles_labels()
     if handles:
-        fig.legend(
+        legend = fig.legend(
             handles,
             labels,
             loc='lower center',
@@ -1158,6 +1234,7 @@ def plot_metrics_at_agreeing_lambda_wrt_best_lambda(
             frameon=False,
             bbox_to_anchor=(0.5, 0.045),
         )
+        _style_legend(legend)
 
     fig.suptitle(
         'Best-agreeing FacLoc/MMR pair metrics by k with configured lambda* controls',
@@ -1181,8 +1258,10 @@ def plot_profiles_metrics_by_k_at_best_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Control-only evaluation metrics using each strategy's configured lambda*."""
+    _set_active_plot_theme(plot_theme)
     _plot_best_lambda_metric_group(
         stats_df,
         out_dir,
@@ -1199,8 +1278,10 @@ def plot_profiles_diagnostics_by_k_at_best_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Control-only diagnostic metrics using each strategy's configured lambda*."""
+    _set_active_plot_theme(plot_theme)
     _plot_best_lambda_metric_group(
         stats_df,
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
@@ -1259,7 +1340,7 @@ def _plot_best_lambda_metric_group(
         'mmr': get_style('mmr'),
         'fac_loc': get_style('fac_loc'),
     }
-    control_facecolor = '#f4efe2'
+    control_facecolor = _theme_color('panel_highlight_facecolor')
     row_ylim = _lambda_agreeing_metrics_ylim(
         stats_df,
         control_pairs,
@@ -1274,8 +1355,8 @@ def _plot_best_lambda_metric_group(
             ax.set_visible(False)
             continue
 
-        fac_loc_lam = float(control_row['fac_loc_lam'])
-        mmr_lam = float(control_row['mmr_lam'])
+        fac_loc_lam = float(control_row['fac_loc_lam'])  # type:ignore
+        mmr_lam = float(control_row['mmr_lam'])  # type:ignore
         topk_row = _topk_k_row(stats_df, k)
         fac_loc_row = _strategy_k_lambda_row(stats_df, strategy='fac_loc', k=k, lam=fac_loc_lam)
         mmr_row = _strategy_k_lambda_row(stats_df, strategy='mmr', k=k, lam=mmr_lam)
@@ -1285,15 +1366,15 @@ def _plot_best_lambda_metric_group(
 
         x_positions = np.arange(len(metrics))
         labels = [metric.title for metric in metrics]
-        topk_values = [float(topk_row[metric.stats_col]) for metric in metrics]
-        mmr_values = [float(mmr_row[metric.stats_col]) for metric in metrics]
-        fac_loc_values = [float(fac_loc_row[metric.stats_col]) for metric in metrics]
+        topk_values = [float(topk_row[metric.stats_col]) for metric in metrics]  # type:ignore
+        mmr_values = [float(mmr_row[metric.stats_col]) for metric in metrics]  # type:ignore
+        fac_loc_values = [float(fac_loc_row[metric.stats_col]) for metric in metrics]  # type:ignore
 
         ax.set_facecolor(control_facecolor)
         ax.plot(
             x_positions,
             topk_values,
-            color='#000000',
+            color=get_style('top_k')['color'],
             lw=2.0,
             marker='o',
             ms=4.5,
@@ -1344,7 +1425,7 @@ def _plot_best_lambda_metric_group(
 
     handles, labels = axes[0][0].get_legend_handles_labels()
     if handles:
-        fig.legend(
+        legend = fig.legend(
             handles,
             labels,
             loc='lower center',
@@ -1353,6 +1434,7 @@ def _plot_best_lambda_metric_group(
             frameon=False,
             bbox_to_anchor=(0.5, 0.05),
         )
+        _style_legend(legend)
 
     fig.suptitle(figure_title, fontsize=12)
     _figure_note(
@@ -1368,8 +1450,10 @@ def plot_diagnostics_at_best_lambda_for_k(
     stats_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Diagnostic metrics that explain why a strategy wins or fails."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
 
     k_values = sorted(stats_df['k'].unique().to_list())
@@ -1411,7 +1495,7 @@ def plot_diagnostics_at_best_lambda_for_k(
                     xs,
                     ys,
                     s=42,
-                    facecolors='white',
+                    facecolors=_theme_color('marker_facecolor'),
                     edgecolors=style['color'],
                     linewidths=1.4,
                     zorder=4,
@@ -1450,8 +1534,10 @@ def plot_answer_metrics_at_best_lambda_for_k(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Auxiliary answer-token overlap diagnostics."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
 
     metrics = _available_answer_rouge_metrics(stats_df, results_df)
@@ -1504,7 +1590,7 @@ def plot_answer_metrics_at_best_lambda_for_k(
                 xs,
                 ys,
                 s=42,
-                facecolors='white',
+                facecolors=_theme_color('marker_facecolor'),
                 edgecolors=style['color'],
                 linewidths=1.4,
                 zorder=4,
@@ -1531,7 +1617,7 @@ def plot_answer_metrics_at_best_lambda_for_k(
 
     handles, labels = _first_legend_handles(axes)
     if handles:
-        fig.legend(
+        legend = fig.legend(
             handles,
             labels,
             loc='lower center',
@@ -1540,6 +1626,7 @@ def plot_answer_metrics_at_best_lambda_for_k(
             frameon=False,
             bbox_to_anchor=(0.5, 0.005),
         )
+        _style_legend(legend)
     fig.suptitle(
         'Auxiliary answer-token ROUGE diagnostics - lambda* path per strategy',
         fontsize=12,
@@ -1554,8 +1641,13 @@ def plot_answer_metrics_at_best_lambda_for_k(
     plt.close(fig)
 
 
-def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Path) -> None:
+def plot_answer_metrics_k_curves_for_lambda(
+    stats_df: pl.DataFrame,
+    out_dir: Path,
+    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+) -> None:
     """Auxiliary ROUGE metrics as lambda changes."""
+    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
 
     metric_cols = [
@@ -1576,8 +1668,7 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
 
     k_values = sorted(stats_df['k'].unique().to_list())
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
-    cmap = plt.get_cmap('viridis')  # type: ignore[attr-defined]
-    k_colors = {k: cmap(i / max(len(k_values) - 1, 1)) for i, k in enumerate(k_values)}
+    k_colors = _k_colors(plt, k_values)
 
     fig, axes = _grid_figure(
         'answer_metrics_k_curves_for_lambda',
@@ -1644,7 +1735,7 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
 
     handles, labels = axes[0][0].get_legend_handles_labels()
     if handles:
-        fig.legend(
+        legend = fig.legend(
             handles,
             labels,
             loc='lower center',
@@ -1653,6 +1744,7 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
             frameon=False,
             bbox_to_anchor=(0.5, -0.01),
         )
+        _style_legend(legend)
     fig.suptitle(
         'Auxiliary answer-token ROUGE lambda sensitivity',
         fontsize=12,
@@ -1666,7 +1758,108 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
 
 
 def get_style(strategy: str) -> dict[str, str]:
-    return STRATEGY_STYLE.get(strategy, {'color': '#aaaaaa', 'ls': '-', 'label': strategy})
+    styles = EVAL_PLOT_STRATEGY_STYLES[_ACTIVE_EVAL_PLOT_THEME]
+    return styles.get(
+        strategy,
+        {'color': _theme_color('fallback_color'), 'ls': '-', 'label': strategy},
+    )
+
+
+_ACTIVE_EVAL_PLOT_THEME: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME
+_ACTIVE_MATPLOTLIB_THEME: EvalPlotTheme | None = None
+
+
+def _normalize_plot_theme(plot_theme: EvalPlotTheme | str | None = None) -> EvalPlotTheme:
+    if plot_theme is None:
+        return DEFAULT_EVAL_PLOT_THEME
+    if plot_theme in EVAL_PLOT_THEMES:
+        return cast(EvalPlotTheme, plot_theme)
+    valid = ', '.join(repr(name) for name in EVAL_PLOT_THEMES)
+    raise ValueError(f'Unknown evaluation plot theme {plot_theme!r}; expected one of: {valid}')
+
+
+def _set_active_plot_theme(plot_theme: EvalPlotTheme | str | None = None) -> EvalPlotTheme:
+    global _ACTIVE_EVAL_PLOT_THEME
+    _ACTIVE_EVAL_PLOT_THEME = _normalize_plot_theme(plot_theme)
+    return _ACTIVE_EVAL_PLOT_THEME
+
+
+def _active_theme() -> dict[str, str]:
+    return EVAL_PLOT_THEMES[_ACTIVE_EVAL_PLOT_THEME]
+
+
+def _theme_color(key: str) -> str:
+    return str(_active_theme()[key])
+
+
+def _activate_plot_theme() -> None:
+    """Apply the selected evaluation theme to Matplotlib defaults."""
+    import matplotlib as mpl
+
+    global _ACTIVE_MATPLOTLIB_THEME
+    if _ACTIVE_MATPLOTLIB_THEME == _ACTIVE_EVAL_PLOT_THEME:
+        return
+
+    mpl.rcParams.update({
+        'figure.facecolor': _theme_color('figure_facecolor'),
+        'figure.edgecolor': _theme_color('figure_facecolor'),
+        'savefig.facecolor': _theme_color('figure_facecolor'),
+        'savefig.edgecolor': _theme_color('figure_facecolor'),
+        'axes.facecolor': _theme_color('axes_facecolor'),
+        'axes.edgecolor': _theme_color('spine_color'),
+        'axes.labelcolor': _theme_color('text_color'),
+        'axes.titlecolor': _theme_color('text_color'),
+        'text.color': _theme_color('text_color'),
+        'xtick.color': _theme_color('tick_color'),
+        'ytick.color': _theme_color('tick_color'),
+        'grid.color': _theme_color('grid_color'),
+        'grid.alpha': 0.28,
+        'legend.facecolor': _theme_color('figure_facecolor'),
+        'legend.edgecolor': _theme_color('spine_color'),
+        'legend.labelcolor': _theme_color('text_color'),
+        'patch.edgecolor': _theme_color('spine_color'),
+    })
+    _ACTIVE_MATPLOTLIB_THEME = _ACTIVE_EVAL_PLOT_THEME
+
+
+def _style_figure(fig: Figure) -> None:
+    fig.patch.set_facecolor(_theme_color('figure_facecolor'))  # type:ignore
+    fig.patch.set_edgecolor(_theme_color('figure_facecolor'))  # type:ignore
+
+
+def _style_axis(ax: Any, *, facecolor: str | None = None) -> None:
+    ax.set_facecolor(facecolor or _theme_color('axes_facecolor'))
+    ax.tick_params(colors=_theme_color('tick_color'), which='both')
+    ax.xaxis.label.set_color(_theme_color('text_color'))
+    ax.yaxis.label.set_color(_theme_color('text_color'))
+    ax.title.set_color(_theme_color('text_color'))
+    for label in [*ax.get_xticklabels(), *ax.get_yticklabels()]:
+        label.set_color(_theme_color('tick_color'))
+    for spine in ax.spines.values():
+        spine.set_color(_theme_color('spine_color'))
+
+
+def _style_existing_axes(fig: Figure) -> None:
+    _style_figure(fig)
+    for ax in fig.axes:
+        _style_axis(ax)
+
+
+def _style_legend(legend: Any | None) -> None:
+    if legend is None:
+        return
+    frame = legend.get_frame()
+    frame.set_facecolor(_theme_color('figure_facecolor'))
+    frame.set_edgecolor(_theme_color('spine_color'))
+    for text in legend.get_texts():
+        text.set_color(_theme_color('text_color'))
+
+
+def _k_colors(plt: Any, k_values: list[int]) -> dict[int, Any]:
+    """Sample a colormap away from its darkest end so every k line is visible."""
+    cmap = plt.get_cmap(EVAL_PLOT_K_COLORMAP)  # type: ignore[attr-defined]
+    denom = max(len(k_values) - 1, 1)
+    return {k: cmap(0.20 + 0.75 * i / denom) for i, k in enumerate(k_values)}
 
 
 def _ordered_strategies(df: pl.DataFrame) -> list[str]:
@@ -1771,9 +1964,13 @@ def _custom_grid_figure(
 ) -> tuple[Figure, NDArray[Any]]:
     import matplotlib.pyplot as plt
 
+    _activate_plot_theme()
     width = width_per_col * cols
     height = height_per_row * rows + footer_height
     fig, axes = plt.subplots(rows, cols, figsize=(width, height), sharex=sharex, squeeze=False)
+    _style_figure(fig)
+    for ax in axes.flatten():
+        _style_axis(ax)
     return fig, axes
 
 
@@ -1874,7 +2071,7 @@ def _mark_best_lambda_curve_point(
         [best_x],
         [best_y],
         s=FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE,
-        facecolors='white',
+        facecolors=_theme_color('marker_facecolor'),
         edgecolors=color,
         linewidths=2.0,
         zorder=5,
@@ -1889,7 +2086,7 @@ def _is_nonfinite_float(value: float) -> bool:
 
 def _finite_float_or_none(value: object) -> float | None:
     try:
-        numeric_value = float(value)
+        numeric_value = float(value)  # type:ignore
     except TypeError, ValueError:
         return None
     return None if _is_nonfinite_float(numeric_value) else numeric_value
@@ -1915,7 +2112,9 @@ def _best_lambda_note(
 
 
 def _figure_note(fig: Figure, text: str, *, y: float = 0.025) -> None:
-    fig.text(0.5, y, text, ha='center', va='bottom', fontsize=8, color='#444444')
+    fig.text(
+        0.5, y, text, ha='center', va='bottom', fontsize=8, color=_theme_color('muted_text_color')
+    )
 
 
 def _add_centered_row_labels(
@@ -1950,6 +2149,7 @@ def _add_centered_row_labels(
             ha='center',
             va='center',
             fontsize=fontsize,
+            color=_theme_color('text_color'),
         )
 
 
@@ -2058,7 +2258,7 @@ def _set_heatmap_axis_labels(
 def _draw_heatmap_grid(ax: Any, n_rows: int, n_cols: int) -> None:
     ax.set_xticks([idx - 0.5 for idx in range(1, n_cols)], minor=True)
     ax.set_yticks([idx - 0.5 for idx in range(1, n_rows)], minor=True)
-    ax.grid(which='minor', color='white', linewidth=0.8, alpha=0.9)
+    ax.grid(which='minor', color=_theme_color('heatmap_grid_color'), linewidth=0.8, alpha=0.9)
     ax.tick_params(which='minor', bottom=False, left=False)
 
 
@@ -2076,13 +2276,17 @@ def _annotate_heatmap_cells(ax: Any, matrix: NDArray[Any], *, diverging: bool) -
                 continue
             if diverging:
                 text_color = (
-                    'white'
+                    _theme_color('heatmap_text_light')
                     if abs(value)
                     > max(abs(float(finite_values.min())), abs(float(finite_values.max()))) * 0.45
-                    else '#222222'
+                    else _theme_color('heatmap_text_dark')
                 )
             else:
-                text_color = 'white' if value >= threshold else '#222222'
+                text_color = (
+                    _theme_color('heatmap_text_light')
+                    if value >= threshold
+                    else _theme_color('heatmap_text_dark')
+                )
             ax.text(
                 col_idx,
                 row_idx,
@@ -2163,7 +2367,7 @@ def _bold_zero_ytick_label(ax: Any) -> None:
     for tick_value, label in zip(ax.get_yticks(), ax.get_yticklabels(), strict=False):
         if abs(float(tick_value)) < 1e-12:
             label.set_fontweight('bold')
-            label.set_color('black')
+            label.set_color(_theme_color('zero_line_color'))
 
 
 def _add_lambda_shade_legend(
@@ -2223,7 +2427,7 @@ def _add_lambda_shade_legend(
         ha='center',
         va='top',
         fontsize=7.5,
-        color='#444444',
+        color=_theme_color('muted_text_color'),
     )
 
 
@@ -2394,7 +2598,7 @@ def _annotate_lambda_points(
             color=color,
             bbox={
                 'boxstyle': 'round,pad=0.18',
-                'facecolor': 'white',
+                'facecolor': _theme_color('annotation_facecolor'),
                 'edgecolor': color,
                 'linewidth': 0.45,
                 'alpha': 0.92,
@@ -2409,8 +2613,9 @@ def _annotate_delta_bars(
     values: list[float],
     *,
     lambda_values: list[float | None] | None = None,
-    color: str = '#222222',
+    color: str | None = None,
 ) -> None:
+    color = _theme_color('text_color') if color is None else color
     ymin, ymax = ax.get_ylim()  # type: ignore[attr-defined]
     span = max(ymax - ymin, 1e-6)
     value_offset = span * 0.025
@@ -2443,7 +2648,7 @@ def _annotate_delta_bars(
             color=color,
             bbox={
                 'boxstyle': 'round,pad=0.18',
-                'facecolor': 'white',
+                'facecolor': _theme_color('annotation_facecolor'),
                 'edgecolor': color,
                 'linewidth': 0.45,
                 'alpha': 0.92,
@@ -2461,7 +2666,7 @@ def _draw_bar_slot_guides(ax: Any, centers: list[float], width: float) -> None:
             center - width / 2,
             center + width / 2,
             facecolor='none',
-            edgecolor='#cfcfcf',
+            edgecolor=_theme_color('spine_color'),
             linewidth=0.4,
             zorder=0.1,
         )
@@ -2499,7 +2704,7 @@ def _annotate_single_delta_bar(ax: Any, bar: Any, value: float, *, color: str) -
         color=color,
         bbox={
             'boxstyle': 'round,pad=0.14',
-            'facecolor': 'white',
+            'facecolor': _theme_color('annotation_facecolor'),
             'edgecolor': color,
             'linewidth': 0.35,
             'alpha': 0.9,
@@ -2564,8 +2769,8 @@ def _best_lambda_control_rows(
         rows.append(
             pl.DataFrame({
                 'k': [k],
-                'fac_loc_lam': [float(fac_loc_best['lam'])],
-                'mmr_lam': [float(mmr_best['lam'])],
+                'fac_loc_lam': [float(fac_loc_best['lam'])],  # type:ignore
+                'mmr_lam': [float(mmr_best['lam'])],  # type:ignore
             })
         )
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
@@ -2623,7 +2828,7 @@ def _annotate_pair_metric_deltas(
     ):
         delta = fac_val - mmr_val
         if abs(delta) < 1e-12:
-            color = '#666666'
+            color = _theme_color('muted_text_color')
         else:
             fac_loc_better = delta > 0.0 if metric.higher_is_better else delta < 0.0
             color = get_style('fac_loc')['color'] if fac_loc_better else get_style('mmr')['color']
@@ -2638,7 +2843,7 @@ def _annotate_pair_metric_deltas(
             color=color,
             bbox={
                 'boxstyle': 'round,pad=0.14',
-                'facecolor': 'white',
+                'facecolor': _theme_color('annotation_facecolor'),
                 'edgecolor': color,
                 'linewidth': 0.35,
                 'alpha': 0.9,
@@ -2664,7 +2869,7 @@ def _lambda_agreeing_metrics_ylim(
                     value = topk_row.get(metric_col)
                     if value is None:
                         continue
-                    values.append(float(value))
+                    values.append(float(value))  # type:ignore
         for strategy, lam_key in [('fac_loc', 'fac_loc_lam'), ('mmr', 'mmr_lam')]:
             metric_row = _strategy_k_lambda_row(
                 stats_df,
@@ -2678,7 +2883,7 @@ def _lambda_agreeing_metrics_ylim(
                 value = metric_row.get(metric_col)
                 if value is None:
                     continue
-                values.append(float(value))
+                values.append(float(value))  # type:ignore
 
     if not values:
         return (0.0, 1.0)
@@ -2849,7 +3054,7 @@ def _figure_legend(fig: Figure, axes: NDArray[Any]) -> None:
                 labels.append(label)
                 seen.add(label)
     if handles:
-        fig.legend(  # type: ignore[attr-defined]
+        legend = fig.legend(  # type: ignore[attr-defined]
             handles,
             labels,
             loc='lower center',
@@ -2858,6 +3063,7 @@ def _figure_legend(fig: Figure, axes: NDArray[Any]) -> None:
             frameon=False,
             bbox_to_anchor=(0.5, -0.005),
         )
+        _style_legend(legend)
 
 
 def _first_legend_handles(axes: NDArray[Any]) -> tuple[list[Any], list[str]]:

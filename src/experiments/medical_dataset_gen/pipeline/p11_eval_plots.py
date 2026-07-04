@@ -92,14 +92,20 @@ def build_plot_callable(
         raise ValueError(f'Missing plot function: {plot_fn_name}')
 
     signature = inspect.signature(plot_fn)
-    missing_params = [name for name in signature.parameters if name not in plot_context]
+    missing_params = [
+        name
+        for name, param in signature.parameters.items()
+        if name not in plot_context and param.default is inspect.Parameter.empty
+    ]
     if missing_params:
         missing = ', '.join(missing_params)
         raise ValueError(
             f'Unsupported plot function signature for {plot_fn_name}: missing {missing}'
         )
 
-    ordered_kwargs = {name: plot_context[name] for name in signature.parameters}
+    ordered_kwargs = {
+        name: plot_context[name] for name in signature.parameters if name in plot_context
+    }
     typed_plot_fn = cast(Callable[..., None], plot_fn)
     return lambda: typed_plot_fn(**ordered_kwargs)
 
@@ -122,6 +128,7 @@ def build_plot_jobs(
         'agreement_df': agreement_df,
         'out_dir': out_dir,
         'lambda_selection': cfg.evaluation.lambda_selection,
+        'plot_theme': cfg.evaluation.plot_theme,
     }
     return [
         (plot_name, build_plot_callable(plot_name, plot_context))
