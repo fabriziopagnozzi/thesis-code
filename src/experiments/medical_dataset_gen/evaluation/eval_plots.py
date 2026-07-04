@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     DEFAULT_PLOT_GRID_LAYOUTS,
+    FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE,
     FOR_LAMBDA_K_CURVE_MARKER_SIZE,
     PLOT_METRIC_TITLES,
     PLOTTED_ANSWER_ROUGE_METRIC_NAMES,
@@ -177,7 +178,7 @@ def _plot_lambda_sensitivity(
     k_values = sorted(stats_df['k'].unique().to_list())
     topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
     metric_cols = [
-        (metric.stats_col, metric.title)
+        (metric.stats_col, metric.title, metric.higher_is_better)
         for metric in _available_metric_specs(
             stats_df,
             results_df=None,
@@ -197,7 +198,7 @@ def _plot_lambda_sensitivity(
         sharex=False,
     )
 
-    for row_idx, (metric, metric_title) in enumerate(metric_cols):
+    for row_idx, (metric, metric_title, higher_is_better) in enumerate(metric_cols):
         row_ylim = _shared_lambda_sensitivity_ylim(
             stats_df,
             metric=metric,
@@ -224,6 +225,13 @@ def _plot_lambda_sensitivity(
                     marker='o',
                     ms=FOR_LAMBDA_K_CURVE_MARKER_SIZE,
                     label=f'k={k}',
+                )
+                _mark_best_lambda_curve_point(
+                    ax,
+                    ksub['lam'].to_list(),
+                    ksub[metric].to_list(),
+                    color=k_colors[k],
+                    higher_is_better=higher_is_better,
                 )
                 ref = topk_df.filter(pl.col('k') == k)
                 if ref.height > 0:
@@ -611,6 +619,14 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
         footer_height=1.0,
     )
     for row_idx, (stats_col, result_col, title, higher_is_better) in enumerate(metrics):
+        row_ylim = _shared_delta_vs_topk_ylim(
+            stats_df,
+            results_df,
+            metric=stats_col,
+            result_col=result_col,
+            strategies=diversity_strategies,
+            k_values=k_values,
+        )
         for col_idx, strategy in enumerate(diversity_strategies):
             ax = axes[row_idx][col_idx]
             style = get_style(strategy)
@@ -647,6 +663,13 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
                     ms=FOR_LAMBDA_K_CURVE_MARKER_SIZE,
                     label=f'k={k}',
                 )
+                _mark_best_lambda_curve_point(
+                    ax,
+                    x.tolist(),
+                    y.tolist(),
+                    color=k_colors[k],
+                    higher_is_better=higher_is_better,
+                )
                 if np.any(ci > 0):
                     ax.fill_between(x, y - ci, y + ci, color=k_colors[k], alpha=0.12, linewidth=0)
 
@@ -661,6 +684,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
             if row_idx == len(metrics) - 1:
                 ax.set_xlabel(f'{style["label"]} lambda', fontsize=9)
             _set_lambda_tick_labels(ax, _sample_tick_values(lambda_values))
+            ax.set_ylim(*row_ylim)
             ax.grid(alpha=0.3)
             ax.tick_params(labelbottom=True)
             _bold_zero_ytick_label(ax)
@@ -1535,7 +1559,7 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
     import matplotlib.pyplot as plt
 
     metric_cols = [
-        (metric.stats_col, metric.title)
+        (metric.stats_col, metric.title, metric.higher_is_better)
         for metric in _available_metric_specs(
             stats_df,
             results_df=None,
@@ -1562,7 +1586,13 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
         sharex=False,
     )
 
-    for row_idx, (metric, title) in enumerate(metric_cols):
+    for row_idx, (metric, title, higher_is_better) in enumerate(metric_cols):
+        row_ylim = _shared_lambda_sensitivity_ylim(
+            stats_df,
+            metric=metric,
+            strategies=diversity_strategies,
+            k_values=k_values,
+        )
         for col_idx, strategy in enumerate(diversity_strategies):
             style = get_style(strategy)
             sub = stats_df.filter(pl.col('strategy') == strategy)
@@ -1584,6 +1614,13 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
                     ms=FOR_LAMBDA_K_CURVE_MARKER_SIZE,
                     label=f'k={k}',
                 )
+                _mark_best_lambda_curve_point(
+                    ax,
+                    ksub['lam'].to_list(),
+                    ksub[metric].to_list(),
+                    color=k_colors[k],
+                    higher_is_better=higher_is_better,
+                )
                 ref = topk_df.filter(pl.col('k') == k)
                 if ref.height > 0:
                     ax.axhline(
@@ -1601,6 +1638,7 @@ def plot_answer_metrics_k_curves_for_lambda(stats_df: pl.DataFrame, out_dir: Pat
             if row_idx == len(metric_cols) - 1:
                 ax.set_xlabel(f'{style["label"]} lambda', fontsize=9)
             _set_lambda_tick_labels(ax, sampled_lambda_values)
+            ax.set_ylim(*row_ylim)
             ax.tick_params(labelbottom=True)
             ax.grid(alpha=0.3)
 
@@ -1759,17 +1797,102 @@ def _shared_lambda_sensitivity_ylim(
             continue
         values.append(float(ref_df[metric][0]))
 
-    if not values:
+    return _padded_ylim(values)
+
+
+def _shared_delta_vs_topk_ylim(
+    stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    *,
+    metric: str,
+    result_col: str,
+    strategies: list[str],
+    k_values: list[int],
+) -> tuple[float, float]:
+    values: list[float] = [0.0]
+    topk_df = stats_df.filter(pl.col('strategy') == 'top_k')
+
+    for strategy in strategies:
+        lambda_values = _lambda_values_for_strategy(stats_df, strategy)
+        for k in k_values:
+            ref_row = topk_df.filter(pl.col('k') == k)
+            ref_val = float(ref_row[metric][0]) if ref_row.height > 0 else 0.0
+            for lam in lambda_values:
+                sub = stats_df.filter(
+                    (pl.col('strategy') == strategy) & (pl.col('k') == k) & (pl.col('lam') == lam)
+                )
+                delta = float(sub[metric][0]) - ref_val if sub.height > 0 else 0.0
+                ci = _paired_delta_ci(results_df, strategy, k, lam, result_col)
+                ci_display = 0.0 if _is_nonfinite_float(ci) else ci
+                values.extend([delta - ci_display, delta, delta + ci_display])
+
+    return _padded_ylim(values)
+
+
+def _padded_ylim(values: Iterable[float]) -> tuple[float, float]:
+    finite_values = [value for value in values if not _is_nonfinite_float(value)]
+    if not finite_values:
         return (0.0, 1.0)
 
-    lower = min(values)
-    upper = max(values)
+    lower = min(finite_values)
+    upper = max(finite_values)
     if lower == upper:
         padding = abs(lower) * 0.05 if lower != 0.0 else 0.05
         return (lower - padding, upper + padding)
 
     padding = (upper - lower) * 0.05
     return (lower - padding, upper + padding)
+
+
+def _mark_best_lambda_curve_point(
+    ax: Any,
+    xs: Sequence[object],
+    ys: Sequence[object],
+    *,
+    color: Any,
+    higher_is_better: bool,
+) -> None:
+    valid_points: list[tuple[int, float]] = []
+    for idx, y in enumerate(ys):
+        value = _finite_float_or_none(y)
+        if value is not None:
+            valid_points.append((idx, value))
+    if not valid_points:
+        return
+
+    best_idx, _best_value = (
+        max(valid_points, key=lambda item: item[1])
+        if higher_is_better
+        else min(valid_points, key=lambda item: item[1])
+    )
+    best_x = _finite_float_or_none(xs[best_idx])
+    best_y = _finite_float_or_none(ys[best_idx])
+    if best_x is None or best_y is None:
+        return
+
+    ax.scatter(
+        [best_x],
+        [best_y],
+        s=FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE,
+        facecolors='white',
+        edgecolors=color,
+        linewidths=2.0,
+        zorder=5,
+    )
+
+
+def _is_nonfinite_float(value: float) -> bool:
+    import math
+
+    return not math.isfinite(value)
+
+
+def _finite_float_or_none(value: object) -> float | None:
+    try:
+        numeric_value = float(value)
+    except TypeError, ValueError:
+        return None
+    return None if _is_nonfinite_float(numeric_value) else numeric_value
 
 
 def _best_lambda_note(

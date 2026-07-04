@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import subprocess
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Literal, cast, get_args
 
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
@@ -28,9 +30,9 @@ from .p05_queries_answers import run_make_queries_answers
 from .p06_qrels import run_make_qrels
 from .p07_embed import run_embed
 from .p08_filter_queries import run_filter_queries
-from .p09_evaluate import run_evaluate
-from .p10_query_geom_plots import run_query_geom_plots
-from .p11_eval_plots import run_eval_plots
+from .p09_evaluate import parse_evaluate_cli_args, run_evaluate
+from .p10_query_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
+from .p11_eval_plots import parse_plots_cli_args, run_eval_plots
 
 type PipelineStage = Literal[
     'plans',
@@ -47,6 +49,17 @@ type PipelineStage = Literal[
 ]
 PIPELINE_STAGES_SET = set[PipelineStage](get_args(PipelineStage.__value__))
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
+type StandalonePipelineScript = Literal['eval', 'geom_plots', 'eval_plots']
+STANDALONE_PIPELINE_SCRIPTS = set[StandalonePipelineScript](
+    get_args(StandalonePipelineScript.__value__)
+)
+
+
+@dataclass(frozen=True)
+class StandaloneRunSpec:
+    script: StandalonePipelineScript
+    script_args: list[str]
+
 
 STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('plans', run_make_query_plans),
@@ -69,6 +82,15 @@ def main() -> None:
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--stages', default=None)
+    parser.add_argument(
+        '--run',
+        action='append',
+        default=None,
+        help=(
+            'Run a standalone pipeline script through the orchestrator entrypoint. '
+            'May be repeated. Format: --run "eval --steps evaluation_stats".'
+        ),
+    )
     parser.add_argument('--release-llm', type=bool, default=None)
     parser.add_argument('--no-log-tee', action='store_true')
     parser.add_argument(
@@ -76,10 +98,16 @@ def main() -> None:
         action='store_true',
         help='Run the parent experiment itself even if child subexperiments exist.',
     )
-    args, _ = parser.parse_known_args()
+    args, unknown_args = parser.parse_known_args()
 
     if args.exp is None:
         parser.error('missing experiment name; pass --exp or set EXP/EXP_NAME')
+
+    if args.run is not None:
+        _validate_run_mode_args(parser, args, unknown_args)
+        run_specs = _parse_run_specs(parser=parser, raw_runs=args.run)
+    else:
+        run_specs = None
 
     children = [] if args.parent else child_experiment_names(args.exp)
     if children:
@@ -97,6 +125,14 @@ def main() -> None:
                 ],
                 check=True,
             )
+        return
+
+    if run_specs is not None:
+        _run_standalone_script_sequence(
+            run_specs=run_specs,
+            exp=args.exp,
+            no_log_tee=args.no_log_tee,
+        )
         return
 
     cfg = load_config(args.exp)
@@ -135,6 +171,102 @@ def main() -> None:
         fn(cfg, paths)
         provenance.after_stage(name, input_fingerprints)
     provenance.finish()
+
+
+def _validate_run_mode_args(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    unknown_args: list[str],
+) -> None:
+    if args.from_stage or args.to_stage or args.stages:
+        parser.error('--run cannot be combined with --from, --to, or --stages')
+    if args.release_llm is not None:
+        parser.error('--release-llm is only supported for normal stage runs')
+    if unknown_args:
+        parser.error(
+            'unknown argument(s) outside --run: '
+            + ' '.join(unknown_args)
+            + '. Put standalone script arguments inside the quoted --run value.'
+        )
+
+
+def _parse_run_specs(
+    *,
+    parser: argparse.ArgumentParser,
+    raw_runs: list[str],
+) -> list[StandaloneRunSpec]:
+    run_specs: list[StandaloneRunSpec] = []
+    for raw_run in raw_runs:
+        parts = shlex.split(raw_run)
+        if not parts:
+            parser.error('--run value cannot be empty')
+
+        script_name = parts[0]
+        if script_name not in STANDALONE_PIPELINE_SCRIPTS:
+            parser.error(
+                f'unknown standalone script in --run: {script_name}. '
+                + 'Valid scripts: '
+                + ', '.join(sorted(STANDALONE_PIPELINE_SCRIPTS))
+            )
+        run_specs.append(
+            StandaloneRunSpec(
+                script=cast(StandalonePipelineScript, script_name),
+                script_args=parts[1:],
+            )
+        )
+
+    return run_specs
+
+
+def _run_standalone_script_sequence(
+    *,
+    run_specs: list[StandaloneRunSpec],
+    exp: str,
+    no_log_tee: bool,
+) -> None:
+    cfg = load_config(exp)
+    paths = paths_for(cfg)
+    if not no_log_tee:
+        setup_logging(paths)
+
+    print(f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]}')
+    print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
+
+    for run_spec in run_specs:
+        print(f'\n=== Script: {run_spec.script} ===')
+        _run_standalone_script(run_spec=run_spec, exp=exp)
+
+
+def _run_standalone_script(*, run_spec: StandaloneRunSpec, exp: str) -> None:
+    script_argv = [
+        *run_spec.script_args,
+        '--exp',
+        exp,
+    ]
+
+    if run_spec.script == 'eval':
+        cfg, selected_steps = parse_evaluate_cli_args(script_argv)
+        paths = paths_for(cfg)
+        print(
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}'
+        )
+        run_evaluate(cfg, paths, selected_steps=selected_steps)
+    elif run_spec.script == 'geom_plots':
+        cfg, selected_plots = parse_geom_plots_cli_args(script_argv)
+        paths = paths_for(cfg)
+        print(
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}'
+        )
+        run_query_geom_plots(cfg, paths, selected_plots=selected_plots)
+    elif run_spec.script == 'eval_plots':
+        cfg, selected_plots = parse_plots_cli_args(script_argv)
+        paths = paths_for(cfg)
+        print(
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}'
+        )
+        run_eval_plots(cfg, paths, selected_plots=selected_plots)
+    else:
+        raise KeyError(run_spec.script)
 
 
 def _stage_index(name: str) -> int:

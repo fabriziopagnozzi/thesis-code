@@ -1,7 +1,7 @@
 # Code - Primary
 * Data distribution
     - formalize better and categorize different kinds of distributions and present results for each of these
-    - bottom line is that MMR behaves overall worse than FacLoc
+    - bottom line is that MMR behaves overall worse than FacLoc, no matter the distribution, given this dataset structure.
 
 * Split validation/test data and tune hyperparameter lambda and see results
     - add "mode: exploring | testing" under "evaluation:" key
@@ -9,6 +9,8 @@
         - Should we maximize the `FacetCoveragePurity@k` separately for each `k` and obtain `lambda_strategy*(k)`, or maximize it overall across all our `k` values and obtain `lambda_strategy*`?
 
 * "pool_mode: global" to scale up the dataset like Martinenghi wants
+    - problem: when focusing on determining the validation/test set for a given query in "pool_mode: global" config, how to deal with facet distractors and background outliers coming from the other queries?
+        - They can overlap with the 4 query facets, we should account for this and exclude all of these points from the test set for the query, otherwise the primary/secondary/niche cluster sizes are subject to these new golden chunks leaked from elsewhere.
 
 * how to make it all more realistic?
     - Draw inspiration from MIMIC
@@ -46,6 +48,5 @@
 ### ([From 30/06 call](file:/home/pagnozzi/thesis/_calls/call_2026-06-30.md))
 * More granular budget based on token rather than num. documents 
 * Lexical overlap with the answer: see what you can do to improve the AnswerROUGE metrics.
-
 
 ---------

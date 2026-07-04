@@ -105,7 +105,7 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
                 embed_fn=embed_docs_fn,
                 dim=dim,
                 # Misses also become parquet cache rows, so keep this bounded by model batch size.
-                batch_size=max(cfg.embeddings.batch_size * 32, 1),
+                batch_size=max(cfg.embeddings.batch_size * 2048, 1),
             )
         else:
             chunk_written = _fill_embedding_memmaps(

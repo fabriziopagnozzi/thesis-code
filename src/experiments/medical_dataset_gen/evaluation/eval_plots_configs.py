@@ -78,6 +78,7 @@ STRATEGY_STYLE: dict[str, dict[str, str]] = {
 
 # Marker size for raw-lambda figures that draw one curve per k.
 FOR_LAMBDA_K_CURVE_MARKER_SIZE = 0.25
+FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE = 18  # points^2 area for matplotlib
 
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {
