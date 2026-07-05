@@ -9,6 +9,7 @@ queries are valid for later evaluation.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter, defaultdict
 from typing import TypedDict
@@ -29,6 +30,7 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
+from experiments.medical_dataset_gen.schemas.generation_schemas import DataSplit
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
     GeometryFilterCfg,
@@ -250,6 +252,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)
+    queries_with_final_split = _assign_post_geometry_splits(queries=queries, geometry=df)
+    write_parquet(paths, 'queries', queries_with_final_split)
     slice_stats = (
         df.group_by(
             'condition_id',
@@ -291,6 +295,47 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     )
     print(f'[geometry] {n_pass:,}/{len(df):,} queries pass')
     return df
+
+
+def _assign_post_geometry_splits(*, queries: pl.DataFrame, geometry: pl.DataFrame) -> pl.DataFrame:
+    pass_by_query: dict[str, bool] = {}
+    if not geometry.is_empty():
+        pass_by_query = {
+            str(query_id): bool(passes_filter)
+            for query_id, passes_filter in geometry.select('query_id', 'passes_filter').iter_rows(
+                named=False
+            )
+        }
+    rows: list[dict[str, object]] = []
+    for query_row in queries.iter_rows(named=True):
+        row = dict(query_row)
+        query_id = str(row['query_id'])
+        original_split = row.get('pre_geometry_split', row['split'])
+        passes_filter = bool(pass_by_query.get(query_id, False))
+        if not passes_filter:
+            continue
+        row['pre_geometry_split'] = str(original_split)
+        row['passes_geometry_filter'] = passes_filter
+        row['split'] = _post_geometry_split_for_profile(str(row['evidence_profile_id']))
+        rows.append(row)
+
+    if not rows:
+        return queries.head(0).with_columns(
+            pl.lit(None, dtype=pl.String).alias('pre_geometry_split'),
+            pl.lit(None, dtype=pl.Boolean).alias('passes_geometry_filter'),
+        )
+
+    return pl.from_dicts(rows, infer_schema_length=None)
+
+
+def _post_geometry_split_for_profile(evidence_profile_id: str) -> DataSplit:
+    bucket = _stable_int(evidence_profile_id, 'post_geometry_split') % 2
+    return 'test' if bucket == 0 else 'validation'
+
+
+def _stable_int(*parts: object) -> int:
+    raw = '|'.join(str(part) for part in parts)
+    return int(hashlib.sha256(raw.encode()).hexdigest()[:16], 16)
 
 
 def _strict_gate_failures(

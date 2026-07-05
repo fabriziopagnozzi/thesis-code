@@ -15,7 +15,6 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     EvalPlotCallContext,
     EvalPlotFileName,
 )
-from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
 )
@@ -26,6 +25,15 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     setup_logging,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
+
+_TEST_GRID_PLOT_NAMES: set[EvalPlotFileName] = {
+    'metrics_k_curves_for_lambda',
+    'metrics_heatmap_k_lambda_grid',
+    'metrics_heatmap_k_lambda_grid_html',
+    'metrics_delta_vs_topk_k_curves_for_lambda',
+    'answer_metrics_k_curves_for_lambda',
+    'diagnostics_k_curves_for_lambda',
+}
 
 
 def run_eval_plots(
@@ -45,16 +53,15 @@ def run_eval_plots(
     if stats_df.is_empty() or results_df.is_empty():
         print('Skipping eval figures: evaluation tables are empty')
         return
-    agreement_path = paths.table_path('lambda_pair_agreement')
-    agreement_df = (
-        read_parquet(paths, 'lambda_pair_agreement')
-        if agreement_path.exists()
-        else build_lambda_pair_agreement(
-            stats_df,
-            results_df=results_df,
-            kernel_cfg=cfg.evaluation.fac_loc_mmr_comparison_kernels,
-        )
-    )
+    test_grid_stats_df = stats_df
+    if cfg.evaluation.mode == 'testing':
+        results_df = results_df.filter(pl.col('split') == 'test')
+        report_grid_stats_path = paths.table_path('evaluation_report_grid_stats')
+        if report_grid_stats_path.exists():
+            test_grid_stats_df = read_parquet(paths, 'evaluation_report_grid_stats')
+        if results_df.is_empty():
+            print('Skipping eval figures: no test rows in evaluation_results')
+            return
 
     out_dir = paths.figures_dir / 'evaluation'
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -62,8 +69,8 @@ def run_eval_plots(
     plot_jobs = build_plot_jobs(
         cfg=cfg,
         stats_df=stats_df,
+        test_grid_stats_df=test_grid_stats_df,
         results_df=results_df,
-        agreement_df=agreement_df,
         out_dir=out_dir,
     )
     selected_job_names = (
@@ -113,8 +120,8 @@ def build_plot_callable(
 def build_plot_jobs(
     cfg: ExperimentCfg,
     stats_df: pl.DataFrame,
+    test_grid_stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
-    agreement_df: pl.DataFrame,
     out_dir: Path,
 ) -> list[tuple[EvalPlotFileName, Callable[[], None]]]:
     available_plot_names: list[EvalPlotFileName] = [
@@ -122,18 +129,46 @@ def build_plot_jobs(
         for plot_name in DEFAULT_ENABLED_EVAL_PLOT_NAMES
         if cfg.retrieval.compute_answer_rouge or plot_name not in ANSWER_ROUGE_EVAL_PLOT_FILE_NAMES
     ]
-    plot_context: EvalPlotCallContext = {
-        'stats_df': stats_df,
+    return [
+        (
+            plot_name,
+            build_plot_callable(
+                plot_name,
+                _plot_context_for_name(
+                    plot_name=plot_name,
+                    cfg=cfg,
+                    stats_df=stats_df,
+                    test_grid_stats_df=test_grid_stats_df,
+                    results_df=results_df,
+                    out_dir=out_dir,
+                ),
+            ),
+        )
+        for plot_name in available_plot_names
+    ]
+
+
+def _plot_context_for_name(
+    *,
+    plot_name: EvalPlotFileName,
+    cfg: ExperimentCfg,
+    stats_df: pl.DataFrame,
+    test_grid_stats_df: pl.DataFrame,
+    results_df: pl.DataFrame,
+    out_dir: Path,
+) -> EvalPlotCallContext:
+    effective_stats_df = (
+        test_grid_stats_df
+        if cfg.evaluation.mode == 'testing' and plot_name in _TEST_GRID_PLOT_NAMES
+        else stats_df
+    )
+    return {
+        'stats_df': effective_stats_df,
         'results_df': results_df,
-        'agreement_df': agreement_df,
         'out_dir': out_dir,
         'lambda_selection': cfg.evaluation.lambda_selection,
         'plot_theme': cfg.evaluation.plot_theme,
     }
-    return [
-        (plot_name, build_plot_callable(plot_name, plot_context))
-        for plot_name in available_plot_names
-    ]
 
 
 def parse_plot_names(raw_value: str | None) -> set[EvalPlotFileName] | None:

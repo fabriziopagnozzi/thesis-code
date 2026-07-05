@@ -36,10 +36,6 @@ type EvalPlotFileName = Literal[
     'profiles_metrics_by_k_at_best_lambda',
     'profiles_diagnostics_by_k_at_best_lambda',
     # -------------------------------------------
-    # lambda-agreement
-    'lambda_agreement',
-    'metrics_at_agreeing_lambda_wrt_best_lambda',
-    # -------------------------------------------
 ]
 EVAL_PLOT_FILE_NAMES = set[EvalPlotFileName](get_args(EvalPlotFileName.__value__))
 
@@ -56,8 +52,6 @@ DEFAULT_ENABLED_EVAL_PLOT_NAMES: list[EvalPlotFileName] = [
     'diagnostics_k_curves_for_lambda',
     'profiles_metrics_by_k_at_best_lambda',
     'profiles_diagnostics_by_k_at_best_lambda',
-    # 'lambda_agreement',
-    # 'metrics_at_agreeing_lambda_wrt_best_lambda',
     'answer_metrics_at_best_lambda_for_k',
     'answer_metrics_k_curves_for_lambda',
 ]
@@ -190,7 +184,6 @@ class PlotGridLayout:
 # Leftover custom figures keep their sizing logic in `plots.py`:
 # - `plot_metrics_heatmap_k_lambda_grid(...)` uses a custom GridSpec/figure composition.
 # - `plot_metrics_heatmap_k_lambda_grid_html(...)` is plotly-based.
-# - `plot_lambda_agreement(...)` depends on lambda counts and shared y-axis behavior.
 DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     # -------------------------------------------
     # Fixed rows/cols layout: adjust configs based on how many metrics you define in
@@ -208,8 +201,6 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     'profiles_metrics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
     'profiles_diagnostics_by_k_at_best_lambda': PlotGridLayout(1, 1, 1.0, 5.0, 2.0),
     'metrics_distributions': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
-    'lambda_agreement': PlotGridLayout(1, 1, 1.0, 1.0, 1.7),
-    'metrics_at_agreeing_lambda_wrt_best_lambda': PlotGridLayout(2, 1, 1.0, 1.0, 1.6),
 }
 
 

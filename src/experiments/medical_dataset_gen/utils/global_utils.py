@@ -34,8 +34,9 @@ type SyntheticMedicalDatasetTableName = Literal[
     'geometry_slice_stats',
     'evaluation_results',
     'evaluation_stats',
+    'evaluation_selection_stats',
+    'evaluation_report_grid_stats',
     'evaluation_slice_stats',
-    'lambda_pair_agreement',
     'query_geometry_points',
     'query_geometry_stats',
 ]

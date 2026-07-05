@@ -61,7 +61,7 @@ The current pipeline stages are:
 - [pipeline](./src/experiments/medical_dataset_gen/pipeline): runnable stage entrypoints and the pipeline orchestrator
 - [dataset_generation](./src/experiments/medical_dataset_gen/dataset_generation): ontology loading, plan helpers, fact construction, chunk rendering, caches, and query/answer templating
 - [query_geometry](./src/experiments/medical_dataset_gen/query_geometry): geometry artifact building, dimensionality reduction, diagnostics, and plot helpers
-- [evaluation](./src/experiments/medical_dataset_gen/evaluation): retrieval metrics, answer metrics, lambda agreement, worker setup, and plotting
+- [evaluation](./src/experiments/medical_dataset_gen/evaluation): retrieval metrics, answer metrics, lambda selection, worker setup, and plotting
 - [schemas](./src/experiments/medical_dataset_gen/schemas): typed models shared across the pipeline
 - [utils](./src/experiments/medical_dataset_gen/utils): config loading, paths, I/O, and shared retrieval helpers
 - [data_templates](./src/experiments/medical_dataset_gen/data_templates): ontology and template YAML resources
@@ -82,7 +82,6 @@ Key outputs written by the pipeline:
 - `geometry_stats.parquet`
 - `evaluation_results.parquet`
 - `evaluation_stats.parquet`
-- `lambda_pair_agreement.parquet`
 - `query_geometry_points.parquet`
 - `query_geometry_stats.parquet`
 

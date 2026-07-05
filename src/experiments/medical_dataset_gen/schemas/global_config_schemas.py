@@ -7,10 +7,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
-    field_validator,
     model_validator,
 )
 
@@ -21,7 +19,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ConditionKey,
     PlanCalibrationMode,
 )
-from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides
 from helpers.embedder import EmbeddingModelName
 
@@ -371,37 +368,8 @@ class GeometryFilterCfg(ConfigModel):
     min_distractors_in_pool: PositiveInt = 10
 
 
-class MethodsComparisonKernelMetricCfg(ConfigModel):
-    summary_metric: str = 'FacetCoveragePurity@k'
-    enabled: bool = True
-    weight: PositiveFloat = 1.0
-    target_gain_vs_topk: float = 0.35
-    gain_bandwidth: PositiveFloat = 0.0065
-    target_lower_bound_vs_topk: float = 0.3
-    lower_bound_bandwidth: PositiveFloat = 0.0065
-
-    @field_validator('summary_metric')
-    @classmethod
-    def _validate_summary_metric(cls, value: str) -> str:
-        if value not in METRIC_NAME_TO_FIELD:
-            raise ValueError(f'unknown evaluation summary_metric: {value}')
-        return value
-
-
-type KernelAggregationStrategy = Literal['geometric_mean', 'arithmetic_mean', 'minimum']
-
-
-class MethodsComparisonKernelsCfg(ConfigModel):
-    lambda_max: NonNegativeFloat = 0.75
-    agreement_alpha: PositiveFloat = 2.5
-    kernel_floor: float = Field(default=0.05, gt=0, le=1)
-    pair_aggregation: KernelAggregationStrategy = 'geometric_mean'
-    metrics: list[MethodsComparisonKernelMetricCfg] = Field(
-        default_factory=lambda: [MethodsComparisonKernelMetricCfg()]
-    )
-
-
 type LambdaSelectionTieBreak = Literal['lower_lambda', 'higher_lambda']
+type EvaluationMode = Literal['exploring', 'testing']
 
 
 class LambdaSelectionCfg(ConfigModel):
@@ -412,13 +380,11 @@ type EvalPlotTheme = Literal['dark', 'light']
 
 
 class EvaluationCfg(ConfigModel):
+    mode: EvaluationMode = 'exploring'
     workers: PositiveInt | None = None
     all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     plot_theme: EvalPlotTheme = 'light'
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
-    fac_loc_mmr_comparison_kernels: MethodsComparisonKernelsCfg = Field(
-        default_factory=MethodsComparisonKernelsCfg
-    )
 
 
 class QueryGeometryCfg(ConfigModel):

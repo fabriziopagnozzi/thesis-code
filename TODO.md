@@ -1,20 +1,5 @@
 # Code - Primary
 
-## More consistent y-axis scale for all of the plots
-
-## Add per-query-pool diagnostics 
-- to have a better grasp of the chunk pool composition for a given query:
-    - GoldPercentage 
-    - NearMissDistractorPercentage
-    - BackgroundOutlierPercentage
-    - their sum is 100%
-
-## Use the already-present "split" property in the query records to distinguish validation data and test data and tune lambda for held-out evaluation on the test queries
-* add "mode: exploring | testing" under the "evaluation:" key in the global config schema
-* what is k in our final benchmark? Do we need to consider multiple values or focus on a small enough value (restricted budget)?
-    - Should we maximize the `FacetFacLocPurity@k` separately for each `k` and obtain `lambda_strategy*(k)`, or maximize it overall across all our `k` values and obtain `lambda_strategy*`?
-
-
 ## Scale-up the dataset and retrieval
 * "pool_mode: global" to scale up the dataset like Martinenghi wants
     - problem: when focusing on determining the validation/test set for a given query in "pool_mode: global" config, how to deal with facet distractors and background outliers coming from the other queries?
@@ -82,7 +67,7 @@
 * on each distribution, FacLoc is consistely better than top-k in FCP@k across all lambda values, thus it's overall a safer method.
     - MMR, while covering well the facets, can fall into distractors and can be arbitrarily worse than top-k at very low lambda values.
     - 28/A shows that even for very low values of lambda, FacLoc does no worse than top-k as for FCP@k --> more stable method, more robust to distractor presence.
-    - claim that using validation/test data after tuning hyperparameter lambda FacLoc still seems to outperform MMR across all data distributions [TODO:code](#split-validation-and-test-data-and-tune-lambda)
+    - claim that using validation/test data after tuning hyperparameter lambda FacLoc still seems to outperform MMR across all data distributions
 
 
 * across distinct distributions, the trend overall FCP@k is that FacLoc performs almost always equally or better than MMR and top-k, with some minor exceptions.
@@ -98,29 +83,30 @@
     - show the greedy step update formulas and discuss 
 
 
-* also talk about AllFacetCleanRate@k: sometimes coverage shows a higher percentage of queries with perfect coverage (FacetCoverage@k == 100%) and very high precision (Precision@k >= 80%)
-
+* also talk about AllFacetCleanRate@k
+    - sometimes coverage shows a higher percentage of queries with perfect coverage (FacetCoverage@k == 100%) and very high precision (Precision@k >= 80%)
+    - [TODO:results]: interpret the plots and check whether MMR can do better.
 
 * the embedding model choice has an impact
-    - smaller models with fewer dimensions (multi-qa-mpnet-base-cos-v1):
+    - smaller models, fewer dimensions (multi-qa-mpnet-base-cos-v1):
         - show a very low number of post-filtering queries compared to bigger models & dimensions (bge_m3, qwen3). 
             - This may be due to their less nuanced understanding of the semantics, yielding embedding vectors which mix up the content of the rendered clinical chunks. The chunks are semantically separable but pertain to the same domain, have similar template structure, etc.
             - Add table showing pass rate of the filter_queries step and show that bigger models do better 
         - even with fewer queries, their evaluation has roughly the same properties as the bigger models with more queries
+        - due to the lower query pass rate, the difference in the evaluation between pass-only and all-queries are a bit more evident than bigger models. They can bump up the results of MMR, but coverage stays on top (see 32P/C vs. 32P/CQ).
 
-    - bigger models (bge_m3, qwen3[0.6B | 4B | 8B])
+    - bigger models, more dimensions (bge_m3, qwen3[0.6B | 4B | 8B])
         - the evaluation results seem to NOT change too much whether we include or exclude the queries that do NOT pass the geometry_filter we impose
         - this may be due to the fact that the poorly-performing queries are typically <= 25% (~2000/8000)
 
     - [TODO:results]: see if the metrics/diagnostics change among distinct models for the same data distributions (and potentially different number of queries)
     - [TODO:results]: see if the metrics/diagnostics change among distinct models for the same data distributions and ALL of queries considered
     - [TODO:results]: check if the diagnostics of smaller models change over the diagnostics of bigger models    
-    - [TODO:results]: check out if with ALL queries considered the smaller models show the same behavior as the bigger ones, yielding similar evaluation results --> UNLIKELY
-    - [TODO:results]
 
-    - thus, this ontology produces different classes of queries in terms of difficulty: some are by design "harder" than others and require better models to capture their nuances.
-        - even then, there is a small percentage of queries that show unseparable geometry even with stronger models.
-        
+    - Given the differences between smaller and bigger models, we can conclude that this ontology produces different classes of queries in terms of difficulty: some are by design "harder" than others and require better models to capture their nuances.
+        - even with stronger models, there is a small percentage of queries that show unseparable facet geometry.
+            - this may be due to the semantical clinical aspects overlapping in the embedding space for particular combinations of Primary Condition / Subgroup / Clinical Axis which are not currently considered by the ontology
+            - it may be due to poor wording in the rendered chunks
 
 
 * add "pool_scope: global" and discuss the results.

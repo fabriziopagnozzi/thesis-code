@@ -27,7 +27,10 @@ from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
     init_evaluation_worker,
     load_selected_parquet_columns,
 )
-from experiments.medical_dataset_gen.evaluation.lambda_agreement import build_lambda_pair_agreement
+from experiments.medical_dataset_gen.evaluation.lambda_selection import (
+    LAMBDA_SELECTION_MAXIMIZING_METRIC,
+    select_best_lambda_row,
+)
 from experiments.medical_dataset_gen.evaluation.metrics_answer import (
     empty_answer_reference_texts,
     prepare_answer_rouge_scorer,
@@ -46,6 +49,7 @@ from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
     LightweightQueryRecord,
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    EvaluationMode,
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -64,12 +68,8 @@ type EvaluationStep = Literal[
     'evaluation_results',
     'evaluation_stats',
     'evaluation_slice_stats',
-    'lambda_agreement',
 ]
 EVALUATION_STEP_NAMES = set[EvaluationStep](get_args(EvaluationStep.__value__))
-EVALUATION_STEP_ALIASES: dict[str, EvaluationStep] = {
-    'lambda_pair_agreement': 'lambda_agreement',
-}
 _PARENT_QUERY_COLUMNS = ['query_id']
 _PARENT_QREL_COLUMNS = ['query_id', 'chunk_id', 'facet_id', 'is_gold']
 _PARENT_GEOMETRY_COLUMNS = [
@@ -79,6 +79,8 @@ _PARENT_GEOMETRY_COLUMNS = [
     'calibration_warning',
     'n_topk_retrieved_facets',
 ]
+_SELECTION_SPLIT = 'validation'
+_REPORT_SPLIT = 'test'
 
 
 def run_evaluate(
@@ -149,8 +151,15 @@ def run_evaluate(
             eval_results_df=eval_results_df,
             requesting_step='evaluation_stats',
         )
-        aggregated_eval_stats_df = stats_aggregated_results_df(eval_results_df)
+        (
+            aggregated_eval_stats_df,
+            selection_stats_df,
+            report_grid_stats_df,
+        ) = stats_for_evaluation_mode(eval_results_df, mode=cfg.evaluation.mode, cfg=cfg)
         write_parquet(paths, 'evaluation_stats', aggregated_eval_stats_df)
+        if cfg.evaluation.mode == 'testing':
+            write_parquet(paths, 'evaluation_selection_stats', selection_stats_df)
+            write_parquet(paths, 'evaluation_report_grid_stats', report_grid_stats_df)
 
     if 'evaluation_slice_stats' in requested_steps:
         eval_results_df = _ensure_eval_results_loaded(
@@ -159,28 +168,13 @@ def run_evaluate(
             eval_results_df=eval_results_df,
             requesting_step='evaluation_slice_stats',
         )
-        sliced_eval_stats_df = stats_sliced_results_df(eval_results_df)
+        slice_results_df = (
+            _results_for_split(eval_results_df, _REPORT_SPLIT)
+            if cfg.evaluation.mode == 'testing'
+            else eval_results_df
+        )
+        sliced_eval_stats_df = stats_sliced_results_df(slice_results_df)
         write_parquet(paths, 'evaluation_slice_stats', sliced_eval_stats_df)
-
-    if 'lambda_agreement' in requested_steps:
-        eval_results_df = _ensure_eval_results_loaded(
-            cfg=cfg,
-            paths=paths,
-            eval_results_df=eval_results_df,
-            requesting_step='lambda_agreement',
-        )
-        if aggregated_eval_stats_df is None:
-            aggregated_eval_stats_df = _load_eval_stats_or_compute_from_results(
-                cfg=cfg,
-                paths=paths,
-                eval_results_df=eval_results_df,
-            )
-        lambda_pair_agreement_df = build_lambda_pair_agreement(
-            aggregated_eval_stats_df,
-            results_df=eval_results_df,
-            kernel_cfg=cfg.evaluation.fac_loc_mmr_comparison_kernels,
-        )
-        write_parquet(paths, 'lambda_pair_agreement', lambda_pair_agreement_df)
 
     if aggregated_eval_stats_df is not None:
         print(aggregated_eval_stats_df)
@@ -256,7 +250,11 @@ def _load_eval_stats_or_compute_from_results(
 ) -> pl.DataFrame:
     stats_df = read_parquet_if_exists_else_empty_df(paths, 'evaluation_stats')
     if stats_df.is_empty():
-        return stats_aggregated_results_df(eval_results_df)
+        return stats_for_evaluation_mode(
+            eval_results_df,
+            mode=cfg.evaluation.mode,
+            cfg=cfg,
+        )[0]
 
     assert_pool_scope_match(stats_df, cfg.retrieval.pool_scope, table_name='evaluation_stats')
     return stats_df
@@ -546,6 +544,100 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
     return stats.select([col for col in STATS_DF_ORDERED_COLS if col in stats.columns])
 
 
+def stats_for_evaluation_mode(
+    results: pl.DataFrame,
+    *,
+    mode: EvaluationMode,
+    cfg: ExperimentCfg,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    if mode == 'exploring':
+        all_stats = stats_aggregated_results_df(results)
+        return all_stats, pl.DataFrame(), pl.DataFrame()
+
+    selection_results = _results_for_split(results, _SELECTION_SPLIT)
+    report_results = _results_for_split(results, _REPORT_SPLIT)
+    selection_stats = stats_aggregated_results_df(selection_results)
+    report_grid_stats = stats_aggregated_results_df(report_results)
+    report_stats = _heldout_report_stats(
+        selection_stats=selection_stats,
+        report_grid_stats=report_grid_stats,
+        cfg=cfg,
+    )
+    return report_stats, selection_stats, report_grid_stats
+
+
+def _results_for_split(results: pl.DataFrame, split: str) -> pl.DataFrame:
+    if results.is_empty() or 'split' not in results.columns:
+        return pl.DataFrame()
+    return results.filter(pl.col('split') == split)
+
+
+def _heldout_report_stats(
+    *,
+    selection_stats: pl.DataFrame,
+    report_grid_stats: pl.DataFrame,
+    cfg: ExperimentCfg,
+) -> pl.DataFrame:
+    if selection_stats.is_empty() or report_grid_stats.is_empty():
+        return pl.DataFrame()
+
+    rows: list[pl.DataFrame] = []
+    k_values = sorted(set(int(k) for k in cfg.retrieval.k_values))
+    for k in k_values:
+        topk_row = report_grid_stats.filter((pl.col('strategy') == 'top_k') & (pl.col('k') == k))
+        if not topk_row.is_empty():
+            rows.append(_annotate_heldout_row(topk_row.head(1), selected_on_metric_value=None))
+
+        for strategy in sorted(cfg.retrieval.strategies - {'top_k'}):
+            selected = select_best_lambda_row(
+                selection_stats,
+                strategy=strategy,
+                k=k,
+                cfg=cfg.evaluation.lambda_selection,
+            )
+            if selected is None:
+                continue
+            selected_lam = float(selected['lam']) if selected.get('lam') is not None else None
+            if selected_lam is None:
+                continue
+
+            report_row = report_grid_stats.filter(
+                (pl.col('strategy') == strategy)
+                & (pl.col('k') == k)
+                & (pl.col('lam') == selected_lam)
+            )
+            if report_row.is_empty():
+                continue
+            selected_metric_value = selected.get(LAMBDA_SELECTION_MAXIMIZING_METRIC)
+            rows.append(
+                _annotate_heldout_row(
+                    report_row.head(1),
+                    selected_on_metric_value=(
+                        float(selected_metric_value)
+                        if selected_metric_value is not None
+                        else None
+                    ),
+                )
+            )
+
+    return pl.concat(rows).sort('k', 'strategy', 'lam') if rows else pl.DataFrame()
+
+
+def _annotate_heldout_row(
+    row: pl.DataFrame,
+    *,
+    selected_on_metric_value: float | None,
+) -> pl.DataFrame:
+    return row.with_columns(
+        pl.lit(_SELECTION_SPLIT).alias('lambda_selection_split'),
+        pl.lit(_REPORT_SPLIT).alias('report_split'),
+        pl.lit(LAMBDA_SELECTION_MAXIMIZING_METRIC).alias('lambda_selection_metric'),
+        pl.lit(selected_on_metric_value, dtype=pl.Float64).alias(
+            'lambda_selection_metric_value'
+        ),
+    )
+
+
 def parse_evaluation_steps(raw_value: str | None) -> set[EvaluationStep] | None:
     if raw_value is None:
         return None
@@ -554,10 +646,7 @@ def parse_evaluation_steps(raw_value: str | None) -> set[EvaluationStep] | None:
     if not raw_steps:
         raise ValueError('--steps was provided but no evaluation step names were specified')
 
-    normalized_steps = {
-        EVALUATION_STEP_ALIASES.get(step_name, cast(EvaluationStep | str, step_name))
-        for step_name in raw_steps
-    }
+    normalized_steps = {cast(EvaluationStep | str, step_name) for step_name in raw_steps}
     unknown_steps = sorted(step for step in normalized_steps if step not in EVALUATION_STEP_NAMES)
     if unknown_steps:
         available = ', '.join(sorted(EVALUATION_STEP_NAMES))

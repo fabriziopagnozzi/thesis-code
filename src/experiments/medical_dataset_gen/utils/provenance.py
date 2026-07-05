@@ -78,7 +78,6 @@
 #     'eval_plots': (
 #         'evaluation_results.parquet',
 #         'evaluation_stats.parquet',
-#         'lambda_pair_agreement.parquet',
 #     ),
 # }
 
@@ -109,7 +108,6 @@
 #         'evaluation_results.parquet',
 #         'evaluation_stats.parquet',
 #         'evaluation_slice_stats.parquet',
-#         'lambda_pair_agreement.parquet',
 #     ),
 #     'geom_plots': ('query_geometry_points.parquet', 'query_geometry_stats.parquet'),
 #     'eval_plots': (),

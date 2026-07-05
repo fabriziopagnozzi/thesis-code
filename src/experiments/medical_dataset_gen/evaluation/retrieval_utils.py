@@ -18,9 +18,6 @@ from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightQrelRecord
 from experiments.medical_dataset_gen.schemas.generation_schemas import ChunkPoolScope
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
-    MethodsComparisonKernelsCfg,
-)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     ChunkMembershipRecord,
@@ -212,10 +209,6 @@ def ci_half_width(values: list[float], z: float = 1.96) -> float:
     return z * float(arr.std(ddof=1)) / float(np.sqrt(len(arr)))
 
 
-def sigmoid(value: float) -> float:
-    return 1.0 / (1.0 + float(np.exp(-value)))
-
-
 def harmonic_mean(left: float, right: float) -> float:
     denom = left + right
     return 0.0 if denom <= 0 else 2 * left * right / denom
@@ -232,22 +225,6 @@ def harmonic_mean_many(values: Sequence[float]) -> float:
     if any(value <= 0.0 for value in normalized_values):
         return 0.0
     return len(normalized_values) / sum(1.0 / value for value in normalized_values)
-
-
-def pair_kernel_polars_expr(kernel_cfg: MethodsComparisonKernelsCfg) -> pl.Expr:
-    match kernel_cfg.pair_aggregation:
-        case 'arithmetic_mean':
-            return (pl.col('fac_loc_kernel_score') + pl.col('mmr_kernel_score')) / 2.0
-        case 'minimum':
-            return pl.min_horizontal('fac_loc_kernel_score', 'mmr_kernel_score')
-        case 'geometric_mean':
-            return (pl.col('fac_loc_kernel_score') * pl.col('mmr_kernel_score')).sqrt()
-        case _ as it:
-            unreachable_code(f'Unexpected value {it} for kernel_cfg.pair_aggregation')
-
-
-def sigmoid_polars_expr(expr: pl.Expr) -> pl.Expr:
-    return 1.0 / (1.0 + (-expr).exp())
 
 
 # Miscellaneous utils
