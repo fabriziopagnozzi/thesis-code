@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import yaml
 
+from experiments.medical_dataset_gen.utils.constants import COLOR_CODES, RESET, ColorName
 from helpers.dir_paths import ROOT_DIR
 
 if TYPE_CHECKING:
@@ -40,6 +41,14 @@ type SyntheticMedicalDatasetTableName = Literal[
 ]
 SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTableName.__value__))
 
+type EmbeddingArtifactName = Literal[
+    'chunk_vectors', 'query_vectors', 'chunk_ids', 'query_ids', 'metadata'
+]
+
+type ResultDirOverrides = dict[SyntheticMedicalDatasetTableName | EmbeddingArtifactName, str]
+
+type YamlMapping = dict[str, object]
+
 
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
@@ -50,16 +59,18 @@ class MedicalDatasetGenPaths:
     def __init__(
         self,
         exp_name: str,
-        result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] | None = None,
+        result_dir_overrides: ResultDirOverrides | None = None,
     ):
         self.exp_name = exp_name
         self.experiment_dir = self.results_dir / exp_name
         if not exp_name:
             raise ValueError('experiment name cannot be empty')
+
         exp_path = Path(exp_name)
         exp_parts = exp_path.parts
         if len(exp_parts) > 2:
             raise ValueError(f'subexperiments support only one nesting level: {exp_name!r}')
+
         parent_exp_name = exp_parts[0] if len(exp_parts) == 2 else exp_path.name
         self.parent_experiment_dir = self.results_dir / parent_exp_name
         self.logs_dir = self.experiment_dir / '_logs'
@@ -68,11 +79,6 @@ class MedicalDatasetGenPaths:
         self.parent_config_path = self.parent_experiment_dir / '_config.yaml'
         self.subconfig_path = self.experiment_dir / '_subconfig.yaml'
         self.result_dir_overrides = dict(result_dir_overrides or {})
-        self.embeddings_chunk_vectors_path = self.experiment_dir / 'embeddings_chunk_vectors.npy'
-        self.embeddings_query_vectors_path = self.experiment_dir / 'embeddings_query_vectors.npy'
-        self.embeddings_chunk_ids_path = self.experiment_dir / 'embeddings_chunk_ids.npy'
-        self.embeddings_query_ids_path = self.experiment_dir / 'embeddings_query_ids.npy'
-        self.embeddings_meta_path = self.experiment_dir / 'embeddings_metadata.json'
 
     def ensure_dirs(self) -> None:
         for path in [self.results_dir, self.experiment_dir, self.logs_dir, self.figures_dir]:
@@ -96,6 +102,15 @@ class MedicalDatasetGenPaths:
         if override_path.is_absolute():
             return override_path / f'{table}.{ext}'
         return self.results_dir / override_path / f'{table}.{ext}'
+
+    def embeddings_paths(self, name: EmbeddingArtifactName) -> Path:
+        override = self.result_dir_overrides.get(name)
+        artifact_disk_old_name = f'embeddings_{name}.{"json" if name == "metadata" else "npy"}'  # for compatibility with old exps
+
+        if override is None:
+            return self.experiment_dir / artifact_disk_old_name
+        else:
+            return Path(override) / artifact_disk_old_name
 
     def get_result_dir(self, table: SyntheticMedicalDatasetTableName) -> Path:
         return self.table_path(table).parent
@@ -184,9 +199,6 @@ def child_experiment_names(
         for child_path in sorted(parent_path.iterdir())
         if child_path.is_dir() and (child_path / '_subconfig.yaml').is_file()
     ]
-
-
-type YamlMapping = dict[str, object]
 
 
 def _resolve_experiment_dir_prefix(prefix: str, parent_dir: Path) -> Path:
@@ -313,3 +325,11 @@ def setup_logging(paths: MedicalDatasetGenPaths, run_id: str | None = None) -> N
             self._file.flush()
 
     sys.stdout = _Tee(log_path)
+
+
+def colored(color: ColorName, text: str) -> str:
+    return f'\033[38;5;{COLOR_CODES[color]}m{text}{RESET}'
+
+
+def colorprint(color: ColorName, text: str) -> None:
+    print(colored(color, text))

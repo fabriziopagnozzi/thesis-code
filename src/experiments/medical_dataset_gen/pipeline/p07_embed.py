@@ -35,12 +35,12 @@ def run_embed(
 ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
     chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
 
-    with open(paths.embeddings_meta_path, 'w') as f:
+    with open(paths.embeddings_paths('metadata'), 'w') as f:
         json.dump(meta, f, indent=2)
 
     print(
         '[write] embeddings arrays -> '
-        f'{paths.embeddings_chunk_vectors_path}, {paths.embeddings_query_vectors_path}'
+        f'{paths.embeddings_paths("chunk_vectors"), paths.embeddings_paths("query_vectors")}'
     )
     return chunk_vectors, query_vectors
 
@@ -71,25 +71,25 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
     try:
         dim = embedder.dim
         chunk_vectors = np.lib.format.open_memmap(
-            paths.embeddings_chunk_vectors_path,
+            paths.embeddings_paths('chunk_vectors'),
             mode='w+',
             dtype=np.float32,
             shape=(n_chunks, dim),
         )
         query_vectors = np.lib.format.open_memmap(
-            paths.embeddings_query_vectors_path,
+            paths.embeddings_paths('query_vectors'),
             mode='w+',
             dtype=np.float32,
             shape=(n_queries, dim),
         )
         chunk_ids = np.lib.format.open_memmap(
-            paths.embeddings_chunk_ids_path,
+            paths.embeddings_paths('chunk_ids'),
             mode='w+',
             dtype='U32',
             shape=(n_chunks,),
         )
         query_ids = np.lib.format.open_memmap(
-            paths.embeddings_query_ids_path,
+            paths.embeddings_paths('query_ids'),
             mode='w+',
             dtype='U32',
             shape=(n_queries,),
@@ -148,10 +148,10 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
             'format': 'npy_memmap',
             'n_chunks': int(n_chunks),
             'n_queries': int(n_queries),
-            'chunk_vectors_file': str(paths.embeddings_chunk_vectors_path),
-            'query_vectors_file': str(paths.embeddings_query_vectors_path),
-            'chunk_ids_file': str(paths.embeddings_chunk_ids_path),
-            'query_ids_file': str(paths.embeddings_query_ids_path),
+            'chunk_vectors_file': str(paths.embeddings_paths('chunk_vectors')),
+            'query_vectors_file': str(paths.embeddings_paths('query_vectors')),
+            'chunk_ids_file': str(paths.embeddings_paths('chunk_ids')),
+            'query_ids_file': str(paths.embeddings_paths('query_ids')),
         }
         if chunk_cache_stats is not None:
             meta['chunk_embedding_cache'] = chunk_cache_stats

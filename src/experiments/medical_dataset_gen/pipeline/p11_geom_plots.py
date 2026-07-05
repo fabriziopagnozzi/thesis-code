@@ -103,11 +103,11 @@ def run_query_geom_plots(
     missing = [str(path) for path in required_paths if not path.exists()]
 
     embedding_paths = [
-        paths.embeddings_meta_path,
-        paths.embeddings_chunk_vectors_path,
-        paths.embeddings_query_vectors_path,
-        paths.embeddings_chunk_ids_path,
-        paths.embeddings_query_ids_path,
+        paths.embeddings_paths('metadata'),
+        paths.embeddings_paths('chunk_vectors'),
+        paths.embeddings_paths('query_vectors'),
+        paths.embeddings_paths('chunk_ids'),
+        paths.embeddings_paths('query_ids'),
     ]
     missing.extend(str(path) for path in embedding_paths if not path.exists())
     if missing:
@@ -133,7 +133,7 @@ def run_query_geom_plots(
     assert_pool_scope_match(eval_results, cfg.retrieval.pool_scope, table_name='evaluation_results')
 
     query_id_set = {
-        str(query_id) for query_id in np.load(paths.embeddings_query_ids_path, mmap_mode='r')
+        str(query_id) for query_id in np.load(paths.embeddings_paths('query_ids'), mmap_mode='r')
     }
     selected_query_groups = choose_query_groups(cfg, queries, geometry, eval_results)
 

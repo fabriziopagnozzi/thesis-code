@@ -1,3 +1,5 @@
+from typing import Literal
+
 GENERIC_CLINICAL_STOPWORDS = frozenset({
     'about',
     'after',
@@ -69,31 +71,58 @@ GENERIC_CLINICAL_STOPWORDS = frozenset({
 })
 
 # Terminal colors
-BLACK = '\033[38;5;0m'
-RED = '\033[38;5;1m'
-GREEN = '\033[38;5;2m'
-YELLOW = '\033[38;5;3m'
-BLUE = '\033[38;5;4m'
-MAGENTA = '\033[38;5;5m'
-CYAN = '\033[38;5;6m'
-WHITE = '\033[38;5;7m'
+type ColorName = Literal[
+    'black',
+    'red',
+    'green',
+    'yellow',
+    'blue',
+    'magenta',
+    'cyan',
+    'white',
+    'bright_black',
+    'bright_red',
+    'bright_green',
+    'bright_yellow',
+    'bright_blue',
+    'bright_magenta',
+    'bright_cyan',
+    'bright_white',
+    'orange',
+    'gold',
+    'neon_yellow',
+    'pink',
+    'purple',
+    'teal',
+    'lime',
+    'gray',
+]
 
-BRIGHT_BLACK = '\033[38;5;8m'
-BRIGHT_RED = '\033[38;5;9m'
-BRIGHT_GREEN = '\033[38;5;10m'
-BRIGHT_YELLOW = '\033[38;5;11m'
-BRIGHT_BLUE = '\033[38;5;12m'
-BRIGHT_MAGENTA = '\033[38;5;13m'
-BRIGHT_CYAN = '\033[38;5;14m'
-BRIGHT_WHITE = '\033[38;5;15m'
-
-ORANGE = '\033[38;5;208m'
-GOLD = '\033[38;5;220m'
-NEON_YELLOW = '\033[38;5;226m'
-PINK = '\033[38;5;213m'
-PURPLE = '\033[38;5;129m'
-TEAL = '\033[38;5;37m'
-LIME = '\033[38;5;118m'
-GRAY = '\033[38;5;245m'
+COLOR_CODES: dict[ColorName, int] = {
+    'black': 0,
+    'red': 1,
+    'green': 2,
+    'yellow': 3,
+    'blue': 4,
+    'magenta': 5,
+    'cyan': 6,
+    'white': 7,
+    'bright_black': 8,
+    'bright_red': 9,
+    'bright_green': 10,
+    'bright_yellow': 11,
+    'bright_blue': 12,
+    'bright_magenta': 13,
+    'bright_cyan': 14,
+    'bright_white': 15,
+    'orange': 208,
+    'gold': 220,
+    'neon_yellow': 226,
+    'pink': 213,
+    'purple': 129,
+    'teal': 37,
+    'lime': 118,
+    'gray': 245,
+}
 
 RESET = '\033[0m'

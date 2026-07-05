@@ -22,9 +22,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     PlanCalibrationMode,
 )
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
-from experiments.medical_dataset_gen.utils.global_utils import (
-    SyntheticMedicalDatasetTableName,
-)
+from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides
 from helpers.embedder import EmbeddingModelName
 
 
@@ -36,7 +34,7 @@ class GlobalCfg(ConfigModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
     output_experiment: str = 'v2'
-    result_dir_overrides: dict[SyntheticMedicalDatasetTableName, str] = Field(default_factory=dict)
+    result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
 
 type DistractorChange = Literal['condition', 'subgroup', 'axis', 'axis_value_bin']

@@ -12,15 +12,16 @@ from typing import Literal, cast, get_args
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
 )
-from experiments.medical_dataset_gen.utils.constants import RESET, TEAL
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     child_experiment_names,
+    colorprint,
     load_config,
     paths_for,
     setup_logging,
 )
-from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
+
+# from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
 from helpers.ollama_client import stop_model
 
 from .p01_plans import run_make_query_plans
@@ -32,8 +33,8 @@ from .p06_qrels import run_make_qrels
 from .p07_embed import run_embed
 from .p08_filter_queries import run_filter_queries
 from .p09_eval import parse_evaluate_cli_args, run_evaluate
-from .p10_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
-from .p11_eval_plots import parse_plots_cli_args, run_eval_plots
+from .p10_eval_plots import parse_plots_cli_args, run_eval_plots
+from .p11_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
 
 type PipelineStage = Literal[
     'plans',
@@ -45,8 +46,8 @@ type PipelineStage = Literal[
     'embed',
     'filter_queries',
     'eval',
-    'geom_plots',
     'eval_plots',
+    'geom_plots',
 ]
 PIPELINE_STAGES_SET = set[PipelineStage](get_args(PipelineStage.__value__))
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
@@ -72,8 +73,8 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('embed', run_embed),
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
-    ('geom_plots', run_query_geom_plots),
     ('eval_plots', run_eval_plots),
+    ('geom_plots', run_query_geom_plots),
 ]
 
 
@@ -156,22 +157,22 @@ def main() -> None:
     stages_to_run = [(name, fn) for name, fn in STAGES_TO_FNS_SORTED if name in selected_stage_set]
     selected_stages = [name for name, _ in stages_to_run]
 
-    provenance = PipelineProvenance(cfg=cfg, paths=paths, stages=selected_stages)
-    if not args.no_log_tee:
-        setup_logging(paths, provenance.run_id)
+    # provenance = PipelineProvenance(cfg=cfg, paths=paths, stages=selected_stages)
+    # if not args.no_log_tee:
+    # setup_logging(paths, provenance.run_id)
 
-    print(f'{TEAL}[pipeline] running experiment: {paths.exp_name}{RESET}')
-    print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
-    print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
+    colorprint('teal', f'[pipeline] running experiment: {paths.exp_name}')
+    colorprint('bright_cyan', f'[pipeline] dir={paths.experiment_dir}')
+    # print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
     for name, fn in stages_to_run:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
         print(f'\n=== Stage: {name} ===')
-        input_fingerprints = provenance.before_stage(name)
+        # input_fingerprints = provenance.before_stage(name)
         fn(cfg, paths)
-        provenance.after_stage(name, input_fingerprints)
-    provenance.finish()
+        # provenance.after_stage(name, input_fingerprints)
+    # provenance.finish()
 
 
 def _validate_run_mode_args(
@@ -230,8 +231,8 @@ def _run_standalone_script_sequence(
     if not no_log_tee:
         setup_logging(paths)
 
-    print(
-        f'{TEAL}[pipeline] running standalone scripts: {[spec.script for spec in run_specs]}{RESET}'
+    colorprint(
+        'teal', f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]})'
     )
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
 
@@ -250,22 +251,25 @@ def _run_standalone_script(*, run_spec: StandaloneRunSpec, exp: str) -> None:
     if run_spec.script == 'eval':
         cfg, selected_steps = parse_evaluate_cli_args(script_argv)
         paths = paths_for(cfg)
-        print(
-            f'{TEAL}[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}{RESET}'
+        colorprint(
+            'teal',
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         run_evaluate(cfg, paths, selected_steps=selected_steps)
     elif run_spec.script == 'geom_plots':
         cfg, selected_plots = parse_geom_plots_cli_args(script_argv)
         paths = paths_for(cfg)
-        print(
-            f'{TEAL}[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}{RESET}'
+        colorprint(
+            'teal',
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         run_query_geom_plots(cfg, paths, selected_plots=selected_plots)
     elif run_spec.script == 'eval_plots':
         cfg, selected_plots = parse_plots_cli_args(script_argv)
         paths = paths_for(cfg)
-        print(
-            f'{TEAL}[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}{RESET}'
+        colorprint(
+            'teal',
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         run_eval_plots(cfg, paths, selected_plots=selected_plots)
     else:

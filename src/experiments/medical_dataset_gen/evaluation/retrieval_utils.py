@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
+from math import sqrt
 
 import numpy as np
 import polars as pl
@@ -220,6 +221,10 @@ def harmonic_mean(left: float, right: float) -> float:
     return 0.0 if denom <= 0 else 2 * left * right / denom
 
 
+def geometric_mean(x: float, y: float) -> float:
+    return sqrt(x * y)
+
+
 def harmonic_mean_many(values: Sequence[float]) -> float:
     if not values:
         return 0.0
@@ -267,18 +272,22 @@ def assert_pool_scope_match(
 def load_embedding_arrays(
     paths: MedicalDatasetGenPaths,
 ) -> tuple[NDArray[np.float32], NDArray[np.float32], list[str], list[str]]:
-    chunk_vectors = np.load(paths.embeddings_chunk_vectors_path, mmap_mode='r')
-    query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
-    chunk_ids = [str(value) for value in np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')]
-    query_ids = [str(value) for value in np.load(paths.embeddings_query_ids_path, mmap_mode='r')]
+    chunk_vectors = np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r')
+    query_vectors = np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r')
+    chunk_ids = [
+        str(value) for value in np.load(paths.embeddings_paths('chunk_ids'), mmap_mode='r')
+    ]
+    query_ids = [
+        str(value) for value in np.load(paths.embeddings_paths('query_ids'), mmap_mode='r')
+    ]
     return chunk_vectors, query_vectors, chunk_ids, query_ids
 
 
 def load_embedding_arrays_mmap_ids(
     paths: MedicalDatasetGenPaths,
 ) -> tuple[NDArray[np.float32], NDArray[np.float32], NDArray[np.str_], NDArray[np.str_]]:
-    chunk_vectors = np.load(paths.embeddings_chunk_vectors_path, mmap_mode='r')
-    query_vectors = np.load(paths.embeddings_query_vectors_path, mmap_mode='r')
-    chunk_ids = np.load(paths.embeddings_chunk_ids_path, mmap_mode='r')
-    query_ids = np.load(paths.embeddings_query_ids_path, mmap_mode='r')
+    chunk_vectors = np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r')
+    query_vectors = np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r')
+    chunk_ids = np.load(paths.embeddings_paths('chunk_ids'), mmap_mode='r')
+    query_ids = np.load(paths.embeddings_paths('query_ids'), mmap_mode='r')
     return chunk_vectors, query_vectors, chunk_ids, query_ids
