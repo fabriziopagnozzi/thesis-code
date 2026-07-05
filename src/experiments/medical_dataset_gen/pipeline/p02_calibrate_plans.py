@@ -15,7 +15,7 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
-from experiments.medical_dataset_gen.pipeline.p03_structured_facts import make_gold_fact
+from experiments.medical_dataset_gen.pipeline.p03_facts import make_gold_fact
 from experiments.medical_dataset_gen.pipeline.p05_queries_answers import render_query
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     MedicalOntology,

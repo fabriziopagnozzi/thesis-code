@@ -1,9 +1,6 @@
 # Code - Primary
 
-## Data distribution
-* formalize better and categorize different kinds of distributions and present results for each of these
-* bottom line is that MMR behaves overall worse than FacLoc, no matter the distribution, given this dataset structure.
-
+## More consistent y-axis scale for all of the plots
 
 ## Split validation/test data and tune hyperparameter lambda and see results
 * add "mode: exploring | testing" under "evaluation:" key
@@ -51,23 +48,65 @@
     - If we can demonstrate, at least on synthetic data across mutliple domains, that Coverage performs better than MMR and is more lambda-stable, that would be a very strong and “general” result.
 
 
-
-
 ---------
 
+<!-- type EmbeddingModelName = Literal[
+    'multi-qa-mpnet-base-cos-v1',
+    'BAAI/bge-m3',
+    'Qwen/Qwen3-Embedding-0.6B',
+    'Qwen/Qwen3-Embedding-4B',
+    'Qwen/Qwen3-Embedding-8B',
+    'jinaai/jina-embeddings-v5-text-small',
+    'abhinand/MedEmbed-large-v0.1',
+    'ncbi/MedCPT',
+] -->
+
 # Writing - Primary
-* TASK: formulate current claims precisely, given the experiment results: write them down, half a dozen claims we're ready to do. 
-    - First, frame the benchmark properties (structure of queries, chunks, facets)
-    - then general settings used (model, k & lambda values...)
-    - then evaluation and diagnostics metrics and the rationale behind them.
-   
-    * Claims so far:
-        - FacLoc is overall a safer method across all lambda values - MMR can do worse than top-k because while it covers the space it can fall into distractors way more easily.
-        - consistely better than top-k across all lambda values
-            - claim that using validation/test data after tuning hyperparameter lambda FacLoc still seems to outperform MMR across all data distributions.
-        - depending on dataset distribution we get results and the trend overall on the main evaluation metric is that FacLoc performs almost always equally or better than top-k 
-        - MMR diversifies with balanced lambda values while FacLoc shows improvements only with low enough values (= high FacLoc weight)
-        - ... (maybe include also other results drawn from diagnostics, maybe how the hidden variables like the model, the geometry etc. have an impact on this)
+
+## TASK: formulate half a dozen claims precisely, given the current experiment results.
+
+### Introduction and pipeline presentation
+    - first, frame the benchmark properties (structure of queries, chunks, facets)
+    - then outline the main pipeline steps:
+        - then general settings used (k & lambda values...)
+        - medical ontology structure
+            - very briefly: conditions, subgroups, clinical axes
+        - deterministic template rendering
+            - query types and constrasts: Primary Condition + Subgroup_1 vs. Subgroup_2 + Clinical_Axis_1 & Clinical_Axis_2
+            - once we fix the query structure, we talk more deeply about the ontology and the reasons why it was designed like that:
+                - allowlists for each condition to limit the combinatorial explosion and produce only meaningful queries as far as the clinical soundness is concerned
+                - allowed cohort contrasts to compare in the query
+                - allowed clinical axis pairs to include in the query
+        - embedding
+        - filtering based on the properties emerging from the embedding space
+            - based on the highest k value set for retrieval, we enforce max. 2 facets retrieved out of 4.
+        - evaluating, along with metrics and diagnostics definition and the rationale behind them
+
+### Claims so far
+    - FacLoc is consistely better than top-k in FCP@k across all lambda values, thus it's overall a safer method.
+        - MMR, while covering well the facets, can fall into distractors and can be arbitrarily worse than top-k at very low lambda values.
+        - 28/A shows that even for very low values of lambda, FacLoc does no worse than top-k as for FCP@k --> more stable methods, more robust to distractor presence.
+        - claim that using validation/test data after tuning hyperparameter lambda FacLoc still seems to outperform MMR across all data distributions
+            > TODO
+    
+    - we get results varying the dataset distribution: the trend overall FCP@k is that FacLoc performs almost always equally or better than MMR and top-k, with some minor exceptions.
+        > find exceptions and list them
+
+    - MMR diversifies with balanced lambda values while FacLoc shows improvements only with low enough values (= high FacLoc weight) --> due to mathematical properties of their scoring functions
+        > show the greedy step update formulas and discuss 
+
+    - the embedding model choice counts:
+        - smaller, weaker models like multi-qa-mpnet-base-cos-v1 show a very low number of post-filtering queries. This may be due to their less nuanced understanding of the semantics, yielding embedding vectors which mix up the content of the rendered clinical chunks. The chunks are semantically separable but pertain to the same domain, have similar template structure, etc.
+            - this shows that some queries are by design "harder" than others and require better models to capture their nuances.
+                - even then, there is a small percentage of queries that show unseparable geometry even with stronger models.
+                    > TODO: let's try with qwen 4b or 8b.
+            - 
+            > Add table showing pass rate of the filter_queries step and show that bigger models do better  
+        - even with the lower success rate of smaller models, the overall trend of the evaluation metrics on the queries that do pass the filtering step is roughly the same, given a specific data distribution.
+
+    - add "pool_scope: global" and discuss the results.
+
+    - ... (maybe include also other results drawn from diagnostics)
 
 ---------
 

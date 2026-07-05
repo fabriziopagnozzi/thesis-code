@@ -24,15 +24,15 @@ from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
 from helpers.ollama_client import stop_model
 
 from .p01_plans import run_make_query_plans
-from .p02_plans_calibration import run_calibrate_query_plans
-from .p03_structured_facts import run_make_facts
+from .p02_calibrate_plans import run_calibrate_query_plans
+from .p03_facts import run_make_facts
 from .p04_chunks import run_make_chunks
 from .p05_queries_answers import run_make_queries_answers
 from .p06_qrels import run_make_qrels
 from .p07_embed import run_embed
 from .p08_filter_queries import run_filter_queries
-from .p09_evaluate import parse_evaluate_cli_args, run_evaluate
-from .p10_query_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
+from .p09_eval import parse_evaluate_cli_args, run_evaluate
+from .p10_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
 from .p11_eval_plots import parse_plots_cli_args, run_eval_plots
 
 type PipelineStage = Literal[

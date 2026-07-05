@@ -48,11 +48,6 @@ dev = [
 [tool.taskipy.tasks]
 # -- Synthetic Medical Dataset Generation ----------------------------------------------------------------------------
 pipeline = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline"
-
-# Specific pipeline runnable scripts
-eval = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline --run eval"
-eval_plots = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline --run eval_plots"
-geom_plots = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline --run geom_plots"
 query_diagnose = "./memlimit.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
 
 # -- MIMIC Experiments ----------------------------------------------------------------------------
