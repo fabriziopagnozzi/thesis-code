@@ -97,7 +97,7 @@ retrieval:
     stop: 0.40
     num_values: 30
   mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
-  compute_answer_rouge: true # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
+  compute_answer_rouge: false # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
   only_pass_geometry: true # If true, evaluation skips queries that fail the geometric prefilter.
 
 geometry_filter:

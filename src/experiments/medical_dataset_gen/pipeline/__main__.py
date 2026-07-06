@@ -161,7 +161,7 @@ def main() -> None:
     # if not args.no_log_tee:
     # setup_logging(paths, provenance.run_id)
 
-    colorprint('teal', f'[pipeline] running experiment: {paths.exp_name}')
+    colorprint('teal', f'\n[pipeline] running experiment: {paths.exp_name}')
     colorprint('bright_cyan', f'[pipeline] dir={paths.experiment_dir}')
     # print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 

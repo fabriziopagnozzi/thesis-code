@@ -146,6 +146,7 @@ def plot_metrics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+    plot_data_split: str = 'current',
 ) -> None:
     """Main benchmark metrics as lambda changes."""
     _set_active_plot_theme(plot_theme)
@@ -156,6 +157,7 @@ def plot_metrics_k_curves_for_lambda(
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
         figure_title=' ',
         output_filename='metrics_k_curves_for_lambda.png',
+        plot_data_split=plot_data_split,
     )
 
 
@@ -163,6 +165,7 @@ def plot_diagnostics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+    plot_data_split: str = 'current',
 ) -> None:
     """Diagnostic metrics as lambda changes."""
     _set_active_plot_theme(plot_theme)
@@ -173,6 +176,7 @@ def plot_diagnostics_k_curves_for_lambda(
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
         figure_title=' ',
         output_filename='diagnostics_k_curves_for_lambda.png',
+        plot_data_split=plot_data_split,
     )
 
 
@@ -184,6 +188,7 @@ def _plot_lambda_sensitivity(
     metric_names: list[str],
     figure_title: str,
     output_filename: str,
+    plot_data_split: str,
 ) -> None:
     """Shared lambda-sensitivity renderer for fixed metric groups."""
     import matplotlib.pyplot as plt
@@ -278,7 +283,11 @@ def _plot_lambda_sensitivity(
         _style_legend(legend)
     fig.suptitle(figure_title, fontsize=12)
     _figure_note(
-        fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
+        fig,
+        (
+            f'Data split: {plot_data_split}. Dashed horizontal lines are the top-k '
+            'reference at each k; line colors identify k'
+        ),
     )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(out_dir / output_filename, dpi=140, bbox_inches='tight')
@@ -290,6 +299,7 @@ def plot_metrics_heatmap_k_lambda_grid(
     results_df: pl.DataFrame,
     out_dir: Path,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+    plot_data_split: str = 'current',
 ) -> None:
     """Static heatmaps across k x lambda for FacLoc, MMR, and FacLoc advantage."""
     _set_active_plot_theme(plot_theme)
@@ -401,7 +411,8 @@ def plot_metrics_heatmap_k_lambda_grid(
     _figure_note(
         fig,
         (
-            'Rows are metrics; columns are FacLoc, MMR, and FacLoc advantage. '
+            f'Data split: {plot_data_split}. Rows are metrics; columns are FacLoc, MMR, '
+            'and FacLoc advantage. '
             'Advantage is matched by normalized grid position, not raw lambda equality; '
             'for lower-better metrics, positive still means FacLoc better.'
         ),
@@ -417,6 +428,7 @@ def plot_metrics_heatmap_k_lambda_grid_html(
     results_df: pl.DataFrame,
     out_dir: Path,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+    plot_data_split: str = 'current',
 ) -> None:
     """Interactive HTML explorer for strategy-vs-lambda heatmaps."""
     _set_active_plot_theme(plot_theme)
@@ -513,7 +525,10 @@ def plot_metrics_heatmap_k_lambda_grid_html(
         })
 
     fig.update_layout(
-        title=f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)}',
+        title=(
+            f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)} '
+            f'(data split: {plot_data_split})'
+        ),
         template=_active_theme()['plotly_template'],
         paper_bgcolor=_theme_color('figure_facecolor'),
         plot_bgcolor=_theme_color('axes_facecolor'),
@@ -647,6 +662,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     results_df: pl.DataFrame,
     out_dir: Path,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+    plot_data_split: str = 'current',
 ) -> None:
     """Paired delta curves relative to top-k on each strategy's native lambda grid.
 
@@ -758,6 +774,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
             bbox_to_anchor=(0.5, 0.0),
         )
         _style_legend(legend)
+    _figure_note(fig, f'Data split: {plot_data_split}. Deltas are paired against top-k.')
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(
         out_dir / 'metrics_delta_vs_topk_k_curves_for_lambda.png',
@@ -1252,6 +1269,7 @@ def plot_answer_metrics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
+    plot_data_split: str = 'current',
 ) -> None:
     """Auxiliary ROUGE metrics as lambda changes."""
     _set_active_plot_theme(plot_theme)
@@ -1357,7 +1375,11 @@ def plot_answer_metrics_k_curves_for_lambda(
         fontsize=12,
     )
     _figure_note(
-        fig, 'Dashed horizontal lines are the top-k reference at each k; line colors identify k'
+        fig,
+        (
+            f'Data split: {plot_data_split}. Dashed horizontal lines are the top-k '
+            'reference at each k; line colors identify k'
+        ),
     )
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     fig.savefig(out_dir / 'answer_metrics_k_curves_for_lambda.png', dpi=140, bbox_inches='tight')

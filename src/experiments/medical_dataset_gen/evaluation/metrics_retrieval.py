@@ -4,7 +4,6 @@ from collections.abc import Mapping
 import numpy as np
 
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
-    geometric_mean,
     harmonic_mean,
 )
 from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
@@ -29,13 +28,8 @@ def compute_retrieval_metrics(
 ) -> dict[str, float | int]:
     relevance = _relevance_metrics(selected_chunk_ids, all_gold_ids)
     facet_coverage_metrics = _facet_coverage_metrics(selected_chunk_ids, facet_to_gold)
-    # facet_coverage_purity = float(facet_coverage_metrics['facet_coverage']) * float(
-    #     relevance['gold_precision']
-    # )
-    # Switch to geometric mean: same ranking behavior (sqrt monotonically increasing) but nicer scores
-    facet_coverage_purity = geometric_mean(
-        facet_coverage_metrics['facet_coverage'], relevance['gold_precision']
-    )
+    facet_coverage_purity = facet_coverage_metrics['facet_coverage'] * relevance['gold_precision']
+
     all_facet_clean = float(
         float(facet_coverage_metrics['facet_coverage']) == 1.0
         and float(relevance['gold_precision']) >= all_clean_rate_precision_threshold

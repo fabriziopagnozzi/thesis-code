@@ -26,7 +26,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
-_TEST_GRID_PLOT_NAMES: set[EvalPlotFileName] = {
+_VALIDATION_GRID_PLOT_NAMES: set[EvalPlotFileName] = {
     'metrics_k_curves_for_lambda',
     'metrics_heatmap_k_lambda_grid',
     'metrics_heatmap_k_lambda_grid_html',
@@ -53,12 +53,14 @@ def run_eval_plots(
     if stats_df.is_empty() or results_df.is_empty():
         print('Skipping eval figures: evaluation tables are empty')
         return
-    test_grid_stats_df = stats_df
+    validation_grid_stats_df = stats_df
+    validation_results_df = results_df
     if cfg.evaluation.mode == 'testing':
+        validation_results_df = results_df.filter(pl.col('split') == 'validation')
         results_df = results_df.filter(pl.col('split') == 'test')
-        report_grid_stats_path = paths.table_path('evaluation_report_grid_stats')
-        if report_grid_stats_path.exists():
-            test_grid_stats_df = read_parquet(paths, 'evaluation_report_grid_stats')
+        selection_stats_path = paths.table_path('evaluation_selection_stats')
+        if selection_stats_path.exists():
+            validation_grid_stats_df = read_parquet(paths, 'evaluation_selection_stats')
         if results_df.is_empty():
             print('Skipping eval figures: no test rows in evaluation_results')
             return
@@ -69,8 +71,9 @@ def run_eval_plots(
     plot_jobs = build_plot_jobs(
         cfg=cfg,
         stats_df=stats_df,
-        test_grid_stats_df=test_grid_stats_df,
+        validation_grid_stats_df=validation_grid_stats_df,
         results_df=results_df,
+        validation_results_df=validation_results_df,
         out_dir=out_dir,
     )
     selected_job_names = (
@@ -120,8 +123,9 @@ def build_plot_callable(
 def build_plot_jobs(
     cfg: ExperimentCfg,
     stats_df: pl.DataFrame,
-    test_grid_stats_df: pl.DataFrame,
+    validation_grid_stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
+    validation_results_df: pl.DataFrame,
     out_dir: Path,
 ) -> list[tuple[EvalPlotFileName, Callable[[], None]]]:
     available_plot_names: list[EvalPlotFileName] = [
@@ -138,8 +142,9 @@ def build_plot_jobs(
                     plot_name=plot_name,
                     cfg=cfg,
                     stats_df=stats_df,
-                    test_grid_stats_df=test_grid_stats_df,
+                    validation_grid_stats_df=validation_grid_stats_df,
                     results_df=results_df,
+                    validation_results_df=validation_results_df,
                     out_dir=out_dir,
                 ),
             ),
@@ -153,21 +158,27 @@ def _plot_context_for_name(
     plot_name: EvalPlotFileName,
     cfg: ExperimentCfg,
     stats_df: pl.DataFrame,
-    test_grid_stats_df: pl.DataFrame,
+    validation_grid_stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
+    validation_results_df: pl.DataFrame,
     out_dir: Path,
 ) -> EvalPlotCallContext:
+    uses_validation_grid = (
+        cfg.evaluation.mode == 'testing' and plot_name in _VALIDATION_GRID_PLOT_NAMES
+    )
     effective_stats_df = (
-        test_grid_stats_df
-        if cfg.evaluation.mode == 'testing' and plot_name in _TEST_GRID_PLOT_NAMES
+        validation_grid_stats_df
+        if uses_validation_grid
         else stats_df
     )
+    effective_results_df = validation_results_df if uses_validation_grid else results_df
     return {
         'stats_df': effective_stats_df,
-        'results_df': results_df,
+        'results_df': effective_results_df,
         'out_dir': out_dir,
         'lambda_selection': cfg.evaluation.lambda_selection,
         'plot_theme': cfg.evaluation.plot_theme,
+        'plot_data_split': 'validation' if uses_validation_grid else 'test',
     }
 
 

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 DEFAULT_EVAL_PLOT_THEME: EvalPlotTheme = 'light'
 
-type EvalPlotCallContext = dict[str, pl.DataFrame | Path | LambdaSelectionCfg | EvalPlotTheme]
+type EvalPlotCallContext = dict[str, pl.DataFrame | Path | LambdaSelectionCfg | EvalPlotTheme | str]
 
 type EvalPlotFileName = Literal[
     # -------------------------------------------

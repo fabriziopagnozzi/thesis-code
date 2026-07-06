@@ -380,7 +380,7 @@ type EvalPlotTheme = Literal['dark', 'light']
 
 
 class EvaluationCfg(ConfigModel):
-    mode: EvaluationMode = 'exploring'
+    mode: EvaluationMode = 'testing'
     workers: PositiveInt | None = None
     all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     plot_theme: EvalPlotTheme = 'light'

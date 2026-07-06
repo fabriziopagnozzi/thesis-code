@@ -72,7 +72,7 @@
 
 * across distinct distributions, the trend overall FCP@k is that FacLoc performs almost always equally or better than MMR and top-k, with some minor exceptions.
     - find exceptions, if any, and list them --> there shouldn't be.
-    - categorize and formalize the properties of the data distributions we have experimented on [TODO:code](#add-per-query-pool-diagnostics)
+    - categorize and formalize the properties of the data distributions we have experimented on
     - Present results:
         - S01_balanced_clean vs. S02_balanced_no_bg: when there is a limited number of near-miss distractors but no actual background outlier, MMR is far worse than FacLoc. 
         - ...
