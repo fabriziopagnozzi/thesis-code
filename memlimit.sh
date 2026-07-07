@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-unit_base="${SYSTEMD_UNIT_NAME:-thesis-$(date +%Y%m%d-%H%M%S)-$$}"
+unit_base="${SYSTEMD_UNIT_NAME:-thesis-$(date +%m%d-%H%M%S)-$$}"
 unit="${unit_base%.service}.service"
 
 cleanup() {

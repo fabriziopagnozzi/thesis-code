@@ -37,6 +37,7 @@ type PlotFormat = Literal['png', 'pdf', 'svg']
 class ScalarItem(Protocol):
     def item(self) -> object: ...
 
+
 STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')
 DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
 HELDOUT_SELECTION_COLUMNS = frozenset({
@@ -225,6 +226,46 @@ class ReportOutputs:
     figures_count: int
 
 
+TABLEFMT_OPTS = [
+    'plain',
+    'simple',
+    'github',
+    'grid',
+    'simple_grid',
+    'rounded_grid',
+    'heavy_grid',
+    'mixed_grid',
+    'double_grid',
+    'fancy_grid',
+    'outline',
+    'simple_outline',
+    'rounded_outline',
+    'heavy_outline',
+    'mixed_outline',
+    'double_outline',
+    'fancy_outline',
+    'pipe',
+    'orgtbl',
+    'asciidoc',
+    'jira',
+    'presto',
+    'pretty',
+    'psql',
+    'rst',
+    'mediawiki',
+    'moinmoin',
+    'youtrack',
+    'html',
+    'unsafehtml',
+    'latex',
+    'latex_raw',
+    'latex_booktabs',
+    'latex_longtable',
+    'textile',
+    'tsv',
+]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     default_results_dir = MedicalDatasetGenPaths.results_dir
     parser = argparse.ArgumentParser(
@@ -262,7 +303,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     parser.add_argument(
         '--tablefmt',
         type=str,
-        default='rounded_grid',
+        choices=TABLEFMT_OPTS,
+        default='pipe',
         help='tabulate table format used in markdown reports.',
     )
     parser.add_argument(
@@ -391,7 +433,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 max_table_rows=args.max_table_rows,
             )
         )
-        (args.output_dir / 'warnings.txt').write_text('\n'.join(warnings) + ('\n' if warnings else ''))
+        (args.output_dir / 'warnings.txt').write_text(
+            '\n'.join(warnings) + ('\n' if warnings else '')
+        )
         (args.output_dir / 'manifest.json').write_text(
             json.dumps(
                 {
@@ -509,7 +553,9 @@ def load_experiment_record(
             cfg = _load_config_with_report_compatibility(name)
         except Exception:
             config_error = str(exc)
-            warnings.append(f'{name}: config could not be loaded, using local artifacts only ({exc})')
+            warnings.append(
+                f'{name}: config could not be loaded, using local artifacts only ({exc})'
+            )
 
     paths = MedicalDatasetGenPaths(
         name,
@@ -610,9 +656,9 @@ def dataset_distribution_row(
     per_query_exprs = [
         pl.len().alias('PoolSize'),
         is_gold.sum().alias('GoldCount'),
-        ((~is_gold) & (cluster_role != 'background_outlier')).sum().alias(
-            'NearMissDistractorCount'
-        ),
+        ((~is_gold) & (cluster_role != 'background_outlier'))
+        .sum()
+        .alias('NearMissDistractorCount'),
         (cluster_role == 'background_outlier').sum().alias('BackgroundOutlierCount'),
         pl.col('facet_id').filter(is_gold).n_unique().alias('GoldFacetCount'),
     ]
@@ -793,9 +839,9 @@ def _selected_stats_frame(
         frames.append(selected)
     if not frames:
         return pl.DataFrame(), 'posthoc_selected'
-    return pl.concat(frames).sort([col for col in ('k', 'strategy', 'lam') if col in stats.columns]), (
-        'posthoc_selected'
-    )
+    return pl.concat(frames).sort([
+        col for col in ('k', 'strategy', 'lam') if col in stats.columns
+    ]), ('posthoc_selected')
 
 
 def near_optimal_lambda_rows(
@@ -935,7 +981,9 @@ def headline_rows_from_comparisons(
         complete_rows = [
             row
             for row in group
-            if all(row.get(f'{_strategy_label(strategy)}_FCP') is not None for strategy in STRATEGIES)
+            if all(
+                row.get(f'{_strategy_label(strategy)}_FCP') is not None for strategy in STRATEGIES
+            )
         ]
         candidates = complete_rows or group
         selected = min(candidates, key=lambda row: int(cast(int, row.get('k') or 0)))
@@ -1017,10 +1065,14 @@ def embedding_model_summary_rows(
     rows: list[dict[str, object]] = []
     for model, group in sorted(grouped.items()):
         out: dict[str, object] = {'EmbeddingModel': model, 'Runs': len(group)}
-        out.update(_numeric_stats(_numeric_values(group, 'EmbeddingDimension'), 'EmbeddingDimension'))
+        out.update(
+            _numeric_stats(_numeric_values(group, 'EmbeddingDimension'), 'EmbeddingDimension')
+        )
         out.update(_numeric_stats(_numeric_values(group, 'GeometryPassRate'), 'GeometryPassRate'))
         out.update(_numeric_stats(_numeric_values(group, 'GeometryQueries'), 'GeometryQueries'))
-        out.update(_numeric_stats(_numeric_values(group, 'GeometryPassQueries'), 'GeometryPassQueries'))
+        out.update(
+            _numeric_stats(_numeric_values(group, 'GeometryPassQueries'), 'GeometryPassQueries')
+        )
         out.update(_numeric_stats(_numeric_values(group, 'TopK_FCP'), 'TopK_FCP'))
         out.update(_numeric_stats(_numeric_values(group, 'MMR_FCP'), 'MMR_FCP'))
         out.update(_numeric_stats(_numeric_values(group, 'FacLoc_FCP'), 'FacLoc_FCP'))
@@ -1123,145 +1175,159 @@ def render_report(
         '',
     ]
 
-    lines.extend(_section_with_table(
-        'Headline FacetCoveragePurity',
-        _sorted_rows(headline_rows, 'Delta_FacLoc_MMR_FCP'),
-        columns=[
-            'ShortExperiment',
-            'k',
-            'EmbeddingModel',
-            'OnlyPassGeometry',
-            'TopK_FCP',
-            'MMR_FCP',
-            'FacLoc_FCP',
-            'Delta_FacLoc_MMR_FCP',
-            'Delta_FacLoc_TopK_FCP',
-            'FacLocVsMMR_FCPOutcome',
-            'TopK_AllFacetCleanRate',
-            'MMR_AllFacetCleanRate',
-            'FacLoc_AllFacetCleanRate',
-            'MMR_lambda',
-            'FacLoc_lambda',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Where FacLoc Is Worse Or Tied With MMR',
-        _sorted_rows(
-            [
-                row
-                for row in comparison_rows
-                if row.get('FacLocVsMMR_FCPOutcome') in {'facloc_worse', 'tied'}
+    lines.extend(
+        _section_with_table(
+            'Headline FacetCoveragePurity',
+            _sorted_rows(headline_rows, 'Delta_FacLoc_MMR_FCP'),
+            columns=[
+                'ShortExperiment',
+                'k',
+                'EmbeddingModel',
+                'OnlyPassGeometry',
+                'TopK_FCP',
+                'MMR_FCP',
+                'FacLoc_FCP',
+                'Delta_FacLoc_MMR_FCP',
+                'Delta_FacLoc_TopK_FCP',
+                'FacLocVsMMR_FCPOutcome',
+                'TopK_AllFacetCleanRate',
+                'MMR_AllFacetCleanRate',
+                'FacLoc_AllFacetCleanRate',
+                'MMR_lambda',
+                'FacLoc_lambda',
             ],
-            'Delta_FacLoc_MMR_FCP',
-            descending=False,
-        ),
-        columns=[
-            'ShortExperiment',
-            'k',
-            'EmbeddingModel',
-            'TopK_FCP',
-            'MMR_FCP',
-            'FacLoc_FCP',
-            'Delta_FacLoc_MMR_FCP',
-            'MMR_AllFacetCleanRate',
-            'FacLoc_AllFacetCleanRate',
-            'FacLocVsMMR_FCPOutcome',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Dataset Distributions',
-        dataset_rows,
-        columns=[
-            'ShortExperiment',
-            'DistributionCategory',
-            'PoolSizeMean',
-            'GoldPercentage',
-            'NearMissDistractorPercentage',
-            'BackgroundOutlierPercentage',
-            'DominantPrimaryGoldCountMean',
-            'OtherPrimaryGoldCountMean',
-            'SecondaryGoldCountMean',
-            'NicheGoldCountMean',
-            'HardDistractorCountMean',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Geometry Filter And Embeddings',
-        geometry_rows,
-        columns=[
-            'ShortExperiment',
-            'EmbeddingModel',
-            'EmbeddingDimension',
-            'GeometryQueries',
-            'GeometryPassQueries',
-            'GeometryPassRate',
-            'NTopkRetrievedFacetsMean',
-            'PrimaryAxisTopkFractionMean',
-            'DominantPrimaryTopkFractionMean',
-            'TopFailureModes',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Lambda Stability',
-        lambda_rows,
-        columns=[
-            'strategy',
-            'n_selected',
-            'distinct_lambda_count',
-            'selected_lambda_mean',
-            'selected_lambda_std',
-            'selected_lambda_norm_mean',
-            'selected_lambda_norm_std',
-            'boundary_selection_rate',
-            'near_optimal_fraction_mean',
-            'near_optimal_span_norm_mean',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Embedding Model Summary',
-        embedding_summary_rows,
-        columns=[
-            'EmbeddingModel',
-            'Runs',
-            'EmbeddingDimension_mean',
-            'GeometryPassRate_mean',
-            'GeometryPassQueries_mean',
-            'TopK_FCP_mean',
-            'MMR_FCP_mean',
-            'FacLoc_FCP_mean',
-            'Delta_FacLoc_MMR_FCP_mean',
-            'PassOnlyRuns',
-            'AllQueryRuns',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Pass-Only Vs All-Query Pairs',
-        embedding_pair_rows,
-        columns=[
-            'ShortDistribution',
-            'EmbeddingModel',
-            'PassOnlyShortExperiment',
-            'AllQueriesShortExperiment',
-            'AllMinusPassOnly_TopK_FCP',
-            'AllMinusPassOnly_MMR_FCP',
-            'AllMinusPassOnly_FacLoc_FCP',
-            'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
-        ],
-        tablefmt=args.tablefmt,
-        max_rows=args.max_table_rows,
-    ))
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Where FacLoc Is Worse Or Tied With MMR',
+            _sorted_rows(
+                [
+                    row
+                    for row in comparison_rows
+                    if row.get('FacLocVsMMR_FCPOutcome') in {'facloc_worse', 'tied'}
+                ],
+                'Delta_FacLoc_MMR_FCP',
+                descending=False,
+            ),
+            columns=[
+                'ShortExperiment',
+                'k',
+                'EmbeddingModel',
+                'TopK_FCP',
+                'MMR_FCP',
+                'FacLoc_FCP',
+                'Delta_FacLoc_MMR_FCP',
+                'MMR_AllFacetCleanRate',
+                'FacLoc_AllFacetCleanRate',
+                'FacLocVsMMR_FCPOutcome',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Dataset Distributions',
+            dataset_rows,
+            columns=[
+                'ShortExperiment',
+                'DistributionCategory',
+                'PoolSizeMean',
+                'GoldPercentage',
+                'NearMissDistractorPercentage',
+                'BackgroundOutlierPercentage',
+                'DominantPrimaryGoldCountMean',
+                'OtherPrimaryGoldCountMean',
+                'SecondaryGoldCountMean',
+                'NicheGoldCountMean',
+                'HardDistractorCountMean',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Geometry Filter And Embeddings',
+            geometry_rows,
+            columns=[
+                'ShortExperiment',
+                'EmbeddingModel',
+                'EmbeddingDimension',
+                'GeometryQueries',
+                'GeometryPassQueries',
+                'GeometryPassRate',
+                'NTopkRetrievedFacetsMean',
+                'PrimaryAxisTopkFractionMean',
+                'DominantPrimaryTopkFractionMean',
+                'TopFailureModes',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Lambda Stability',
+            lambda_rows,
+            columns=[
+                'strategy',
+                'n_selected',
+                'distinct_lambda_count',
+                'selected_lambda_mean',
+                'selected_lambda_std',
+                'selected_lambda_norm_mean',
+                'selected_lambda_norm_std',
+                'boundary_selection_rate',
+                'near_optimal_fraction_mean',
+                'near_optimal_span_norm_mean',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Embedding Model Summary',
+            embedding_summary_rows,
+            columns=[
+                'EmbeddingModel',
+                'Runs',
+                'EmbeddingDimension_mean',
+                'GeometryPassRate_mean',
+                'GeometryPassQueries_mean',
+                'TopK_FCP_mean',
+                'MMR_FCP_mean',
+                'FacLoc_FCP_mean',
+                'Delta_FacLoc_MMR_FCP_mean',
+                'PassOnlyRuns',
+                'AllQueryRuns',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Pass-Only Vs All-Query Pairs',
+            embedding_pair_rows,
+            columns=[
+                'ShortDistribution',
+                'EmbeddingModel',
+                'PassOnlyShortExperiment',
+                'AllQueriesShortExperiment',
+                'AllMinusPassOnly_TopK_FCP',
+                'AllMinusPassOnly_MMR_FCP',
+                'AllMinusPassOnly_FacLoc_FCP',
+                'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
 
     lines.extend([
         '## Output Files',
@@ -1347,92 +1413,102 @@ def render_interesting_findings(
         )
 
     lines.append('')
-    lines.extend(_section_with_table(
-        'Largest FacLoc Over MMR Gains',
-        _sorted_rows(headline_rows, 'Delta_FacLoc_MMR_FCP', descending=True),
-        columns=[
-            'ShortExperiment',
-            'k',
-            'EmbeddingModel',
-            'TopK_FCP',
-            'MMR_FCP',
-            'FacLoc_FCP',
-            'Delta_FacLoc_MMR_FCP',
-            'Delta_FacLoc_TopK_FCP',
-        ],
-        tablefmt=tablefmt,
-        max_rows=max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'FacLoc Worse Or Tied With MMR',
-        _sorted_rows(
-            [
-                row
-                for row in comparison_rows
-                if row.get('FacLocVsMMR_FCPOutcome') in {'facloc_worse', 'tied'}
+    lines.extend(
+        _section_with_table(
+            'Largest FacLoc Over MMR Gains',
+            _sorted_rows(headline_rows, 'Delta_FacLoc_MMR_FCP', descending=True),
+            columns=[
+                'ShortExperiment',
+                'k',
+                'EmbeddingModel',
+                'TopK_FCP',
+                'MMR_FCP',
+                'FacLoc_FCP',
+                'Delta_FacLoc_MMR_FCP',
+                'Delta_FacLoc_TopK_FCP',
             ],
-            'Delta_FacLoc_MMR_FCP',
-            descending=False,
-        ),
-        columns=[
-            'ShortExperiment',
-            'k',
-            'EmbeddingModel',
-            'TopK_FCP',
-            'MMR_FCP',
-            'FacLoc_FCP',
-            'Delta_FacLoc_MMR_FCP',
-            'MMR_AllFacetCleanRate',
-            'FacLoc_AllFacetCleanRate',
-            'FacLocVsMMR_FCPOutcome',
-        ],
-        tablefmt=tablefmt,
-        max_rows=max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Lowest Geometry Pass Rates',
-        _sorted_rows(geometry_rows, 'GeometryPassRate', descending=False),
-        columns=[
-            'ShortExperiment',
-            'EmbeddingModel',
-            'EmbeddingDimension',
-            'GeometryQueries',
-            'GeometryPassQueries',
-            'GeometryPassRate',
-            'TopFailureModes',
-        ],
-        tablefmt=tablefmt,
-        max_rows=max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Embedding Summary',
-        embedding_summary_rows,
-        columns=[
-            'EmbeddingModel',
-            'Runs',
-            'GeometryPassRate_mean',
-            'GeometryPassRate_min',
-            'GeometryPassRate_max',
-            'Delta_FacLoc_MMR_FCP_mean',
-            'PassOnlyRuns',
-            'AllQueryRuns',
-        ],
-        tablefmt=tablefmt,
-        max_rows=max_table_rows,
-    ))
-    lines.extend(_section_with_table(
-        'Pass-Only Vs All-Query Deltas',
-        embedding_pair_rows,
-        columns=[
-            'ShortDistribution',
-            'EmbeddingModel',
-            'AllMinusPassOnly_MMR_FCP',
-            'AllMinusPassOnly_FacLoc_FCP',
-            'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
-        ],
-        tablefmt=tablefmt,
-        max_rows=max_table_rows,
-    ))
+            tablefmt=tablefmt,
+            max_rows=max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'FacLoc Worse Or Tied With MMR',
+            _sorted_rows(
+                [
+                    row
+                    for row in comparison_rows
+                    if row.get('FacLocVsMMR_FCPOutcome') in {'facloc_worse', 'tied'}
+                ],
+                'Delta_FacLoc_MMR_FCP',
+                descending=False,
+            ),
+            columns=[
+                'ShortExperiment',
+                'k',
+                'EmbeddingModel',
+                'TopK_FCP',
+                'MMR_FCP',
+                'FacLoc_FCP',
+                'Delta_FacLoc_MMR_FCP',
+                'MMR_AllFacetCleanRate',
+                'FacLoc_AllFacetCleanRate',
+                'FacLocVsMMR_FCPOutcome',
+            ],
+            tablefmt=tablefmt,
+            max_rows=max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Lowest Geometry Pass Rates',
+            _sorted_rows(geometry_rows, 'GeometryPassRate', descending=False),
+            columns=[
+                'ShortExperiment',
+                'EmbeddingModel',
+                'EmbeddingDimension',
+                'GeometryQueries',
+                'GeometryPassQueries',
+                'GeometryPassRate',
+                'TopFailureModes',
+            ],
+            tablefmt=tablefmt,
+            max_rows=max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Embedding Summary',
+            embedding_summary_rows,
+            columns=[
+                'EmbeddingModel',
+                'Runs',
+                'GeometryPassRate_mean',
+                'GeometryPassRate_min',
+                'GeometryPassRate_max',
+                'Delta_FacLoc_MMR_FCP_mean',
+                'PassOnlyRuns',
+                'AllQueryRuns',
+            ],
+            tablefmt=tablefmt,
+            max_rows=max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Pass-Only Vs All-Query Deltas',
+            embedding_pair_rows,
+            columns=[
+                'ShortDistribution',
+                'EmbeddingModel',
+                'AllMinusPassOnly_MMR_FCP',
+                'AllMinusPassOnly_FacLoc_FCP',
+                'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
+            ],
+            tablefmt=tablefmt,
+            max_rows=max_table_rows,
+        )
+    )
     return '\n'.join(lines) + '\n'
 
 
@@ -1544,9 +1620,7 @@ def _plot_horizontal_metric(
     xlabel: str,
     max_rows: int,
 ) -> list[Path]:
-    plot_rows = [
-        row for row in rows if _float_or_none(row.get(value_column)) is not None
-    ]
+    plot_rows = [row for row in rows if _float_or_none(row.get(value_column)) is not None]
     if not plot_rows:
         return []
     plot_rows = _select_extreme_rows(plot_rows, value_column, max_rows)
@@ -1588,7 +1662,10 @@ def _plot_grouped_clean_rate(
     series = [
         ('TopK', [_float_or_none(row.get('TopK_AllFacetCleanRate')) or 0.0 for row in plot_rows]),
         ('MMR', [_float_or_none(row.get('MMR_AllFacetCleanRate')) or 0.0 for row in plot_rows]),
-        ('FacLoc', [_float_or_none(row.get('FacLoc_AllFacetCleanRate')) or 0.0 for row in plot_rows]),
+        (
+            'FacLoc',
+            [_float_or_none(row.get('FacLoc_AllFacetCleanRate')) or 0.0 for row in plot_rows],
+        ),
     ]
     positions = list(range(len(labels)))
     width = 0.26
@@ -1802,7 +1879,11 @@ def _mean_min_max_for_columns(df: pl.DataFrame, *, columns: Sequence[str]) -> di
     for column in columns:
         if column not in df.columns:
             continue
-        values = [value for value in (_float_or_none(value) for value in df[column].to_list()) if value is not None]
+        values = [
+            value
+            for value in (_float_or_none(value) for value in df[column].to_list())
+            if value is not None
+        ]
         if not values:
             continue
         out[f'{column}Mean'] = statistics.fmean(values)
@@ -1910,9 +1991,7 @@ def _numeric_stats(values: Sequence[float], prefix: str) -> dict[str, object]:
 
 def _numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[float]:
     return [
-        value
-        for value in (_float_or_none(row.get(column)) for row in rows)
-        if value is not None
+        value for value in (_float_or_none(row.get(column)) for row in rows) if value is not None
     ]
 
 
@@ -2059,11 +2138,14 @@ def _sorted_rows(
 ) -> list[Mapping[str, object]]:
     with_values = [row for row in rows if _float_or_none(row.get(column)) is not None]
     without_values = [row for row in rows if _float_or_none(row.get(column)) is None]
-    return sorted(
-        with_values,
-        key=lambda row: cast(float, _float_or_none(row.get(column))),
-        reverse=descending,
-    ) + without_values
+    return (
+        sorted(
+            with_values,
+            key=lambda row: cast(float, _float_or_none(row.get(column))),
+            reverse=descending,
+        )
+        + without_values
+    )
 
 
 def _select_extreme_rows(
@@ -2101,8 +2183,7 @@ def _section_with_table(
         return lines
     shown = rows[:max_rows]
     table_rows = [
-        [_format_table_value(row.get(column), column=column) for column in columns]
-        for row in shown
+        [_format_table_value(row.get(column), column=column) for column in columns] for row in shown
     ]
     lines.append(
         tabulate(
