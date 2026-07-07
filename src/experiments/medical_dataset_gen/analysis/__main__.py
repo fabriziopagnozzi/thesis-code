@@ -13,6 +13,21 @@ from typing import Literal, Protocol, cast, runtime_checkable
 import polars as pl
 from tabulate import tabulate
 
+from experiments.medical_dataset_gen.analysis.analysis_constants import (
+    DEFAULT_TABLE_COL_WIDTH,
+    DIVERSIFYING_STRATEGIES,
+    EVALUATION_METRICS,
+    FCP_TIE_EPSILON,
+    HELDOUT_SELECTION_COLUMNS,
+    INTEGER_TABLE_COLUMNS,
+    METRIC_LABELS,
+    REPORT_FILES,
+    ROLE_COUNT_COLUMNS,
+    STRATEGIES,
+    TABLE_COL_WIDTHS,
+    TABLE_HEADERS,
+    TABLEFMT_OPTS,
+)
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
     select_best_lambda_rows,
@@ -36,148 +51,6 @@ type PlotFormat = Literal['png', 'pdf', 'svg']
 @runtime_checkable
 class ScalarItem(Protocol):
     def item(self) -> object: ...
-
-
-STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')
-DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
-HELDOUT_SELECTION_COLUMNS = frozenset({
-    'lambda_selection_split',
-    'report_split',
-    'lambda_selection_metric',
-    'lambda_selection_metric_value',
-})
-
-REPORT_FILES = (
-    'report.md',
-    'interesting_findings.md',
-    'warnings.txt',
-    'manifest.json',
-    'experiment_manifest.csv',
-    'dataset_distribution.csv',
-    'geometry_filter_summary.csv',
-    'strategy_by_k.csv',
-    'comparison_by_k.csv',
-    'headline_strategy_summary.csv',
-    'lambda_stability.csv',
-    'near_optimal_lambda_width.csv',
-    'embedding_model_summary.csv',
-    'embedding_query_scope_pairs.csv',
-)
-
-FCP_TIE_EPSILON = 0.01
-
-EVALUATION_METRICS = (
-    'n_queries',
-    'Precision@k',
-    'Recall@k',
-    'F1@k',
-    'FacetCoverage@k',
-    'MeanFacetRecall@k',
-    'FacetCoveragePurity@k',
-    'AllFacetCleanRate@k',
-    'FacetMRR@k',
-    'alpha-nDCG@k',
-    'DistractorRate',
-    'NearMissDistractorRate',
-    'BackgroundOutlierRate',
-    'PrimaryAxisRate',
-    'DominantFacetRate',
-    'RedundantGoldRate',
-    'fac',
-    'avg_cos',
-    'jac',
-)
-
-METRIC_LABELS = {
-    'Precision@k': 'Precision',
-    'Recall@k': 'Recall',
-    'F1@k': 'F1',
-    'FacetCoverage@k': 'FacetCoverage',
-    'MeanFacetRecall@k': 'MeanFacetRecall',
-    'FacetCoveragePurity@k': 'FCP',
-    'AllFacetCleanRate@k': 'AllFacetCleanRate',
-    'FacetMRR@k': 'FacetMRR',
-    'alpha-nDCG@k': 'alpha_nDCG',
-    'DistractorRate': 'DistractorRate',
-    'NearMissDistractorRate': 'NearMissDistractorRate',
-    'BackgroundOutlierRate': 'BackgroundOutlierRate',
-    'PrimaryAxisRate': 'PrimaryAxisRate',
-    'DominantFacetRate': 'DominantFacetRate',
-    'RedundantGoldRate': 'RedundantGoldRate',
-}
-
-TABLE_HEADERS = {
-    'ShortExperiment': 'ID',
-    'ShortDistribution': 'Dist',
-    'EmbeddingModel': 'Embedding',
-    'OnlyPassGeometry': 'Pass-only',
-    'DistributionCategory': 'Distribution',
-    'GoldPercentage': 'Gold%',
-    'NearMissDistractorPercentage': 'NearMiss%',
-    'BackgroundOutlierPercentage': 'BgOut%',
-    'DominantPrimaryGoldCountMean': 'DomGold',
-    'OtherPrimaryGoldCountMean': 'OtherGold',
-    'SecondaryGoldCountMean': 'SecGold',
-    'NicheGoldCountMean': 'NicheGold',
-    'HardDistractorCountMean': 'HardDistr',
-    'GeometryPassRate': 'PassRate',
-    'GeometryQueries': 'GeomQ',
-    'GeometryPassQueries': 'PassQ',
-    'NTopkRetrievedFacetsMean': 'TopKFacets',
-    'PrimaryAxisTopkFractionMean': 'PrimaryAxis',
-    'DominantPrimaryTopkFractionMean': 'DomPrimary',
-    'TopFailureModes': 'Top failures',
-    'Delta_FacLoc_MMR_FCP': 'F-MM FCP',
-    'Delta_FacLoc_TopK_FCP': 'F-Top FCP',
-    'Delta_FacLoc_MMR_AllFacetCleanRate': 'F-MM Clean',
-    'FacLocVsMMR_FCPOutcome': 'F vs M',
-    'TopK_AllFacetCleanRate': 'Top Clean',
-    'MMR_AllFacetCleanRate': 'MMR Clean',
-    'FacLoc_AllFacetCleanRate': 'FacLoc Clean',
-    'PassOnlyShortExperiment': 'Pass-only',
-    'AllQueriesShortExperiment': 'All-query',
-    'AllMinusPassOnly_MMR_FCP': 'All-Pass MMR',
-    'AllMinusPassOnly_FacLoc_FCP': 'All-Pass F',
-    'AllMinusPassOnly_Delta_FacLoc_MMR_FCP': 'All-Pass Delta',
-    'selected_lambda_norm_mean': 'lambda* norm mean',
-    'selected_lambda_norm_std': 'lambda* norm std',
-    'near_optimal_fraction_mean': 'near-opt frac',
-    'near_optimal_span_norm_mean': 'near-opt width',
-}
-
-TABLE_COL_WIDTHS = {
-    'ShortExperiment': 10,
-    'ShortDistribution': 8,
-    'EmbeddingModel': 24,
-    'DistributionCategory': 28,
-    'TopFailureModes': 34,
-    'PassOnlyShortExperiment': 10,
-    'AllQueriesShortExperiment': 10,
-    'strategy': 8,
-}
-DEFAULT_TABLE_COL_WIDTH = 14
-
-INTEGER_TABLE_COLUMNS = frozenset({
-    'k',
-    'EmbeddingDimension',
-    'GeometryQueries',
-    'GeometryPassQueries',
-    'Runs',
-    'PassOnlyRuns',
-    'AllQueryRuns',
-    'n_selected',
-    'distinct_lambda_count',
-    'PassOnly_k',
-    'AllQueries_k',
-})
-
-ROLE_COUNT_COLUMNS = {
-    'dominant_primary_gold': 'DominantPrimaryGoldCount',
-    'primary_gold': 'OtherPrimaryGoldCount',
-    'secondary_gold': 'SecondaryGoldCount',
-    'niche_gold': 'NicheGoldCount',
-    'hard_distractor': 'HardDistractorCount',
-}
 
 
 @dataclass(frozen=True)
@@ -224,124 +97,6 @@ class ReportOutputs:
     experiments_loaded: int
     warnings_count: int
     figures_count: int
-
-
-TABLEFMT_OPTS = [
-    'plain',
-    'simple',
-    'github',
-    'grid',
-    'simple_grid',
-    'rounded_grid',
-    'heavy_grid',
-    'mixed_grid',
-    'double_grid',
-    'fancy_grid',
-    'outline',
-    'simple_outline',
-    'rounded_outline',
-    'heavy_outline',
-    'mixed_outline',
-    'double_outline',
-    'fancy_outline',
-    'pipe',
-    'orgtbl',
-    'asciidoc',
-    'jira',
-    'presto',
-    'pretty',
-    'psql',
-    'rst',
-    'mediawiki',
-    'moinmoin',
-    'youtrack',
-    'html',
-    'unsafehtml',
-    'latex',
-    'latex_raw',
-    'latex_booktabs',
-    'latex_longtable',
-    'textile',
-    'tsv',
-]
-
-
-def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
-    default_results_dir = MedicalDatasetGenPaths.results_dir
-    parser = argparse.ArgumentParser(
-        description='Discover completed medical dataset experiments and compare retrieval results.'
-    )
-    parser.add_argument(
-        '--results-dir',
-        type=Path,
-        default=default_results_dir,
-        help='Root directory containing experiment result folders.',
-    )
-    parser.add_argument(
-        '--output-dir',
-        type=Path,
-        default=None,
-        help='Directory where report files are written. Defaults to <results-dir>/_reports/experiment_comparison.',
-    )
-    parser.add_argument(
-        '--include-scrapped',
-        action='store_true',
-        help='Include experiments under 00_scrapped.',
-    )
-    parser.add_argument(
-        '--experiments',
-        nargs='*',
-        default=(),
-        help='Optional experiment names or prefixes. Parent names include completed child runs.',
-    )
-    parser.add_argument(
-        '--max-table-rows',
-        type=int,
-        default=12,
-        help='Maximum rows rendered per markdown table.',
-    )
-    parser.add_argument(
-        '--tablefmt',
-        type=str,
-        choices=TABLEFMT_OPTS,
-        default='pipe',
-        help='tabulate table format used in markdown reports.',
-    )
-    parser.add_argument(
-        '--no-plots',
-        action='store_true',
-        help='Skip matplotlib figure generation.',
-    )
-    parser.add_argument(
-        '--plot-format',
-        choices=('png', 'pdf', 'svg'),
-        default='png',
-        help='Matplotlib figure file format.',
-    )
-    parser.add_argument(
-        '--near-optimal-epsilon',
-        type=float,
-        default=0.01,
-        help='A lambda is near-optimal when FCP is within this absolute margin of the best FCP.',
-    )
-    parsed = parser.parse_args(argv)
-    results_dir = parsed.results_dir.expanduser().resolve()
-    output_dir = (
-        parsed.output_dir.expanduser().resolve()
-        if parsed.output_dir is not None
-        else results_dir / '_reports' / 'experiment_comparison'
-    )
-    return CliArgs(
-        results_dir=results_dir,
-        output_dir=output_dir,
-        include_scrapped=bool(parsed.include_scrapped),
-        experiments=tuple(str(exp) for exp in parsed.experiments),
-        max_table_rows=max(1, int(parsed.max_table_rows)),
-        tablefmt=str(parsed.tablefmt),
-        plots=not bool(parsed.no_plots),
-        plot_format=cast(PlotFormat, parsed.plot_format),
-        near_optimal_epsilon=max(0.0, float(parsed.near_optimal_epsilon)),
-    )
 
 
 def run_report(args: CliArgs) -> ReportOutputs:
@@ -421,7 +176,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             figures=figures,
         )
         (args.output_dir / 'report.md').write_text(report_text)
-        (args.output_dir / 'interesting_findings.md').write_text(
+        (args.output_dir / 'report_interesting_findings.md').write_text(
             render_interesting_findings(
                 comparison_rows=comparison_rows,
                 headline_rows=headline_rows,
@@ -2231,15 +1986,89 @@ def _bullets(items: Iterable[str]) -> list[str]:
     return [f'- {item}' for item in items]
 
 
-def main(argv: Sequence[str] | None = None) -> None:
-    args = parse_args(argv)
-    outputs = run_report(args)
+def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
+    default_results_dir = MedicalDatasetGenPaths.results_dir
+    parser = argparse.ArgumentParser(
+        description='Discover completed medical dataset experiments and compare retrieval results.'
+    )
+    parser.add_argument(
+        '--results-dir',
+        type=Path,
+        default=default_results_dir,
+        help='Root directory containing experiment result folders.',
+    )
+    parser.add_argument(
+        '--output-dir',
+        type=Path,
+        default=None,
+        help='Directory where report files are written. Defaults to <results-dir>/_reports/experiment_comparison.',
+    )
+    parser.add_argument(
+        '--include-scrapped',
+        action='store_true',
+        help='Include experiments under 00_scrapped.',
+    )
+    parser.add_argument(
+        '--experiments',
+        nargs='*',
+        default=(),
+        help='Optional experiment names or prefixes. Parent names include completed child runs.',
+    )
+    parser.add_argument(
+        '--max-table-rows',
+        type=int,
+        default=12,
+        help='Maximum rows rendered per markdown table.',
+    )
+    parser.add_argument(
+        '--tablefmt',
+        type=str,
+        choices=TABLEFMT_OPTS,
+        default='pipe',
+        help='tabulate table format used in markdown reports.',
+    )
+    parser.add_argument(
+        '--no-plots',
+        action='store_true',
+        help='Skip matplotlib figure generation.',
+    )
+    parser.add_argument(
+        '--plot-format',
+        choices=('png', 'pdf', 'svg'),
+        default='png',
+        help='Matplotlib figure file format.',
+    )
+    parser.add_argument(
+        '--near-optimal-epsilon',
+        type=float,
+        default=0.01,
+        help='A lambda is near-optimal when FCP is within this absolute margin of the best FCP.',
+    )
+    parsed = parser.parse_args(argv)
+    results_dir = parsed.results_dir.expanduser().resolve()
+    output_dir = (
+        parsed.output_dir.expanduser().resolve()
+        if parsed.output_dir is not None
+        else results_dir / '_reports' / 'experiment_comparison'
+    )
+
+    return CliArgs(
+        results_dir=results_dir,
+        output_dir=output_dir,
+        include_scrapped=bool(parsed.include_scrapped),
+        experiments=tuple(str(exp) for exp in parsed.experiments),
+        max_table_rows=max(1, int(parsed.max_table_rows)),
+        tablefmt=str(parsed.tablefmt),
+        plots=not bool(parsed.no_plots),
+        plot_format=cast(PlotFormat, parsed.plot_format),
+        near_optimal_epsilon=max(0.0, float(parsed.near_optimal_epsilon)),
+    )
+
+
+if __name__ == '__main__':
+    outputs = run_report(parse_args())
     print(f'wrote report files to {outputs.output_dir}')
     print(
         f'experiments: {outputs.experiments_loaded}/{outputs.experiments_discovered} configs loaded; '
         f'warnings: {outputs.warnings_count}; figures: {outputs.figures_count}'
     )
-
-
-if __name__ == '__main__':
-    main()

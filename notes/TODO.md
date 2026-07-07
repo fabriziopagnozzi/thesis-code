@@ -121,7 +121,7 @@
 * Explain more formally and mathematically why FacLoc works only with very aggressive lambda values, < 0.40
 * Compare embedding_calibrarion with rotating.
 
-## ([From 30/06 call](file:/home/pagnozzi/thesis/_calls/call_2026-06-30.md))
+## ([From 30/06 call](file:/home/pagnozzi/thesis/notes/call_2026-06-30.md))
 * More granular budget based on token rather than num. documents 
 * Lexical overlap with the answer: see what you can do to improve the AnswerROUGE metrics.
 
