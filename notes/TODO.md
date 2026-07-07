@@ -46,23 +46,6 @@
 
 ## TASK: formulate half a dozen claims precisely, given the current experiment results.
 
-### Introduction and pipeline presentation
-* first, frame the benchmark properties (structure of queries, chunks, facets)
-* then outline the main pipeline steps:
-    - the general settings used (k & lambda values...)
-    - medical ontology structure
-        - very briefly: conditions, subgroups, clinical axes
-    - deterministic template rendering
-        - query types and constrasts: Primary Condition + Subgroup_1 vs. Subgroup_2 + Clinical_Axis_1 & Clinical_Axis_2
-        - once we fix the query structure, we talk more deeply about the ontology and the reasons why it was designed like that:
-            - allowlists for each condition to limit the combinatorial explosion and produce only meaningful queries as far as the clinical soundness is concerned
-            - allowed cohort contrasts to compare in the query
-            - allowed clinical axis pairs to include in the query
-    - embedding
-    - filtering based on the properties emerging from the embedding space
-        - based on the highest k value set for retrieval, we enforce max. 2 facets retrieved out of 4.
-    - evaluating, along with metrics and diagnostics definition and the rationale behind them
-
 ### Claims so far
 * on each distribution, FacLoc is consistely better than top-k in FCP@k across all lambda values, thus it's overall a safer method.
     - MMR, while covering well the facets, can fall into distractors and can be arbitrarily worse than top-k at very low lambda values.
@@ -114,12 +97,34 @@
 
 * ... (maybe include also other results drawn from diagnostics)
 
+
+## DONE
+
+### Introduction and pipeline presentation
+* first, frame the benchmark properties (structure of queries, chunks, facets) -->
+* then outline the main pipeline steps:
+    - the general settings used (k & lambda values...)
+    - medical ontology structure
+        - very briefly: conditions, subgroups, clinical axes
+    - deterministic template rendering
+        - query types and constrasts: Primary Condition + Subgroup_1 vs. Subgroup_2 + Clinical_Axis_1 & Clinical_Axis_2
+        - once we fix the query structure, we talk more deeply about the ontology and the reasons why it was designed like that:
+            - allowlists for each condition to limit the combinatorial explosion and produce only meaningful queries as far as the clinical soundness is concerned
+            - allowed cohort contrasts to compare in the query
+            - allowed clinical axis pairs to include in the query
+    - embedding
+    - filtering based on the properties emerging from the embedding space
+        - based on the highest k value set for retrieval, we enforce max. 2 facets retrieved out of 4.
+    - evaluating, along with metrics and diagnostics definition and the rationale behind them
+
+
 ---------
 
 # Code - Secondary
-* Figure out if the current `FacetFacLocPurity@k` is the target evaluation metric for our benchmark, or if we have to include even more evaluation metrics inside of it.
+* Figure out if the current `FacetCoveragePurity@k` is the target evaluation metric for our benchmark, or if we have to include even more evaluation metrics inside of it.
 * Explain more formally and mathematically why FacLoc works only with very aggressive lambda values, < 0.40
 * Compare embedding_calibrarion with rotating.
+* Rerankers impact?
 
 ## ([From 30/06 call](file:/home/pagnozzi/thesis/notes/call_2026-06-30.md))
 * More granular budget based on token rather than num. documents 
