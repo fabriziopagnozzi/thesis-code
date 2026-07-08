@@ -16,6 +16,7 @@ from tabulate import tabulate
 
 from experiments.medical_dataset_gen.analysis.analysis_constants import (
     DEFAULT_TABLE_COL_WIDTH,
+    DELTA_METRIC_LABELS,
     DIVERSIFYING_STRATEGIES,
     EVALUATION_METRICS,
     EXPERIMENT_FAMILIES,
@@ -31,6 +32,7 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     TABLE_COL_WIDTHS,
     TABLE_HEADERS,
     TABLEFMT_OPTS,
+    DeltaMetricLabel,
     ExperimentFamilyId,
     StrategyName,
 )
@@ -51,6 +53,31 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 
 type PlotFormat = Literal['png', 'pdf', 'svg']
+type BudgetCategory = Literal['headline', 'medium_budget', 'high_budget']
+
+BUDGET_CATEGORIES: tuple[BudgetCategory, ...] = ('headline', 'medium_budget', 'high_budget')
+BUDGET_CATEGORY_LABELS: dict[BudgetCategory, str] = {
+    'headline': 'headline',
+    'medium_budget': 'medium budget',
+    'high_budget': 'high budget',
+}
+
+
+@dataclass(frozen=True)
+class DeltaMetricPlotSpec:
+    metric_label: DeltaMetricLabel
+    title_label: str
+    filename_token: str
+
+
+DELTA_METRIC_PLOT_SPECS: tuple[DeltaMetricPlotSpec, ...] = (
+    DeltaMetricPlotSpec('FCP', 'FCP', 'fcp'),
+    DeltaMetricPlotSpec('FacetCoverage', 'FacetCoverage@k', 'facet_coverage'),
+    DeltaMetricPlotSpec('AllFacetCleanRate', 'AllFacetCleanRate@k', 'all_facet_clean_rate'),
+    DeltaMetricPlotSpec('Precision', 'Precision@k', 'precision'),
+    DeltaMetricPlotSpec('Recall', 'Recall@k', 'recall'),
+    DeltaMetricPlotSpec('alpha_nDCG', 'alpha-nDCG@k', 'alpha_ndcg'),
+)
 
 
 @runtime_checkable
@@ -136,25 +163,25 @@ def run_report(args: CliArgs) -> ReportOutputs:
             )
 
         comparison_rows = comparison_by_k_rows(strategy_rows)
-        headline_rows = headline_rows_from_comparisons(comparison_rows)
+        budget_rows = budget_category_rows_from_comparisons(comparison_rows)
+        headline_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'headline']
         lambda_rows = lambda_stability_rows(strategy_rows, near_optimal_rows)
         embedding_summary_rows = embedding_model_summary_rows(
             manifest_rows=manifest_rows,
             geometry_rows=geometry_rows,
             headline_rows=headline_rows,
         )
-        embedding_pair_rows = embedding_query_scope_pair_rows(headline_rows)
 
         write_csv(args.output_dir / 'experiment_manifest.csv', manifest_rows)
         write_csv(args.output_dir / 'dataset_distribution.csv', dataset_rows)
         write_csv(args.output_dir / 'geometry_filter_summary.csv', geometry_rows)
         write_csv(args.output_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(args.output_dir / 'comparison_by_k.csv', comparison_rows)
+        write_csv(args.output_dir / 'budget_strategy_summary.csv', budget_rows)
         write_csv(args.output_dir / 'headline_strategy_summary.csv', headline_rows)
         write_csv(args.output_dir / 'lambda_stability.csv', lambda_rows)
         write_csv(args.output_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(args.output_dir / 'embedding_model_summary.csv', embedding_summary_rows)
-        write_csv(args.output_dir / 'embedding_query_scope_pairs.csv', embedding_pair_rows)
 
         figures: list[Path] = []
         if args.plots:
@@ -162,8 +189,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 output_dir=args.output_dir / '_figures',
                 plot_format=args.plot_format,
                 max_rows=args.max_table_rows,
-                headline_rows=headline_rows,
-                embedding_pair_rows=embedding_pair_rows,
+                budget_rows=budget_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 near_optimal_rows=near_optimal_rows,
@@ -180,7 +206,6 @@ def run_report(args: CliArgs) -> ReportOutputs:
             headline_rows=headline_rows,
             lambda_rows=lambda_rows,
             embedding_summary_rows=embedding_summary_rows,
-            embedding_pair_rows=embedding_pair_rows,
             figures=figures,
         )
         (args.output_dir / 'report.md').write_text(report_text)
@@ -191,7 +216,6 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 embedding_summary_rows=embedding_summary_rows,
-                embedding_pair_rows=embedding_pair_rows,
                 tablefmt=args.tablefmt,
                 max_table_rows=args.max_table_rows,
             )
@@ -262,7 +286,10 @@ def discover_experiments(
         if not stats_path.is_file():
             warnings.append(f'{name}: skipped because evaluation_stats.parquet is missing')
             continue
-        records.append(load_experiment_record(results_dir, name, warnings=warnings))
+        record = load_experiment_record(results_dir, name, warnings=warnings)
+        if record.only_pass_geometry is False:
+            continue
+        records.append(record)
     return sorted(records, key=lambda record: record.name)
 
 
@@ -761,7 +788,7 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             for metric, metric_label in METRIC_LABELS.items():
                 out[f'{label}_{metric_label}'] = row.get(metric) if row else None
 
-        for metric_label in ('FCP', 'FacetCoverage', 'AllFacetCleanRate', 'Precision'):
+        for metric_label in DELTA_METRIC_LABELS:
             fac_loc = _float_or_none(out.get(f'FacLoc_{metric_label}'))
             mmr = _float_or_none(out.get(f'MMR_{metric_label}'))
             top_k = _float_or_none(out.get(f'TopK_{metric_label}'))
@@ -786,6 +813,16 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
 def headline_rows_from_comparisons(
     comparison_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
+    return [
+        row
+        for row in budget_category_rows_from_comparisons(comparison_rows)
+        if row.get('BudgetCategory') == 'headline'
+    ]
+
+
+def budget_category_rows_from_comparisons(
+    comparison_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
     by_experiment: dict[str, list[Mapping[str, object]]] = {}
     for row in comparison_rows:
         experiment = str(row.get('Experiment') or '')
@@ -801,12 +838,44 @@ def headline_rows_from_comparisons(
                 row.get(f'{_strategy_label(strategy)}_FCP') is not None for strategy in STRATEGIES
             )
         ]
-        candidates = complete_rows or group
-        selected = min(candidates, key=lambda row: int(cast(int, row.get('k') or 0)))
-        out = dict(selected)
-        out['HeadlineRule'] = 'smallest k with all strategies' if complete_rows else 'smallest k'
-        rows.append(out)
+        candidates = sorted(
+            complete_rows or group,
+            key=lambda row: int(cast(int, row.get('k') or 0)),
+        )
+        if not candidates:
+            continue
+        selected_by_category: dict[BudgetCategory, Mapping[str, object]] = {
+            'headline': candidates[0],
+            'medium_budget': candidates[len(candidates) // 2],
+            'high_budget': candidates[-1],
+        }
+        completeness = 'complete strategies' if complete_rows else 'available rows'
+        for category in BUDGET_CATEGORIES:
+            selected = selected_by_category[category]
+            out = dict(selected)
+            out['BudgetCategory'] = category
+            out['BudgetCategoryLabel'] = BUDGET_CATEGORY_LABELS[category]
+            out['BudgetCategoryRule'] = _budget_category_rule(
+                category, len(candidates), completeness
+            )
+            if category == 'headline':
+                out['HeadlineRule'] = (
+                    'smallest k with all strategies' if complete_rows else 'smallest k'
+                )
+            rows.append(out)
     return rows
+
+
+def _budget_category_rule(
+    category: BudgetCategory,
+    k_count: int,
+    completeness: str,
+) -> str:
+    if category == 'headline':
+        return f'lowest k among {completeness}'
+    if category == 'medium_budget':
+        return f'k at index floor({k_count}/2) among {completeness}'
+    return f'highest k among {completeness}'
 
 
 def lambda_stability_rows(
@@ -901,56 +970,7 @@ def embedding_model_summary_rows(
                 'Delta_FacLoc_TopK_FCP',
             )
         )
-        out['PassOnlyRuns'] = sum(row.get('OnlyPassGeometry') is True for row in group)
-        out['AllQueryRuns'] = sum(row.get('OnlyPassGeometry') is False for row in group)
-        rows.append(out)
-    return rows
-
-
-def embedding_query_scope_pair_rows(
-    headline_rows: Sequence[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, str], list[Mapping[str, object]]] = {}
-    for row in headline_rows:
-        distribution = str(row.get('Distribution') or '')
-        model = str(row.get('EmbeddingModel') or '')
-        if distribution and model:
-            grouped.setdefault((distribution, model), []).append(row)
-
-    rows: list[dict[str, object]] = []
-    for (distribution, model), group in sorted(grouped.items()):
-        pass_rows = [row for row in group if row.get('OnlyPassGeometry') is True]
-        all_query_rows = [row for row in group if row.get('OnlyPassGeometry') is False]
-        if not pass_rows or not all_query_rows:
-            continue
-        pass_row = pass_rows[0]
-        all_row = all_query_rows[0]
-        out: dict[str, object] = {
-            'Distribution': distribution,
-            'ShortDistribution': short_token(distribution),
-            'ExperimentFamily': pass_row.get('ExperimentFamily') or all_row.get('ExperimentFamily'),
-            'ExperimentFamilyLabel': pass_row.get('ExperimentFamilyLabel')
-            or all_row.get('ExperimentFamilyLabel'),
-            'EmbeddingModel': model,
-            'PassOnlyExperiment': pass_row.get('Experiment'),
-            'PassOnlyShortExperiment': pass_row.get('ShortExperiment'),
-            'AllQueriesExperiment': all_row.get('Experiment'),
-            'AllQueriesShortExperiment': all_row.get('ShortExperiment'),
-            'PassOnly_k': pass_row.get('k'),
-            'AllQueries_k': all_row.get('k'),
-        }
-        for label in (
-            'TopK_FCP',
-            'MMR_FCP',
-            'FacLoc_FCP',
-            'Delta_FacLoc_MMR_FCP',
-            'Delta_FacLoc_TopK_FCP',
-        ):
-            pass_value = _float_or_none(pass_row.get(label))
-            all_value = _float_or_none(all_row.get(label))
-            out[f'PassOnly_{label}'] = pass_value
-            out[f'AllQueries_{label}'] = all_value
-            out[f'AllMinusPassOnly_{label}'] = _subtract(all_value, pass_value)
+        out['PassFilterRuns'] = sum(row.get('OnlyPassGeometry') is True for row in group)
         rows.append(out)
     return rows
 
@@ -973,7 +993,6 @@ def render_report(
     headline_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
-    embedding_pair_rows: Sequence[Mapping[str, object]],
     figures: Sequence[Path],
 ) -> str:
     lines: list[str] = [
@@ -989,6 +1008,8 @@ def render_report(
         'The headline row for each experiment is the smallest `k` with all three strategies '
         'available, which keeps the summary demanding while preserving the full per-k output in '
         '`comparison_by_k.csv` and `strategy_by_k.csv`.',
+        'Budget-category summaries are also written for `headline`, `medium_budget`, and '
+        '`high_budget`, using the lowest, median-index, and highest available `k` per experiment.',
         '',
         '## Run Scope',
         '',
@@ -1131,33 +1152,12 @@ def render_report(
                 'MMR_FCP_mean',
                 'FacLoc_FCP_mean',
                 'Delta_FacLoc_MMR_FCP_mean',
-                'PassOnlyRuns',
-                'AllQueryRuns',
+                'PassFilterRuns',
             ],
             tablefmt=args.tablefmt,
             max_rows=args.max_table_rows,
         )
     )
-    lines.extend(
-        _section_with_table(
-            'Pass-Only Vs All-Query Pairs',
-            embedding_pair_rows,
-            columns=[
-                'ShortDistribution',
-                'ExperimentFamilyLabel',
-                'EmbeddingModel',
-                'PassOnlyShortExperiment',
-                'AllQueriesShortExperiment',
-                'AllMinusPassOnly_TopK_FCP',
-                'AllMinusPassOnly_MMR_FCP',
-                'AllMinusPassOnly_FacLoc_FCP',
-                'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
-            ],
-            tablefmt=args.tablefmt,
-            max_rows=args.max_table_rows,
-        )
-    )
-
     lines.extend([
         '## Output Files',
         '',
@@ -1180,7 +1180,6 @@ def render_interesting_findings(
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
-    embedding_pair_rows: Sequence[Mapping[str, object]],
     tablefmt: str,
     max_table_rows: int,
 ) -> str:
@@ -1318,25 +1317,7 @@ def render_interesting_findings(
                 'GeometryPassRate_min',
                 'GeometryPassRate_max',
                 'Delta_FacLoc_MMR_FCP_mean',
-                'PassOnlyRuns',
-                'AllQueryRuns',
-            ],
-            tablefmt=tablefmt,
-            max_rows=max_table_rows,
-        )
-    )
-    lines.extend(
-        _section_with_table(
-            'Pass-Only Vs All-Query Deltas',
-            embedding_pair_rows,
-            columns=[
-                'ShortDistribution',
-                'ExperimentFamilyLabel',
-                'EmbeddingModel',
-                'AllMinusPassOnly_MMR_FCP',
-                'AllMinusPassOnly_FacLoc_FCP',
-                'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
-                'AllMinusPassOnly_Delta_FacLoc_TopK_FCP',
+                'PassFilterRuns',
             ],
             tablefmt=tablefmt,
             max_rows=max_table_rows,
@@ -1350,8 +1331,7 @@ def write_figures(
     output_dir: Path,
     plot_format: PlotFormat,
     max_rows: int,
-    headline_rows: Sequence[Mapping[str, object]],
-    embedding_pair_rows: Sequence[Mapping[str, object]],
+    budget_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     near_optimal_rows: Sequence[Mapping[str, object]],
@@ -1368,34 +1348,33 @@ def write_figures(
         return []
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    for obsolete_stem in ('fcp_delta_by_experiment', 'facloc_vs_topk_delta_by_experiment'):
+    metrics_dir = output_dir / 'metrics'
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    for obsolete_stem in (
+        'fcp_delta_by_experiment',
+        'facloc_vs_topk_delta_by_experiment',
+        'headline_fcp_deltas_by_experiment',
+        'all_facet_clean_rate_by_experiment',
+        'query_scope_headline_delta_shift_by_experiment',
+    ):
         (output_dir / f'{obsolete_stem}.{plot_format}').unlink(missing_ok=True)
+    for obsolete_path in output_dir.glob(f'*_deltas_by_experiment.{plot_format}'):
+        obsolete_path.unlink(missing_ok=True)
     paths: list[Path] = []
 
-    paths.extend(
-        _plot_headline_fcp_delta_columns(
-            plt=plt,
-            rows=headline_rows,
-            output_dir=output_dir,
-            plot_format=plot_format,
-        )
-    )
-    paths.extend(
-        _plot_query_scope_delta_columns(
-            plt=plt,
-            rows=embedding_pair_rows,
-            output_dir=output_dir,
-            plot_format=plot_format,
-        )
-    )
-    paths.extend(
-        _plot_clean_rate_delta_columns(
-            plt=plt,
-            rows=headline_rows,
-            output_dir=output_dir,
-            plot_format=plot_format,
-        )
-    )
+    for category in BUDGET_CATEGORIES:
+        category_rows = [row for row in budget_rows if row.get('BudgetCategory') == category]
+        for spec in DELTA_METRIC_PLOT_SPECS:
+            paths.extend(
+                _plot_budget_delta_columns(
+                    plt=plt,
+                    rows=category_rows,
+                    category=category,
+                    spec=spec,
+                    output_dir=metrics_dir,
+                    plot_format=plot_format,
+                )
+            )
     paths.extend(
         _plot_geometry_pass_rate(
             plt=plt,
@@ -1431,14 +1410,19 @@ def write_figures(
     return paths
 
 
-def _plot_headline_fcp_delta_columns(
+def _plot_budget_delta_columns(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
+    category: BudgetCategory,
+    spec: DeltaMetricPlotSpec,
     output_dir: Path,
     plot_format: PlotFormat,
 ) -> list[Path]:
-    value_columns = ('Delta_FacLoc_MMR_FCP', 'Delta_FacLoc_TopK_FCP')
+    value_columns = (
+        f'Delta_FacLoc_MMR_{spec.metric_label}',
+        f'Delta_FacLoc_TopK_{spec.metric_label}',
+    )
     plot_rows = [
         row
         for row in rows
@@ -1446,16 +1430,17 @@ def _plot_headline_fcp_delta_columns(
     ]
     if not plot_rows:
         return []
-    plot_rows = _query_scope_paired_rows(plot_rows, value_columns[0])
+    plot_rows = _family_grouped_rows(plot_rows, value_columns[0])
     labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
     colors = [_family_color_for_row(row) for row in plot_rows]
+    category_label = BUDGET_CATEGORY_LABELS[category].capitalize()
     series = [
         (
-            'FacLoc - MMR FCP',
+            f'FacLoc - MMR {spec.title_label}',
             [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
         ),
         (
-            'FacLoc - top-k FCP',
+            f'FacLoc - top-k {spec.title_label}',
             [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
         ),
     ]
@@ -1470,68 +1455,11 @@ def _plot_headline_fcp_delta_columns(
         for ax, (title, values) in zip(axes, series, strict=True):
             _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
             ax.set_title(title)
-            ax.set_xlabel('Headline FCP delta')
+            ax.set_xlabel(f'{category_label} delta')
         _add_family_legend(fig=fig, rows=plot_rows)
-        fig.suptitle('Headline FCP deltas by experiment', y=0.995)
+        fig.suptitle(f'{category_label} {spec.title_label} deltas by experiment', y=0.995)
         fig.tight_layout(rect=(0, 0.03, 1, 0.985))
-        path = output_dir / f'headline_fcp_deltas_by_experiment.{plot_format}'
-        fig.savefig(path, dpi=180)
-        return [path]
-    finally:
-        plt.close(fig)  # type: ignore[attr-defined]
-
-
-def _plot_query_scope_delta_columns(
-    *,
-    plt: object,
-    rows: Sequence[Mapping[str, object]],
-    output_dir: Path,
-    plot_format: PlotFormat,
-) -> list[Path]:
-    value_columns = (
-        'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
-        'AllMinusPassOnly_Delta_FacLoc_TopK_FCP',
-    )
-    plot_rows = [
-        row
-        for row in rows
-        if all(_float_or_none(row.get(column)) is not None for column in value_columns)
-    ]
-    if not plot_rows:
-        return []
-    # The y-axis is inverted, so ascending data order renders larger scores lower.
-    plot_rows = _sorted_rows(plot_rows, value_columns[0], descending=False)
-    labels = [
-        f'{row.get("ShortDistribution")}/{_short_model_label(str(row.get("EmbeddingModel") or ""))}'
-        for row in plot_rows
-    ]
-    colors = [_family_color_for_row(row) for row in plot_rows]
-    series = [
-        (
-            '(FacLoc - MMR) all-query minus pass-only',
-            [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
-        ),
-        (
-            '(FacLoc - top-k) all-query minus pass-only',
-            [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
-        ),
-    ]
-    fig_height = max(5.0, 0.32 * len(labels) + 1.6)
-    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
-        ncols=2,
-        sharey=True,
-        figsize=(16.0, fig_height),
-    )
-    axes = cast(Sequence[Any], axes_obj)
-    try:
-        for ax, (title, values) in zip(axes, series, strict=True):
-            _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
-            ax.set_title(title)
-            ax.set_xlabel('Headline FCP delta change')
-        _add_family_legend(fig=fig, rows=plot_rows)
-        fig.suptitle('All-query sensitivity of headline FacLoc margins', y=0.995)
-        fig.tight_layout(rect=(0, 0.03, 1, 0.985))
-        path = output_dir / f'query_scope_headline_delta_shift_by_experiment.{plot_format}'
+        path = output_dir / f'{spec.filename_token}_{category}_deltas_by_experiment.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
     finally:
@@ -1580,6 +1508,45 @@ def _annotate_horizontal_values(*, ax: Any, values: Sequence[float]) -> None:
             fontsize=7,
             color='#202020',
         )
+
+
+def _family_grouped_rows(
+    rows: Sequence[Mapping[str, object]],
+    value_column: str,
+) -> list[Mapping[str, object]]:
+    grouped: dict[ExperimentFamilyId, list[Mapping[str, object]]] = {}
+    for row in rows:
+        family_id = _family_id_for_row(row)
+        grouped.setdefault(family_id, []).append(row)
+
+    family_order: list[tuple[float, str, ExperimentFamilyId]] = []
+    for family_id, group in grouped.items():
+        values = [
+            value
+            for value in (_float_or_none(row.get(value_column)) for row in group)
+            if value is not None
+        ]
+        family_order.append((
+            statistics.fmean(values) if values else float('-inf'),
+            EXPERIMENT_FAMILY_LABELS[family_id],
+            family_id,
+        ))
+
+    ordered_rows: list[Mapping[str, object]] = []
+    for _mean_value, _label, family_id in sorted(
+        family_order,
+        key=lambda item: (-item[0], item[1]),
+    ):
+        ordered_rows.extend(
+            sorted(
+                grouped[family_id],
+                key=lambda row: (
+                    -(_float_or_none(row.get(value_column)) or float('-inf')),
+                    str(row.get('ShortExperiment') or row.get('Experiment') or ''),
+                ),
+            )
+        )
+    return ordered_rows
 
 
 def _query_scope_paired_rows(
@@ -1660,14 +1627,18 @@ def _representative_distribution_rows(
                 ),
             )[0]
         )
-    return _sorted_rows(representatives, 'GoldPercentage', descending=True)
+    return _family_grouped_rows(representatives, 'GoldPercentage')
 
 
 def _family_color_for_row(row: Mapping[str, object]) -> str:
+    return EXPERIMENT_FAMILY_COLORS[_family_id_for_row(row)]
+
+
+def _family_id_for_row(row: Mapping[str, object]) -> ExperimentFamilyId:
     family_id = row.get('ExperimentFamily')
     if isinstance(family_id, str) and family_id in EXPERIMENT_FAMILIES:
-        return EXPERIMENT_FAMILY_COLORS[cast(ExperimentFamilyId, family_id)]
-    return EXPERIMENT_FAMILY_COLORS['unknown']
+        return cast(ExperimentFamilyId, family_id)
+    return 'unknown'
 
 
 def _add_family_legend(*, fig: Any, rows: Sequence[Mapping[str, object]]) -> None:
@@ -1705,59 +1676,6 @@ def _color_tick_labels_by_family(*, ax: Any, rows: Sequence[Mapping[str, object]
         tick_label.set_color(_family_color_for_row(row))
 
 
-def _plot_clean_rate_delta_columns(
-    *,
-    plt: object,
-    rows: Sequence[Mapping[str, object]],
-    output_dir: Path,
-    plot_format: PlotFormat,
-) -> list[Path]:
-    value_columns = (
-        'Delta_FacLoc_MMR_AllFacetCleanRate',
-        'Delta_FacLoc_TopK_AllFacetCleanRate',
-    )
-    plot_rows = [
-        row
-        for row in rows
-        if all(_float_or_none(row.get(column)) is not None for column in value_columns)
-    ]
-    if not plot_rows:
-        return []
-    plot_rows = _query_scope_paired_rows(plot_rows, value_columns[0])
-    labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
-    colors = [_family_color_for_row(row) for row in plot_rows]
-    series = [
-        (
-            'FacLoc - MMR AllFacetCleanRate',
-            [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
-        ),
-        (
-            'FacLoc - top-k AllFacetCleanRate',
-            [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
-        ),
-    ]
-    fig_height = max(5.0, 0.28 * len(labels) + 1.6)
-    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
-        ncols=2,
-        sharey=True,
-        figsize=(15.0, fig_height),
-    )
-    axes = cast(Sequence[Any], axes_obj)
-    try:
-        for ax, (title, values) in zip(axes, series, strict=True):
-            _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
-            ax.set_title(title)
-            ax.set_xlabel('Headline AllFacetCleanRate delta')
-        _add_family_legend(fig=fig, rows=plot_rows)
-        fig.suptitle('Headline AllFacetCleanRate deltas by experiment', y=0.995)
-        fig.tight_layout(rect=(0, 0.03, 1, 0.985))
-        path = output_dir / f'all_facet_clean_rate_by_experiment.{plot_format}'
-        fig.savefig(path, dpi=180)
-        return [path]
-    finally:
-        plt.close(fig)  # type: ignore[attr-defined]
-
-
 def _plot_geometry_pass_rate(
     *,
     plt: object,
@@ -1765,7 +1683,7 @@ def _plot_geometry_pass_rate(
     output_dir: Path,
     plot_format: PlotFormat,
 ) -> list[Path]:
-    plot_rows = _sorted_rows(
+    plot_rows = _family_grouped_rows(
         [
             row
             for row in rows
@@ -1773,7 +1691,6 @@ def _plot_geometry_pass_rate(
             and 'Q' not in str(row.get('ShortExperiment') or row.get('Experiment') or '')
         ],
         'GeometryPassRate',
-        descending=True,
     )
     if not plot_rows:
         return []

@@ -2,7 +2,17 @@ from typing import Literal, get_args
 
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
+FCP_TIE_EPSILON = 0.05
+
 type StrategyName = Literal['top_k', 'mmr', 'fac_loc']
+type DeltaMetricLabel = Literal[
+    'FCP',
+    'FacetCoverage',
+    'AllFacetCleanRate',
+    'Precision',
+    'Recall',
+    'alpha_nDCG',
+]
 type ExperimentFamilyId = Literal[
     'balanced_clean',
     'dominance',
@@ -16,6 +26,7 @@ type ExperimentFamilyId = Literal[
 
 STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')
 DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
+DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_args(DeltaMetricLabel.__value__))
 EXPERIMENT_FAMILIES: tuple[ExperimentFamilyId, ...] = tuple[ExperimentFamilyId](
     get_args(ExperimentFamilyId.__value__)
 )
@@ -55,13 +66,12 @@ REPORT_FILES = (
     'geometry_filter_summary.csv',
     'strategy_by_k.csv',
     'comparison_by_k.csv',
+    'budget_strategy_summary.csv',
     'headline_strategy_summary.csv',
     'lambda_stability.csv',
     'near_optimal_lambda_width.csv',
     'embedding_model_summary.csv',
-    'embedding_query_scope_pairs.csv',
 )
-FCP_TIE_EPSILON = 0.03
 ANALYSIS_EXCLUDED_METRICS = frozenset({
     'MAP@k',
     'AnswerROUGE1Recall@k',
@@ -117,12 +127,7 @@ TABLE_HEADERS = {
     'TopK_AllFacetCleanRate': 'Top Clean',
     'MMR_AllFacetCleanRate': 'MMR Clean',
     'FacLoc_AllFacetCleanRate': 'FacLoc Clean',
-    'PassOnlyShortExperiment': 'Pass-only',
-    'AllQueriesShortExperiment': 'All-query',
-    'AllMinusPassOnly_MMR_FCP': 'All-Pass MMR',
-    'AllMinusPassOnly_FacLoc_FCP': 'All-Pass F',
-    'AllMinusPassOnly_Delta_FacLoc_MMR_FCP': 'All-Pass Delta',
-    'AllMinusPassOnly_Delta_FacLoc_TopK_FCP': 'All-Pass F-Top',
+    'PassFilterRuns': 'Pass-filter runs',
     'selected_lambda_norm_mean': 'lambda* norm mean',
     'selected_lambda_norm_std': 'lambda* norm std',
     'near_optimal_fraction_mean': 'near-opt frac',
@@ -135,8 +140,6 @@ TABLE_COL_WIDTHS = {
     'DistributionCategory': 28,
     'ExperimentFamilyLabel': 20,
     'TopFailureModes': 34,
-    'PassOnlyShortExperiment': 10,
-    'AllQueriesShortExperiment': 10,
     'strategy': 8,
 }
 DEFAULT_TABLE_COL_WIDTH = 14
@@ -146,12 +149,9 @@ INTEGER_TABLE_COLUMNS = frozenset({
     'GeometryQueries',
     'GeometryPassQueries',
     'Runs',
-    'PassOnlyRuns',
-    'AllQueryRuns',
+    'PassFilterRuns',
     'n_selected',
     'distinct_lambda_count',
-    'PassOnly_k',
-    'AllQueries_k',
 })
 ROLE_COUNT_COLUMNS = {
     'dominant_primary_gold': 'DominantPrimaryGoldCount',

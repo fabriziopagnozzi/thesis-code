@@ -1,5 +1,7 @@
 # Code - Primary
 
+## Add more report plots
+
 ## Scale-up the dataset and retrieval
 * "pool_mode: global" to scale up the dataset like Martinenghi wants
     - problem: when focusing on determining the validation/test set for a given query in "pool_mode: global" config, how to deal with facet distractors and background outliers coming from the other queries?

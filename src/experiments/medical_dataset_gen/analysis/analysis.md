@@ -6,9 +6,12 @@ The main unit is an `experiment x k x strategy` row.
 
 * `strategy_by_k.csv` keeps one row per experiment, retrieval budget `k`, and strategy.
 * `comparison_by_k.csv` pivots those rows into one row per experiment and `k`, with TopK, MMR, and FacLoc metrics side by side.
+* `budget_strategy_summary.csv` keeps one row per experiment for each budget category: `headline`, `medium_budget`, and `high_budget`.
 * `headline_strategy_summary.csv` keeps one headline row per experiment. The headline row is the smallest `k` where all three strategies are available.
 
-The headline row is intentionally conservative: it summarizes each experiment at the tightest complete budget, while the full per-`k` evidence remains in `comparison_by_k.csv` and `strategy_by_k.csv`.
+The headline row is intentionally conservative: it summarizes each experiment at the tightest complete budget, while the full per-`k` evidence remains in `comparison_by_k.csv` and `strategy_by_k.csv`. The medium-budget row uses the sorted `k` index `floor(len(k_values) / 2)`, and the high-budget row uses the largest available `k`.
+
+The active report excludes experiments whose config has `retrieval.only_pass_geometry: false`, because all-query branches are no longer part of the primary thesis analysis.
 
 ## Lambda Selection
 
@@ -33,7 +36,7 @@ Important comparison columns:
 
 * `Delta_FacLoc_MMR_FCP`: FacLoc FCP minus MMR FCP.
 * `Delta_FacLoc_TopK_FCP`: FacLoc FCP minus TopK FCP.
-* `FacLocVsMMR_FCPOutcome`: `facloc_better`, `tied`, or `facloc_worse`. The tie threshold is an absolute FCP delta of `0.01`.
+* `FacLocVsMMR_FCPOutcome`: `facloc_better`, `tied`, or `facloc_worse`. The tie threshold is an absolute FCP delta of `0.03`.
 * `AllFacetCleanRate@k`: fraction of queries where all four facets are covered and precision is at least `0.8`.
 
 ## Output Artifacts
@@ -42,10 +45,9 @@ Important comparison columns:
 
 Matplotlib visualizations derived from the same CSV rows:
 
-* `headline_fcp_deltas_by_experiment.*`: **headline** FacLoc-minus-MMR and FacLoc-minus-TopK FCP deltas in a two-column plot. Bars are color-coded by experiment family and annotated with signed delta values. Pass-only and all-query siblings are adjacent; pair groups are ordered by the mean FacLoc-minus-MMR FCP delta across those siblings.
-* `query_scope_headline_delta_shift_by_experiment.*`: paired **headline** all-query minus pass-only changes for FacLoc-minus-MMR and FacLoc-minus-TopK FCP margins. This plot uses only distribution/embedding pairs with both query scopes and orders rows by the mean of the underlying pass-only and all-query FacLoc-minus-MMR margins.
-* `all_facet_clean_rate_by_experiment.*`: **headline** FacLoc-minus-MMR and FacLoc-minus-TopK AllFacetCleanRate deltas in a two-column plot. Pass-only and all-query siblings are adjacent; pair groups are ordered by the mean FacLoc-minus-MMR AllFacetCleanRate delta.
-* `geometry_pass_rate_by_embedding.*`: geometry pass rate by experiment and embedding in a portrait horizontal bar plot, color-coded by experiment family.
+* `metrics/<metric>_<budget>_deltas_by_experiment.*`: FacLoc-minus-MMR and FacLoc-minus-TopK deltas in a two-column plot for each budget category and metric. Budgets are `headline`, `medium_budget`, and `high_budget`; metrics are `fcp`, `facet_coverage`, `all_facet_clean_rate`, `precision`, `recall`, and `alpha_ndcg`.
+* In the delta plots, bars are color-coded and grouped by experiment family. Families are ordered by their mean FacLoc-minus-MMR value for the plotted metric; rows inside a family are ordered by the same value.
+* `geometry_pass_rate_by_embedding.*`: geometry pass rate by experiment and embedding in a portrait horizontal bar plot, color-coded and grouped by experiment family.
 * `lambda_stability_boxplot.*`: for `mmr` and `fac_loc`, shows the mean selected `lambda_norm` with one standard-deviation error bar across all selected `experiment x k` rows. `lambda_norm` maps the selected raw lambda onto that experiment's available lambda grid, with `0` at the smallest grid value and `1` at the largest grid value. Use this to see whether a strategy tends to select low, middle, or high lambdas, and how variable that selection is across experiments and budgets.
 * `near_optimal_lambda_width.*`: for `mmr` and `fac_loc`, shows the distribution of `NearOptimalLambdaSpanNorm` across `experiment x k` lambda grids. For each grid, lambdas are near-optimal when their `FacetCoveragePurity@k` is within `--near-optimal-epsilon` of the best FCP for that strategy and `k`; the plotted value is the raw span from the smallest to largest near-optimal lambda divided by the full lambda-grid span. Values near `0` mean only a narrow lambda region is competitive, while values near `1` mean performance is flat across most of the grid.
 * `dataset_composition_stacked.*`: portrait stacked composition plot for gold, near-miss, and background proportions. It shows one representative child per parent distribution because sibling children share the same generated data distribution. The stack colors encode pool component, while y-axis label colors encode experiment family.
@@ -57,14 +59,14 @@ Figures are for visual inspection; cite the CSV values for exact numbers.
 Human-readable overview with the main tables, generated with `tabulate`. It is good for quick inspection, but CSV files are the authoritative machine-readable outputs.
 
 #### `report_interesting_findings.md`
-Shorter diagnostic report focused on notable patterns: largest FacLoc gains, FacLoc worse/tied rows, low geometry pass rates, embedding summaries, and pass-only versus all-query comparisons.
+Shorter diagnostic report focused on notable patterns: largest FacLoc gains, FacLoc worse/tied rows, low geometry pass rates, and embedding summaries.
 
 ### CSV Files
 
 ### `experiment_manifest.csv`
 
-One row per discovered experiment. It records config/load metadata, distribution ID, subexperiment label, embedding model/dimension, `OnlyPassGeometry`, human-readable `QueryScope`, configured `k` values, evaluation mode, and key artifact paths.
-Use this to audit what experiments were included and whether they were pass-only or all-query evaluations. `OnlyPassGeometry` remains the machine-readable boolean; `QueryScope` is the report-facing label. `ExperimentFamily` and `ExperimentFamilyLabel` come from `_exp_family.yaml` metadata stored in the experiment directory, normally at the parent distribution level.
+One row per discovered pass-filter experiment. It records config/load metadata, distribution ID, subexperiment label, embedding model/dimension, `OnlyPassGeometry`, human-readable `QueryScope`, configured `k` values, evaluation mode, and key artifact paths.
+Use this to audit what experiments were included. `OnlyPassGeometry` remains the machine-readable boolean; `QueryScope` is the report-facing label. `ExperimentFamily` and `ExperimentFamilyLabel` come from `_exp_family.yaml` metadata stored in the experiment directory, normally at the parent distribution level.
 
 ### `dataset_distribution.csv`
 
@@ -98,9 +100,15 @@ Use this when you need the full per-strategy evidence and selected-lambda detail
 
 One row per experiment and `k`, with TopK, MMR, and FacLoc metrics pivoted side by side.
 
-This is the main comparison table for method behavior across retrieval budgets. It includes deltas for FCP, facet coverage, AllFacetCleanRate, and precision.
+This is the main comparison table for method behavior across retrieval budgets. It includes deltas for FCP, facet coverage, AllFacetCleanRate, precision, recall, and alpha-nDCG.
 
 Use this for claims like "FacLoc beats MMR for most experiment-k rows" or for finding budgets where FacLoc becomes worse/tied.
+
+### `budget_strategy_summary.csv`
+
+One row per experiment and budget category. It selects the lowest complete `k` for `headline`, the median-index `k` for `medium_budget`, and the largest complete `k` for `high_budget`.
+
+Use this for compact thesis figures that compare the same semantic budget category across experiments with different raw `k` grids.
 
 ### `headline_strategy_summary.csv`
 
@@ -136,14 +144,6 @@ Use this to see whether a method has a broad plateau of good lambdas or is sensi
 
 One row per embedding model, aggregated from experiment-level headline rows and geometry summaries.
 
-It reports run counts, embedding dimensions, geometry pass rates, headline FCP means, FacLoc deltas, and counts of pass-only versus all-query runs.
+It reports run counts, embedding dimensions, geometry pass rates, headline FCP means, FacLoc deltas, and active pass-filter run counts.
 
 Use this for broad embedding-level trends. Treat it as descriptive rather than strictly paired, because different embeddings can yield different geometry-pass query sets.
-
-### `embedding_query_scope_pairs.csv`
-
-Rows for distribution and embedding combinations that have both pass-only and all-query headline runs.
-
-It reports pass-only metrics, all-query metrics, and all-minus-pass-only deltas for TopK, MMR, FacLoc, FacLoc-minus-MMR FCP, and FacLoc-minus-TopK FCP.
-
-Use this to inspect how much the geometry filter changes the evaluation for the same distribution and embedding model.
