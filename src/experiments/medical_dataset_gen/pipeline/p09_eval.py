@@ -52,6 +52,7 @@ from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     EvaluationMode,
     ExperimentCfg,
 )
+from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config_from_cli,
@@ -587,7 +588,7 @@ def _heldout_report_stats(
         if not topk_row.is_empty():
             rows.append(_annotate_heldout_row(topk_row.head(1), selected_on_metric_value=None))
 
-        for strategy in sorted(cfg.retrieval.strategies - {'top_k'}):
+        for strategy in sorted(cfg.retrieval.strategies - set[RetrievalStrategy]({'top_k'})):
             selected = select_best_lambda_row(
                 selection_stats,
                 strategy=strategy,
@@ -596,7 +597,7 @@ def _heldout_report_stats(
             )
             if selected is None:
                 continue
-            selected_lam = float(selected['lam']) if selected.get('lam') is not None else None
+            selected_lam = selected.get('lam', None)
             if selected_lam is None:
                 continue
 
@@ -607,13 +608,11 @@ def _heldout_report_stats(
             )
             if report_row.is_empty():
                 continue
+
             selected_metric_value = selected.get(LAMBDA_SELECTION_MAXIMIZING_METRIC)
             rows.append(
                 _annotate_heldout_row(
-                    report_row.head(1),
-                    selected_on_metric_value=(
-                        float(selected_metric_value) if selected_metric_value is not None else None
-                    ),
+                    report_row.head(1), selected_on_metric_value=selected_metric_value
                 )
             )
 

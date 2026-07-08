@@ -97,8 +97,8 @@ class MedicalDatasetGenPaths:
         override_path = Path(override)
         if override_path.suffix:
             if override_path.is_absolute():
-                return override_path
-            return self.experiment_dir / override_path
+                return override_path / f'{table}.{ext}'
+            return self.experiment_dir / override_path / f'{table}.{ext}'
 
         if override_path.is_absolute():
             return override_path / f'{table}.{ext}'

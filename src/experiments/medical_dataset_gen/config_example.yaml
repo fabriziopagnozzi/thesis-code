@@ -74,7 +74,7 @@ generation:
 
 embeddings:
     model_name: BAAI/bge-m3
-    batch_size: 128
+    batch_size: 512
     device: cuda # Single-device fallback. Use cuda:0/cuda:1 if you want one explicit GPU.
     devices: [] # Optional data-parallel devices, e.g. [cuda:0, cuda:1] on a 2-GPU Kaggle runtime.
     query_prompt: null # Optional query prompt passed to the Embedder for models that require one.
