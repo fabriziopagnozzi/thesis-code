@@ -40,7 +40,7 @@ type ChunkPoolScope = Literal['query_local']
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
 
-type DataSplit = Literal['train', 'validation', 'test']
+type DataSplit = Literal['validation', 'test']
 type PatientSex = Literal['female', 'male']
 
 type ConditionKey = str

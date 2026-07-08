@@ -85,7 +85,7 @@ retrieval:
     strategies: [top_k, mmr, fac_loc]
     pool_scope: query_local
     candidate_pool_n: 10_000 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
-    k_values: [4, 5, 6, 7, 8, 9]
+    k_values: [6, 7, 8, 9]
     lambdas_mmr: # MMR uses lambda on its full relevance-diversity scale.
         start: 0.02
         stop: 0.90
@@ -99,7 +99,7 @@ retrieval:
     only_pass_geometry: true # If true, evaluation skips queries that fail the geometric prefilter.
 
 geometry_filter:
-    topk_k: 20 # k used by the strict geometry gate; match the main RAG context budget.
+    topk_k: 20 # k used by the strict geometry gate; match the stricter RAG context budget.
     min_primary_axis_count: 14 # Minimum number of top-20 results from the declared primary axis.
     max_topk_retrieved_facets: 2 # Maximum distinct gold facets represented in the top-k geometry window.
     min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.

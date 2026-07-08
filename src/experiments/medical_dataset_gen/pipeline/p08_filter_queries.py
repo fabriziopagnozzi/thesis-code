@@ -88,6 +88,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
         else {}
     )
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
+    chunk_vectors = _materialize_embedding_vectors(chunk_vectors)
+    query_vectors = _materialize_embedding_vectors(query_vectors)
     maps = build_index_maps(chunk_documents, chunk_memberships, queries, chunk_ids, query_ids)
 
     facet_gold = build_query_to_facet_gold_map(qrels)
@@ -312,8 +314,6 @@ def _assign_post_geometry_splits(*, queries: pl.DataFrame, geometry: pl.DataFram
         query_id = str(row['query_id'])
         original_split = row.get('pre_geometry_split', row['split'])
         passes_filter = bool(pass_by_query.get(query_id, False))
-        if not passes_filter:
-            continue
         row['pre_geometry_split'] = str(original_split)
         row['passes_geometry_filter'] = passes_filter
         row['split'] = _post_geometry_split_for_profile(str(row['evidence_profile_id']))
@@ -329,8 +329,14 @@ def _assign_post_geometry_splits(*, queries: pl.DataFrame, geometry: pl.DataFram
 
 
 def _post_geometry_split_for_profile(evidence_profile_id: str) -> DataSplit:
-    bucket = _stable_int(evidence_profile_id, 'post_geometry_split') % 2
-    return 'test' if bucket == 0 else 'validation'
+    bucket = _stable_int(evidence_profile_id, 'post_geometry_split') % 10
+    return 'test' if bucket < 3 else 'validation'
+
+
+def _materialize_embedding_vectors(vectors: NDArray[np.float32]) -> NDArray[np.float32]:
+    # Geometry filtering does many tiny query-local gathers. Keeping embeddings
+    # as np.memmap makes those gathers turn into scattered disk reads on /DATA.
+    return np.array(vectors, dtype=np.float32, copy=True)
 
 
 def _stable_int(*parts: object) -> int:

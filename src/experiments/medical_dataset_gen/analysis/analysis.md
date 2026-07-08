@@ -42,13 +42,13 @@ Important comparison columns:
 
 Matplotlib visualizations derived from the same CSV rows:
 
-* `fcp_delta_by_experiment.*`: **headline** FacLoc-minus-MMR FCP deltas.
-* `facloc_vs_topk_delta_by_experiment.*`: **headline** FacLoc-minus-TopK FCP deltas.
-* `all_facet_clean_rate_by_experiment.*`: **headline** AllFacetCleanRate comparison.
-* `geometry_pass_rate_by_embedding.*`: geometry pass rate grouped by embedding.
+* `headline_fcp_deltas_by_experiment.*`: **headline** FacLoc-minus-MMR and FacLoc-minus-TopK FCP deltas in a two-column plot. Bars are color-coded by experiment family and annotated with signed delta values. Pass-only and all-query siblings are adjacent; pair groups are ordered by the mean FacLoc-minus-MMR FCP delta across those siblings.
+* `query_scope_headline_delta_shift_by_experiment.*`: paired **headline** all-query minus pass-only changes for FacLoc-minus-MMR and FacLoc-minus-TopK FCP margins. This plot uses only distribution/embedding pairs with both query scopes and orders rows by the mean of the underlying pass-only and all-query FacLoc-minus-MMR margins.
+* `all_facet_clean_rate_by_experiment.*`: **headline** FacLoc-minus-MMR and FacLoc-minus-TopK AllFacetCleanRate deltas in a two-column plot. Pass-only and all-query siblings are adjacent; pair groups are ordered by the mean FacLoc-minus-MMR AllFacetCleanRate delta.
+* `geometry_pass_rate_by_embedding.*`: geometry pass rate by experiment and embedding in a portrait horizontal bar plot, color-coded by experiment family.
 * `lambda_stability_boxplot.*`: for `mmr` and `fac_loc`, shows the mean selected `lambda_norm` with one standard-deviation error bar across all selected `experiment x k` rows. `lambda_norm` maps the selected raw lambda onto that experiment's available lambda grid, with `0` at the smallest grid value and `1` at the largest grid value. Use this to see whether a strategy tends to select low, middle, or high lambdas, and how variable that selection is across experiments and budgets.
 * `near_optimal_lambda_width.*`: for `mmr` and `fac_loc`, shows the distribution of `NearOptimalLambdaSpanNorm` across `experiment x k` lambda grids. For each grid, lambdas are near-optimal when their `FacetCoveragePurity@k` is within `--near-optimal-epsilon` of the best FCP for that strategy and `k`; the plotted value is the raw span from the smallest to largest near-optimal lambda divided by the full lambda-grid span. Values near `0` mean only a narrow lambda region is competitive, while values near `1` mean performance is flat across most of the grid.
-* `dataset_composition_stacked.*`: gold, near-miss, and background proportions.
+* `dataset_composition_stacked.*`: portrait stacked composition plot for gold, near-miss, and background proportions. It shows one representative child per parent distribution because sibling children share the same generated data distribution. The stack colors encode pool component, while y-axis label colors encode experiment family.
 
 Figures are for visual inspection; cite the CSV values for exact numbers.
 
@@ -56,15 +56,15 @@ Figures are for visual inspection; cite the CSV values for exact numbers.
 #### `report.md`
 Human-readable overview with the main tables, generated with `tabulate`. It is good for quick inspection, but CSV files are the authoritative machine-readable outputs.
 
-#### `interesting_findings.md`
+#### `report_interesting_findings.md`
 Shorter diagnostic report focused on notable patterns: largest FacLoc gains, FacLoc worse/tied rows, low geometry pass rates, embedding summaries, and pass-only versus all-query comparisons.
 
 ### CSV Files
 
 ### `experiment_manifest.csv`
 
-One row per discovered experiment. It records config/load metadata, distribution ID, subexperiment label, embedding model/dimension, `OnlyPassGeometry`, configured `k` values, evaluation mode, and key artifact paths.
-Use this to audit what experiments were included and whether they were pass-only or all-query evaluations.
+One row per discovered experiment. It records config/load metadata, distribution ID, subexperiment label, embedding model/dimension, `OnlyPassGeometry`, human-readable `QueryScope`, configured `k` values, evaluation mode, and key artifact paths.
+Use this to audit what experiments were included and whether they were pass-only or all-query evaluations. `OnlyPassGeometry` remains the machine-readable boolean; `QueryScope` is the report-facing label. `ExperimentFamily` and `ExperimentFamilyLabel` come from `_exp_family.yaml` metadata stored in the experiment directory, normally at the parent distribution level.
 
 ### `dataset_distribution.csv`
 
@@ -144,6 +144,6 @@ Use this for broad embedding-level trends. Treat it as descriptive rather than s
 
 Rows for distribution and embedding combinations that have both pass-only and all-query headline runs.
 
-It reports pass-only metrics, all-query metrics, and all-minus-pass-only deltas for TopK, MMR, FacLoc, and FacLoc-minus-MMR FCP.
+It reports pass-only metrics, all-query metrics, and all-minus-pass-only deltas for TopK, MMR, FacLoc, FacLoc-minus-MMR FCP, and FacLoc-minus-TopK FCP.
 
 Use this to inspect how much the geometry filter changes the evaluation for the same distribution and embedding model.

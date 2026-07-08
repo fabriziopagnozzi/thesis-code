@@ -71,7 +71,8 @@ GENERIC_CLINICAL_STOPWORDS = frozenset({
 })
 
 # Terminal colors
-type ColorName = Literal[
+ColorName = Literal[
+    # Basic ANSI
     'black',
     'red',
     'green',
@@ -80,6 +81,7 @@ type ColorName = Literal[
     'magenta',
     'cyan',
     'white',
+    # Bright ANSI
     'bright_black',
     'bright_red',
     'bright_green',
@@ -88,17 +90,74 @@ type ColorName = Literal[
     'bright_magenta',
     'bright_cyan',
     'bright_white',
-    'orange',
-    'gold',
-    'neon_yellow',
-    'pink',
-    'purple',
-    'teal',
-    'lime',
+    # Grays
     'gray',
+    'grey',
+    'dark_gray',
+    'dark_grey',
+    'light_gray',
+    'light_grey',
+    'silver',
+    'charcoal',
+    'slate',
+    # Reds / oranges
+    'maroon',
+    'dark_red',
+    'crimson',
+    'scarlet',
+    'coral',
+    'salmon',
+    'tomato',
+    'orange',
+    'dark_orange',
+    'amber',
+    # Yellows / golds
+    'gold',
+    'khaki',
+    'beige',
+    'cream',
+    'neon_yellow',
+    # Greens
+    'lime',
+    'neon_green',
+    'mint',
+    'spring_green',
+    'sea_green',
+    'forest_green',
+    'olive',
+    'dark_green',
+    # Cyans / teals
+    'teal',
+    'aqua',
+    'turquoise',
+    'cyan_blue',
+    'dark_cyan',
+    # Blues
+    'navy',
+    'royal_blue',
+    'sky_blue',
+    'dodger_blue',
+    'steel_blue',
+    'indigo',
+    # Purples / pinks
+    'purple',
+    'violet',
+    'lavender',
+    'plum',
+    'pink',
+    'hot_pink',
+    'rose',
+    'fuchsia',
+    # Browns
+    'brown',
+    'tan',
+    'sand',
 ]
 
-COLOR_CODES: dict[ColorName, int] = {
+type ColorLike = ColorName | int | str
+
+COLOR_CODES: dict[str, int] = {
+    # Basic ANSI
     'black': 0,
     'red': 1,
     'green': 2,
@@ -107,6 +166,7 @@ COLOR_CODES: dict[ColorName, int] = {
     'magenta': 5,
     'cyan': 6,
     'white': 7,
+    # Bright ANSI
     'bright_black': 8,
     'bright_red': 9,
     'bright_green': 10,
@@ -115,14 +175,72 @@ COLOR_CODES: dict[ColorName, int] = {
     'bright_magenta': 13,
     'bright_cyan': 14,
     'bright_white': 15,
-    'orange': 208,
-    'gold': 220,
-    'neon_yellow': 226,
-    'pink': 213,
-    'purple': 129,
-    'teal': 37,
-    'lime': 118,
+    # Grays
     'gray': 245,
+    'grey': 245,
+    'dark_gray': 240,
+    'dark_grey': 240,
+    'light_gray': 250,
+    'light_grey': 250,
+    'silver': 251,
+    'charcoal': 238,
+    'slate': 67,
+    # Reds / oranges
+    'maroon': 88,
+    'dark_red': 124,
+    'crimson': 160,
+    'scarlet': 196,
+    'coral': 209,
+    'salmon': 216,
+    'tomato': 203,
+    'orange': 208,
+    'dark_orange': 202,
+    'amber': 214,
+    # Yellows / golds
+    'gold': 220,
+    'khaki': 222,
+    'beige': 230,
+    'cream': 229,
+    'neon_yellow': 226,
+    # Greens
+    'lime': 118,
+    'neon_green': 46,
+    'mint': 121,
+    'spring_green': 48,
+    'sea_green': 78,
+    'forest_green': 28,
+    'olive': 100,
+    'dark_green': 22,
+    # Cyans / teals
+    'teal': 37,
+    'aqua': 51,
+    'turquoise': 45,
+    'cyan_blue': 39,
+    'dark_cyan': 30,
+    # Blues
+    'navy': 17,
+    'royal_blue': 63,
+    'sky_blue': 117,
+    'dodger_blue': 33,
+    'steel_blue': 67,
+    'indigo': 54,
+    # Purples / pinks
+    'purple': 129,
+    'violet': 177,
+    'lavender': 183,
+    'plum': 176,
+    'pink': 213,
+    'hot_pink': 205,
+    'rose': 204,
+    'fuchsia': 201,
+    # Browns
+    'brown': 130,
+    'tan': 180,
+    'sand': 222,
 }
+
+# Add aliases c0 through c255, so you can use:
+# colored("c208", "orange")
+COLOR_CODES.update({f'c{i}': i for i in range(256)})
 
 RESET = '\033[0m'

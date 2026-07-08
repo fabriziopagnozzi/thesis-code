@@ -8,15 +8,19 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, Protocol, cast, runtime_checkable
+from typing import Any, Literal, Protocol, cast, runtime_checkable
 
 import polars as pl
+import yaml
 from tabulate import tabulate
 
 from experiments.medical_dataset_gen.analysis.analysis_constants import (
     DEFAULT_TABLE_COL_WIDTH,
     DIVERSIFYING_STRATEGIES,
     EVALUATION_METRICS,
+    EXPERIMENT_FAMILIES,
+    EXPERIMENT_FAMILY_COLORS,
+    EXPERIMENT_FAMILY_LABELS,
     FCP_TIE_EPSILON,
     HELDOUT_SELECTION_COLUMNS,
     INTEGER_TABLE_COLUMNS,
@@ -27,6 +31,8 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     TABLE_COL_WIDTHS,
     TABLE_HEADERS,
     TABLEFMT_OPTS,
+    ExperimentFamilyId,
+    StrategyName,
 )
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
@@ -44,7 +50,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     resolve_experiment_name,
 )
 
-type StrategyName = Literal['top_k', 'mmr', 'fac_loc']
 type PlotFormat = Literal['png', 'pdf', 'svg']
 
 
@@ -76,6 +81,8 @@ class ExperimentRecord:
     cfg: ExperimentCfg | None
     paths: MedicalDatasetGenPaths
     config_error: str | None
+    family_id: ExperimentFamilyId
+    family_label: str
 
     @property
     def embedding_model(self) -> str:
@@ -156,6 +163,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 plot_format=args.plot_format,
                 max_rows=args.max_table_rows,
                 headline_rows=headline_rows,
+                embedding_pair_rows=embedding_pair_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 near_optimal_rows=near_optimal_rows,
@@ -320,6 +328,12 @@ def load_experiment_record(
     is_subexperiment = len(parts) == 2
     distribution_id = parts[0]
     run_label = parts[1] if is_subexperiment else 'parent'
+    family_id, family_label = _load_experiment_family(
+        results_dir=results_dir,
+        name=name,
+        distribution_id=distribution_id,
+        warnings=warnings,
+    )
     return ExperimentRecord(
         name=name,
         experiment_dir=results_dir / name,
@@ -329,7 +343,48 @@ def load_experiment_record(
         cfg=cfg,
         paths=paths,
         config_error=config_error,
+        family_id=family_id,
+        family_label=family_label,
     )
+
+
+def _load_experiment_family(
+    *,
+    results_dir: Path,
+    name: str,
+    distribution_id: str,
+    warnings: list[str],
+) -> tuple[ExperimentFamilyId, str]:
+    candidate_paths = [
+        results_dir / name / '_exp_family.yaml',
+        results_dir / distribution_id / '_exp_family.yaml',
+    ]
+    for path in candidate_paths:
+        if not path.is_file():
+            continue
+        try:
+            raw: object = yaml.safe_load(path.read_text()) or {}
+        except Exception as exc:
+            warnings.append(f'{name}: could not read experiment family metadata at {path} ({exc})')
+            return 'unknown', EXPERIMENT_FAMILY_LABELS['unknown']
+        if not isinstance(raw, Mapping):
+            warnings.append(f'{name}: experiment family metadata at {path} is not a mapping')
+            return 'unknown', EXPERIMENT_FAMILY_LABELS['unknown']
+        family_id = raw.get('family_id')
+        if not isinstance(family_id, str) or family_id not in EXPERIMENT_FAMILIES:
+            warnings.append(
+                f'{name}: experiment family metadata at {path} has invalid family_id {family_id!r}'
+            )
+            return 'unknown', EXPERIMENT_FAMILY_LABELS['unknown']
+        typed_family_id = cast(ExperimentFamilyId, family_id)
+        family_label = raw.get('family_label')
+        return (
+            typed_family_id,
+            family_label
+            if isinstance(family_label, str)
+            else EXPERIMENT_FAMILY_LABELS[typed_family_id],
+        )
+    return 'unknown', EXPERIMENT_FAMILY_LABELS['unknown']
 
 
 def _load_config_with_report_compatibility(exp_name: str) -> ExperimentCfg:
@@ -352,6 +407,8 @@ def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
         'ShortDistribution': short_token(record.distribution_id),
+        'ExperimentFamily': record.family_id,
+        'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
         'IsSubexperiment': record.is_subexperiment,
         'ConfigLoaded': record.cfg is not None,
@@ -361,6 +418,7 @@ def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
         'EmbeddingChunks': metadata.get('n_chunks'),
         'EmbeddingQueries': metadata.get('n_queries'),
         'OnlyPassGeometry': record.only_pass_geometry,
+        'QueryScope': _query_scope_label(record.only_pass_geometry),
         'CandidatePoolN': record.cfg.retrieval.candidate_pool_n if record.cfg else None,
         'KValues': ','.join(str(k) for k in record.cfg.retrieval.k_values) if record.cfg else None,
         'EvaluationMode': record.cfg.evaluation.mode if record.cfg else None,
@@ -684,10 +742,13 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             'ShortExperiment': first.get('ShortExperiment'),
             'Distribution': first.get('Distribution'),
             'ShortDistribution': first.get('ShortDistribution'),
+            'ExperimentFamily': first.get('ExperimentFamily'),
+            'ExperimentFamilyLabel': first.get('ExperimentFamilyLabel'),
             'RunLabel': first.get('RunLabel'),
             'EmbeddingModel': first.get('EmbeddingModel'),
             'EmbeddingDimension': first.get('EmbeddingDimension'),
             'OnlyPassGeometry': first.get('OnlyPassGeometry'),
+            'QueryScope': first.get('QueryScope'),
             'k': k,
             'SelectionSource': first.get('SelectionSource'),
         }
@@ -867,6 +928,9 @@ def embedding_query_scope_pair_rows(
         out: dict[str, object] = {
             'Distribution': distribution,
             'ShortDistribution': short_token(distribution),
+            'ExperimentFamily': pass_row.get('ExperimentFamily') or all_row.get('ExperimentFamily'),
+            'ExperimentFamilyLabel': pass_row.get('ExperimentFamilyLabel')
+            or all_row.get('ExperimentFamilyLabel'),
             'EmbeddingModel': model,
             'PassOnlyExperiment': pass_row.get('Experiment'),
             'PassOnlyShortExperiment': pass_row.get('ShortExperiment'),
@@ -875,7 +939,13 @@ def embedding_query_scope_pair_rows(
             'PassOnly_k': pass_row.get('k'),
             'AllQueries_k': all_row.get('k'),
         }
-        for label in ('TopK_FCP', 'MMR_FCP', 'FacLoc_FCP', 'Delta_FacLoc_MMR_FCP'):
+        for label in (
+            'TopK_FCP',
+            'MMR_FCP',
+            'FacLoc_FCP',
+            'Delta_FacLoc_MMR_FCP',
+            'Delta_FacLoc_TopK_FCP',
+        ):
             pass_value = _float_or_none(pass_row.get(label))
             all_value = _float_or_none(all_row.get(label))
             out[f'PassOnly_{label}'] = pass_value
@@ -938,7 +1008,8 @@ def render_report(
                 'ShortExperiment',
                 'k',
                 'EmbeddingModel',
-                'OnlyPassGeometry',
+                'QueryScope',
+                'ExperimentFamilyLabel',
                 'TopK_FCP',
                 'MMR_FCP',
                 'FacLoc_FCP',
@@ -971,6 +1042,7 @@ def render_report(
                 'ShortExperiment',
                 'k',
                 'EmbeddingModel',
+                'ExperimentFamilyLabel',
                 'TopK_FCP',
                 'MMR_FCP',
                 'FacLoc_FCP',
@@ -989,6 +1061,7 @@ def render_report(
             dataset_rows,
             columns=[
                 'ShortExperiment',
+                'ExperimentFamilyLabel',
                 'DistributionCategory',
                 'PoolSizeMean',
                 'GoldPercentage',
@@ -1071,6 +1144,7 @@ def render_report(
             embedding_pair_rows,
             columns=[
                 'ShortDistribution',
+                'ExperimentFamilyLabel',
                 'EmbeddingModel',
                 'PassOnlyShortExperiment',
                 'AllQueriesShortExperiment',
@@ -1176,6 +1250,7 @@ def render_interesting_findings(
                 'ShortExperiment',
                 'k',
                 'EmbeddingModel',
+                'ExperimentFamilyLabel',
                 'TopK_FCP',
                 'MMR_FCP',
                 'FacLoc_FCP',
@@ -1202,6 +1277,7 @@ def render_interesting_findings(
                 'ShortExperiment',
                 'k',
                 'EmbeddingModel',
+                'ExperimentFamilyLabel',
                 'TopK_FCP',
                 'MMR_FCP',
                 'FacLoc_FCP',
@@ -1255,10 +1331,12 @@ def render_interesting_findings(
             embedding_pair_rows,
             columns=[
                 'ShortDistribution',
+                'ExperimentFamilyLabel',
                 'EmbeddingModel',
                 'AllMinusPassOnly_MMR_FCP',
                 'AllMinusPassOnly_FacLoc_FCP',
                 'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
+                'AllMinusPassOnly_Delta_FacLoc_TopK_FCP',
             ],
             tablefmt=tablefmt,
             max_rows=max_table_rows,
@@ -1273,6 +1351,7 @@ def write_figures(
     plot_format: PlotFormat,
     max_rows: int,
     headline_rows: Sequence[Mapping[str, object]],
+    embedding_pair_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     near_optimal_rows: Sequence[Mapping[str, object]],
@@ -1289,41 +1368,32 @@ def write_figures(
         return []
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    for obsolete_stem in ('fcp_delta_by_experiment', 'facloc_vs_topk_delta_by_experiment'):
+        (output_dir / f'{obsolete_stem}.{plot_format}').unlink(missing_ok=True)
     paths: list[Path] = []
 
     paths.extend(
-        _plot_horizontal_metric(
+        _plot_headline_fcp_delta_columns(
             plt=plt,
             rows=headline_rows,
             output_dir=output_dir,
             plot_format=plot_format,
-            file_stem='fcp_delta_by_experiment',
-            value_column='Delta_FacLoc_MMR_FCP',
-            title='FacLoc - MMR FCP by experiment',
-            xlabel='FCP delta',
-            max_rows=max_rows,
         )
     )
     paths.extend(
-        _plot_horizontal_metric(
+        _plot_query_scope_delta_columns(
             plt=plt,
-            rows=headline_rows,
+            rows=embedding_pair_rows,
             output_dir=output_dir,
             plot_format=plot_format,
-            file_stem='facloc_vs_topk_delta_by_experiment',
-            value_column='Delta_FacLoc_TopK_FCP',
-            title='FacLoc - top-k FCP by experiment',
-            xlabel='FCP delta',
-            max_rows=max_rows,
         )
     )
     paths.extend(
-        _plot_grouped_clean_rate(
+        _plot_clean_rate_delta_columns(
             plt=plt,
             rows=headline_rows,
             output_dir=output_dir,
             plot_format=plot_format,
-            max_rows=max_rows,
         )
     )
     paths.extend(
@@ -1332,7 +1402,6 @@ def write_figures(
             rows=geometry_rows,
             output_dir=output_dir,
             plot_format=plot_format,
-            max_rows=max_rows,
         )
     )
     paths.extend(
@@ -1357,87 +1426,331 @@ def write_figures(
             rows=dataset_rows,
             output_dir=output_dir,
             plot_format=plot_format,
-            max_rows=max_rows,
         )
     )
     return paths
 
 
-def _plot_horizontal_metric(
+def _plot_headline_fcp_delta_columns(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
     output_dir: Path,
     plot_format: PlotFormat,
-    file_stem: str,
-    value_column: str,
-    title: str,
-    xlabel: str,
-    max_rows: int,
 ) -> list[Path]:
-    plot_rows = [row for row in rows if _float_or_none(row.get(value_column)) is not None]
+    value_columns = ('Delta_FacLoc_MMR_FCP', 'Delta_FacLoc_TopK_FCP')
+    plot_rows = [
+        row
+        for row in rows
+        if all(_float_or_none(row.get(column)) is not None for column in value_columns)
+    ]
     if not plot_rows:
         return []
-    plot_rows = _select_extreme_rows(plot_rows, value_column, max_rows)
+    plot_rows = _query_scope_paired_rows(plot_rows, value_columns[0])
     labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
-    values = [_float_or_none(row.get(value_column)) or 0.0 for row in plot_rows]
-    fig_height = max(4.0, 0.32 * len(values) + 1.5)
-    fig, ax = plt.subplots(figsize=(10, fig_height))  # type: ignore[attr-defined]
+    colors = [_family_color_for_row(row) for row in plot_rows]
+    series = [
+        (
+            'FacLoc - MMR FCP',
+            [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
+        ),
+        (
+            'FacLoc - top-k FCP',
+            [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
+        ),
+    ]
+    fig_height = max(5.0, 0.28 * len(labels) + 1.6)
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
+        ncols=2,
+        sharey=True,
+        figsize=(15.0, fig_height),
+    )
+    axes = cast(Sequence[Any], axes_obj)
     try:
-        colors = ['#287C8E' if value >= 0 else '#B8463F' for value in values]
-        ax.barh(labels, values, color=colors)
-        ax.axvline(0.0, color='#303030', linewidth=0.9)
-        ax.set_title(title)
-        ax.set_xlabel(xlabel)
-        ax.grid(axis='x', alpha=0.25)
-        fig.tight_layout()
-        path = output_dir / f'{file_stem}.{plot_format}'
+        for ax, (title, values) in zip(axes, series, strict=True):
+            _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
+            ax.set_title(title)
+            ax.set_xlabel('Headline FCP delta')
+        _add_family_legend(fig=fig, rows=plot_rows)
+        fig.suptitle('Headline FCP deltas by experiment', y=0.995)
+        fig.tight_layout(rect=(0, 0.03, 1, 0.985))
+        path = output_dir / f'headline_fcp_deltas_by_experiment.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_grouped_clean_rate(
+def _plot_query_scope_delta_columns(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
     output_dir: Path,
     plot_format: PlotFormat,
-    max_rows: int,
 ) -> list[Path]:
-    plot_rows = _sorted_rows(
-        [row for row in rows if _float_or_none(row.get('FacLoc_AllFacetCleanRate')) is not None],
-        'FacLoc_AllFacetCleanRate',
-        descending=True,
-    )[:max_rows]
+    value_columns = (
+        'AllMinusPassOnly_Delta_FacLoc_MMR_FCP',
+        'AllMinusPassOnly_Delta_FacLoc_TopK_FCP',
+    )
+    plot_rows = [
+        row
+        for row in rows
+        if all(_float_or_none(row.get(column)) is not None for column in value_columns)
+    ]
     if not plot_rows:
         return []
-    labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
+    # The y-axis is inverted, so ascending data order renders larger scores lower.
+    plot_rows = _sorted_rows(plot_rows, value_columns[0], descending=False)
+    labels = [
+        f'{row.get("ShortDistribution")}/{_short_model_label(str(row.get("EmbeddingModel") or ""))}'
+        for row in plot_rows
+    ]
+    colors = [_family_color_for_row(row) for row in plot_rows]
     series = [
-        ('TopK', [_float_or_none(row.get('TopK_AllFacetCleanRate')) or 0.0 for row in plot_rows]),
-        ('MMR', [_float_or_none(row.get('MMR_AllFacetCleanRate')) or 0.0 for row in plot_rows]),
         (
-            'FacLoc',
-            [_float_or_none(row.get('FacLoc_AllFacetCleanRate')) or 0.0 for row in plot_rows],
+            '(FacLoc - MMR) all-query minus pass-only',
+            [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
+        ),
+        (
+            '(FacLoc - top-k) all-query minus pass-only',
+            [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
         ),
     ]
-    positions = list(range(len(labels)))
-    width = 0.26
-    fig, ax = plt.subplots(figsize=(max(10, 0.55 * len(labels)), 5.2))  # type: ignore[attr-defined]
+    fig_height = max(5.0, 0.32 * len(labels) + 1.6)
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
+        ncols=2,
+        sharey=True,
+        figsize=(16.0, fig_height),
+    )
+    axes = cast(Sequence[Any], axes_obj)
     try:
-        colors = ['#6F7890', '#C47A3A', '#287C8E']
-        for idx, (name, values) in enumerate(series):
-            offsets = [pos + (idx - 1) * width for pos in positions]
-            ax.bar(offsets, values, width=width, label=name, color=colors[idx])
-        ax.set_title('AllFacetCleanRate at headline k')
-        ax.set_ylabel('Rate')
-        ax.set_xticks(positions)
-        ax.set_xticklabels(labels, rotation=45, ha='right')
-        ax.set_ylim(0, 1)
-        ax.grid(axis='y', alpha=0.25)
-        ax.legend()
-        fig.tight_layout()
+        for ax, (title, values) in zip(axes, series, strict=True):
+            _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
+            ax.set_title(title)
+            ax.set_xlabel('Headline FCP delta change')
+        _add_family_legend(fig=fig, rows=plot_rows)
+        fig.suptitle('All-query sensitivity of headline FacLoc margins', y=0.995)
+        fig.tight_layout(rect=(0, 0.03, 1, 0.985))
+        path = output_dir / f'query_scope_headline_delta_shift_by_experiment.{plot_format}'
+        fig.savefig(path, dpi=180)
+        return [path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _draw_family_delta_bars(
+    *,
+    ax: Any,
+    labels: Sequence[str],
+    values: Sequence[float],
+    colors: Sequence[str],
+) -> None:
+    positions = list(range(len(labels)))
+    ax.barh(positions, values, color=colors)
+    ax.axvline(0.0, color='#303030', linewidth=0.9)
+    ax.set_yticks(positions)
+    ax.set_yticklabels(labels)
+    ax.invert_yaxis()
+    ax.grid(axis='x', alpha=0.25)
+    _annotate_horizontal_values(ax=ax, values=values)
+
+
+def _annotate_horizontal_values(*, ax: Any, values: Sequence[float]) -> None:
+    if not values:
+        return
+    min_value = min([0.0, *values])
+    max_value = max([0.0, *values])
+    span = max(max_value - min_value, 0.05)
+    padding = span * 0.22
+    ax.set_xlim(min_value - padding, max_value + padding)
+    offset = max(span * 0.015, 0.003)
+    for position, value in enumerate(values):
+        if value >= 0:
+            x_position = value + offset
+            alignment = 'left'
+        else:
+            x_position = value - offset
+            alignment = 'right'
+        ax.text(
+            x_position,
+            position,
+            f'{value:+.3f}',
+            va='center',
+            ha=alignment,
+            fontsize=7,
+            color='#202020',
+        )
+
+
+def _query_scope_paired_rows(
+    rows: Sequence[Mapping[str, object]],
+    value_column: str,
+) -> list[Mapping[str, object]]:
+    grouped: dict[tuple[str, str], list[Mapping[str, object]]] = {}
+    for row in rows:
+        distribution = str(row.get('Distribution') or '')
+        embedding_model = str(row.get('EmbeddingModel') or '')
+        if distribution and embedding_model:
+            grouped.setdefault((distribution, embedding_model), []).append(row)
+
+    ordered_groups: list[tuple[float, tuple[str, str], list[Mapping[str, object]]]] = []
+    for key, group in grouped.items():
+        values = [
+            value
+            for value in (_float_or_none(row.get(value_column)) for row in group)
+            if value is not None
+        ]
+        if not values:
+            continue
+        ordered_groups.append((statistics.fmean(values), key, group))
+
+    ordered_rows: list[Mapping[str, object]] = []
+    # Horizontal plots use an inverted y-axis, so ascending row order places
+    # higher-scoring pair groups lower in the rendered figure.
+    for _mean_value, _key, group in sorted(ordered_groups, key=lambda item: item[0]):
+        ordered_rows.extend(
+            sorted(
+                group,
+                key=lambda row: (
+                    1 if row.get('OnlyPassGeometry') is False else 0,
+                    str(row.get('ShortExperiment') or row.get('Experiment') or ''),
+                ),
+            )
+        )
+    return ordered_rows
+
+
+def _sorted_pair_rows_by_source_mean(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    pass_column: str,
+    all_query_column: str,
+) -> list[Mapping[str, object]]:
+    return sorted(
+        rows,
+        key=lambda row: _mean_available(
+            _float_or_none(row.get(pass_column)),
+            _float_or_none(row.get(all_query_column)),
+        ),
+    )
+
+
+def _mean_available(*values: float | None) -> float:
+    present = [value for value in values if value is not None]
+    return statistics.fmean(present) if present else float('-inf')
+
+
+def _representative_distribution_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[Mapping[str, object]]:
+    grouped: dict[str, list[Mapping[str, object]]] = {}
+    for row in rows:
+        distribution = str(row.get('Distribution') or '')
+        if distribution:
+            grouped.setdefault(distribution, []).append(row)
+
+    representatives: list[Mapping[str, object]] = []
+    for _distribution, group in grouped.items():
+        representatives.append(
+            sorted(
+                group,
+                key=lambda row: (
+                    0 if row.get('OnlyPassGeometry') is True else 1,
+                    str(row.get('ShortExperiment') or row.get('Experiment') or ''),
+                ),
+            )[0]
+        )
+    return _sorted_rows(representatives, 'GoldPercentage', descending=True)
+
+
+def _family_color_for_row(row: Mapping[str, object]) -> str:
+    family_id = row.get('ExperimentFamily')
+    if isinstance(family_id, str) and family_id in EXPERIMENT_FAMILIES:
+        return EXPERIMENT_FAMILY_COLORS[cast(ExperimentFamilyId, family_id)]
+    return EXPERIMENT_FAMILY_COLORS['unknown']
+
+
+def _add_family_legend(*, fig: Any, rows: Sequence[Mapping[str, object]]) -> None:
+    from matplotlib.patches import Patch
+
+    present = {
+        cast(ExperimentFamilyId, row.get('ExperimentFamily'))
+        for row in rows
+        if isinstance(row.get('ExperimentFamily'), str)
+        and row.get('ExperimentFamily') in EXPERIMENT_FAMILIES
+    }
+    if not present:
+        return
+    ordered: list[ExperimentFamilyId] = [
+        family_id for family_id in EXPERIMENT_FAMILIES if family_id in present
+    ]
+    handles = [
+        Patch(
+            facecolor=EXPERIMENT_FAMILY_COLORS[family_id],
+            label=EXPERIMENT_FAMILY_LABELS[family_id],
+        )
+        for family_id in ordered
+    ]
+    fig.legend(
+        handles=handles,
+        loc='lower center',
+        ncol=min(4, len(handles)),
+        frameon=False,
+        fontsize=8,
+    )
+
+
+def _color_tick_labels_by_family(*, ax: Any, rows: Sequence[Mapping[str, object]]) -> None:
+    for tick_label, row in zip(ax.get_yticklabels(), rows, strict=False):
+        tick_label.set_color(_family_color_for_row(row))
+
+
+def _plot_clean_rate_delta_columns(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    value_columns = (
+        'Delta_FacLoc_MMR_AllFacetCleanRate',
+        'Delta_FacLoc_TopK_AllFacetCleanRate',
+    )
+    plot_rows = [
+        row
+        for row in rows
+        if all(_float_or_none(row.get(column)) is not None for column in value_columns)
+    ]
+    if not plot_rows:
+        return []
+    plot_rows = _query_scope_paired_rows(plot_rows, value_columns[0])
+    labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
+    colors = [_family_color_for_row(row) for row in plot_rows]
+    series = [
+        (
+            'FacLoc - MMR AllFacetCleanRate',
+            [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
+        ),
+        (
+            'FacLoc - top-k AllFacetCleanRate',
+            [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
+        ),
+    ]
+    fig_height = max(5.0, 0.28 * len(labels) + 1.6)
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
+        ncols=2,
+        sharey=True,
+        figsize=(15.0, fig_height),
+    )
+    axes = cast(Sequence[Any], axes_obj)
+    try:
+        for ax, (title, values) in zip(axes, series, strict=True):
+            _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
+            ax.set_title(title)
+            ax.set_xlabel('Headline AllFacetCleanRate delta')
+        _add_family_legend(fig=fig, rows=plot_rows)
+        fig.suptitle('Headline AllFacetCleanRate deltas by experiment', y=0.995)
+        fig.tight_layout(rect=(0, 0.03, 1, 0.985))
         path = output_dir / f'all_facet_clean_rate_by_experiment.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -1451,30 +1764,41 @@ def _plot_geometry_pass_rate(
     rows: Sequence[Mapping[str, object]],
     output_dir: Path,
     plot_format: PlotFormat,
-    max_rows: int,
 ) -> list[Path]:
     plot_rows = _sorted_rows(
-        [row for row in rows if _float_or_none(row.get('GeometryPassRate')) is not None],
+        [
+            row
+            for row in rows
+            if _float_or_none(row.get('GeometryPassRate')) is not None
+            and 'Q' not in str(row.get('ShortExperiment') or row.get('Experiment') or '')
+        ],
         'GeometryPassRate',
         descending=True,
-    )[:max_rows]
+    )
     if not plot_rows:
         return []
     labels = [
-        f'{row.get("ShortExperiment") or _short_experiment_label(str(row.get("Experiment")))}\n{_short_model_label(str(row.get("EmbeddingModel")))}'
+        f'{row.get("ShortExperiment") or _short_experiment_label(str(row.get("Experiment")))}/'
+        f'{_short_model_label(str(row.get("EmbeddingModel")))}'
         for row in plot_rows
     ]
     values = [_float_or_none(row.get('GeometryPassRate')) or 0.0 for row in plot_rows]
-    fig, ax = plt.subplots(figsize=(max(10, 0.62 * len(labels)), 5.2))  # type: ignore[attr-defined]
+    colors = [_family_color_for_row(row) for row in plot_rows]
+    fig_height = max(5.0, 0.28 * len(labels) + 1.6)
+    fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
-        ax.bar(range(len(labels)), values, color='#4E6E5D')
+        ax.barh(range(len(labels)), values, color=colors)
         ax.set_title('Geometry filter pass rate by experiment and embedding')
-        ax.set_ylabel('Pass rate')
-        ax.set_xticks(range(len(labels)))
-        ax.set_xticklabels(labels, rotation=45, ha='right')
-        ax.set_ylim(0, 1)
-        ax.grid(axis='y', alpha=0.25)
-        fig.tight_layout()
+        ax.set_xlabel('Pass rate')
+        ax.set_yticks(range(len(labels)))
+        ax.set_yticklabels(labels)
+        ax.invert_yaxis()
+        ax.set_xlim(0, 1)
+        ax.grid(axis='x', alpha=0.25)
+        _annotate_horizontal_values(ax=ax, values=values)
+        ax.set_xlim(0, 1.08)
+        _add_family_legend(fig=fig, rows=plot_rows)
+        fig.tight_layout(rect=(0, 0.03, 1, 1))
         path = output_dir / f'geometry_pass_rate_by_embedding.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -1555,7 +1879,6 @@ def _plot_dataset_composition(
     rows: Sequence[Mapping[str, object]],
     output_dir: Path,
     plot_format: PlotFormat,
-    max_rows: int,
 ) -> list[Path]:
     plot_rows = [
         row
@@ -1568,30 +1891,41 @@ def _plot_dataset_composition(
                 'BackgroundOutlierPercentage',
             )
         )
-    ][:max_rows]
+    ]
+    plot_rows = _representative_distribution_rows(plot_rows)
     if not plot_rows:
         return []
-    labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
+    labels = [str(row.get('ShortDistribution') or row.get('Distribution')) for row in plot_rows]
     gold = [_float_or_none(row.get('GoldPercentage')) or 0.0 for row in plot_rows]
     near = [_float_or_none(row.get('NearMissDistractorPercentage')) or 0.0 for row in plot_rows]
     background = [
         _float_or_none(row.get('BackgroundOutlierPercentage')) or 0.0 for row in plot_rows
     ]
     positions = list(range(len(labels)))
-    fig, ax = plt.subplots(figsize=(max(10, 0.55 * len(labels)), 5.2))  # type: ignore[attr-defined]
+    fig_height = max(5.0, 0.28 * len(labels) + 1.6)
+    fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
-        ax.bar(positions, gold, label='Gold', color='#287C8E')
-        ax.bar(positions, near, bottom=gold, label='Near-miss distractors', color='#C47A3A')
+        ax.barh(positions, gold, label='Gold', color='#287C8E')
+        ax.barh(positions, near, left=gold, label='Near-miss distractors', color='#C47A3A')
         bottoms = [g + n for g, n in zip(gold, near, strict=True)]
-        ax.bar(positions, background, bottom=bottoms, label='Background outliers', color='#6F7890')
+        ax.barh(
+            positions,
+            background,
+            left=bottoms,
+            label='Background outliers',
+            color='#6F7890',
+        )
         ax.set_title('Candidate-pool composition')
-        ax.set_ylabel('Share of qrel pool')
-        ax.set_xticks(positions)
-        ax.set_xticklabels(labels, rotation=45, ha='right')
-        ax.set_ylim(0, 1)
-        ax.grid(axis='y', alpha=0.25)
+        ax.set_xlabel('Share of qrel pool')
+        ax.set_yticks(positions)
+        ax.set_yticklabels(labels)
+        ax.invert_yaxis()
+        ax.set_xlim(0, 1)
+        ax.grid(axis='x', alpha=0.25)
+        _color_tick_labels_by_family(ax=ax, rows=plot_rows)
         ax.legend()
-        fig.tight_layout()
+        _add_family_legend(fig=fig, rows=plot_rows)
+        fig.tight_layout(rect=(0, 0.03, 1, 1))
         path = output_dir / f'dataset_composition_stacked.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -1606,11 +1940,14 @@ def _base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
         'ShortDistribution': short_token(record.distribution_id),
+        'ExperimentFamily': record.family_id,
+        'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
         'IsSubexperiment': record.is_subexperiment,
         'EmbeddingModel': metadata.get('model_name') or record.embedding_model,
         'EmbeddingDimension': metadata.get('dimension'),
         'OnlyPassGeometry': record.only_pass_geometry,
+        'QueryScope': _query_scope_label(record.only_pass_geometry),
     }
 
 
@@ -1858,6 +2195,14 @@ def _strategy_label(strategy: StrategyName) -> str:
     return {'top_k': 'TopK', 'mmr': 'MMR', 'fac_loc': 'FacLoc'}[strategy]
 
 
+def _query_scope_label(only_pass_geometry: bool | None) -> str:
+    if only_pass_geometry is True:
+        return 'pass-only'
+    if only_pass_geometry is False:
+        return 'all-query'
+    return 'unknown'
+
+
 def _title_token(value: str) -> str:
     return ''.join(part.capitalize() for part in value.split('_') if part)
 
@@ -2024,7 +2369,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         '--tablefmt',
         type=str,
         choices=TABLEFMT_OPTS,
-        default='pipe',
+        default='grid',
         help='tabulate table format used in markdown reports.',
     )
     parser.add_argument(

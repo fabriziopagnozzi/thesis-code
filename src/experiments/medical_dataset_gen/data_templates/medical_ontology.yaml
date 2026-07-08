@@ -1,7 +1,3 @@
-patient_defaults:
-    age_range:
-        - 50
-        - 75
 conditions:
     encephalitis_myelitis:
         display: encephalitis or myelitis
@@ -40,6 +36,27 @@ conditions:
                     - intravenous acyclovir
                     - intravenous methylprednisolone
                     - plasma-exchange therapy
+            acute_clinical_course:
+                axis: acute_clinical_course
+                bins:
+                    early_stabilization:
+                        - prompt improvement in encephalitis or myelitis symptoms after treatment began
+                        - early response on serial bedside assessment
+                        - rapid improvement in presenting findings
+                        - prompt reduction in disease activity on serial evaluation
+                        - early clinical response during the hospital course
+                    delayed_improvement:
+                        - gradual improvement in encephalitis or myelitis symptoms over several days
+                        - slow response on serial bedside assessment
+                        - delayed improvement in presenting findings
+                        - stepwise symptom improvement rather than an immediate response
+                        - persistent symptoms before a later clinical response
+                    refractory_or_worsening:
+                        - persistent encephalitis or myelitis symptoms despite initial treatment
+                        - worsening disease signs on serial assessment
+                        - limited response to initial management
+                        - continued presenting findings despite early treatment
+                        - refractory disease activity on serial evaluation
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -85,27 +102,6 @@ conditions:
                         - a treatment-limiting adverse event requiring a major regimen change
                         - a serious inpatient adverse event documented during encephalitis or myelitis care
                         - a major medication toxicity requiring therapy revision
-            acute_clinical_course:
-                axis: acute_clinical_course
-                bins:
-                    early_stabilization:
-                        - prompt improvement in encephalitis or myelitis symptoms after treatment began
-                        - early response on serial bedside assessment
-                        - rapid improvement in presenting findings
-                        - prompt reduction in disease activity on serial evaluation
-                        - early clinical response during the hospital course
-                    delayed_improvement:
-                        - gradual improvement in encephalitis or myelitis symptoms over several days
-                        - slow response on serial bedside assessment
-                        - delayed improvement in presenting findings
-                        - stepwise symptom improvement rather than an immediate response
-                        - persistent symptoms before a later clinical response
-                    refractory_or_worsening:
-                        - persistent encephalitis or myelitis symptoms despite initial treatment
-                        - worsening disease signs on serial assessment
-                        - limited response to initial management
-                        - continued presenting findings despite early treatment
-                        - refractory disease activity on serial evaluation
             care_intensity:
                 axis: care_intensity
                 bins:
@@ -4179,3 +4175,7 @@ axis_pairs:
             cohort_b_bins:
                 - ward_level
                 - specimen_or_specialized_test
+patient_defaults:
+    age_range:
+        - 50
+        - 75

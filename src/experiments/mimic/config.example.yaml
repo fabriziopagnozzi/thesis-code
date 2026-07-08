@@ -2,7 +2,7 @@
 # Copy this config file to _results/EXP/_config.yaml and edit.
 
 global:
-    # result_dir_overrides: # Per-table result directory overrides relative to _results 
+    # result_dir_overrides: # Per-table result directory overrides relative to _results
     # (if not listed here, their default location is _results/EXP)
     #     conditions_stats: <dir>
     #     chunks: <dir>
@@ -17,6 +17,7 @@ global:
 
     embedding_model: Qwen/Qwen3-Embedding-0.6B # shared by "chunking" (for tokenizer), "pool_analysis", "queries" and "evaluation"
 # ----------------------------------------------------------------------------
+
 embeddings:
     models:
         - multi-qa-mpnet-base-cos-v1
@@ -25,7 +26,7 @@ embeddings:
         - Qwen/Qwen3-Embedding-0.6B
         - Qwen/Qwen3-Embedding-4B
         - Qwen/Qwen3-Embedding-8B
-    batch_sizes: [ 2, 4, 8, 16, 32 ] # for each model
+    batch_sizes: [2, 4, 8, 16, 32] # for each model
     commit_every: 16384
 # ----------------------------------------------------------------------------
 pool_analysis:
@@ -47,13 +48,14 @@ pool_analysis:
 
     output_subdir: pool_analysis
 # ----------------------------------------------------------------------------
+
 evaluation:
     strategies:
         - top_k
         - mmr
         - fac_loc
-    k_values: [ 5, 10, 20, 30 ]
-    lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+    k_values: [5, 10, 20, 30]
+    lam_values: [0.3, 0.5, 0.7, 0.8]
 
     gold_annotation:
         min_per_modifier: 0 # optional per-modifier retrieval floor
@@ -170,8 +172,8 @@ queries:
         think: false
 
     filtering:
-        k_values: [ 5, 10, 20, 30, 100, 500 ]
-        lam_values: [ 0.3, 0.5, 0.7, 0.8 ]
+        k_values: [5, 10, 20, 30, 100, 500]
+        lam_values: [0.3, 0.5, 0.7, 0.8]
         jaccard_threshold: 0.90
 
 # ----------------------------------------------------------------------------

@@ -14,11 +14,15 @@
 
 ### Data distribution formal categorization and properties; further variation
 
-## Use the already-present "split" property in the query records to distinguish validation data and test data and tune lambda for held-out evaluation on the test queries
-* add "mode: exploring | testing" under the "evaluation:" key in the global config schema
-* what is k in our final benchmark? Do we need to consider multiple values or focus on a small enough value (restricted budget)?
-    - maximize the `FacetFacLocPurity@k` separately for each `k` and obtain `lambda_strategy*(k)`
-    - in the end, we can focus on a single k value --> the LOWEST one. This is already used by the experiment analysis module and is called "baseline"
+## Use the "split" property in the query records to distinguish validation data and test data and tune lambda for held-out evaluation on the test queries
+    * add "mode: exploring | testing" under the "evaluation:" key in the global config schema
+    * what is k in our final benchmark? Do we need to consider multiple values or focus on a small enough value (restricted budget)?
+        - maximize the `FacetFacLocPurity@k` separately for each `k` and obtain `lambda_strategy*(k)`
+        - in the end, we can focus on a single k value --> the LOWEST one. This is already used by the experiment analysis module and is called "baseline"
+
+## Fix everywhere the geometry filter configuration
+    * We're focusing on restricted budgets: the geometry filter should encode for top-k failures when budget is restricted, NOT when it's inflated!
+        - Fix all the geometry_filter.top_k values in configs.
 
 
 ---

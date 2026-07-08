@@ -1,8 +1,44 @@
-from experiments.medical_dataset_gen.analysis.__main__ import StrategyName
+from typing import Literal, get_args
+
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
+
+type StrategyName = Literal['top_k', 'mmr', 'fac_loc']
+type ExperimentFamilyId = Literal[
+    'balanced_clean',
+    'dominance',
+    'sparse_niche',
+    'near_miss_heavy',
+    'background_variant',
+    'budget_sweep',
+    'embedding_comparison',
+    'unknown',
+]
 
 STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')
 DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
+EXPERIMENT_FAMILIES: tuple[ExperimentFamilyId, ...] = tuple[ExperimentFamilyId](
+    get_args(ExperimentFamilyId.__value__)
+)
+EXPERIMENT_FAMILY_LABELS: dict[ExperimentFamilyId, str] = {
+    'balanced_clean': 'Balanced clean',
+    'dominance': 'Dominance',
+    'sparse_niche': 'Sparse niche',
+    'near_miss_heavy': 'Near-miss heavy',
+    'background_variant': 'Background variant',
+    'budget_sweep': 'Budget sweep',
+    'embedding_comparison': 'Embedding comparison',
+    'unknown': 'Unknown',
+}
+EXPERIMENT_FAMILY_COLORS: dict[ExperimentFamilyId, str] = {
+    'balanced_clean': '#287C8E',
+    'dominance': '#C44E52',
+    'sparse_niche': '#5F8F3F',
+    'near_miss_heavy': '#C47A3A',
+    'background_variant': '#6F63A6',
+    'budget_sweep': '#8C6D31',
+    'embedding_comparison': '#4C78A8',
+    'unknown': '#808080',
+}
 HELDOUT_SELECTION_COLUMNS = frozenset({
     'lambda_selection_split',
     'report_split',
@@ -11,7 +47,7 @@ HELDOUT_SELECTION_COLUMNS = frozenset({
 })
 REPORT_FILES = (
     'report.md',
-    'interesting_findings.md',
+    'report_interesting_findings.md',
     'warnings.txt',
     'manifest.json',
     'experiment_manifest.csv',
@@ -25,7 +61,7 @@ REPORT_FILES = (
     'embedding_model_summary.csv',
     'embedding_query_scope_pairs.csv',
 )
-FCP_TIE_EPSILON = 0.01
+FCP_TIE_EPSILON = 0.03
 ANALYSIS_EXCLUDED_METRICS = frozenset({
     'MAP@k',
     'AnswerROUGE1Recall@k',
@@ -55,6 +91,9 @@ TABLE_HEADERS = {
     'ShortDistribution': 'Dist',
     'EmbeddingModel': 'Embedding',
     'OnlyPassGeometry': 'Pass-only',
+    'QueryScope': 'Scope',
+    'ExperimentFamily': 'Family ID',
+    'ExperimentFamilyLabel': 'Family',
     'DistributionCategory': 'Distribution',
     'GoldPercentage': 'Gold%',
     'NearMissDistractorPercentage': 'NearMiss%',
@@ -83,6 +122,7 @@ TABLE_HEADERS = {
     'AllMinusPassOnly_MMR_FCP': 'All-Pass MMR',
     'AllMinusPassOnly_FacLoc_FCP': 'All-Pass F',
     'AllMinusPassOnly_Delta_FacLoc_MMR_FCP': 'All-Pass Delta',
+    'AllMinusPassOnly_Delta_FacLoc_TopK_FCP': 'All-Pass F-Top',
     'selected_lambda_norm_mean': 'lambda* norm mean',
     'selected_lambda_norm_std': 'lambda* norm std',
     'near_optimal_fraction_mean': 'near-opt frac',
@@ -93,6 +133,7 @@ TABLE_COL_WIDTHS = {
     'ShortDistribution': 8,
     'EmbeddingModel': 24,
     'DistributionCategory': 28,
+    'ExperimentFamilyLabel': 20,
     'TopFailureModes': 34,
     'PassOnlyShortExperiment': 10,
     'AllQueriesShortExperiment': 10,
