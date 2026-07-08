@@ -156,39 +156,41 @@ def chunk_embedding_signature(cfg: ExperimentCfg) -> str:
 
 def chunk_embedding_cache_key(
     embedding_signature: str,
-    chunk_id: str,
     text_sha256: str,
 ) -> str:
+    # Embeddings are a pure function of model/prompt settings plus input text.
+    # Deterministic chunk IDs can change across render signatures, so they must
+    # not be part of the reusable embedding identity.
     return _hash_json({
         'cache_version': CHUNK_EMBEDDING_CACHE_VERSION,
         'embedding_signature': embedding_signature,
-        'chunk_id': chunk_id,
         'text_sha256': text_sha256,
     })
 
 
-def load_matching_chunk_embedding_cache(
+def load_matching_chunk_embedding_cache_by_text(
     paths: MedicalDatasetGenPaths,
     embedding_signature: str,
-    keys_by_bucket: Mapping[str, list[str]],
+    text_sha256_values: list[str],
 ) -> pl.DataFrame:
-    rows: list[pl.DataFrame] = []
-    for bucket, cache_keys in sorted(keys_by_bucket.items()):
-        if not cache_keys:
-            continue
-        cache_path = paths.chunk_embeddings_bucket_path(embedding_signature, bucket)
-        if not cache_path.exists():
-            continue
-        matched = (
-            pl
-            .scan_parquet(cache_path)
-            .filter(pl.col('chunk_embedding_cache_key').is_in(cache_keys))
-            .collect(engine='streaming')
-        )
-        if not matched.is_empty():
-            _validate_embedding_cache(matched)
-            rows.append(matched)
-    return pl.concat(rows, how='diagonal_relaxed') if rows else pl.DataFrame()
+    text_hashes = sorted(set(text_sha256_values))
+    if not text_hashes:
+        return pl.DataFrame()
+
+    cache_paths = sorted(paths.chunk_embeddings_cache_dir(embedding_signature).glob('*.parquet'))
+    if not cache_paths:
+        return pl.DataFrame()
+
+    matched = (
+        pl.scan_parquet(cache_paths)
+        .filter(pl.col('text_sha256').is_in(text_hashes))
+        .collect(engine='streaming')
+    )
+    if matched.is_empty():
+        return matched
+
+    _validate_embedding_cache(matched)
+    return _validated_unique_embedding_cache_by_text(matched)
 
 
 def append_chunk_embedding_cache_rows(
@@ -287,6 +289,20 @@ def _validate_embedding_cache(cache: pl.DataFrame) -> None:
         fingerprint_column='embedding_payload_sha256',
         label='global chunk embedding cache',
     )
+
+
+def _validated_unique_embedding_cache_by_text(cache: pl.DataFrame) -> pl.DataFrame:
+    conflicts = (
+        cache.group_by('text_sha256')
+        .agg(pl.col('dimension').n_unique().alias('n_dimensions'))
+        .filter(pl.col('n_dimensions') > 1)
+    )
+    if conflicts.height:
+        examples = conflicts['text_sha256'].head(5).to_list()
+        raise RuntimeError(
+            f'global chunk embedding cache has dimension conflicts for text hashes: {examples}'
+        )
+    return cache.unique(subset=['text_sha256'], keep='first', maintain_order=True)
 
 
 def _validated_unique_cache(

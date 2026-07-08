@@ -15,8 +15,7 @@ from experiments.medical_dataset_gen.dataset_generation.deterministic_caches imp
     chunk_embedding_cache_key,
     chunk_embedding_signature,
     chunk_embedding_signature_payload,
-    embedding_cache_bucket,
-    load_matching_chunk_embedding_cache,
+    load_matching_chunk_embedding_cache_by_text,
     row_payload_sha256,
     text_sha256,
 )
@@ -182,10 +181,10 @@ def _fill_deterministic_chunk_embedding_memmaps(
     embedding_signature = chunk_embedding_signature(cfg)
     cache_dir = paths.chunk_embeddings_cache_dir(embedding_signature)
     chunk_documents = _chunk_documents_with_embedding_cache_keys(paths, embedding_signature)
-    cache = load_matching_chunk_embedding_cache(
-        paths,
-        embedding_signature,
-        _embedding_cache_keys_by_bucket(chunk_documents),
+    cache = load_matching_chunk_embedding_cache_by_text(
+        paths=paths,
+        embedding_signature=embedding_signature,
+        text_sha256_values=[str(value) for value in chunk_documents['text_sha256'].to_list()],
     )
     if cache.is_empty():
         joined = chunk_documents.with_columns(
@@ -196,18 +195,23 @@ def _fill_deterministic_chunk_embedding_memmaps(
     else:
         joined = chunk_documents.join(
             cache.select(
-                'chunk_embedding_cache_key',
-                pl.col('text_sha256').alias('cached_text_sha256'),
+                'text_sha256',
                 'dimension',
                 'embedding',
             ),
-            on='chunk_embedding_cache_key',
+            on='text_sha256',
             how='left',
             validate='m:1',
+        ).with_columns(
+            pl.when(pl.col('embedding').is_not_null())
+            .then(pl.col('text_sha256'))
+            .otherwise(None)
+            .alias('cached_text_sha256')
         )
 
     miss_rows: list[dict[str, object]] = []
     hits = 0
+    new_cache_keys: set[str] = set()
     for row in joined.iter_rows(named=True):
         row_index = int(row['_row_idx'])
         chunk_id_value = str(row['chunk_id'])
@@ -264,8 +268,12 @@ def _fill_deterministic_chunk_embedding_memmaps(
             chunk_id_value = str(row['chunk_id'])
             vectors[row_index] = vector
             ids[row_index] = chunk_id_value
+            cache_key = str(row['chunk_embedding_cache_key'])
+            if cache_key in new_cache_keys:
+                continue
+            new_cache_keys.add(cache_key)
             cache_row = {
-                'chunk_embedding_cache_key': str(row['chunk_embedding_cache_key']),
+                'chunk_embedding_cache_key': cache_key,
                 'chunk_id': chunk_id_value,
                 'text_sha256': str(row['text_sha256']),
                 'embedding_signature': embedding_signature,
@@ -279,7 +287,7 @@ def _fill_deterministic_chunk_embedding_memmaps(
             }
             cache_row['embedding_payload_sha256'] = row_payload_sha256(
                 cache_row,
-                excluded_columns={'embedding_payload_sha256'},
+                excluded_columns={'chunk_id', 'embedding_payload_sha256'},
             )
             batch_cache_rows.append(cache_row)
         if batch_cache_rows:
@@ -316,14 +324,9 @@ def _chunk_documents_with_embedding_cache_keys(
     keys = [
         chunk_embedding_cache_key(
             embedding_signature,
-            str(chunk_id_value),
             str(text_hash),
         )
-        for chunk_id_value, text_hash in zip(
-            docs['chunk_id'].to_list(),
-            docs['text_sha256'].to_list(),
-            strict=True,
-        )
+        for text_hash in docs['text_sha256'].to_list()
     ]
     return (
         docs
@@ -331,17 +334,6 @@ def _chunk_documents_with_embedding_cache_keys(
         .with_row_index('_row_idx')
         .with_columns(pl.Series('chunk_embedding_cache_key', keys))
     )
-
-
-def _embedding_cache_keys_by_bucket(chunk_documents: pl.DataFrame) -> dict[str, list[str]]:
-    keys_by_bucket: dict[str, set[str]] = {}
-    for raw_key in chunk_documents['chunk_embedding_cache_key'].to_list():
-        cache_key = str(raw_key)
-        bucket = embedding_cache_bucket(cache_key)
-        keys_by_bucket.setdefault(bucket, set()).add(cache_key)
-    return {bucket: sorted(cache_keys) for bucket, cache_keys in sorted(keys_by_bucket.items())}
-
-
 def _fill_embedding_memmaps(
     *,
     file: pq.ParquetFile,
