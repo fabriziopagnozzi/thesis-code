@@ -63,7 +63,6 @@
 \usepackage{fancyhdr} % Fancy headers and footers
 \usepackage{lipsum} % Insert dummy text
 \usepackage{tcolorbox} % Create coloured boxes (e.g. the one for the key-words)
-\graphicspath{{/home/pagnozzi/thesis/thesis/article/Images}}
 
 %-------------------------------------------------------------------------
 %	NEW COMMANDS DEFINED
@@ -129,21 +128,12 @@ Keywords may be a single word or two to four words. }
 % -> key-words (only in English)
 \newcommand{\keywords}{here, the keywords, of your thesis}
 
-%-------------------------------------------------------------------------
-%	BEGIN OF YOUR DOCUMENT
-%-------------------------------------------------------------------------
 \begin{document}
 
 %-----------------------------------------------------------------------------
 % TITLE PAGE
 %-----------------------------------------------------------------------------
-% Do not change Configuration_Files/TitlePage.tex (Modify it IF AND ONLY IF you need to add or delete the Co-advisors)
-% This file creates the Title Page of the document
 \input{Configuration_Files/title_page}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%     THESIS MAIN TEXT     %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %-----------------------------------------------------------------------------
 % INTRODUCTION
@@ -165,25 +155,10 @@ The title has to be chosen at the end of your work so that it accurately capture
 
 It is convenient to break the article format of your thesis (in article format) into sections and subsections.
 If necessary, subsubsections, paragraphs and subparagraphs can be used.
-A new section is created by the command
-\begin{verbatim}
-\section{Title of the section}
-\end{verbatim}
-The numbering can be turned off by using \verb|\section*{}|.
-A new subsection is created by the command
-\begin{verbatim}
-\subsection{Title of the subsection}
-\end{verbatim}
-and, similarly, the numbering can be turned off by adding an asterisk as follows
-\begin{verbatim}
-\subsection*{}
-\end{verbatim}
 It is recommended to give a label to each section by using the command
 \begin{verbatim}
 \label{sec:section_name}%
 \end{verbatim}
-where the argument is just a text string that you'll use to reference that part
-as follows: \textit{Section~\ref{sec:introduction} contains \sc{INTRODUCTION}  \dots}.
 
 %-----------------------------------------------------------------------------
 % EQUATIONS

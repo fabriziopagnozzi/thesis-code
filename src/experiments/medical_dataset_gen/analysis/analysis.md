@@ -7,10 +7,11 @@ The main unit is an `experiment x k x strategy` row.
 * `strategy_by_k.csv` keeps one row per experiment, retrieval budget `k`, and strategy.
 * `comparison_by_k.csv` pivots those rows into one row per experiment and `k`, with TopK, MMR, and FacLoc metrics side by side.
 * `metric_aggregate_summary.csv` aggregates the main metric deltas by metric and budget view.
-* `budget_strategy_summary.csv` keeps one row per experiment for each budget category: `headline`, `medium_budget`, and `high_budget`.
-* `headline_strategy_summary.csv` keeps one headline row per experiment. The headline row is the smallest `k` where all three strategies are available.
+* `budget_strategy_summary.csv` keeps one row per experiment for each budget category: `low_budget`, `medium_budget`, and `high_budget`.
+* `low_budget_strategy_summary.csv` keeps one low-budget row per experiment. The low-budget row is the smallest `k` where all three strategies are available.
+* `experiment_config_recap.md` groups the loaded configurations by parent experiment and gives an appendix-friendly textual recap of pool composition, retrieval budgets, lambda grids, geometry-filter settings, and child embedding models.
 
-The headline row is intentionally conservative: it summarizes each experiment at the tightest complete budget, while the full per-`k` evidence remains in `comparison_by_k.csv` and `strategy_by_k.csv`. The medium-budget row uses the sorted `k` index `floor(len(k_values) / 2)`, and the high-budget row uses the largest available `k`.
+The low-budget row is intentionally conservative: it summarizes each experiment at the tightest complete budget, while the full per-`k` evidence remains in `comparison_by_k.csv` and `strategy_by_k.csv`. The medium-budget row uses the sorted `k` index `floor(len(k_values) / 2)`, and the high-budget row uses the largest available `k`.
 
 The active report excludes experiments whose config has `retrieval.only_pass_geometry: false`, because all-query branches are no longer part of the primary thesis analysis.
 
@@ -46,8 +47,11 @@ Important comparison columns:
 
 Matplotlib visualizations derived from the same CSV rows:
 
-* `metrics/<metric>_<budget>_deltas_by_experiment.*`: FacLoc-minus-MMR and FacLoc-minus-TopK deltas in a two-column plot for each budget category and metric. Budgets are `headline`, `medium_budget`, and `high_budget`; metrics are `fcp`, `facet_coverage`, `all_facet_clean_rate`, `precision`, `recall`, and `alpha_ndcg`.
+* `metrics/<metric>_<budget>_deltas_by_experiment.*`: FacLoc-minus-MMR and FacLoc-minus-TopK deltas in a two-column plot for each budget category and metric. Budgets are `low_budget`, `medium_budget`, and `high_budget`; metrics are `fcp`, `facet_coverage`, `all_facet_clean_rate`, `precision`, `recall`, and `alpha_ndcg`.
 * In the delta plots, bars are color-coded and grouped by experiment family. Families are ordered by their mean FacLoc-minus-MMR value for the plotted metric; rows inside a family are ordered by the same value.
+* `aggregates/aggregate_metric_budget_outcomes.*`: stacked FacLoc-vs-MMR outcome rates by metric and retrieval-budget view. Each row shows the percentage of rows where FacLoc beats, ties, or loses to MMR, with the mean FacLoc-minus-MMR delta annotated at the right.
+* `aggregates/aggregate_metric_family_delta_heatmap.*`: heatmap of mean FacLoc-minus-MMR deltas by evaluation metric and core experiment family. Cell annotations show the mean delta and the percentage of rows where FacLoc beats MMR.
+* `aggregates/fcp_family_budget_delta_heatmaps.*`: paired FCP heatmaps by core experiment family and retrieval budget. The left panel shows mean FacLoc-minus-MMR FCP deltas; the right panel shows mean FacLoc-minus-TopK FCP deltas. Each cell reports the mean delta on the first line and the corresponding FacLoc win percentage on the second line.
 * `geometry_pass_rate_by_embedding.*`: geometry pass rate by experiment and embedding in a portrait horizontal bar plot, color-coded and grouped by experiment family.
 * `lambda_stability_boxplot.*`: for `mmr` and `fac_loc`, shows the mean selected `lambda_norm` with one standard-deviation error bar across all selected `experiment x k` rows. `lambda_norm` maps the selected raw lambda onto that experiment's available lambda grid, with `0` at the smallest grid value and `1` at the largest grid value. Use this to see whether a strategy tends to select low, middle, or high lambdas, and how variable that selection is across experiments and budgets.
 * `near_optimal_lambda_width.*`: for `mmr` and `fac_loc`, shows the distribution of `NearOptimalLambdaSpanNorm` across `experiment x k` lambda grids. For each grid, lambdas are near-optimal when their `FacetCoveragePurity@k` is within `--near-optimal-epsilon` of the best FCP for that strategy and `k`; the plotted value is the raw span from the smallest to largest near-optimal lambda divided by the full lambda-grid span. Values near `0` mean only a narrow lambda region is competitive, while values near `1` mean performance is flat across most of the grid.
@@ -61,6 +65,9 @@ Human-readable overview with the main tables, generated with `tabulate`. It is g
 
 #### `report_interesting_findings.md`
 Shorter diagnostic report focused on notable patterns: largest FacLoc gains, FacLoc worse/tied rows, low geometry pass rates, and embedding summaries.
+
+#### `experiment_config_recap.md`
+Appendix-oriented textual recap of the experiment configurations. It groups runs by parent distribution, reports the configured pool composition and background topology, and then lists each child run with its embedding model, embedding dimension when available, budget grid, and query scope.
 
 ### CSV Files
 
@@ -125,7 +132,7 @@ Use this for thesis tables that compare aggregate behavior across metrics. The p
 
 One row per experiment family and budget category. It aggregates the same representative rows used by `budget_strategy_summary.csv`, grouping by `ExperimentFamilyLabel` and `BudgetCategoryLabel`.
 
-Use this for thesis tables that need to separate distribution-family effects from retrieval-budget effects. It preserves the family-level win/tie/loss percentages and FacLoc-minus-MMR/TopK deltas, but reports them separately for headline, medium-budget, and high-budget views.
+Use this for thesis tables that need to separate distribution-family effects from retrieval-budget effects. It preserves the family-level win/tie/loss percentages and FacLoc-minus-MMR/TopK deltas, but reports them separately for Low Budget, Medium Budget, and High Budget views.
 
 ### `metric_family_summary.csv`
 
@@ -135,17 +142,17 @@ Use this for aggregate thesis tables that compare whether the family-level patte
 
 ### `metric_family_budget_summary.csv`
 
-One row per evaluation metric, experiment family, and budget category. It uses the same representative headline, medium-budget, and high-budget rows as `budget_strategy_summary.csv`, then groups them by `Metric`, `ExperimentFamilyLabel`, and `BudgetCategoryLabel`.
+One row per evaluation metric, experiment family, and budget category. It uses the same representative Low Budget, Medium Budget, and High Budget rows as `budget_strategy_summary.csv`, then groups them by `Metric`, `ExperimentFamilyLabel`, and `BudgetCategoryLabel`.
 
 Use this for aggregate thesis tables that jointly condition on metric, data-distribution family, and retrieval budget. The \FCP{} subset corresponds to the budget-resolved family table used to support the data-distribution claim.
 
 ### `budget_strategy_summary.csv`
 
-One row per experiment and budget category. It selects the lowest complete `k` for `headline`, the median-index `k` for `medium_budget`, and the largest complete `k` for `high_budget`.
+One row per experiment and budget category. It selects the lowest complete `k` for `low_budget`, the median-index `k` for `medium_budget`, and the largest complete `k` for `high_budget`.
 
 Use this for compact thesis figures that compare the same semantic budget category across experiments with different raw `k` grids.
 
-### `headline_strategy_summary.csv`
+### `low_budget_strategy_summary.csv`
 
 One row per experiment. It selects the smallest complete `k` for that experiment, where complete means TopK, MMR, and FacLoc are all present.
 
@@ -177,8 +184,8 @@ Use this to see whether a method has a broad plateau of good lambdas or is sensi
 
 ### `embedding_model_summary.csv`
 
-One row per embedding model, aggregated from experiment-level headline rows and geometry summaries.
+One row per embedding model, aggregated from experiment-level low-budget rows and geometry summaries.
 
-It reports run counts, embedding dimensions, geometry pass rates, headline FCP means, FacLoc deltas, and active pass-filter run counts.
+It reports run counts, embedding dimensions, geometry pass rates, Low Budget FCP means, FacLoc deltas, and active pass-filter run counts.
 
 Use this for broad embedding-level trends. Treat it as descriptive rather than strictly paired, because different embeddings can yield different geometry-pass query sets.

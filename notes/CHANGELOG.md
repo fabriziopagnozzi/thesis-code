@@ -24,6 +24,8 @@
     * We're focusing on restricted budgets: the geometry filter should encode for top-k failures when budget is restricted, NOT when it's inflated!
         - Fix all the geometry_filter.top_k values in configs.
 
+## Add the analysis/ module that produces a report summarizing all the experiments
+
 
 ---
 

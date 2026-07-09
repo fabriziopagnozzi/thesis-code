@@ -59,6 +59,7 @@ HELDOUT_SELECTION_COLUMNS = frozenset({
 REPORT_FILES = (
     'report.md',
     'report_interesting_findings.md',
+    'experiment_config_recap.md',
     'warnings.txt',
     'manifest.json',
     'experiment_manifest.csv',
@@ -72,7 +73,7 @@ REPORT_FILES = (
     'metric_family_budget_summary.csv',
     'metric_aggregate_summary.csv',
     'budget_strategy_summary.csv',
-    'headline_strategy_summary.csv',
+    'low_budget_strategy_summary.csv',
     'lambda_stability.csv',
     'lambda_grid_fcp_delta.csv',
     'lambda_safety_summary.csv',

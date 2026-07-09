@@ -118,6 +118,12 @@ def fac_loc_lazy_greedy(
     k = min(k, n)
 
     selected: list[int] = []
+
+    # Let D be the whole dataset to cover
+    # m[i] at greedy step t is the current best coverage value for pool item i in D,
+    # induced by the selected set S_t:
+    #     m[i]_t = max_{j in S_t} max(0, sim_matrix[i, j])
+    #     m[i]_0 = 0
     m = np.zeros(n, dtype=np.float64)
 
     initial_coverage = np.maximum(0, sim_matrix).sum(axis=0) / n
@@ -130,18 +136,21 @@ def fac_loc_lazy_greedy(
     # Lazy Greedy Selection (exactly k times)
     for curr_step in range(k):
         while True:
-            # item with the highest historical gain
             _, node_idx, last_update_step = heapq.heappop(max_heap)
 
+            # the popped gain may be outdated if it was computed before the latest update to "m"
             if last_update_step == curr_step:
+                # if the gain was already recomputed during the current step, it is fresh
+                # --> select candidate and break out of the while True
                 selected.append(node_idx)
                 m = np.maximum(m, sim_matrix[:, node_idx])
                 break
-
-            marginal_cov_gain = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
-            new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov_gain
-
-            heapq.heappush(max_heap, (-new_gain, node_idx, curr_step))  # guarantees heap property
+            else:
+                # otherwise, recompute the candidate's true marginal gain under the current vector m,
+                #  then push it back and save the freshness info as third tuple elem
+                marginal_cov_gain = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
+                new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov_gain
+                heapq.heappush(max_heap, (-new_gain, node_idx, curr_step))
 
     return np.array(selected, dtype=np.intp)
 
