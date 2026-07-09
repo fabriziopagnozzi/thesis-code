@@ -6,6 +6,7 @@ The main unit is an `experiment x k x strategy` row.
 
 * `strategy_by_k.csv` keeps one row per experiment, retrieval budget `k`, and strategy.
 * `comparison_by_k.csv` pivots those rows into one row per experiment and `k`, with TopK, MMR, and FacLoc metrics side by side.
+* `metric_aggregate_summary.csv` aggregates the main metric deltas by metric and budget view.
 * `budget_strategy_summary.csv` keeps one row per experiment for each budget category: `headline`, `medium_budget`, and `high_budget`.
 * `headline_strategy_summary.csv` keeps one headline row per experiment. The headline row is the smallest `k` where all three strategies are available.
 
@@ -36,7 +37,7 @@ Important comparison columns:
 
 * `Delta_FacLoc_MMR_FCP`: FacLoc FCP minus MMR FCP.
 * `Delta_FacLoc_TopK_FCP`: FacLoc FCP minus TopK FCP.
-* `FacLocVsMMR_FCPOutcome`: `facloc_better`, `tied`, or `facloc_worse`. The tie threshold is an absolute FCP delta of `0.03`.
+* `FacLocVsMMR_FCPOutcome`: `facloc_better`, `tied`, or `facloc_worse`. The tie threshold is an absolute FCP delta of `0.05`.
 * `AllFacetCleanRate@k`: fraction of queries where all four facets are covered and precision is at least `0.8`.
 
 ## Output Artifacts
@@ -103,6 +104,28 @@ One row per experiment and `k`, with TopK, MMR, and FacLoc metrics pivoted side 
 This is the main comparison table for method behavior across retrieval budgets. It includes deltas for FCP, facet coverage, AllFacetCleanRate, precision, recall, and alpha-nDCG.
 
 Use this for claims like "FacLoc beats MMR for most experiment-k rows" or for finding budgets where FacLoc becomes worse/tied.
+
+### `metric_aggregate_summary.csv`
+
+One row per metric and budget view. It summarizes FacLoc-minus-MMR and baseline deltas for `FCP`, `FacetCoverage@k`, `AllFacetCleanRate@k`, `Precision@k`, `Recall@k`, and `alpha-nDCG@k`.
+
+Key columns:
+
+* `Metric`
+* `BudgetView`
+* `Rows`
+* `FacLocBetterRows`, `FacLocTiedRows`, `FacLocWorseRows`
+* `FacLocTopKBetterRows`, `MMRTopKBetterRows`
+* `MeanDeltaFacLocMMR`, `MedianDeltaFacLocMMR`
+* `MeanDeltaFacLocTopK`, `MeanDeltaMMRTopK`
+
+Use this for thesis tables that compare aggregate behavior across metrics. The FacLoc-vs-MMR win/tie/loss counts use the report tie threshold `TieEpsilon`.
+
+### `experiment_family_budget_summary.csv`
+
+One row per experiment family and budget category. It aggregates the same representative rows used by `budget_strategy_summary.csv`, grouping by `ExperimentFamilyLabel` and `BudgetCategoryLabel`.
+
+Use this for thesis tables that need to separate distribution-family effects from retrieval-budget effects. It preserves the family-level win/tie/loss counts and FacLoc-minus-MMR/TopK deltas, but reports them separately for headline, medium-budget, and high-budget views.
 
 ### `budget_strategy_summary.csv`
 

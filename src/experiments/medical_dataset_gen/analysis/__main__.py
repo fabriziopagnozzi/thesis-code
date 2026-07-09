@@ -167,6 +167,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
         comparison_rows = comparison_by_k_rows(strategy_rows)
         family_summary_rows = experiment_family_summary_rows(comparison_rows)
         budget_rows = budget_category_rows_from_comparisons(comparison_rows)
+        family_budget_summary_rows = experiment_family_budget_summary_rows(budget_rows)
+        metric_summary_rows = metric_aggregate_summary_rows(
+            comparison_rows=comparison_rows,
+            budget_rows=budget_rows,
+        )
         headline_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'headline']
         lambda_rows = lambda_stability_rows(strategy_rows, near_optimal_rows)
         embedding_summary_rows = embedding_model_summary_rows(
@@ -181,6 +186,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(args.output_dir / 'comparison_by_k.csv', comparison_rows)
         write_csv(args.output_dir / 'experiment_family_summary.csv', family_summary_rows)
+        write_csv(
+            args.output_dir / 'experiment_family_budget_summary.csv',
+            family_budget_summary_rows,
+        )
+        write_csv(args.output_dir / 'metric_aggregate_summary.csv', metric_summary_rows)
         write_csv(args.output_dir / 'budget_strategy_summary.csv', budget_rows)
         write_csv(args.output_dir / 'headline_strategy_summary.csv', headline_rows)
         write_csv(args.output_dir / 'lambda_stability.csv', lambda_rows)
@@ -212,6 +222,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
             geometry_rows=geometry_rows,
             comparison_rows=comparison_rows,
             family_summary_rows=family_summary_rows,
+            family_budget_summary_rows=family_budget_summary_rows,
+            metric_summary_rows=metric_summary_rows,
             headline_rows=headline_rows,
             lambda_rows=lambda_rows,
             lambda_safety_rows=lambda_safety_rows,
@@ -224,6 +236,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 comparison_rows=comparison_rows,
                 headline_rows=headline_rows,
                 family_summary_rows=family_summary_rows,
+                family_budget_summary_rows=family_budget_summary_rows,
+                metric_summary_rows=metric_summary_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 lambda_safety_rows=lambda_safety_rows,
@@ -964,45 +978,186 @@ def experiment_family_summary_rows(
         family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
         grouped.setdefault(family, []).append(row)
 
-    rows: list[dict[str, object]] = []
-    for family, group in grouped.items():
-        facloc_better = sum(row.get('FacLocVsMMR_FCPOutcome') == 'facloc_better' for row in group)
-        facloc_tied = sum(row.get('FacLocVsMMR_FCPOutcome') == 'tied' for row in group)
-        facloc_worse = sum(row.get('FacLocVsMMR_FCPOutcome') == 'facloc_worse' for row in group)
-        out: dict[str, object] = {
-            'ExperimentFamilyLabel': family,
-            'Rows': len(group),
-            'FacLocBetterRows': facloc_better,
-            'FacLocTiedRows': facloc_tied,
-            'FacLocWorseRows': facloc_worse,
-        }
-        out.update(
-            _numeric_stats(
-                _numeric_values(group, 'Delta_FacLoc_MMR_FCP'),
-                'Delta_FacLoc_MMR_FCP',
-            )
-        )
-        out.update(
-            _numeric_stats(
-                _numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
-                'Delta_FacLoc_TopK_FCP',
-            )
-        )
-        out.update(
-            _numeric_stats(
-                _numeric_values(group, 'Delta_MMR_TopK_FCP'),
-                'Delta_MMR_TopK_FCP',
-            )
-        )
-        out.update(
-            _numeric_stats(
-                _numeric_values(group, 'Delta_FacLoc_MMR_AllFacetCleanRate'),
-                'Delta_FacLoc_MMR_AllFacetCleanRate',
-            )
-        )
-        rows.append(out)
+    rows = [
+        _experiment_family_summary_row(family=family, group=group)
+        for family, group in grouped.items()
+    ]
 
     return _sorted_rows(rows, 'Delta_FacLoc_MMR_FCP_mean')
+
+
+def experiment_family_budget_summary_rows(
+    budget_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    grouped: dict[tuple[str, BudgetCategory, str], list[Mapping[str, object]]] = {}
+    family_groups: dict[str, list[Mapping[str, object]]] = {}
+    for row in budget_rows:
+        family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
+        category_value = str(row.get('BudgetCategory') or '')
+        if category_value not in BUDGET_CATEGORIES:
+            continue
+        category = cast(BudgetCategory, category_value)
+        budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
+        grouped.setdefault((family, category, budget_label), []).append(row)
+        family_groups.setdefault(family, []).append(row)
+
+    budget_order = {category: index for index, category in enumerate(BUDGET_CATEGORIES)}
+    family_mean_delta = {
+        family: (
+            statistics.fmean(values)
+            if (values := _numeric_values(group, 'Delta_FacLoc_MMR_FCP'))
+            else -math.inf
+        )
+        for family, group in family_groups.items()
+    }
+
+    rows: list[dict[str, object]] = []
+    for (family, category, budget_label), group in grouped.items():
+        out = _experiment_family_summary_row(
+            family=family,
+            group=group,
+            budget_category=category,
+            budget_label=budget_label,
+        )
+        out['_FamilySort'] = family_mean_delta.get(family, -math.inf)
+        out['_BudgetSort'] = budget_order[category]
+        rows.append(out)
+
+    rows.sort(
+        key=lambda row: (
+            -cast(float, row['_FamilySort']),
+            cast(int, row['_BudgetSort']),
+            str(row.get('ExperimentFamilyLabel') or ''),
+        )
+    )
+    for row in rows:
+        row.pop('_FamilySort', None)
+        row.pop('_BudgetSort', None)
+    return rows
+
+
+def _experiment_family_summary_row(
+    *,
+    family: str,
+    group: Sequence[Mapping[str, object]],
+    budget_category: BudgetCategory | None = None,
+    budget_label: str | None = None,
+) -> dict[str, object]:
+    facloc_better = sum(row.get('FacLocVsMMR_FCPOutcome') == 'facloc_better' for row in group)
+    facloc_tied = sum(row.get('FacLocVsMMR_FCPOutcome') == 'tied' for row in group)
+    facloc_worse = sum(row.get('FacLocVsMMR_FCPOutcome') == 'facloc_worse' for row in group)
+    out: dict[str, object] = {
+        'ExperimentFamilyLabel': family,
+        'Rows': len(group),
+        'FacLocBetterRows': facloc_better,
+        'FacLocTiedRows': facloc_tied,
+        'FacLocWorseRows': facloc_worse,
+    }
+    if budget_category is not None and budget_label is not None:
+        out['BudgetCategory'] = budget_category
+        out['BudgetCategoryLabel'] = budget_label
+    out.update(
+        _numeric_stats(
+            _numeric_values(group, 'Delta_FacLoc_MMR_FCP'),
+            'Delta_FacLoc_MMR_FCP',
+        )
+    )
+    out.update(
+        _numeric_stats(
+            _numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
+            'Delta_FacLoc_TopK_FCP',
+        )
+    )
+    out.update(
+        _numeric_stats(
+            _numeric_values(group, 'Delta_MMR_TopK_FCP'),
+            'Delta_MMR_TopK_FCP',
+        )
+    )
+    out.update(
+        _numeric_stats(
+            _numeric_values(group, 'Delta_FacLoc_MMR_AllFacetCleanRate'),
+            'Delta_FacLoc_MMR_AllFacetCleanRate',
+        )
+    )
+    return out
+
+
+def metric_aggregate_summary_rows(
+    *,
+    comparison_rows: Sequence[Mapping[str, object]],
+    budget_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    view_rows: tuple[tuple[str, str, Sequence[Mapping[str, object]]], ...] = (
+        ('all_k', 'All k', comparison_rows),
+        (
+            'headline',
+            'Headline',
+            [row for row in budget_rows if row.get('BudgetCategory') == 'headline'],
+        ),
+        (
+            'medium_budget',
+            'Medium budget',
+            [row for row in budget_rows if row.get('BudgetCategory') == 'medium_budget'],
+        ),
+        (
+            'high_budget',
+            'High budget',
+            [row for row in budget_rows if row.get('BudgetCategory') == 'high_budget'],
+        ),
+    )
+    for spec in DELTA_METRIC_PLOT_SPECS:
+        for budget_category, budget_view, source_rows in view_rows:
+            rows.append(
+                _metric_aggregate_row(
+                    metric=spec.metric_label,
+                    metric_title=spec.title_label,
+                    budget_category=budget_category,
+                    budget_view=budget_view,
+                    rows=source_rows,
+                )
+            )
+    return rows
+
+
+def _metric_aggregate_row(
+    *,
+    metric: DeltaMetricLabel,
+    metric_title: str,
+    budget_category: str,
+    budget_view: str,
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
+    delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
+    delta_mt_col = f'Delta_MMR_TopK_{metric}'
+    complete_rows = [
+        row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None
+    ]
+    deltas_fm = _numeric_values(complete_rows, delta_fm_col)
+    deltas_ft = _numeric_values(complete_rows, delta_ft_col)
+    deltas_mt = _numeric_values(complete_rows, delta_mt_col)
+    facloc_better = sum(delta > FCP_TIE_EPSILON for delta in deltas_fm)
+    facloc_tied = sum(abs(delta) <= FCP_TIE_EPSILON for delta in deltas_fm)
+    facloc_worse = sum(delta < -FCP_TIE_EPSILON for delta in deltas_fm)
+    return {
+        'Metric': metric_title,
+        'MetricLabel': metric,
+        'BudgetCategory': budget_category,
+        'BudgetView': budget_view,
+        'Rows': len(complete_rows),
+        'FacLocBetterRows': facloc_better,
+        'FacLocTiedRows': facloc_tied,
+        'FacLocWorseRows': facloc_worse,
+        'FacLocTopKBetterRows': sum(delta > 0.0 for delta in deltas_ft),
+        'MMRTopKBetterRows': sum(delta > 0.0 for delta in deltas_mt),
+        'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
+        'MedianDeltaFacLocMMR': statistics.median(deltas_fm) if deltas_fm else None,
+        'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
+        'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
+        'TieEpsilon': FCP_TIE_EPSILON,
+    }
 
 
 def headline_rows_from_comparisons(
@@ -1186,6 +1341,8 @@ def render_report(
     geometry_rows: Sequence[Mapping[str, object]],
     comparison_rows: Sequence[Mapping[str, object]],
     family_summary_rows: Sequence[Mapping[str, object]],
+    family_budget_summary_rows: Sequence[Mapping[str, object]],
+    metric_summary_rows: Sequence[Mapping[str, object]],
     headline_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
@@ -1275,6 +1432,28 @@ def render_report(
     )
     lines.extend(
         _section_with_table(
+            'Metric Aggregate Summary',
+            metric_summary_rows,
+            columns=[
+                'Metric',
+                'BudgetView',
+                'Rows',
+                'FacLocBetterRows',
+                'FacLocTiedRows',
+                'FacLocWorseRows',
+                'FacLocTopKBetterRows',
+                'MMRTopKBetterRows',
+                'MeanDeltaFacLocMMR',
+                'MedianDeltaFacLocMMR',
+                'MeanDeltaFacLocTopK',
+                'MeanDeltaMMRTopK',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=len(metric_summary_rows),
+        )
+    )
+    lines.extend(
+        _section_with_table(
             'Experiment Family Summary',
             family_summary_rows,
             columns=[
@@ -1291,6 +1470,27 @@ def render_report(
             ],
             tablefmt=args.tablefmt,
             max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Experiment Family By Budget Summary',
+            family_budget_summary_rows,
+            columns=[
+                'ExperimentFamilyLabel',
+                'BudgetCategoryLabel',
+                'Rows',
+                'FacLocBetterRows',
+                'FacLocTiedRows',
+                'FacLocWorseRows',
+                'Delta_FacLoc_MMR_FCP_mean',
+                'Delta_FacLoc_MMR_FCP_median',
+                'Delta_FacLoc_TopK_FCP_mean',
+                'Delta_MMR_TopK_FCP_mean',
+                'Delta_FacLoc_MMR_AllFacetCleanRate_mean',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=len(family_budget_summary_rows),
         )
     )
     lines.extend(
@@ -1415,6 +1615,8 @@ def render_interesting_findings(
     comparison_rows: Sequence[Mapping[str, object]],
     headline_rows: Sequence[Mapping[str, object]],
     family_summary_rows: Sequence[Mapping[str, object]],
+    family_budget_summary_rows: Sequence[Mapping[str, object]],
+    metric_summary_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
@@ -1536,6 +1738,25 @@ def render_interesting_findings(
     )
     lines.extend(
         _section_with_table(
+            'Metric Aggregate Summary',
+            metric_summary_rows,
+            columns=[
+                'Metric',
+                'BudgetView',
+                'Rows',
+                'FacLocBetterRows',
+                'FacLocTiedRows',
+                'FacLocWorseRows',
+                'FacLocTopKBetterRows',
+                'MeanDeltaFacLocMMR',
+                'MeanDeltaFacLocTopK',
+            ],
+            tablefmt=tablefmt,
+            max_rows=len(metric_summary_rows),
+        )
+    )
+    lines.extend(
+        _section_with_table(
             'Experiment Family Summary',
             family_summary_rows,
             columns=[
@@ -1551,6 +1772,26 @@ def render_interesting_findings(
             ],
             tablefmt=tablefmt,
             max_rows=max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Experiment Family By Budget Summary',
+            family_budget_summary_rows,
+            columns=[
+                'ExperimentFamilyLabel',
+                'BudgetCategoryLabel',
+                'Rows',
+                'FacLocBetterRows',
+                'FacLocTiedRows',
+                'FacLocWorseRows',
+                'Delta_FacLoc_MMR_FCP_mean',
+                'Delta_FacLoc_MMR_FCP_median',
+                'Delta_FacLoc_TopK_FCP_mean',
+                'Delta_MMR_TopK_FCP_mean',
+            ],
+            tablefmt=tablefmt,
+            max_rows=len(family_budget_summary_rows),
         )
     )
     lines.extend(

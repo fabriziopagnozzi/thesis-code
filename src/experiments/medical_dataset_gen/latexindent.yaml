@@ -1,0 +1,5 @@
+noIndentBlock:
+    iffalseblock:
+        begin: '\\iffalse'
+        end: '\\fi'
+        lookForThis: 1

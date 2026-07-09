@@ -101,7 +101,23 @@
     - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions and ALL of queries considered
     - [results]: check if the diagnostics of smaller models change over the diagnostics of bigger models    
 
-
+    - qwen reruns of badly performing experiments:
+        27P/C
+        29P/C
+        30/B
+        31P/D
+        32P/D
+        33P/D
+        M1/B
+        M2/B
+        M3a/B
+        M3b/B
+        M5c/B
+        S06/B
+        S02/B
+        S09/B
+        S10/B
+        S18/B
 
 ---------
 
