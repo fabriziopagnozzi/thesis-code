@@ -69,6 +69,8 @@ REPORT_FILES = (
     'budget_strategy_summary.csv',
     'headline_strategy_summary.csv',
     'lambda_stability.csv',
+    'lambda_grid_fcp_delta.csv',
+    'lambda_safety_summary.csv',
     'near_optimal_lambda_width.csv',
     'embedding_model_summary.csv',
 )
@@ -132,6 +134,12 @@ TABLE_HEADERS = {
     'selected_lambda_norm_std': 'lambda* norm std',
     'near_optimal_fraction_mean': 'near-opt frac',
     'near_optimal_span_norm_mean': 'near-opt width',
+    'SafeLambdaFraction': 'safe lambda frac',
+    'WorstDeltaStrategyTopK_FCP': 'worst dTopK FCP',
+    'MedianDeltaStrategyTopK_FCP': 'median dTopK FCP',
+    'BestDeltaStrategyTopK_FCP': 'best dTopK FCP',
+    'WorstLambda': 'worst lambda',
+    'BestLambda': 'best lambda',
 }
 TABLE_COL_WIDTHS = {
     'ShortExperiment': 10,

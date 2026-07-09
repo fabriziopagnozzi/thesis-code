@@ -40,21 +40,6 @@
         - S01_balanced_clean vs. S02_balanced_no_bg: when there is a limited number of near-miss distractors but no actual background outlier, MMR is far worse than FacLoc. 
         - ...
 
-* the embedding model choice has an impact
-    - smaller models, fewer dimensions (multi-qa-mpnet-base-cos-v1):
-        - show a very low number of post-filtering queries compared to bigger models & dimensions (bge_m3, qwen3). 
-            - This may be due to their less nuanced understanding of the semantics, yielding embedding vectors which mix up the content of the rendered clinical chunks. The chunks are semantically separable but pertain to the same domain, have similar template structure, etc.
-            - Add table showing pass rate of the filter_queries step and show that bigger models do better 
-        - even with fewer queries, their evaluation has roughly the same properties as the bigger models with more queries
-        - due to the lower query pass rate, the difference in the evaluation between pass-only and all-queries are a bit more evident than bigger models. They can bump up the results of MMR, but coverage stays on top (see 32P/C vs. 32P/CQ).
-
-    - bigger models, more dimensions (bge_m3, qwen3[0.6B | 4B | 8B])
-        - the evaluation results seem to NOT change too much whether we include or exclude the queries that do NOT pass the geometry_filter we impose
-        - this may be due to the fact that the poorly-performing queries under low retrieval budgets are typically <= ~4%
-
-    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions (and potentially different number of queries)
-    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions and ALL of queries considered
-    - [results]: check if the diagnostics of smaller models change over the diagnostics of bigger models    
 
     - Given the differences between smaller and bigger models, we can conclude that this ontology produces different classes of queries in terms of difficulty: some are by design "harder" than others and require better models to capture their nuances.
         - even with stronger models, there is a small percentage of queries that show unseparable facet geometry.
@@ -92,11 +77,30 @@
 
 * also talk about AllFacetCleanRate@k
     - sometimes coverage shows a higher percentage of queries with perfect coverage (FacetCoverage@k == 100%) and very high precision (Precision@k >= 80%)
-    - [TODO:results]: interpret the plots and check whether MMR can do better.
+    - [results]: interpret the plots and check whether MMR can do better.
 
 * MMR diversifies with balanced lambda values while FacLoc shows improvements only with low enough values (= high FacLoc weight)
     - due to mathematical properties of their scoring functions
     - show the greedy step update formulas and discuss 
+
+### Claims
+
+* the embedding model choice has an impact
+    - smaller models, fewer dimensions (multi-qa-mpnet-base-cos-v1):
+        - show a lower number of post-filtering queries compared to bigger models & dimensions (bge_m3, qwen3). 
+            - This may be due to their less nuanced understanding of the semantics, yielding embedding vectors which mix up the content of the rendered clinical chunks. The chunks are semantically separable but pertain to the same domain, have similar template structure, etc.
+            - Add table showing pass rate of the filter_queries step and show that bigger models do better 
+        - even with fewer queries, their evaluation has roughly the same properties as the bigger models with more queries
+        - due to the lower query pass rate, the difference in the evaluation between pass-only and all-queries are a bit more evident than bigger models. They can bump up the results of MMR, but coverage stays on top.
+
+    - bigger models, more dimensions (bge_m3, qwen3[0.6B | 4B | 8B])
+        - the evaluation results seem to NOT change too much whether we include or exclude the queries that do NOT pass the geometry_filter we impose
+        - this may be due to the fact that the poorly-performing queries under low retrieval budgets are typically <= ~4%
+
+    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions (and potentially different number of queries)
+    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions and ALL of queries considered
+    - [results]: check if the diagnostics of smaller models change over the diagnostics of bigger models    
+
 
 
 ---------

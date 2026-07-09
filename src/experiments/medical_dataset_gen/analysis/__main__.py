@@ -162,6 +162,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 )
             )
 
+        lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
+        lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
         comparison_rows = comparison_by_k_rows(strategy_rows)
         budget_rows = budget_category_rows_from_comparisons(comparison_rows)
         headline_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'headline']
@@ -180,6 +182,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'budget_strategy_summary.csv', budget_rows)
         write_csv(args.output_dir / 'headline_strategy_summary.csv', headline_rows)
         write_csv(args.output_dir / 'lambda_stability.csv', lambda_rows)
+        write_csv(args.output_dir / 'lambda_grid_fcp_delta.csv', lambda_grid_delta_rows)
+        write_csv(args.output_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
         write_csv(args.output_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(args.output_dir / 'embedding_model_summary.csv', embedding_summary_rows)
 
@@ -192,6 +196,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 budget_rows=budget_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
+                lambda_grid_delta_rows=lambda_grid_delta_rows,
+                lambda_safety_rows=lambda_safety_rows,
                 near_optimal_rows=near_optimal_rows,
                 dataset_rows=dataset_rows,
                 warnings=warnings,
@@ -205,6 +211,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             comparison_rows=comparison_rows,
             headline_rows=headline_rows,
             lambda_rows=lambda_rows,
+            lambda_safety_rows=lambda_safety_rows,
             embedding_summary_rows=embedding_summary_rows,
             figures=figures,
         )
@@ -215,6 +222,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 headline_rows=headline_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
+                lambda_safety_rows=lambda_safety_rows,
                 embedding_summary_rows=embedding_summary_rows,
                 tablefmt=args.tablefmt,
                 max_table_rows=args.max_table_rows,
@@ -744,11 +752,145 @@ def near_optimal_lambda_rows(
     return rows
 
 
+def lambda_grid_fcp_delta_rows(
+    records: Sequence[ExperimentRecord],
+    *,
+    warnings: list[str],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for record in records:
+        grid_path = _lambda_validation_grid_stats_path(record)
+        if not grid_path.is_file():
+            continue
+        try:
+            stats = pl.read_parquet(grid_path)
+        except Exception as exc:
+            warnings.append(f'{record.name}: could not read validation lambda grid stats ({exc})')
+            continue
+        if (
+            stats.is_empty()
+            or 'strategy' not in stats.columns
+            or 'k' not in stats.columns
+            or 'lam' not in stats.columns
+            or LAMBDA_SELECTION_MAXIMIZING_METRIC not in stats.columns
+        ):
+            continue
+
+        topk_by_k: dict[int, float] = {}
+        topk = stats.filter(pl.col('strategy') == 'top_k')
+        for topk_row in topk.iter_rows(named=True):
+            k = _int_or_none(topk_row.get('k'))
+            fcp = _float_or_none(topk_row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC))
+            if k is not None and fcp is not None:
+                topk_by_k[k] = fcp
+
+        for row in stats.filter(pl.col('strategy').is_in(DIVERSIFYING_STRATEGIES)).iter_rows(
+            named=True
+        ):
+            strategy = row.get('strategy')
+            if strategy not in DIVERSIFYING_STRATEGIES:
+                continue
+            typed_strategy = cast(StrategyName, strategy)
+            k = _int_or_none(row.get('k'))
+            lam = _float_or_none(row.get('lam'))
+            fcp = _float_or_none(row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC))
+            if k is None or lam is None or fcp is None:
+                continue
+            topk_fcp = topk_by_k.get(k)
+            if topk_fcp is None:
+                continue
+
+            out = _base_experiment_row(record)
+            out.update({
+                'DataSplit': 'validation',
+                'GridStatsPath': str(grid_path),
+                'strategy': typed_strategy,
+                'k': k,
+                'lam': lam,
+                'lambda_norm': _lambda_norm(record, typed_strategy, lam, stats),
+                'TopK_FCP': topk_fcp,
+                'Strategy_FCP': fcp,
+                'DeltaStrategyTopK_FCP': fcp - topk_fcp,
+            })
+            rows.append(out)
+    return rows
+
+
+def lambda_safety_summary_rows(
+    lambda_grid_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    grouped: dict[tuple[str, StrategyName, int], list[Mapping[str, object]]] = {}
+    for row in lambda_grid_rows:
+        experiment = str(row.get('Experiment') or '')
+        strategy = row.get('strategy')
+        k = _int_or_none(row.get('k'))
+        if not experiment or strategy not in DIVERSIFYING_STRATEGIES or k is None:
+            continue
+        grouped.setdefault((experiment, cast(StrategyName, strategy), k), []).append(row)
+
+    rows: list[dict[str, object]] = []
+    for (_experiment, strategy, k), group in sorted(grouped.items()):
+        deltas = _numeric_values(group, 'DeltaStrategyTopK_FCP')
+        if not deltas:
+            continue
+        lambda_count = len(deltas)
+        nonnegative_count = sum(value >= 0.0 for value in deltas)
+        best_row = max(group, key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0)
+        worst_row = min(
+            group,
+            key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0,
+        )
+        first = dict(group[0])
+        out = {
+            key: first.get(key)
+            for key in (
+                'Experiment',
+                'ShortExperiment',
+                'Distribution',
+                'ShortDistribution',
+                'ExperimentFamily',
+                'ExperimentFamilyLabel',
+                'RunLabel',
+                'IsSubexperiment',
+                'EmbeddingModel',
+                'EmbeddingDimension',
+                'OnlyPassGeometry',
+                'QueryScope',
+                'DataSplit',
+            )
+        }
+        out.update({
+            'strategy': strategy,
+            'k': k,
+            'LambdaCount': lambda_count,
+            'NonnegativeDeltaLambdaCount': nonnegative_count,
+            'SafeLambdaFraction': nonnegative_count / lambda_count,
+            'WorstDeltaStrategyTopK_FCP': min(deltas),
+            'BestDeltaStrategyTopK_FCP': max(deltas),
+            'MeanDeltaStrategyTopK_FCP': statistics.fmean(deltas),
+            'MedianDeltaStrategyTopK_FCP': statistics.median(deltas),
+            'DeltaStrategyTopK_FCPRange': max(deltas) - min(deltas),
+            'WorstLambda': worst_row.get('lam'),
+            'WorstLambdaNorm': worst_row.get('lambda_norm'),
+            'BestLambda': best_row.get('lam'),
+            'BestLambdaNorm': best_row.get('lambda_norm'),
+        })
+        rows.append(out)
+    return rows
+
+
 def _lambda_grid_stats_path(record: ExperimentRecord) -> Path:
     report_grid_path = record.paths.table_path('evaluation_report_grid_stats')
     if report_grid_path.is_file():
         return report_grid_path
     return record.paths.table_path('evaluation_stats')
+
+
+def _lambda_validation_grid_stats_path(record: ExperimentRecord) -> Path:
+    selection_path = record.paths.table_path('evaluation_selection_stats')
+    if selection_path.is_file():
+        return selection_path
+    return _lambda_grid_stats_path(record)
 
 
 def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
@@ -992,6 +1134,7 @@ def render_report(
     comparison_rows: Sequence[Mapping[str, object]],
     headline_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
+    lambda_safety_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
     figures: Sequence[Path],
 ) -> str:
@@ -1140,6 +1283,26 @@ def render_report(
     )
     lines.extend(
         _section_with_table(
+            'Lambda Safety On Validation FCP',
+            _sorted_rows(lambda_safety_rows, 'WorstDeltaStrategyTopK_FCP', descending=False),
+            columns=[
+                'ShortExperiment',
+                'k',
+                'strategy',
+                'EmbeddingModel',
+                'SafeLambdaFraction',
+                'WorstDeltaStrategyTopK_FCP',
+                'MedianDeltaStrategyTopK_FCP',
+                'BestDeltaStrategyTopK_FCP',
+                'WorstLambda',
+                'BestLambda',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
             'Embedding Model Summary',
             embedding_summary_rows,
             columns=[
@@ -1179,6 +1342,7 @@ def render_interesting_findings(
     headline_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
+    lambda_safety_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
     tablefmt: str,
     max_table_rows: int,
@@ -1225,6 +1389,30 @@ def render_interesting_findings(
         lines.append(
             f'- Mean FacLoc - top-k FCP delta: `{statistics.fmean(topk_deltas):.4f}`; '
             f'median: `{statistics.median(topk_deltas):.4f}`.'
+        )
+    facloc_worst_deltas = [
+        value
+        for value in (
+            _float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
+            for row in lambda_safety_rows
+            if row.get('strategy') == 'fac_loc'
+        )
+        if value is not None
+    ]
+    mmr_worst_deltas = [
+        value
+        for value in (
+            _float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
+            for row in lambda_safety_rows
+            if row.get('strategy') == 'mmr'
+        )
+        if value is not None
+    ]
+    if facloc_worst_deltas and mmr_worst_deltas:
+        lines.append(
+            '- Validation lambda-safety check: median worst-case FacLoc - top-k FCP delta '
+            f'is `{statistics.median(facloc_worst_deltas):.4f}`, while the corresponding '
+            f'MMR value is `{statistics.median(mmr_worst_deltas):.4f}`.'
         )
 
     lambda_std = {
@@ -1334,6 +1522,8 @@ def write_figures(
     budget_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
+    lambda_grid_delta_rows: Sequence[Mapping[str, object]],
+    lambda_safety_rows: Sequence[Mapping[str, object]],
     near_optimal_rows: Sequence[Mapping[str, object]],
     dataset_rows: Sequence[Mapping[str, object]],
     warnings: list[str],
@@ -1387,6 +1577,22 @@ def write_figures(
         _plot_lambda_stability(
             plt=plt,
             rows=lambda_rows,
+            output_dir=output_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        _plot_lambda_safety_worst_delta(
+            plt=plt,
+            rows=lambda_safety_rows,
+            output_dir=output_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        _plot_lambda_delta_curve(
+            plt=plt,
+            rows=lambda_grid_delta_rows,
             output_dir=output_dir,
             plot_format=plot_format,
         )
@@ -1749,6 +1955,125 @@ def _plot_lambda_stability(
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _plot_lambda_safety_worst_delta(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    data: list[list[float]] = []
+    labels: list[str] = []
+    for strategy in DIVERSIFYING_STRATEGIES:
+        values = [
+            value
+            for value in (
+                _float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
+                for row in rows
+                if row.get('strategy') == strategy
+            )
+            if value is not None
+        ]
+        if values:
+            data.append(values)
+            labels.append(_strategy_label(strategy))
+    if not data:
+        return []
+
+    fig, ax = plt.subplots(figsize=(6.8, 4.8))  # type: ignore[attr-defined]
+    try:
+        box = ax.boxplot(data, tick_labels=labels, patch_artist=True)
+        colors = ['#1F77B4', '#D62728']
+        for patch, color in zip(box['boxes'], colors, strict=False):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.55)
+        ax.axhline(0.0, color='#202020', linewidth=0.9)
+        ax.set_title('Validation lambda safety: worst FCP delta vs top-k')
+        ax.set_ylabel('Worst FacetCoveragePurity@k delta over lambda')
+        ax.grid(axis='y', alpha=0.25)
+        fig.tight_layout()
+        path = output_dir / f'lambda_safety_worst_delta_vs_topk.{plot_format}'
+        fig.savefig(path, dpi=180)
+        return [path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _plot_lambda_delta_curve(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    fig, ax = plt.subplots(figsize=(7.2, 4.8))  # type: ignore[attr-defined]
+    try:
+        has_data = False
+        for strategy, color in (('mmr', '#1F77B4'), ('fac_loc', '#D62728')):
+            points = [
+                (
+                    _float_or_none(row.get('lambda_norm')),
+                    _float_or_none(row.get('DeltaStrategyTopK_FCP')),
+                )
+                for row in rows
+                if row.get('strategy') == strategy
+            ]
+            binned = _binned_lambda_delta_stats(points, n_bins=20)
+            if not binned:
+                continue
+            has_data = True
+            xs = [item['x'] for item in binned]
+            means = [item['mean'] for item in binned]
+            lowers = [item['q25'] for item in binned]
+            uppers = [item['q75'] for item in binned]
+            ax.plot(xs, means, color=color, linewidth=2.0, label=_strategy_label(strategy))
+            ax.fill_between(xs, lowers, uppers, color=color, alpha=0.16)
+
+        if not has_data:
+            plt.close(fig)  # type: ignore[attr-defined]
+            return []
+        ax.axhline(0.0, color='#202020', linewidth=0.9)
+        ax.set_title('Validation FCP delta vs top-k across lambda')
+        ax.set_xlabel('Normalized lambda within each strategy grid')
+        ax.set_ylabel('Mean FacetCoveragePurity@k delta')
+        ax.set_xlim(0, 1)
+        ax.grid(alpha=0.25)
+        ax.legend(frameon=False)
+        fig.tight_layout()
+        path = output_dir / f'lambda_fcp_delta_vs_topk_by_lambda.{plot_format}'
+        fig.savefig(path, dpi=180)
+        return [path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _binned_lambda_delta_stats(
+    points: Sequence[tuple[float | None, float | None]],
+    *,
+    n_bins: int,
+) -> list[dict[str, float]]:
+    bins: list[list[float]] = [[] for _ in range(n_bins)]
+    for lambda_norm, delta in points:
+        if lambda_norm is None or delta is None:
+            continue
+        clipped = min(1.0, max(0.0, lambda_norm))
+        index = min(n_bins - 1, int(clipped * n_bins))
+        bins[index].append(delta)
+
+    out: list[dict[str, float]] = []
+    for index, values in enumerate(bins):
+        if not values:
+            continue
+        sorted_values = sorted(values)
+        out.append({
+            'x': (index + 0.5) / n_bins,
+            'mean': statistics.fmean(values),
+            'q25': _quantile(sorted_values, 0.25),
+            'q75': _quantile(sorted_values, 0.75),
+        })
+    return out
 
 
 def _plot_near_optimal_width(
