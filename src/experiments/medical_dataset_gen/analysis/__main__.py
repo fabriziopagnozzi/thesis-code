@@ -165,6 +165,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
         lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
         comparison_rows = comparison_by_k_rows(strategy_rows)
+        family_summary_rows = experiment_family_summary_rows(comparison_rows)
         budget_rows = budget_category_rows_from_comparisons(comparison_rows)
         headline_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'headline']
         lambda_rows = lambda_stability_rows(strategy_rows, near_optimal_rows)
@@ -179,6 +180,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'geometry_filter_summary.csv', geometry_rows)
         write_csv(args.output_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(args.output_dir / 'comparison_by_k.csv', comparison_rows)
+        write_csv(args.output_dir / 'experiment_family_summary.csv', family_summary_rows)
         write_csv(args.output_dir / 'budget_strategy_summary.csv', budget_rows)
         write_csv(args.output_dir / 'headline_strategy_summary.csv', headline_rows)
         write_csv(args.output_dir / 'lambda_stability.csv', lambda_rows)
@@ -209,6 +211,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             dataset_rows=dataset_rows,
             geometry_rows=geometry_rows,
             comparison_rows=comparison_rows,
+            family_summary_rows=family_summary_rows,
             headline_rows=headline_rows,
             lambda_rows=lambda_rows,
             lambda_safety_rows=lambda_safety_rows,
@@ -220,6 +223,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             render_interesting_findings(
                 comparison_rows=comparison_rows,
                 headline_rows=headline_rows,
+                family_summary_rows=family_summary_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 lambda_safety_rows=lambda_safety_rows,
@@ -952,6 +956,55 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
     return rows
 
 
+def experiment_family_summary_rows(
+    comparison_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    grouped: dict[str, list[Mapping[str, object]]] = {}
+    for row in comparison_rows:
+        family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
+        grouped.setdefault(family, []).append(row)
+
+    rows: list[dict[str, object]] = []
+    for family, group in grouped.items():
+        facloc_better = sum(row.get('FacLocVsMMR_FCPOutcome') == 'facloc_better' for row in group)
+        facloc_tied = sum(row.get('FacLocVsMMR_FCPOutcome') == 'tied' for row in group)
+        facloc_worse = sum(row.get('FacLocVsMMR_FCPOutcome') == 'facloc_worse' for row in group)
+        out: dict[str, object] = {
+            'ExperimentFamilyLabel': family,
+            'Rows': len(group),
+            'FacLocBetterRows': facloc_better,
+            'FacLocTiedRows': facloc_tied,
+            'FacLocWorseRows': facloc_worse,
+        }
+        out.update(
+            _numeric_stats(
+                _numeric_values(group, 'Delta_FacLoc_MMR_FCP'),
+                'Delta_FacLoc_MMR_FCP',
+            )
+        )
+        out.update(
+            _numeric_stats(
+                _numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
+                'Delta_FacLoc_TopK_FCP',
+            )
+        )
+        out.update(
+            _numeric_stats(
+                _numeric_values(group, 'Delta_MMR_TopK_FCP'),
+                'Delta_MMR_TopK_FCP',
+            )
+        )
+        out.update(
+            _numeric_stats(
+                _numeric_values(group, 'Delta_FacLoc_MMR_AllFacetCleanRate'),
+                'Delta_FacLoc_MMR_AllFacetCleanRate',
+            )
+        )
+        rows.append(out)
+
+    return _sorted_rows(rows, 'Delta_FacLoc_MMR_FCP_mean')
+
+
 def headline_rows_from_comparisons(
     comparison_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
@@ -1132,6 +1185,7 @@ def render_report(
     dataset_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     comparison_rows: Sequence[Mapping[str, object]],
+    family_summary_rows: Sequence[Mapping[str, object]],
     headline_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
@@ -1214,6 +1268,26 @@ def render_report(
                 'MMR_AllFacetCleanRate',
                 'FacLoc_AllFacetCleanRate',
                 'FacLocVsMMR_FCPOutcome',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Experiment Family Summary',
+            family_summary_rows,
+            columns=[
+                'ExperimentFamilyLabel',
+                'Rows',
+                'FacLocBetterRows',
+                'FacLocTiedRows',
+                'FacLocWorseRows',
+                'Delta_FacLoc_MMR_FCP_mean',
+                'Delta_FacLoc_MMR_FCP_median',
+                'Delta_FacLoc_TopK_FCP_mean',
+                'Delta_MMR_TopK_FCP_mean',
+                'Delta_FacLoc_MMR_AllFacetCleanRate_mean',
             ],
             tablefmt=args.tablefmt,
             max_rows=args.max_table_rows,
@@ -1340,6 +1414,7 @@ def render_interesting_findings(
     *,
     comparison_rows: Sequence[Mapping[str, object]],
     headline_rows: Sequence[Mapping[str, object]],
+    family_summary_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
@@ -1389,6 +1464,17 @@ def render_interesting_findings(
         lines.append(
             f'- Mean FacLoc - top-k FCP delta: `{statistics.fmean(topk_deltas):.4f}`; '
             f'median: `{statistics.median(topk_deltas):.4f}`.'
+        )
+    if family_summary_rows:
+        strongest_family = family_summary_rows[0]
+        weakest_family = family_summary_rows[-1]
+        lines.append(
+            '- Strongest family-level FacLoc - MMR FCP margin: '
+            f'`{strongest_family.get("ExperimentFamilyLabel")}` '
+            f'(`{(_float_or_none(strongest_family.get("Delta_FacLoc_MMR_FCP_mean")) or 0.0):.4f}` mean). '
+            'Weakest family-level margin: '
+            f'`{weakest_family.get("ExperimentFamilyLabel")}` '
+            f'(`{(_float_or_none(weakest_family.get("Delta_FacLoc_MMR_FCP_mean")) or 0.0):.4f}` mean).'
         )
     facloc_worst_deltas = [
         value
@@ -1443,6 +1529,25 @@ def render_interesting_findings(
                 'FacLoc_FCP',
                 'Delta_FacLoc_MMR_FCP',
                 'Delta_FacLoc_TopK_FCP',
+            ],
+            tablefmt=tablefmt,
+            max_rows=max_table_rows,
+        )
+    )
+    lines.extend(
+        _section_with_table(
+            'Experiment Family Summary',
+            family_summary_rows,
+            columns=[
+                'ExperimentFamilyLabel',
+                'Rows',
+                'FacLocBetterRows',
+                'FacLocTiedRows',
+                'FacLocWorseRows',
+                'Delta_FacLoc_MMR_FCP_mean',
+                'Delta_FacLoc_MMR_FCP_median',
+                'Delta_FacLoc_TopK_FCP_mean',
+                'Delta_MMR_TopK_FCP_mean',
             ],
             tablefmt=tablefmt,
             max_rows=max_table_rows,
