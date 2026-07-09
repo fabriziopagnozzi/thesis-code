@@ -114,18 +114,30 @@ Key columns:
 * `Metric`
 * `BudgetView`
 * `Rows`
-* `FacLocBetterRows`, `FacLocTiedRows`, `FacLocWorseRows`
-* `FacLocTopKBetterRows`, `MMRTopKBetterRows`
-* `MeanDeltaFacLocMMR`, `MedianDeltaFacLocMMR`
+* `FacLocBetterPct`, `FacLocTiedPct`, `FacLocWorsePct`
+* `FacLocTopKBetterPct`, `MMRTopKBetterPct`
+* `MeanDeltaFacLocMMR`
 * `MeanDeltaFacLocTopK`, `MeanDeltaMMRTopK`
 
-Use this for thesis tables that compare aggregate behavior across metrics. The FacLoc-vs-MMR win/tie/loss counts use the report tie threshold `TieEpsilon`.
+Use this for thesis tables that compare aggregate behavior across metrics. The percentage columns are normalized by `Rows`; the FacLoc-vs-MMR win/tie/loss percentages use the report tie threshold `TieEpsilon`.
 
 ### `experiment_family_budget_summary.csv`
 
 One row per experiment family and budget category. It aggregates the same representative rows used by `budget_strategy_summary.csv`, grouping by `ExperimentFamilyLabel` and `BudgetCategoryLabel`.
 
-Use this for thesis tables that need to separate distribution-family effects from retrieval-budget effects. It preserves the family-level win/tie/loss counts and FacLoc-minus-MMR/TopK deltas, but reports them separately for headline, medium-budget, and high-budget views.
+Use this for thesis tables that need to separate distribution-family effects from retrieval-budget effects. It preserves the family-level win/tie/loss percentages and FacLoc-minus-MMR/TopK deltas, but reports them separately for headline, medium-budget, and high-budget views.
+
+### `metric_family_summary.csv`
+
+One row per evaluation metric and experiment family. It aggregates all experiment-$k$ rows within each family and reports FacLoc-vs-MMR win/tie/loss percentages, FacLoc-vs-TopK win percentages, and mean FacLoc-minus-MMR/TopK deltas.
+
+Use this for aggregate thesis tables that compare whether the family-level pattern is specific to \FCP{} or also appears in the secondary metrics.
+
+### `metric_family_budget_summary.csv`
+
+One row per evaluation metric, experiment family, and budget category. It uses the same representative headline, medium-budget, and high-budget rows as `budget_strategy_summary.csv`, then groups them by `Metric`, `ExperimentFamilyLabel`, and `BudgetCategoryLabel`.
+
+Use this for aggregate thesis tables that jointly condition on metric, data-distribution family, and retrieval budget. The \FCP{} subset corresponds to the budget-resolved family table used to support the data-distribution claim.
 
 ### `budget_strategy_summary.csv`
 
