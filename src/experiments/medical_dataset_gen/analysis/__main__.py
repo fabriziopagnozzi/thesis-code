@@ -169,8 +169,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
             embedding_summary_rows=embedding_summary_rows,
             figures=figures,
         )
-        (args.output_dir / 'report.md').write_text(report_text)
-        (args.output_dir / 'report_interesting_findings.md').write_text(
+        (args.output_dir / 'txt_report.md').write_text(report_text)
+        (args.output_dir / 'txt_report_highlights.md').write_text(
             render_interesting_findings(
                 comparison_rows=comparison_rows,
                 low_budget_rows=low_budget_rows,
@@ -187,7 +187,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 max_table_rows=args.max_table_rows,
             )
         )
-        (args.output_dir / 'experiment_config_recap.md').write_text(
+        (args.output_dir / 'txt_experiments_config_recap.md').write_text(
             render_experiment_config_recap(records)
         )
         (args.output_dir / 'warnings.txt').write_text(

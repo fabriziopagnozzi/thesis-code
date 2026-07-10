@@ -50,18 +50,16 @@ EXPERIMENT_FAMILY_COLORS: dict[ExperimentFamilyId, str] = {
     'embedding_comparison': '#4C78A8',
     'unknown': '#808080',
 }
-HELDOUT_SELECTION_COLUMNS = frozenset(
-    {
-        'lambda_selection_split',
-        'report_split',
-        'lambda_selection_metric',
-        'lambda_selection_metric_value',
-    }
-)
+HELDOUT_SELECTION_COLUMNS = frozenset({
+    'lambda_selection_split',
+    'report_split',
+    'lambda_selection_metric',
+    'lambda_selection_metric_value',
+})
 REPORT_FILES = (
-    'report.md',
-    'report_interesting_findings.md',
-    'experiment_config_recap.md',
+    'txt_report.md',
+    'txt_report_highlights.md',
+    'txt_experiments_config_recap.md',
     'thesis_aggregate_tables.tex',
     'warnings.txt',
     'manifest.json',
@@ -83,15 +81,13 @@ REPORT_FILES = (
     'near_optimal_lambda_width.csv',
     'embedding_model_summary.csv',
 )
-ANALYSIS_EXCLUDED_METRICS = frozenset(
-    {
-        'MAP@k',
-        'AnswerROUGE1Recall@k',
-        'AnswerROUGE1Precision@k',
-        'AnswerROUGE1F1@k',
-        'AnswerROUGE2Recall@k',
-    }
-)
+ANALYSIS_EXCLUDED_METRICS = frozenset({
+    'MAP@k',
+    'AnswerROUGE1Recall@k',
+    'AnswerROUGE1Precision@k',
+    'AnswerROUGE1F1@k',
+    'AnswerROUGE2Recall@k',
+})
 EVALUATION_METRICS = (
     'n_queries',
     *(
@@ -186,24 +182,22 @@ TABLE_COL_WIDTHS = {
     'strategy': 8,
 }
 DEFAULT_TABLE_COL_WIDTH = 14
-INTEGER_TABLE_COLUMNS = frozenset(
-    {
-        'k',
-        'EmbeddingDimension',
-        'GeometryQueries',
-        'GeometryPassQueries',
-        'Runs',
-        'Rows',
-        'FacLocBetterRows',
-        'FacLocTiedRows',
-        'FacLocWorseRows',
-        'FacLocTopKBetterRows',
-        'MMRTopKBetterRows',
-        'PassFilterRuns',
-        'n_selected',
-        'distinct_lambda_count',
-    }
-)
+INTEGER_TABLE_COLUMNS = frozenset({
+    'k',
+    'EmbeddingDimension',
+    'GeometryQueries',
+    'GeometryPassQueries',
+    'Runs',
+    'Rows',
+    'FacLocBetterRows',
+    'FacLocTiedRows',
+    'FacLocWorseRows',
+    'FacLocTopKBetterRows',
+    'MMRTopKBetterRows',
+    'PassFilterRuns',
+    'n_selected',
+    'distinct_lambda_count',
+})
 ROLE_COUNT_COLUMNS = {
     'dominant_primary_gold': 'DominantPrimaryGoldCount',
     'primary_gold': 'OtherPrimaryGoldCount',

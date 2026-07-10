@@ -56,7 +56,7 @@ def render_report(
         'Budget-category summaries are also written for `low_budget`, `medium_budget`, and '
         '`high_budget`, using the lowest, median-index, and highest available `k` per experiment.',
         'A parent/child configuration recap for appendix use is written to '
-        '`experiment_config_recap.md`.',
+        '`txt_experiments_config_recap.md`.',
         '',
         '## Run Scope',
         '',
@@ -326,22 +326,18 @@ def render_report(
             max_rows=args.max_table_rows,
         )
     )
-    lines.extend(
-        [
-            '## Output Files',
-            '',
-            *_bullets(f'`{file_name}`' for file_name in REPORT_FILES),
-        ]
-    )
+    lines.extend([
+        '## Output Files',
+        '',
+        *_bullets(f'`{file_name}`' for file_name in REPORT_FILES),
+    ])
     if figures:
-        lines.extend(
-            [
-                '',
-                '## Figures',
-                '',
-                *_bullets(f'`{path.relative_to(args.output_dir)}`' for path in figures),
-            ]
-        )
+        lines.extend([
+            '',
+            '## Figures',
+            '',
+            *_bullets(f'`{path.relative_to(args.output_dir)}`' for path in figures),
+        ])
     return '\n'.join(lines) + '\n'
 
 

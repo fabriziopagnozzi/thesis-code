@@ -224,15 +224,7 @@ def _plot_geometry_pass_rate(
     output_dir: Path,
     plot_format: PlotFormat,
 ) -> list[Path]:
-    plot_rows = _family_grouped_rows(
-        [
-            row
-            for row in rows
-            if _float_or_none(row.get('GeometryPassRate')) is not None
-            and 'Q' not in str(row.get('ShortExperiment') or row.get('Experiment') or '')
-        ],
-        'GeometryPassRate',
-    )
+    plot_rows = _geometry_pass_rate_rows(rows)
     if not plot_rows:
         return []
     labels = [
@@ -262,6 +254,32 @@ def _plot_geometry_pass_rate(
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _geometry_pass_rate_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[Mapping[str, object]]:
+    return _family_grouped_rows(
+        [
+            row
+            for row in rows
+            if _float_or_none(row.get('GeometryPassRate')) is not None
+            and _is_pass_only_geometry_row(row)
+        ],
+        'GeometryPassRate',
+    )
+
+
+def _is_pass_only_geometry_row(row: Mapping[str, object]) -> bool:
+    only_pass_geometry = row.get('OnlyPassGeometry')
+    if isinstance(only_pass_geometry, bool):
+        return only_pass_geometry
+
+    query_scope = row.get('QueryScope')
+    if isinstance(query_scope, str):
+        return query_scope.strip().lower() == 'pass-only'
+
+    return False
 
 
 def _plot_lambda_stability(
