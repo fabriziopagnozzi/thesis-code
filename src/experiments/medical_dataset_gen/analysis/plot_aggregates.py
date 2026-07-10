@@ -159,9 +159,9 @@ def _plot_metric_family_delta_heatmap(
         ax.set_xticks(range(len(families)))
         ax.set_xticklabels(families, rotation=35, ha='right')
         ax.set_yticks(range(len(metric_labels)))
-        ax.set_yticklabels([
-            _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
-        ])
+        ax.set_yticklabels(
+            [_metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels]
+        )
         for y_index, metric_label in enumerate(metric_labels):
             for x_index, family in enumerate(families):
                 row = _find_summary_row(
@@ -362,8 +362,7 @@ def _plot_budget_delta_columns(
         fig.text(
             0.5,
             0.018,
-            'Alternating light blue and light grey bands group rows from the same parent experiment; '
-            'thin horizontal lines mark parent changes.',
+            'Alternating light blue and light grey bands group rows from the same parent experiment, with different embedding models. Notice: qwen3-0.6B seems the best model.',
             ha='center',
             va='bottom',
             fontsize=11,
@@ -603,8 +602,7 @@ def _draw_family_delta_bars(
 
 def _draw_parent_group_guides(*, ax: Any, parent_keys: Sequence[str]) -> None:
     for span_index, (start, end) in enumerate(_parent_group_spans(parent_keys)):
-        # band_color = '#EAF3FB' if span_index % 2 == 0 else '#F3F4F6'
-        band_color = '#F3F4F6' if span_index % 2 == 0 else '#EAF3FB'
+        band_color = '#EAF3FB' if span_index % 2 == 0 else '#F3F4F6'
 
         ax.axhspan(
             start - 0.5,

@@ -14,9 +14,11 @@ from experiments.medical_dataset_gen.analysis.cli import parse_args
 from experiments.medical_dataset_gen.analysis.discovery import discover_experiments
 from experiments.medical_dataset_gen.analysis.latex_tables import (
     THESIS_AGGREGATE_TABLES_FILENAME,
+    THESIS_RESULT_MACROS_FILENAME,
     render_thesis_aggregate_tables,
+    render_thesis_result_macros,
 )
-from experiments.medical_dataset_gen.analysis.models import CliArgs, ReportOutputs
+from experiments.medical_dataset_gen.analysis.models import CliArgs, ExperimentRecord, ReportOutputs
 from experiments.medical_dataset_gen.analysis.plots import write_figures
 from experiments.medical_dataset_gen.analysis.rendering import (
     render_interesting_findings,
@@ -55,12 +57,16 @@ def run_report(args: CliArgs) -> ReportOutputs:
     try:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         warnings: list[str] = []
-        records = discover_experiments(
+        plot_and_recap_records = discover_experiments(
             args.results_dir,
             include_scrapped=args.include_scrapped,
             requested_experiments=args.experiments,
             warnings=warnings,
+            include_all_query=True,
         )
+        records = [
+            record for record in plot_and_recap_records if record.only_pass_geometry is not False
+        ]
 
         manifest_rows = [experiment_manifest_row(record) for record in records]
         dataset_rows = [dataset_distribution_row(record, warnings=warnings) for record in records]
@@ -132,14 +138,28 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             )
         )
+        (args.output_dir / THESIS_RESULT_MACROS_FILENAME).write_text(
+            render_thesis_result_macros(
+                geometry_rows=geometry_rows,
+                comparison_rows=comparison_rows,
+                budget_rows=budget_rows,
+                lambda_safety_rows=lambda_safety_rows,
+            )
+        )
 
         figures: list[Path] = []
         if args.plots:
+            plot_budget_rows = _plot_budget_rows(
+                records=plot_and_recap_records,
+                base_records=records,
+                base_budget_rows=budget_rows,
+                warnings=warnings,
+            )
             figures = write_figures(
                 output_dir=args.output_dir / '_figures',
                 plot_format=args.plot_format,
                 max_rows=args.max_table_rows,
-                budget_rows=budget_rows,
+                budget_rows=plot_budget_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 lambda_grid_delta_rows=lambda_grid_delta_rows,
@@ -188,7 +208,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             )
         )
         (args.output_dir / 'txt_experiments_config_recap.md').write_text(
-            render_experiment_config_recap(records)
+            render_experiment_config_recap(plot_and_recap_records)
         )
         (args.output_dir / 'warnings.txt').write_text(
             '\n'.join(warnings) + ('\n' if warnings else '')
@@ -222,6 +242,28 @@ def run_report(args: CliArgs) -> ReportOutputs:
         )
     finally:
         MedicalDatasetGenPaths.results_dir = old_results_dir
+
+
+def _plot_budget_rows(
+    *,
+    records: list[ExperimentRecord],
+    base_records: list[ExperimentRecord],
+    base_budget_rows: list[dict[str, object]],
+    warnings: list[str],
+) -> list[dict[str, object]]:
+    base_names = {str(record.name) for record in base_records}
+    extra_records = [record for record in records if str(record.name) not in base_names]
+    if not extra_records:
+        return base_budget_rows
+
+    extra_strategy_rows: list[dict[str, object]] = []
+    for record in extra_records:
+        extra_strategy_rows.extend(selected_strategy_rows(record, warnings=warnings))
+    extra_comparison_rows = comparison_by_k_rows(extra_strategy_rows)
+    return [
+        *base_budget_rows,
+        *budget_category_rows_from_comparisons(extra_comparison_rows),
+    ]
 
 
 def main() -> None:

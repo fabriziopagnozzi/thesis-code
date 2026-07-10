@@ -30,6 +30,7 @@ def discover_experiments(
     include_scrapped: bool,
     requested_experiments: Sequence[str],
     warnings: list[str],
+    include_all_query: bool = False,
 ) -> list[ExperimentRecord]:
     candidate_names = (
         _requested_experiment_names(results_dir, requested_experiments, warnings)
@@ -57,7 +58,7 @@ def discover_experiments(
             warnings.append(f'{name}: skipped because evaluation_stats.parquet is missing')
             continue
         record = load_experiment_record(results_dir, name, warnings=warnings)
-        if record.only_pass_geometry is False:
+        if record.only_pass_geometry is False and not include_all_query:
             continue
         records.append(record)
     return sorted(records, key=lambda record: record.name)
