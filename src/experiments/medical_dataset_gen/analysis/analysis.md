@@ -9,7 +9,7 @@ The main unit is an `experiment x k x strategy` row.
 * `metric_aggregate_summary.csv` aggregates the main metric deltas by metric and budget view.
 * `budget_strategy_summary.csv` keeps one row per experiment for each budget category: `low_budget`, `medium_budget`, and `high_budget`.
 * `low_budget_strategy_summary.csv` keeps one low-budget row per experiment. The low-budget row is the smallest `k` where all three strategies are available.
-* `experiment_config_recap.md` groups the loaded configurations by parent experiment and gives an appendix-friendly textual recap of pool composition, retrieval budgets, lambda grids, geometry-filter settings, and child embedding models.
+* `experiment_config_recap.md` groups the loaded configurations by parent experiment and gives an appendix-friendly textual recap of pool composition, background outliers, low/medium/high retrieval budgets, and child embedding variants.
 
 The low-budget row is intentionally conservative: it summarizes each experiment at the tightest complete budget, while the full per-`k` evidence remains in `comparison_by_k.csv` and `strategy_by_k.csv`. The medium-budget row uses the sorted `k` index `floor(len(k_values) / 2)`, and the high-budget row uses the largest available `k`.
 
@@ -72,7 +72,7 @@ thesis-specific captions, headers, metric group rows, row colors, and numeric fo
 Shorter diagnostic report focused on notable patterns: largest FacLoc gains, FacLoc worse/tied rows, low geometry pass rates, and embedding summaries.
 
 #### `experiment_config_recap.md`
-Appendix-oriented textual recap of the experiment configurations. It groups runs by parent distribution, reports the configured pool composition and background topology, and then lists each child run with its embedding model, embedding dimension when available, budget grid, and query scope.
+Appendix-oriented textual recap of the experiment configurations. It uses the compact thesis format: `Instance "<ID>"`, family, pool composition, background topology, low/medium/high budget values, and one nested embedding-variant line per child run.
 
 ### CSV Files
 

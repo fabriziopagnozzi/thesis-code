@@ -904,7 +904,9 @@ def lambda_safety_summary_rows(
             continue
         lambda_count = len(deltas)
         nonnegative_count = sum(value >= 0.0 for value in deltas)
-        best_row = max(group, key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0)
+        best_row = max(
+            group, key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0
+        )
         worst_row = min(
             group,
             key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0,
@@ -1034,7 +1036,7 @@ def experiment_family_summary_rows(
         for family, group in grouped.items()
     ]
 
-    return _sorted_rows(rows, 'Delta_FacLoc_MMR_FCP_mean')
+    return _sorted_rows(rows, 'Delta_FacLoc_MMR_FCP_mean')  # type: ignore
 
 
 def experiment_family_budget_summary_rows(
@@ -1180,9 +1182,7 @@ def metric_family_summary_rows(
     comparison_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    metric_order = {
-        spec.metric_label: index for index, spec in enumerate(DELTA_METRIC_PLOT_SPECS)
-    }
+    metric_order = {spec.metric_label: index for index, spec in enumerate(DELTA_METRIC_PLOT_SPECS)}
     for spec in DELTA_METRIC_PLOT_SPECS:
         grouped: dict[str, list[Mapping[str, object]]] = {}
         for row in comparison_rows:
@@ -1214,9 +1214,7 @@ def metric_family_budget_summary_rows(
     budget_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    metric_order = {
-        spec.metric_label: index for index, spec in enumerate(DELTA_METRIC_PLOT_SPECS)
-    }
+    metric_order = {spec.metric_label: index for index, spec in enumerate(DELTA_METRIC_PLOT_SPECS)}
     budget_order = {category: index for index, category in enumerate(BUDGET_CATEGORIES)}
 
     for spec in DELTA_METRIC_PLOT_SPECS:
@@ -1286,9 +1284,7 @@ def _metric_group_summary_row(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
-    complete_rows = [
-        row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None
-    ]
+    complete_rows = [row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None]
     deltas_fm = _numeric_values(complete_rows, delta_fm_col)
     deltas_ft = _numeric_values(complete_rows, delta_ft_col)
     deltas_mt = _numeric_values(complete_rows, delta_mt_col)
@@ -1356,9 +1352,7 @@ def _metric_aggregate_row(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
-    complete_rows = [
-        row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None
-    ]
+    complete_rows = [row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None]
     deltas_fm = _numeric_values(complete_rows, delta_fm_col)
     deltas_ft = _numeric_values(complete_rows, delta_ft_col)
     deltas_mt = _numeric_values(complete_rows, delta_mt_col)
@@ -1565,32 +1559,25 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
     for record in records:
         grouped.setdefault(record.distribution_id, []).append(record)
 
-    lines: list[str] = [
-        '# Experiment Configuration Recap',
-        '',
-        'This appendix-oriented recap groups completed pass-filter runs by parent experiment. '
-        'The pool fields come from the parent generation configuration, while each child line '
-        'uses the merged child configuration actually loaded by the report.',
-        '',
-    ]
+    lines = list[str]()
     for distribution_id in sorted(grouped):
         group = sorted(grouped[distribution_id], key=lambda record: record.name)
         representative = next((record for record in group if record.cfg is not None), group[0])
         parent_label = short_token(distribution_id)
-        lines.append(f'{parent_label}:')
-        lines.append(f'    full experiment: "{distribution_id}"')
-        lines.append(f'    family: {representative.family_label}')
+        lines.append(f'Instance "{parent_label}":')
+        lines.append(f'    Family: {representative.family_label}')
         if representative.cfg is None:
-            lines.append('    config: unavailable; inspect experiment_manifest.csv for load errors.')
+            lines.append(
+                '    Config: unavailable; inspect experiment_manifest.csv for load errors.'
+            )
         else:
             cfg = representative.cfg
-            lines.append(f'    pool: {_chunk_pool_recap(cfg)};')
-            lines.append(f'    background outliers: {_background_outlier_recap(cfg)}')
-            lines.append(f'    retrieval budgets: {_k_values_recap(cfg)}')
-            lines.append(f'    lambda grids: {_lambda_grid_recap(cfg)}')
-            lines.append(f'    geometry filter: {_geometry_filter_recap(cfg)}')
+            lines.append(f'    Pool: {_chunk_pool_recap(cfg)};')
+            lines.append(f'    Background Outliers: {_background_outlier_recap(cfg)}')
+            lines.append(f'    Retrieval Budgets: {_budget_category_recap(cfg)}')
+        lines.append('    Embedding variants:')
         for record in group:
-            lines.append(f'    {_child_config_recap(record)}')
+            lines.append(f'        {_child_config_recap(record)}')
         lines.append('')
     return '\n'.join(lines)
 
@@ -1645,6 +1632,17 @@ def _k_values_recap(cfg: ExperimentCfg) -> str:
     )
 
 
+def _budget_category_recap(cfg: ExperimentCfg) -> str:
+    k_values = sorted(int(k) for k in cfg.retrieval.k_values)
+    if not k_values:
+        return 'none configured'
+    return (
+        f'Low Budget={k_values[0]}, '
+        f'Medium Budget={k_values[len(k_values) // 2]}, '
+        f'High Budget={k_values[-1]}'
+    )
+
+
 def _lambda_grid_recap(cfg: ExperimentCfg) -> str:
     return ', '.join([
         _single_lambda_grid_recap('MMR', cfg.retrieval.lambdas_mmr),
@@ -1668,17 +1666,18 @@ def _geometry_filter_recap(cfg: ExperimentCfg) -> str:
 
 def _child_config_recap(record: ExperimentRecord) -> str:
     child_label = _recap_experiment_label(record.name)
-    model = record.embedding_model
-    metadata = embedding_metadata(record)
-    dimension = metadata.get('dimension')
-    dimension_text = f'; dimension {dimension}' if dimension is not None else ''
+    model = _recap_model_label(record.embedding_model)
     if record.cfg is None:
-        return f'"{child_label}" has no loaded config; embedding model "{model}"{dimension_text}.'
-    return (
-        f'"{child_label}" uses embedding model "{model}"{dimension_text}; '
-        f'budgets {", ".join(str(k) for k in sorted(record.cfg.retrieval.k_values))}; '
-        f'query scope {_query_scope_label(record.only_pass_geometry)}.'
-    )
+        return f'"{child_label}": model "{model}" (config unavailable)'
+    return f'"{child_label}": model "{model}"'
+
+
+def _recap_model_label(model_name: str) -> str:
+    if model_name == 'unknown':
+        return model_name
+    if model_name.startswith('jinaai/'):
+        return model_name
+    return model_name.rsplit('/', 1)[-1]
 
 
 def _recap_experiment_label(exp_name: str) -> str:
@@ -2466,10 +2465,7 @@ def _plot_metric_budget_outcomes(
     if not plot_rows:
         return []
 
-    labels = [
-        f'{row.get("Metric")} | {row.get("BudgetView")}'
-        for row in plot_rows
-    ]
+    labels = [f'{row.get("Metric")} | {row.get("BudgetView")}' for row in plot_rows]
     better = [_float_or_none(row.get('FacLocBetterPct')) or 0.0 for row in plot_rows]
     tied = [_float_or_none(row.get('FacLocTiedPct')) or 0.0 for row in plot_rows]
     worse = [_float_or_none(row.get('FacLocWorsePct')) or 0.0 for row in plot_rows]
@@ -2570,8 +2566,7 @@ def _plot_metric_family_delta_heatmap(
         ax.set_xticklabels(families, rotation=35, ha='right')
         ax.set_yticks(range(len(metric_labels)))
         ax.set_yticklabels([
-            _metric_title_from_rows(plot_rows, metric_label)
-            for metric_label in metric_labels
+            _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
         ])
         for y_index, metric_label in enumerate(metric_labels):
             for x_index, family in enumerate(families):
@@ -2622,8 +2617,7 @@ def _plot_fcp_family_budget_heatmaps(
     families = _ordered_families_for_summary_rows(plot_rows)
     budget_labels = [BUDGET_CATEGORY_LABELS[category] for category in BUDGET_CATEGORIES]
     budget_label_by_category = {
-        category: BUDGET_CATEGORY_LABELS[category]
-        for category in BUDGET_CATEGORIES
+        category: BUDGET_CATEGORY_LABELS[category] for category in BUDGET_CATEGORIES
     }
     matrices = [
         (
@@ -2773,10 +2767,7 @@ def _plot_budget_delta_columns(
 
 
 def _metric_plot_order(metric_label: str) -> int:
-    order = {
-        label: index
-        for index, label in enumerate(AGGREGATE_METRIC_ORDER)
-    }
+    order = {label: index for index, label in enumerate(AGGREGATE_METRIC_ORDER)}
     return order.get(metric_label, len(order))
 
 
@@ -2810,11 +2801,7 @@ def _ordered_families_for_summary_rows(rows: Sequence[Mapping[str, object]]) -> 
     return [
         family
         for family, _mean_value in sorted(
-            (
-                (family, statistics.fmean(values))
-                for family, values in grouped.items()
-                if values
-            ),
+            ((family, statistics.fmean(values)) for family, values in grouped.items() if values),
             key=lambda item: (-item[1], item[0]),
         )
     ]
@@ -2836,16 +2823,12 @@ def _summary_matrix(
         if row_key and column_key:
             by_key[(row_key, column_key)] = _float_or_none(row.get(value_field))
     return [
-        [by_key.get((row_key, column_key)) for column_key in column_keys]
-        for row_key in row_keys
+        [by_key.get((row_key, column_key)) for column_key in column_keys] for row_key in row_keys
     ]
 
 
 def _matrix_with_nan(matrix: Sequence[Sequence[float | None]]) -> list[list[float]]:
-    return [
-        [value if value is not None else math.nan for value in row]
-        for row in matrix
-    ]
+    return [[value if value is not None else math.nan for value in row] for row in matrix]
 
 
 def _symmetric_delta_norm(values: Sequence[float]) -> Any:
@@ -3220,7 +3203,7 @@ def _plot_lambda_delta_curve(
     fig, ax = plt.subplots(figsize=(7.2, 4.8))  # type: ignore[attr-defined]
     try:
         has_data = False
-        for strategy, color in (('mmr', '#1F77B4'), ('fac_loc', '#D62728')):
+        for (strategy), color in (('mmr', '#1F77B4'), ('fac_loc', '#D62728')):
             points = [
                 (
                     _float_or_none(row.get('lambda_norm')),
@@ -3237,7 +3220,7 @@ def _plot_lambda_delta_curve(
             means = [item['mean'] for item in binned]
             lowers = [item['q25'] for item in binned]
             uppers = [item['q75'] for item in binned]
-            ax.plot(xs, means, color=color, linewidth=2.0, label=_strategy_label(strategy))
+            ax.plot(xs, means, color=color, linewidth=2.0, label=_strategy_label(strategy))  # type: ignore
             ax.fill_between(xs, lowers, uppers, color=color, alpha=0.16)
 
         if not has_data:
