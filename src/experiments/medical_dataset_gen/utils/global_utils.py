@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import json
 import os
 import sys
 from collections.abc import Mapping
@@ -56,6 +57,7 @@ class MedicalDatasetGenPaths:
     results_dir = root / '_results'
     cache_dir = root / '_cache'
     default_ontology_path = root / 'data_templates' / 'medical_ontology.yaml'
+    experiment_aliases_path = results_dir / '_experiment_aliases.json'
 
     def __init__(
         self,
@@ -169,9 +171,15 @@ def resolve_experiment_name(exp_name: str, results_dir: Path | None = None) -> s
     if dir.is_dir():
         return exp_name
 
+    alias_target = _resolve_experiment_alias(exp_name, results_dir)
+    if alias_target is not None:
+        return alias_target
+
     if len(exp_path.parts) == 2:
         parent_prefix, child_prefix = exp_path.parts
-        parent_name = _resolve_experiment_dir_prefix(parent_prefix, results_dir).name
+        parent_name = _resolve_experiment_alias(parent_prefix, results_dir)
+        if parent_name is None:
+            parent_name = _resolve_experiment_dir_prefix(parent_prefix, results_dir).name
         child_dir = _resolve_experiment_dir_prefix(child_prefix, results_dir / parent_name)
         return f'{parent_name}/{child_dir.name}'
 
@@ -216,6 +224,37 @@ def _resolve_experiment_dir_prefix(prefix: str, parent_dir: Path) -> Path:
             f'found many matches: {[path.name for path in matches]}'
         )
     raise FileNotFoundError(f'no experiment directory prefixed {prefix!r} in {parent_dir}. ')
+
+
+def _resolve_experiment_alias(exp_name: str, results_dir: Path) -> str | None:
+    alias_target = _load_experiment_aliases(results_dir).get(exp_name)
+    if alias_target is None:
+        return None
+
+    target_path = Path(alias_target)
+    if target_path.is_absolute() or len(target_path.parts) > 2:
+        raise ValueError(f'experiment alias target must be relative with at most one child: {alias_target!r}')
+    if not (results_dir / target_path).is_dir():
+        raise FileNotFoundError(
+            f'experiment alias {exp_name!r} points to missing directory {alias_target!r}'
+        )
+    return alias_target
+
+
+def _load_experiment_aliases(results_dir: Path) -> dict[str, str]:
+    aliases_path = results_dir / '_experiment_aliases.json'
+    if not aliases_path.is_file():
+        return {}
+    raw = json.loads(aliases_path.read_text())
+    if not isinstance(raw, dict):
+        raise ValueError(f'experiment aliases file must contain a JSON object: {aliases_path}')
+
+    aliases: dict[str, str] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ValueError(f'experiment aliases must map strings to strings: {aliases_path}')
+        aliases[key] = value
+    return aliases
 
 
 def load_config(exp: str | None = None) -> ExperimentCfg:

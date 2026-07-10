@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import shutil
 import statistics
 from collections.abc import Iterable, Mapping, Sequence
@@ -3662,6 +3663,9 @@ def short_experiment_id(value: str) -> str:
 
 
 def short_token(value: str) -> str:
+    canonical_match = re.match(r'^(?P<token>[A-Z]+_[SML]\d{2})(?:_|$)', value)
+    if canonical_match is not None:
+        return canonical_match.group('token')
     return value.split('_', 1)[0]
 
 
