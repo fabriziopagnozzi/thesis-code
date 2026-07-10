@@ -24,7 +24,7 @@ from experiments.medical_dataset_gen.utils.exp_naming import (
 )
 
 
-def _base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
+def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
     metadata = embedding_metadata(record)
     return {
         'Experiment': record.name,
@@ -38,7 +38,7 @@ def _base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
         'EmbeddingModel': metadata.get('model_name') or record.embedding_model,
         'EmbeddingDimension': metadata.get('dimension'),
         'OnlyPassGeometry': record.only_pass_geometry,
-        'QueryScope': _query_scope_label(record.only_pass_geometry),
+        'QueryScope': query_scope_label(record.only_pass_geometry),
     }
 
 
@@ -54,17 +54,17 @@ def embedding_metadata(record: ExperimentRecord) -> dict[str, object]:
         return {}
     if not isinstance(raw, dict):
         return {}
-    return {str(key): value for key, value in raw.items() if _is_jsonish_scalar(value)}
+    return {str(key): value for key, value in raw.items() if is_jsonish_scalar(value)}
 
 
-def _mean_min_max_for_columns(df: pl.DataFrame, *, columns: Sequence[str]) -> dict[str, object]:
+def mean_min_max_for_columns(df: pl.DataFrame, *, columns: Sequence[str]) -> dict[str, object]:
     out: dict[str, object] = {}
     for column in columns:
         if column not in df.columns:
             continue
         values = [
             value
-            for value in (_float_or_none(value) for value in df[column].to_list())
+            for value in (float_or_none(value) for value in df[column].to_list())
             if value is not None
         ]
         if not values:
@@ -75,22 +75,22 @@ def _mean_min_max_for_columns(df: pl.DataFrame, *, columns: Sequence[str]) -> di
     return out
 
 
-def _primary_dominance_ratio(summary: Mapping[str, object]) -> float | None:
-    dominant = _float_or_none(summary.get('DominantPrimaryGoldCountMean'))
-    other_primary = _float_or_none(summary.get('OtherPrimaryGoldCountMean'))
-    secondary = _float_or_none(summary.get('SecondaryGoldCountMean'))
+def primary_dominance_ratio(summary: Mapping[str, object]) -> float | None:
+    dominant = float_or_none(summary.get('DominantPrimaryGoldCountMean'))
+    other_primary = float_or_none(summary.get('OtherPrimaryGoldCountMean'))
+    secondary = float_or_none(summary.get('SecondaryGoldCountMean'))
     reference_values = [value for value in (other_primary, secondary) if value and value > 0.0]
     if dominant is None or not reference_values:
         return None
     return dominant / statistics.fmean(reference_values)
 
 
-def _distribution_category(summary: Mapping[str, object]) -> str | None:
-    pool_size = _float_or_none(summary.get('PoolSizeMean'))
+def distribution_category(summary: Mapping[str, object]) -> str | None:
+    pool_size = float_or_none(summary.get('PoolSizeMean'))
     if pool_size is None:
         return None
     size_label = 'small' if pool_size <= 80 else 'medium' if pool_size <= 160 else 'large'
-    dominance = _primary_dominance_ratio(summary)
+    dominance = primary_dominance_ratio(summary)
     if dominance is None:
         dominance_label = 'unknown-dominance'
     elif dominance < 1.25:
@@ -99,16 +99,16 @@ def _distribution_category(summary: Mapping[str, object]) -> str | None:
         dominance_label = 'mild-primary-skew'
     else:
         dominance_label = 'strong-primary-skew'
-    background = _float_or_none(summary.get('BackgroundOutlierCountMean')) or 0.0
+    background = float_or_none(summary.get('BackgroundOutlierCountMean')) or 0.0
     background_label = 'no-bg' if background == 0.0 else 'bg-outliers'
-    niche = _float_or_none(summary.get('NicheGoldCountMean')) or 0.0
+    niche = float_or_none(summary.get('NicheGoldCountMean')) or 0.0
     niche_label = 'niche' if niche > 0.0 else 'no-niche'
-    near_miss = _float_or_none(summary.get('NearMissDistractorCountMean')) or 0.0
+    near_miss = float_or_none(summary.get('NearMissDistractorCountMean')) or 0.0
     distractor_label = 'low-distractors' if near_miss <= 12 else 'hard-distractors'
     return '/'.join([size_label, dominance_label, niche_label, background_label, distractor_label])
 
 
-def _lambda_norm(
+def lambda_norm(
     record: ExperimentRecord,
     strategy: StrategyName,
     lam: float | None,
@@ -129,8 +129,8 @@ def _lambda_norm(
     else:
         sub = stats.filter(pl.col('strategy') == strategy).drop_nulls(subset=['lam'])
         if not sub.is_empty():
-            start = _float_or_none(sub['lam'].min())
-            stop = _float_or_none(sub['lam'].max())
+            start = float_or_none(sub['lam'].min())
+            stop = float_or_none(sub['lam'].max())
     if start is None or stop is None:
         return None
     denominator = stop - start
@@ -139,11 +139,11 @@ def _lambda_norm(
     return (lam - start) / denominator
 
 
-def _winner_for_metric(row: Mapping[str, object], metric_label: str) -> str | None:
+def winner_for_metric(row: Mapping[str, object], metric_label: str) -> str | None:
     values = {
-        'top_k': _float_or_none(row.get(f'TopK_{metric_label}')),
-        'mmr': _float_or_none(row.get(f'MMR_{metric_label}')),
-        'fac_loc': _float_or_none(row.get(f'FacLoc_{metric_label}')),
+        'top_k': float_or_none(row.get(f'TopK_{metric_label}')),
+        'mmr': float_or_none(row.get(f'MMR_{metric_label}')),
+        'fac_loc': float_or_none(row.get(f'FacLoc_{metric_label}')),
     }
     present = {key: value for key, value in values.items() if value is not None}
     if not present:
@@ -151,7 +151,7 @@ def _winner_for_metric(row: Mapping[str, object], metric_label: str) -> str | No
     return max(present.items(), key=lambda item: item[1])[0]
 
 
-def _numeric_stats(values: Sequence[float], prefix: str) -> dict[str, object]:
+def numeric_stats(values: Sequence[float], prefix: str) -> dict[str, object]:
     if not values:
         return {
             f'{prefix}_mean': None,
@@ -168,17 +168,17 @@ def _numeric_stats(values: Sequence[float], prefix: str) -> dict[str, object]:
         f'{prefix}_min': min(values),
         f'{prefix}_max': max(values),
         f'{prefix}_median': statistics.median(values),
-        f'{prefix}_iqr': _quantile(sorted_values, 0.75) - _quantile(sorted_values, 0.25),
+        f'{prefix}_iqr': quantile(sorted_values, 0.75) - quantile(sorted_values, 0.25),
     }
 
 
-def _numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[float]:
+def numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[float]:
     return [
-        value for value in (_float_or_none(row.get(column)) for row in rows) if value is not None
+        value for value in (float_or_none(row.get(column)) for row in rows) if value is not None
     ]
 
 
-def _quantile(sorted_values: Sequence[float], q: float) -> float:
+def quantile(sorted_values: Sequence[float], q: float) -> float:
     if not sorted_values:
         return math.nan
     if len(sorted_values) == 1:
@@ -192,26 +192,26 @@ def _quantile(sorted_values: Sequence[float], q: float) -> float:
     return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
-def _boundary_rate(values: Sequence[float]) -> float | None:
+def boundary_rate(values: Sequence[float]) -> float | None:
     if not values:
         return None
     boundary_count = sum(value <= 0.02 or value >= 0.98 for value in values)
     return boundary_count / len(values)
 
 
-def _ratio(numerator: float | None, denominator: float | None) -> float | None:
+def ratio(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator is None or denominator == 0.0:
         return None
     return numerator / denominator
 
 
-def _subtract(left: float | None, right: float | None) -> float | None:
+def subtract(left: float | None, right: float | None) -> float | None:
     if left is None or right is None:
         return None
     return left - right
 
 
-def _delta_outcome(delta: float | None, *, epsilon: float) -> str | None:
+def delta_outcome(delta: float | None, *, epsilon: float) -> str | None:
     if delta is None:
         return None
     if delta < -epsilon:
@@ -221,7 +221,7 @@ def _delta_outcome(delta: float | None, *, epsilon: float) -> str | None:
     return 'facloc_better'
 
 
-def _int_or_none(value: object) -> int | None:
+def int_or_none(value: object) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool):
@@ -238,11 +238,11 @@ def _int_or_none(value: object) -> int | None:
         except ValueError:
             return None
     if isinstance(value, ScalarItem):
-        return _int_or_none(value.item())
+        return int_or_none(value.item())
     return None
 
 
-def _float_or_none(value: object) -> float | None:
+def float_or_none(value: object) -> float | None:
     if value is None:
         return None
     if isinstance(value, bool):
@@ -257,36 +257,36 @@ def _float_or_none(value: object) -> float | None:
             return None
         return None if math.isnan(numeric) or math.isinf(numeric) else numeric
     if isinstance(value, ScalarItem):
-        return _float_or_none(value.item())
+        return float_or_none(value.item())
     return None
 
 
-def _json_scalar(value: object) -> object:
-    if _is_jsonish_scalar(value):
+def json_scalar(value: object) -> object:
+    if is_jsonish_scalar(value):
         if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
             return None
         return value
     if isinstance(value, ScalarItem):
         item = value.item()
-        return item if _is_jsonish_scalar(item) else str(item)
+        return item if is_jsonish_scalar(item) else str(item)
     return str(value)
 
 
-def _series_mean(series: pl.Series) -> float | None:
-    values = [_float_or_none(value) for value in series.to_list()]
+def series_mean(series: pl.Series) -> float | None:
+    values = [float_or_none(value) for value in series.to_list()]
     present = [value for value in values if value is not None]
     return statistics.fmean(present) if present else None
 
 
-def _is_jsonish_scalar(value: object) -> bool:
+def is_jsonish_scalar(value: object) -> bool:
     return value is None or isinstance(value, str | int | float | bool)
 
 
-def _strategy_label(strategy: StrategyName) -> str:
+def strategy_label(strategy: StrategyName) -> str:
     return {'top_k': 'TopK', 'mmr': 'MMR', 'fac_loc': 'FacLoc'}[strategy]
 
 
-def _query_scope_label(only_pass_geometry: bool | None) -> str:
+def query_scope_label(only_pass_geometry: bool | None) -> str:
     if only_pass_geometry is True:
         return 'pass-only'
     if only_pass_geometry is False:
@@ -294,11 +294,11 @@ def _query_scope_label(only_pass_geometry: bool | None) -> str:
     return 'unknown'
 
 
-def _title_token(value: str) -> str:
+def title_token(value: str) -> str:
     return ''.join(part.capitalize() for part in value.split('_') if part)
 
 
-def _short_experiment_label(value: str) -> str:
+def short_experiment_label(value: str) -> str:
     if len(value) <= 42:
         return value
     if '/' in value:
@@ -322,38 +322,38 @@ def short_token(value: str) -> str:
     return value.split('_', 1)[0]
 
 
-def _short_model_label(value: str) -> str:
+def short_model_label(value: str) -> str:
     return value.rsplit('/', 1)[-1].replace('Embedding-', '').replace('-cos-v1', '')
 
 
-def _sorted_rows(
+def sorted_rows(
     rows: Sequence[Mapping[str, object]],
     column: str,
     *,
     descending: bool = True,
 ) -> list[Mapping[str, object]]:
-    with_values = [row for row in rows if _float_or_none(row.get(column)) is not None]
-    without_values = [row for row in rows if _float_or_none(row.get(column)) is None]
+    with_values = [row for row in rows if float_or_none(row.get(column)) is not None]
+    without_values = [row for row in rows if float_or_none(row.get(column)) is None]
     return (
         sorted(
             with_values,
-            key=lambda row: cast(float, _float_or_none(row.get(column))),
+            key=lambda row: cast(float, float_or_none(row.get(column))),
             reverse=descending,
         )
         + without_values
     )
 
 
-def _select_extreme_rows(
+def select_extreme_rows(
     rows: Sequence[Mapping[str, object]],
     column: str,
     max_rows: int,
 ) -> list[Mapping[str, object]]:
     if len(rows) <= max_rows:
-        return _sorted_rows(rows, column, descending=True)
+        return sorted_rows(rows, column, descending=True)
     half = max(1, max_rows // 2)
-    best = _sorted_rows(rows, column, descending=True)[:half]
-    worst = _sorted_rows(rows, column, descending=False)[: max_rows - half]
+    best = sorted_rows(rows, column, descending=True)[:half]
+    worst = sorted_rows(rows, column, descending=False)[: max_rows - half]
     selected: list[Mapping[str, object]] = []
     seen: set[str] = set()
     for row in [*best, *worst]:
@@ -362,10 +362,10 @@ def _select_extreme_rows(
             continue
         seen.add(experiment)
         selected.append(row)
-    return _sorted_rows(selected, column, descending=True)
+    return sorted_rows(selected, column, descending=True)
 
 
-def _section_with_table(
+def section_with_table(
     title: str,
     rows: Sequence[Mapping[str, object]],
     *,
@@ -379,14 +379,14 @@ def _section_with_table(
         return lines
     shown = rows[:max_rows]
     table_rows = [
-        [_format_table_value(row.get(column), column=column) for column in columns] for row in shown
+        [format_table_value(row.get(column), column=column) for column in columns] for row in shown
     ]
     lines.append(
         tabulate(
             table_rows,
-            headers=[_table_header(column) for column in columns],
+            headers=[table_header(column) for column in columns],
             tablefmt=tablefmt,
-            maxcolwidths=[_table_col_width(column) for column in columns],
+            maxcolwidths=[table_col_width(column) for column in columns],
             disable_numparse=True,
         )
     )
@@ -397,12 +397,12 @@ def _section_with_table(
     return lines
 
 
-def _format_table_value(value: object, *, column: str) -> object:
+def format_table_value(value: object, *, column: str) -> object:
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, str):
         return value if len(value) <= 70 else value[:67] + '...'
-    numeric = _float_or_none(value)
+    numeric = float_or_none(value)
     if numeric is not None:
         if column in INTEGER_TABLE_COLUMNS:
             return f'{numeric:.0f}'
@@ -417,13 +417,13 @@ def _format_table_value(value: object, *, column: str) -> object:
     return text if len(text) <= 70 else text[:67] + '...'
 
 
-def _table_header(column: str) -> str:
+def table_header(column: str) -> str:
     return TABLE_HEADERS.get(column, column)
 
 
-def _table_col_width(column: str) -> int:
+def table_col_width(column: str) -> int:
     return TABLE_COL_WIDTHS.get(column, DEFAULT_TABLE_COL_WIDTH)
 
 
-def _bullets(items: Iterable[str]) -> list[str]:
+def bullets(items: Iterable[str]) -> list[str]:
     return [f'- {item}' for item in items]

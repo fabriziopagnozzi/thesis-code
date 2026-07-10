@@ -10,11 +10,11 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     REPORT_FILES,
 )
 from experiments.medical_dataset_gen.analysis.helpers import (
-    _bullets,
-    _float_or_none,
-    _numeric_values,
-    _section_with_table,
-    _sorted_rows,
+    bullets,
+    float_or_none,
+    numeric_values,
+    section_with_table,
+    sorted_rows,
 )
 from experiments.medical_dataset_gen.analysis.models import CliArgs, ExperimentRecord
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
@@ -69,9 +69,9 @@ def render_report(
     ]
 
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Low Budget FacetCoveragePurity',
-            _sorted_rows(low_budget_rows, 'Delta_FacLoc_MMR_FCP'),
+            sorted_rows(low_budget_rows, 'Delta_FacLoc_MMR_FCP'),
             columns=[
                 'ShortExperiment',
                 'k',
@@ -95,9 +95,9 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Where FacLoc Is Worse Or Tied With MMR',
-            _sorted_rows(
+            sorted_rows(
                 [
                     row
                     for row in comparison_rows
@@ -124,7 +124,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'By Evaluation Metric and Retrieval Budget',
             metric_summary_rows,
             columns=[
@@ -145,7 +145,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Experiment Family Summary',
             family_summary_rows,
             columns=[
@@ -164,7 +164,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Experiment Family By Budget Summary',
             family_budget_summary_rows,
             columns=[
@@ -184,7 +184,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'By Evaluation Metric and Experiment Family',
             metric_family_summary_rows,
             columns=[
@@ -204,7 +204,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'By Evaluation Metric, Experiment Family, and Retrieval Budget',
             metric_family_budget_summary_rows,
             columns=[
@@ -225,7 +225,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Dataset Distributions',
             dataset_rows,
             columns=[
@@ -247,7 +247,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Geometry Filter And Embeddings',
             geometry_rows,
             columns=[
@@ -267,7 +267,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Lambda Stability',
             lambda_rows,
             columns=[
@@ -287,9 +287,9 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Lambda Safety On Validation FCP',
-            _sorted_rows(lambda_safety_rows, 'WorstDeltaStrategyTopK_FCP', descending=False),
+            sorted_rows(lambda_safety_rows, 'WorstDeltaStrategyTopK_FCP', descending=False),
             columns=[
                 'ShortExperiment',
                 'k',
@@ -307,7 +307,7 @@ def render_report(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Embedding Model Summary',
             embedding_summary_rows,
             columns=[
@@ -329,14 +329,14 @@ def render_report(
     lines.extend([
         '## Output Files',
         '',
-        *_bullets(f'`{file_name}`' for file_name in REPORT_FILES),
+        *bullets(f'`{file_name}`' for file_name in REPORT_FILES),
     ])
     if figures:
         lines.extend([
             '',
             '## Figures',
             '',
-            *_bullets(f'`{path.relative_to(args.output_dir)}`' for path in figures),
+            *bullets(f'`{path.relative_to(args.output_dir)}`' for path in figures),
         ])
     return '\n'.join(lines) + '\n'
 
@@ -357,12 +357,10 @@ def render_interesting_findings(
     tablefmt: str,
     max_table_rows: int,
 ) -> str:
-    fcp_deltas = _numeric_values(comparison_rows, 'Delta_FacLoc_MMR_FCP')
-    topk_deltas = _numeric_values(comparison_rows, 'Delta_FacLoc_TopK_FCP')
+    fcp_deltas = numeric_values(comparison_rows, 'Delta_FacLoc_MMR_FCP')
+    topk_deltas = numeric_values(comparison_rows, 'Delta_FacLoc_TopK_FCP')
     complete_fcp_rows = [
-        row
-        for row in comparison_rows
-        if _float_or_none(row.get('Delta_FacLoc_MMR_FCP')) is not None
+        row for row in comparison_rows if float_or_none(row.get('Delta_FacLoc_MMR_FCP')) is not None
     ]
     facloc_better_rows = [
         row for row in complete_fcp_rows if row.get('FacLocVsMMR_FCPOutcome') == 'facloc_better'
@@ -374,9 +372,9 @@ def render_interesting_findings(
         row for row in complete_fcp_rows if row.get('FacLocVsMMR_FCPOutcome') == 'tied'
     ]
     facloc_beats_topk = sum(
-        (_float_or_none(row.get('Delta_FacLoc_TopK_FCP')) or 0.0) > 0.0
+        (float_or_none(row.get('Delta_FacLoc_TopK_FCP')) or 0.0) > 0.0
         for row in comparison_rows
-        if _float_or_none(row.get('Delta_FacLoc_TopK_FCP')) is not None
+        if float_or_none(row.get('Delta_FacLoc_TopK_FCP')) is not None
     )
 
     lines: list[str] = ['# Interesting Findings', '']
@@ -406,15 +404,15 @@ def render_interesting_findings(
         lines.append(
             '- Strongest family-level FacLoc - MMR FCP margin: '
             f'`{strongest_family.get("ExperimentFamilyLabel")}` '
-            f'(`{(_float_or_none(strongest_family.get("Delta_FacLoc_MMR_FCP_mean")) or 0.0):.4f}` mean). '
+            f'(`{(float_or_none(strongest_family.get("Delta_FacLoc_MMR_FCP_mean")) or 0.0):.4f}` mean). '
             'Weakest family-level margin: '
             f'`{weakest_family.get("ExperimentFamilyLabel")}` '
-            f'(`{(_float_or_none(weakest_family.get("Delta_FacLoc_MMR_FCP_mean")) or 0.0):.4f}` mean).'
+            f'(`{(float_or_none(weakest_family.get("Delta_FacLoc_MMR_FCP_mean")) or 0.0):.4f}` mean).'
         )
     facloc_worst_deltas = [
         value
         for value in (
-            _float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
+            float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
             for row in lambda_safety_rows
             if row.get('strategy') == 'fac_loc'
         )
@@ -423,7 +421,7 @@ def render_interesting_findings(
     mmr_worst_deltas = [
         value
         for value in (
-            _float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
+            float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
             for row in lambda_safety_rows
             if row.get('strategy') == 'mmr'
         )
@@ -437,7 +435,7 @@ def render_interesting_findings(
         )
 
     lambda_std = {
-        str(row.get('strategy')): _float_or_none(row.get('selected_lambda_norm_std'))
+        str(row.get('strategy')): float_or_none(row.get('selected_lambda_norm_std'))
         for row in lambda_rows
     }
     facloc_lambda_std = lambda_std.get('fac_loc')
@@ -451,9 +449,9 @@ def render_interesting_findings(
 
     lines.append('')
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Largest FacLoc Over MMR Gains',
-            _sorted_rows(low_budget_rows, 'Delta_FacLoc_MMR_FCP', descending=True),
+            sorted_rows(low_budget_rows, 'Delta_FacLoc_MMR_FCP', descending=True),
             columns=[
                 'ShortExperiment',
                 'k',
@@ -470,7 +468,7 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'By Evaluation Metric and Retrieval Budget',
             metric_summary_rows,
             columns=[
@@ -489,7 +487,7 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Experiment Family Summary',
             family_summary_rows,
             columns=[
@@ -507,7 +505,7 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Experiment Family By Budget Summary',
             family_budget_summary_rows,
             columns=[
@@ -526,7 +524,7 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'By Evaluation Metric and Experiment Family',
             metric_family_summary_rows,
             columns=[
@@ -545,7 +543,7 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'By Evaluation Metric, Experiment Family, and Retrieval Budget',
             metric_family_budget_summary_rows,
             columns=[
@@ -565,9 +563,9 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'FacLoc Worse Or Tied With MMR',
-            _sorted_rows(
+            sorted_rows(
                 [
                     row
                     for row in comparison_rows
@@ -594,9 +592,9 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Lowest Geometry Pass Rates',
-            _sorted_rows(geometry_rows, 'GeometryPassRate', descending=False),
+            sorted_rows(geometry_rows, 'GeometryPassRate', descending=False),
             columns=[
                 'ShortExperiment',
                 'EmbeddingModel',
@@ -611,7 +609,7 @@ def render_interesting_findings(
         )
     )
     lines.extend(
-        _section_with_table(
+        section_with_table(
             'Embedding Summary',
             embedding_summary_rows,
             columns=[

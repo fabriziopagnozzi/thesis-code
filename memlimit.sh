@@ -26,8 +26,8 @@ systemd-run --user \
   --setenv="QUERY_GEOMETRY_WORKERS=${QUERY_GEOMETRY_WORKERS:-7}" \
   --setenv=HF_TOKEN \
   --property=Type=exec \
-  -p MemoryHigh="${MEMORY_HIGH:-52G}" \
-  -p MemoryMax="${MEMORY_MAX:-55G}" \
+  -p MemoryHigh="${MEMORY_HIGH:-48G}" \
+  -p MemoryMax="${MEMORY_MAX:-50G}" \
   -p MemorySwapMax="${MEMORY_SWAP_MAX:-0G}" \
   -p OOMPolicy=kill \
   -p KillMode=control-group \

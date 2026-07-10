@@ -14,16 +14,16 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     DeltaMetricLabel,
 )
 from experiments.medical_dataset_gen.analysis.helpers import (
-    _boundary_rate,
-    _delta_outcome,
-    _float_or_none,
-    _int_or_none,
-    _numeric_stats,
-    _numeric_values,
-    _sorted_rows,
-    _strategy_label,
-    _subtract,
-    _winner_for_metric,
+    boundary_rate,
+    delta_outcome,
+    float_or_none,
+    int_or_none,
+    numeric_stats,
+    numeric_values,
+    sorted_rows,
+    strategy_label,
+    subtract,
+    winner_for_metric,
 )
 from experiments.medical_dataset_gen.analysis.models import BudgetCategory
 from experiments.medical_dataset_gen.analysis.report_config import (
@@ -37,7 +37,7 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
     grouped: dict[tuple[str, int], dict[str, Mapping[str, object]]] = {}
     for row in strategy_rows:
         experiment = str(row.get('Experiment') or '')
-        k = _int_or_none(row.get('k'))
+        k = int_or_none(row.get('k'))
         strategy = row.get('strategy')
         if not experiment or k is None or strategy not in STRATEGIES:
             continue
@@ -63,7 +63,7 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
         }
         for strategy in STRATEGIES:
             row = by_strategy.get(strategy)
-            label = _strategy_label(strategy)
+            label = strategy_label(strategy)
             out[f'{label}_lambda'] = row.get('lam') if row else None
             out[f'{label}_lambda_norm'] = row.get('lambda_norm') if row else None
             out[f'{label}_n_queries'] = row.get('n_queries') if row else None
@@ -71,23 +71,23 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
                 out[f'{label}_{metric_label}'] = row.get(metric) if row else None
 
         for metric_label in DELTA_METRIC_LABELS:
-            fac_loc = _float_or_none(out.get(f'FacLoc_{metric_label}'))
-            mmr = _float_or_none(out.get(f'MMR_{metric_label}'))
-            top_k = _float_or_none(out.get(f'TopK_{metric_label}'))
-            out[f'Delta_FacLoc_MMR_{metric_label}'] = _subtract(fac_loc, mmr)
-            out[f'Delta_FacLoc_TopK_{metric_label}'] = _subtract(fac_loc, top_k)
-            out[f'Delta_MMR_TopK_{metric_label}'] = _subtract(mmr, top_k)
+            fac_loc = float_or_none(out.get(f'FacLoc_{metric_label}'))
+            mmr = float_or_none(out.get(f'MMR_{metric_label}'))
+            top_k = float_or_none(out.get(f'TopK_{metric_label}'))
+            out[f'Delta_FacLoc_MMR_{metric_label}'] = subtract(fac_loc, mmr)
+            out[f'Delta_FacLoc_TopK_{metric_label}'] = subtract(fac_loc, top_k)
+            out[f'Delta_MMR_TopK_{metric_label}'] = subtract(mmr, top_k)
 
-        out['FacLocVsMMR_FCPOutcome'] = _delta_outcome(
-            _float_or_none(out.get('Delta_FacLoc_MMR_FCP')),
+        out['FacLocVsMMR_FCPOutcome'] = delta_outcome(
+            float_or_none(out.get('Delta_FacLoc_MMR_FCP')),
             epsilon=FCP_TIE_EPSILON,
         )
-        out['FacLocVsMMR_AllFacetCleanRateOutcome'] = _delta_outcome(
-            _float_or_none(out.get('Delta_FacLoc_MMR_AllFacetCleanRate')),
+        out['FacLocVsMMR_AllFacetCleanRateOutcome'] = delta_outcome(
+            float_or_none(out.get('Delta_FacLoc_MMR_AllFacetCleanRate')),
             epsilon=FCP_TIE_EPSILON,
         )
-        out['FCPWinner'] = _winner_for_metric(out, 'FCP')
-        out['AllFacetCleanRateWinner'] = _winner_for_metric(out, 'AllFacetCleanRate')
+        out['FCPWinner'] = winner_for_metric(out, 'FCP')
+        out['AllFacetCleanRateWinner'] = winner_for_metric(out, 'AllFacetCleanRate')
         rows.append(out)
     return rows
 
@@ -105,7 +105,7 @@ def experiment_family_summary_rows(
         for family, group in grouped.items()
     ]
 
-    return _sorted_rows(rows, 'Delta_FacLoc_MMR_FCP_mean')  # type: ignore
+    return sorted_rows(rows, 'Delta_FacLoc_MMR_FCP_mean')  # type: ignore
 
 
 def experiment_family_budget_summary_rows(
@@ -127,7 +127,7 @@ def experiment_family_budget_summary_rows(
     family_mean_delta = {
         family: (
             statistics.fmean(values)
-            if (values := _numeric_values(group, 'Delta_FacLoc_MMR_FCP'))
+            if (values := numeric_values(group, 'Delta_FacLoc_MMR_FCP'))
             else -math.inf
         )
         for family, group in family_groups.items()
@@ -183,26 +183,26 @@ def _experiment_family_summary_row(
         out['BudgetCategory'] = budget_category
         out['BudgetCategoryLabel'] = budget_label
     out.update(
-        _numeric_stats(
-            _numeric_values(group, 'Delta_FacLoc_MMR_FCP'),
+        numeric_stats(
+            numeric_values(group, 'Delta_FacLoc_MMR_FCP'),
             'Delta_FacLoc_MMR_FCP',
         )
     )
     out.update(
-        _numeric_stats(
-            _numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
+        numeric_stats(
+            numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
             'Delta_FacLoc_TopK_FCP',
         )
     )
     out.update(
-        _numeric_stats(
-            _numeric_values(group, 'Delta_MMR_TopK_FCP'),
+        numeric_stats(
+            numeric_values(group, 'Delta_MMR_TopK_FCP'),
             'Delta_MMR_TopK_FCP',
         )
     )
     out.update(
-        _numeric_stats(
-            _numeric_values(group, 'Delta_FacLoc_MMR_AllFacetCleanRate'),
+        numeric_stats(
+            numeric_values(group, 'Delta_FacLoc_MMR_AllFacetCleanRate'),
             'Delta_FacLoc_MMR_AllFacetCleanRate',
         )
     )
@@ -270,7 +270,7 @@ def metric_family_summary_rows(
     rows.sort(
         key=lambda row: (
             cast(int, row['_MetricSort']),
-            -(_float_or_none(row.get('MeanDeltaFacLocMMR')) or -math.inf),
+            -(float_or_none(row.get('MeanDeltaFacLocMMR')) or -math.inf),
             str(row.get('ExperimentFamilyLabel') or ''),
         )
     )
@@ -303,7 +303,7 @@ def metric_family_budget_summary_rows(
             family: (
                 statistics.fmean(values)
                 if (
-                    values := _numeric_values(
+                    values := numeric_values(
                         group,
                         f'Delta_FacLoc_MMR_{spec.metric_label}',
                     )
@@ -353,10 +353,10 @@ def _metric_group_summary_row(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
-    complete_rows = [row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None]
-    deltas_fm = _numeric_values(complete_rows, delta_fm_col)
-    deltas_ft = _numeric_values(complete_rows, delta_ft_col)
-    deltas_mt = _numeric_values(complete_rows, delta_mt_col)
+    complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
+    deltas_fm = numeric_values(complete_rows, delta_fm_col)
+    deltas_ft = numeric_values(complete_rows, delta_ft_col)
+    deltas_mt = numeric_values(complete_rows, delta_mt_col)
     out: dict[str, object] = {
         'Metric': metric_title,
         'MetricLabel': metric,
@@ -421,10 +421,10 @@ def _metric_aggregate_row(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
-    complete_rows = [row for row in rows if _float_or_none(row.get(delta_fm_col)) is not None]
-    deltas_fm = _numeric_values(complete_rows, delta_fm_col)
-    deltas_ft = _numeric_values(complete_rows, delta_ft_col)
-    deltas_mt = _numeric_values(complete_rows, delta_mt_col)
+    complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
+    deltas_fm = numeric_values(complete_rows, delta_fm_col)
+    deltas_ft = numeric_values(complete_rows, delta_ft_col)
+    deltas_mt = numeric_values(complete_rows, delta_mt_col)
     facloc_better = sum(delta > FCP_TIE_EPSILON for delta in deltas_fm)
     facloc_tied = sum(abs(delta) <= FCP_TIE_EPSILON for delta in deltas_fm)
     facloc_worse = sum(delta < -FCP_TIE_EPSILON for delta in deltas_fm)
@@ -483,7 +483,7 @@ def budget_category_rows_from_comparisons(
             row
             for row in group
             if all(
-                row.get(f'{_strategy_label(strategy)}_FCP') is not None for strategy in STRATEGIES
+                row.get(f'{strategy_label(strategy)}_FCP') is not None for strategy in STRATEGIES
             )
         ]
         candidates = sorted(
@@ -533,32 +533,32 @@ def lambda_stability_rows(
     rows: list[dict[str, object]] = []
     for strategy in DIVERSIFYING_STRATEGIES:
         selected = [row for row in strategy_rows if row.get('strategy') == strategy]
-        lambdas = [_float_or_none(row.get('lam')) for row in selected]
-        lambda_norms = [_float_or_none(row.get('lambda_norm')) for row in selected]
+        lambdas = [float_or_none(row.get('lam')) for row in selected]
+        lambda_norms = [float_or_none(row.get('lambda_norm')) for row in selected]
         lambdas = [value for value in lambdas if value is not None]
         lambda_norms = [value for value in lambda_norms if value is not None]
         near_rows = [row for row in near_optimal_rows if row.get('strategy') == strategy]
         near_fractions = [
             value
-            for value in (_float_or_none(row.get('NearOptimalLambdaFraction')) for row in near_rows)
+            for value in (float_or_none(row.get('NearOptimalLambdaFraction')) for row in near_rows)
             if value is not None
         ]
         near_spans = [
             value
-            for value in (_float_or_none(row.get('NearOptimalLambdaSpanNorm')) for row in near_rows)
+            for value in (float_or_none(row.get('NearOptimalLambdaSpanNorm')) for row in near_rows)
             if value is not None
         ]
         row: dict[str, object] = {
             'strategy': strategy,
             'n_selected': len(lambdas),
             'distinct_lambda_count': len(set(round(value, 6) for value in lambdas)),
-            'boundary_selection_rate': _boundary_rate(lambda_norms),
+            'boundary_selection_rate': boundary_rate(lambda_norms),
             'near_optimal_rows': len(near_rows),
         }
-        row.update(_numeric_stats(lambdas, prefix='selected_lambda'))
-        row.update(_numeric_stats(lambda_norms, prefix='selected_lambda_norm'))
-        row.update(_numeric_stats(near_fractions, prefix='near_optimal_fraction'))
-        row.update(_numeric_stats(near_spans, prefix='near_optimal_span_norm'))
+        row.update(numeric_stats(lambdas, prefix='selected_lambda'))
+        row.update(numeric_stats(lambda_norms, prefix='selected_lambda_norm'))
+        row.update(numeric_stats(near_fractions, prefix='near_optimal_fraction'))
+        row.update(numeric_stats(near_spans, prefix='near_optimal_span_norm'))
         rows.append(row)
     return rows
 
@@ -576,21 +576,19 @@ def embedding_model_summary_rows(
     for experiment, manifest in manifest_by_exp.items():
         geometry = geometry_by_exp.get(experiment, {})
         low_budget = low_budget_by_exp.get(experiment, {})
-        run_rows.append(
-            {
-                'EmbeddingModel': manifest.get('EmbeddingModel'),
-                'EmbeddingDimension': manifest.get('EmbeddingDimension'),
-                'GeometryPassRate': geometry.get('GeometryPassRate'),
-                'GeometryQueries': geometry.get('GeometryQueries'),
-                'GeometryPassQueries': geometry.get('GeometryPassQueries'),
-                'TopK_FCP': low_budget.get('TopK_FCP'),
-                'MMR_FCP': low_budget.get('MMR_FCP'),
-                'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
-                'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
-                'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
-                'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
-            }
-        )
+        run_rows.append({
+            'EmbeddingModel': manifest.get('EmbeddingModel'),
+            'EmbeddingDimension': manifest.get('EmbeddingDimension'),
+            'GeometryPassRate': geometry.get('GeometryPassRate'),
+            'GeometryQueries': geometry.get('GeometryQueries'),
+            'GeometryPassQueries': geometry.get('GeometryPassQueries'),
+            'TopK_FCP': low_budget.get('TopK_FCP'),
+            'MMR_FCP': low_budget.get('MMR_FCP'),
+            'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
+            'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
+            'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
+            'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
+        })
 
     grouped: dict[str, list[Mapping[str, object]]] = {}
     for row in run_rows:
@@ -600,23 +598,21 @@ def embedding_model_summary_rows(
     rows: list[dict[str, object]] = []
     for model, group in sorted(grouped.items()):
         out: dict[str, object] = {'EmbeddingModel': model, 'Runs': len(group)}
+        out.update(numeric_stats(numeric_values(group, 'EmbeddingDimension'), 'EmbeddingDimension'))
+        out.update(numeric_stats(numeric_values(group, 'GeometryPassRate'), 'GeometryPassRate'))
+        out.update(numeric_stats(numeric_values(group, 'GeometryQueries'), 'GeometryQueries'))
         out.update(
-            _numeric_stats(_numeric_values(group, 'EmbeddingDimension'), 'EmbeddingDimension')
+            numeric_stats(numeric_values(group, 'GeometryPassQueries'), 'GeometryPassQueries')
         )
-        out.update(_numeric_stats(_numeric_values(group, 'GeometryPassRate'), 'GeometryPassRate'))
-        out.update(_numeric_stats(_numeric_values(group, 'GeometryQueries'), 'GeometryQueries'))
+        out.update(numeric_stats(numeric_values(group, 'TopK_FCP'), 'TopK_FCP'))
+        out.update(numeric_stats(numeric_values(group, 'MMR_FCP'), 'MMR_FCP'))
+        out.update(numeric_stats(numeric_values(group, 'FacLoc_FCP'), 'FacLoc_FCP'))
         out.update(
-            _numeric_stats(_numeric_values(group, 'GeometryPassQueries'), 'GeometryPassQueries')
-        )
-        out.update(_numeric_stats(_numeric_values(group, 'TopK_FCP'), 'TopK_FCP'))
-        out.update(_numeric_stats(_numeric_values(group, 'MMR_FCP'), 'MMR_FCP'))
-        out.update(_numeric_stats(_numeric_values(group, 'FacLoc_FCP'), 'FacLoc_FCP'))
-        out.update(
-            _numeric_stats(_numeric_values(group, 'Delta_FacLoc_MMR_FCP'), 'Delta_FacLoc_MMR_FCP')
+            numeric_stats(numeric_values(group, 'Delta_FacLoc_MMR_FCP'), 'Delta_FacLoc_MMR_FCP')
         )
         out.update(
-            _numeric_stats(
-                _numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
+            numeric_stats(
+                numeric_values(group, 'Delta_FacLoc_TopK_FCP'),
                 'Delta_FacLoc_TopK_FCP',
             )
         )

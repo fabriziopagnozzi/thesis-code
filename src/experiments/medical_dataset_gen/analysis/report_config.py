@@ -17,13 +17,11 @@ AGGREGATE_METRIC_ORDER: tuple[DeltaMetricLabel, ...] = (
     'AllFacetCleanRate',
     'Recall',
 )
-AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset(
-    {
-        'Budget sweeps',
-        'Embedding comparison',
-        'Unknown',
-    }
-)
+AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset({
+    'Budget sweeps',
+    'Embedding comparison',
+    'Unknown',
+})
 LEGACY_LOW_BUDGET_TOKEN = ''.join(('head', 'line'))
 
 DELTA_METRIC_PLOT_SPECS: tuple[DeltaMetricPlotSpec, ...] = (

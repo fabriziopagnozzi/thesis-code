@@ -13,16 +13,16 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     ExperimentFamilyId,
 )
 from experiments.medical_dataset_gen.analysis.helpers import (
-    _float_or_none,
-    _quantile,
-    _short_experiment_label,
-    _short_model_label,
-    _strategy_label,
+    float_or_none,
+    quantile,
+    short_experiment_label,
+    short_model_label,
+    strategy_label,
 )
 from experiments.medical_dataset_gen.analysis.models import PlotFormat
 
 
-def _annotate_horizontal_values(*, ax: Any, values: Sequence[float]) -> None:
+def annotate_horizontal_values(*, ax: Any, values: Sequence[float]) -> None:
     if not values:
         return
     min_value = min([0.0, *values])
@@ -62,16 +62,14 @@ def _family_grouped_rows(
     for family_id, group in grouped.items():
         values = [
             value
-            for value in (_float_or_none(row.get(value_column)) for row in group)
+            for value in (float_or_none(row.get(value_column)) for row in group)
             if value is not None
         ]
-        family_order.append(
-            (
-                statistics.fmean(values) if values else float('-inf'),
-                EXPERIMENT_FAMILY_LABELS[family_id],
-                family_id,
-            )
-        )
+        family_order.append((
+            statistics.fmean(values) if values else float('-inf'),
+            EXPERIMENT_FAMILY_LABELS[family_id],
+            family_id,
+        ))
 
     ordered_rows: list[Mapping[str, object]] = []
     for _mean_value, _label, family_id in sorted(
@@ -82,7 +80,7 @@ def _family_grouped_rows(
             sorted(
                 grouped[family_id],
                 key=lambda row: (
-                    -(_float_or_none(row.get(value_column)) or float('-inf')),
+                    -(float_or_none(row.get(value_column)) or float('-inf')),
                     str(row.get('ShortExperiment') or row.get('Experiment') or ''),
                 ),
             )
@@ -105,7 +103,7 @@ def _query_scope_paired_rows(
     for key, group in grouped.items():
         values = [
             value
-            for value in (_float_or_none(row.get(value_column)) for row in group)
+            for value in (float_or_none(row.get(value_column)) for row in group)
             if value is not None
         ]
         if not values:
@@ -137,8 +135,8 @@ def _sorted_pair_rows_by_source_mean(
     return sorted(
         rows,
         key=lambda row: _mean_available(
-            _float_or_none(row.get(pass_column)),
-            _float_or_none(row.get(all_query_column)),
+            float_or_none(row.get(pass_column)),
+            float_or_none(row.get(all_query_column)),
         ),
     )
 
@@ -171,7 +169,7 @@ def _representative_distribution_rows(
     return _family_grouped_rows(representatives, 'GoldPercentage')
 
 
-def _family_color_for_row(row: Mapping[str, object]) -> str:
+def family_color_for_row(row: Mapping[str, object]) -> str:
     return EXPERIMENT_FAMILY_COLORS[_family_id_for_row(row)]
 
 
@@ -214,10 +212,10 @@ def _add_family_legend(*, fig: Any, rows: Sequence[Mapping[str, object]]) -> Non
 
 def _color_tick_labels_by_family(*, ax: Any, rows: Sequence[Mapping[str, object]]) -> None:
     for tick_label, row in zip(ax.get_yticklabels(), rows, strict=False):
-        tick_label.set_color(_family_color_for_row(row))
+        tick_label.set_color(family_color_for_row(row))
 
 
-def _plot_geometry_pass_rate(
+def plot_geometry_pass_rate(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -228,12 +226,12 @@ def _plot_geometry_pass_rate(
     if not plot_rows:
         return []
     labels = [
-        f'{row.get("ShortExperiment") or _short_experiment_label(str(row.get("Experiment")))}/'
-        f'{_short_model_label(str(row.get("EmbeddingModel")))}'
+        f'{row.get("ShortExperiment") or short_experiment_label(str(row.get("Experiment")))}/'
+        f'{short_model_label(str(row.get("EmbeddingModel")))}'
         for row in plot_rows
     ]
-    values = [_float_or_none(row.get('GeometryPassRate')) or 0.0 for row in plot_rows]
-    colors = [_family_color_for_row(row) for row in plot_rows]
+    values = [float_or_none(row.get('GeometryPassRate')) or 0.0 for row in plot_rows]
+    colors = [family_color_for_row(row) for row in plot_rows]
     fig_height = max(5.0, 0.28 * len(labels) + 1.6)
     fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
@@ -245,7 +243,7 @@ def _plot_geometry_pass_rate(
         ax.invert_yaxis()
         ax.set_xlim(0, 1)
         ax.grid(axis='x', alpha=0.25)
-        _annotate_horizontal_values(ax=ax, values=values)
+        annotate_horizontal_values(ax=ax, values=values)
         ax.set_xlim(0, 1.08)
         _add_family_legend(fig=fig, rows=plot_rows)
         fig.tight_layout(rect=(0, 0.03, 1, 1))
@@ -263,7 +261,7 @@ def _geometry_pass_rate_rows(
         [
             row
             for row in rows
-            if _float_or_none(row.get('GeometryPassRate')) is not None
+            if float_or_none(row.get('GeometryPassRate')) is not None
             and _is_pass_only_geometry_row(row)
         ],
         'GeometryPassRate',
@@ -282,7 +280,7 @@ def _is_pass_only_geometry_row(row: Mapping[str, object]) -> bool:
     return False
 
 
-def _plot_lambda_stability(
+def plot_lambda_stability(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -293,8 +291,8 @@ def _plot_lambda_stability(
     if not plot_rows:
         return []
     labels = [str(row.get('strategy')) for row in plot_rows]
-    means = [_float_or_none(row.get('selected_lambda_norm_mean')) or 0.0 for row in plot_rows]
-    stds = [_float_or_none(row.get('selected_lambda_norm_std')) or 0.0 for row in plot_rows]
+    means = [float_or_none(row.get('selected_lambda_norm_mean')) or 0.0 for row in plot_rows]
+    stds = [float_or_none(row.get('selected_lambda_norm_std')) or 0.0 for row in plot_rows]
     fig, ax = plt.subplots(figsize=(6.5, 4.5))  # type: ignore[attr-defined]
     try:
         ax.bar(labels, means, yerr=stds, color=['#C47A3A', '#287C8E'], capsize=5)
@@ -310,7 +308,7 @@ def _plot_lambda_stability(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_lambda_safety_worst_delta(
+def plot_lambda_safety_worst_delta(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -323,7 +321,7 @@ def _plot_lambda_safety_worst_delta(
         values = [
             value
             for value in (
-                _float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
+                float_or_none(row.get('WorstDeltaStrategyTopK_FCP'))
                 for row in rows
                 if row.get('strategy') == strategy
             )
@@ -331,7 +329,7 @@ def _plot_lambda_safety_worst_delta(
         ]
         if values:
             data.append(values)
-            labels.append(_strategy_label(strategy))
+            labels.append(strategy_label(strategy))
     if not data:
         return []
 
@@ -354,7 +352,7 @@ def _plot_lambda_safety_worst_delta(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_lambda_delta_curve(
+def plot_lambda_delta_curve(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -367,8 +365,8 @@ def _plot_lambda_delta_curve(
         for (strategy), color in (('mmr', '#1F77B4'), ('fac_loc', '#D62728')):
             points = [
                 (
-                    _float_or_none(row.get('lambda_norm')),
-                    _float_or_none(row.get('DeltaStrategyTopK_FCP')),
+                    float_or_none(row.get('lambda_norm')),
+                    float_or_none(row.get('DeltaStrategyTopK_FCP')),
                 )
                 for row in rows
                 if row.get('strategy') == strategy
@@ -381,7 +379,7 @@ def _plot_lambda_delta_curve(
             means = [item['mean'] for item in binned]
             lowers = [item['q25'] for item in binned]
             uppers = [item['q75'] for item in binned]
-            ax.plot(xs, means, color=color, linewidth=2.0, label=_strategy_label(strategy))  # type: ignore
+            ax.plot(xs, means, color=color, linewidth=2.0, label=strategy_label(strategy))  # type: ignore
             ax.fill_between(xs, lowers, uppers, color=color, alpha=0.16)
 
         if not has_data:
@@ -420,18 +418,16 @@ def _binned_lambda_delta_stats(
         if not values:
             continue
         sorted_values = sorted(values)
-        out.append(
-            {
-                'x': (index + 0.5) / n_bins,
-                'mean': statistics.fmean(values),
-                'q25': _quantile(sorted_values, 0.25),
-                'q75': _quantile(sorted_values, 0.75),
-            }
-        )
+        out.append({
+            'x': (index + 0.5) / n_bins,
+            'mean': statistics.fmean(values),
+            'q25': quantile(sorted_values, 0.25),
+            'q75': quantile(sorted_values, 0.75),
+        })
     return out
 
 
-def _plot_near_optimal_width(
+def plot_near_optimal_width(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -444,7 +440,7 @@ def _plot_near_optimal_width(
         values = [
             value
             for value in (
-                _float_or_none(row.get('NearOptimalLambdaSpanNorm'))
+                float_or_none(row.get('NearOptimalLambdaSpanNorm'))
                 for row in rows
                 if row.get('strategy') == strategy
             )
@@ -470,7 +466,7 @@ def _plot_near_optimal_width(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_dataset_composition(
+def plot_dataset_composition(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -481,7 +477,7 @@ def _plot_dataset_composition(
         row
         for row in rows
         if all(
-            _float_or_none(row.get(column)) is not None
+            float_or_none(row.get(column)) is not None
             for column in (
                 'GoldPercentage',
                 'NearMissDistractorPercentage',
@@ -493,11 +489,9 @@ def _plot_dataset_composition(
     if not plot_rows:
         return []
     labels = [str(row.get('ShortDistribution') or row.get('Distribution')) for row in plot_rows]
-    gold = [_float_or_none(row.get('GoldPercentage')) or 0.0 for row in plot_rows]
-    near = [_float_or_none(row.get('NearMissDistractorPercentage')) or 0.0 for row in plot_rows]
-    background = [
-        _float_or_none(row.get('BackgroundOutlierPercentage')) or 0.0 for row in plot_rows
-    ]
+    gold = [float_or_none(row.get('GoldPercentage')) or 0.0 for row in plot_rows]
+    near = [float_or_none(row.get('NearMissDistractorPercentage')) or 0.0 for row in plot_rows]
+    background = [float_or_none(row.get('BackgroundOutlierPercentage')) or 0.0 for row in plot_rows]
     positions = list(range(len(labels)))
     fig_height = max(5.0, 0.28 * len(labels) + 1.6)
     fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]

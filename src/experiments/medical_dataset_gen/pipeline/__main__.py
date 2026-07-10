@@ -73,7 +73,7 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
     ('eval_plots', run_eval_plots),
-    ('geom_plots', run_query_geom_plots),
+    # ('geom_plots', run_query_geom_plots),
 ]
 
 
@@ -83,6 +83,14 @@ def main() -> None:
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGES_SET, default=None)
     parser.add_argument('--stages', default=None)
+    parser.add_argument(
+        '--exclude',
+        action='append',
+        nargs='+',
+        choices=PIPELINE_STAGES_SET,
+        default=None,
+        help='Exclude one or more stages from a normal pipeline run. May be repeated.',
+    )
     parser.add_argument(
         '--run',
         action='append',
@@ -147,12 +155,12 @@ def main() -> None:
     else:
         start_idx = _stage_index(args.from_stage) if args.from_stage else 0
         stop_idx = _stage_index(args.to_stage) if args.to_stage else len(STAGES_TO_FNS_SORTED) - 1
-
         if stop_idx < start_idx:
             raise ValueError('--to must be the same as or later than --from')
-
         selected_stages = [name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]
-    selected_stage_set = set(selected_stages)
+
+    excluded_stages = {stage for excluded_group in args.exclude or [] for stage in excluded_group}
+    selected_stage_set = set(selected_stages) - excluded_stages
     stages_to_run = [(name, fn) for name, fn in STAGES_TO_FNS_SORTED if name in selected_stage_set]
     selected_stages = [name for name, _ in stages_to_run]
 
@@ -161,7 +169,7 @@ def main() -> None:
     # setup_logging(paths, provenance.run_id)
 
     colorprint('teal', f'\n[pipeline] running experiment: {paths.exp_name}')
-    colorprint('bright_cyan', f'[pipeline] dir={paths.experiment_dir}')
+    # colorprint('bright_cyan', f'[pipeline] dir={paths.experiment_dir}')
     # print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
     for name, fn in stages_to_run:
@@ -179,8 +187,8 @@ def _validate_run_mode_args(
     args: argparse.Namespace,
     unknown_args: list[str],
 ) -> None:
-    if args.from_stage or args.to_stage or args.stages:
-        parser.error('--run cannot be combined with --from, --to, or --stages')
+    if args.from_stage or args.to_stage or args.stages or args.exclude:
+        parser.error('--run cannot be combined with --from, --to, --stages, or --exclude')
     if args.release_llm is not None:
         parser.error('--release-llm is only supported for normal stage runs')
     if unknown_args:

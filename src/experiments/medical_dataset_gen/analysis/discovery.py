@@ -19,8 +19,8 @@ from experiments.medical_dataset_gen.utils.exp_naming import (
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    _load_raw_experiment_config,
     load_config,
+    load_raw_experiment_config,
 )
 
 
@@ -187,7 +187,7 @@ def _load_experiment_family(
 
 def _load_config_with_report_compatibility(exp_name: str) -> ExperimentCfg:
     paths = MedicalDatasetGenPaths(exp_name)
-    raw = _load_raw_experiment_config(paths)
+    raw = load_raw_experiment_config(paths)
     evaluation = raw.get('evaluation')
     if isinstance(evaluation, Mapping):
         sanitized_evaluation = dict(evaluation)

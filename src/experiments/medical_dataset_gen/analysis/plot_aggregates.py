@@ -13,15 +13,15 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     EXPERIMENT_FAMILY_LABELS,
     ExperimentFamilyId,
 )
-from experiments.medical_dataset_gen.analysis.helpers import _float_or_none
+from experiments.medical_dataset_gen.analysis.helpers import float_or_none
 from experiments.medical_dataset_gen.analysis.models import (
     BudgetCategory,
     DeltaMetricPlotSpec,
     PlotFormat,
 )
 from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
-    _annotate_horizontal_values,
-    _family_color_for_row,
+    annotate_horizontal_values,
+    family_color_for_row,
 )
 from experiments.medical_dataset_gen.analysis.report_config import (
     AGGREGATE_METRIC_ORDER,
@@ -31,7 +31,7 @@ from experiments.medical_dataset_gen.analysis.report_config import (
 )
 
 
-def _plot_metric_budget_outcomes(
+def plot_metric_budget_outcomes(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -45,9 +45,9 @@ def _plot_metric_budget_outcomes(
     plot_rows = [
         row
         for row in rows
-        if _float_or_none(row.get('FacLocBetterPct')) is not None
-        and _float_or_none(row.get('FacLocTiedPct')) is not None
-        and _float_or_none(row.get('FacLocWorsePct')) is not None
+        if float_or_none(row.get('FacLocBetterPct')) is not None
+        and float_or_none(row.get('FacLocTiedPct')) is not None
+        and float_or_none(row.get('FacLocWorsePct')) is not None
     ]
     plot_rows = sorted(
         plot_rows,
@@ -60,10 +60,10 @@ def _plot_metric_budget_outcomes(
         return []
 
     labels = [f'{row.get("Metric")} | {row.get("BudgetView")}' for row in plot_rows]
-    better = [_float_or_none(row.get('FacLocBetterPct')) or 0.0 for row in plot_rows]
-    tied = [_float_or_none(row.get('FacLocTiedPct')) or 0.0 for row in plot_rows]
-    worse = [_float_or_none(row.get('FacLocWorsePct')) or 0.0 for row in plot_rows]
-    mean_delta = [_float_or_none(row.get('MeanDeltaFacLocMMR')) for row in plot_rows]
+    better = [float_or_none(row.get('FacLocBetterPct')) or 0.0 for row in plot_rows]
+    tied = [float_or_none(row.get('FacLocTiedPct')) or 0.0 for row in plot_rows]
+    worse = [float_or_none(row.get('FacLocWorsePct')) or 0.0 for row in plot_rows]
+    mean_delta = [float_or_none(row.get('MeanDeltaFacLocMMR')) for row in plot_rows]
     positions = list(range(len(plot_rows)))
     fig_height = max(5.5, 0.31 * len(plot_rows) + 1.6)
     fig, ax = plt.subplots(figsize=(10.5, fig_height))  # type: ignore[attr-defined]
@@ -113,7 +113,7 @@ def _plot_metric_budget_outcomes(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_metric_family_delta_heatmap(
+def plot_metric_family_delta_heatmap(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -123,7 +123,7 @@ def _plot_metric_family_delta_heatmap(
     plot_rows = [
         row
         for row in rows
-        if _float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
+        if float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
         and str(row.get('MetricLabel') or '') in DELTA_METRIC_LABELS
         and _is_core_aggregate_family_row(row)
     ]
@@ -159,9 +159,9 @@ def _plot_metric_family_delta_heatmap(
         ax.set_xticks(range(len(families)))
         ax.set_xticklabels(families, rotation=35, ha='right')
         ax.set_yticks(range(len(metric_labels)))
-        ax.set_yticklabels(
-            [_metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels]
-        )
+        ax.set_yticklabels([
+            _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
+        ])
         for y_index, metric_label in enumerate(metric_labels):
             for x_index, family in enumerate(families):
                 row = _find_summary_row(
@@ -170,7 +170,7 @@ def _plot_metric_family_delta_heatmap(
                     ExperimentFamilyLabel=family,
                 )
                 value = matrix[y_index][x_index]
-                pct = _float_or_none(row.get('FacLocBetterPct')) if row is not None else None
+                pct = float_or_none(row.get('FacLocBetterPct')) if row is not None else None
                 if value is None:
                     continue
                 ax.text(
@@ -192,7 +192,7 @@ def _plot_metric_family_delta_heatmap(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_fcp_family_budget_heatmaps(
+def plot_fcp_family_budget_heatmaps(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -269,8 +269,8 @@ def _plot_fcp_family_budget_heatmaps(
                         ExperimentFamilyLabel=family,
                         BudgetCategoryLabel=budget_label,
                     )
-                    value = _float_or_none(row.get(value_field)) if row is not None else None
-                    pct = _float_or_none(row.get(pct_field)) if row is not None else None
+                    value = float_or_none(row.get(value_field)) if row is not None else None
+                    pct = float_or_none(row.get(pct_field)) if row is not None else None
                     if value is None:
                         continue
                     ax.text(
@@ -304,7 +304,7 @@ def _plot_fcp_family_budget_heatmaps(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _plot_budget_delta_columns(
+def plot_budget_delta_columns(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -320,23 +320,23 @@ def _plot_budget_delta_columns(
     plot_rows = [
         row
         for row in rows
-        if all(_float_or_none(row.get(column)) is not None for column in value_columns)
+        if all(float_or_none(row.get(column)) is not None for column in value_columns)
     ]
     if not plot_rows:
         return []
     plot_rows = _budget_delta_grouped_rows(plot_rows, value_columns[0])
     labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
     parent_keys = [_parent_experiment_key(row) for row in plot_rows]
-    colors = [_family_color_for_row(row) for row in plot_rows]
+    colors = [family_color_for_row(row) for row in plot_rows]
     category_label = BUDGET_CATEGORY_LABELS[category]
     series = [
         (
             f'FacLoc - MMR {spec.title_label}',
-            [_float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
+            [float_or_none(row.get(value_columns[0])) or 0.0 for row in plot_rows],
         ),
         (
             f'FacLoc - top-k {spec.title_label}',
-            [_float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
+            [float_or_none(row.get(value_columns[1])) or 0.0 for row in plot_rows],
         ),
     ]
     fig_height = max(5.0, 0.28 * len(labels) + 1.6)
@@ -412,7 +412,7 @@ def _budget_delta_grouped_rows(
                 sorted(
                     parent_groups[parent_key],
                     key=lambda row: (
-                        _float_or_none(row.get(value_column)) or float('-inf'),
+                        float_or_none(row.get(value_column)) or float('-inf'),
                         str(row.get('ShortExperiment') or row.get('Experiment') or ''),
                     ),
                 )
@@ -434,7 +434,7 @@ def _parent_experiment_key(row: Mapping[str, object]) -> str:
 def _mean_row_value(rows: Sequence[Mapping[str, object]], value_column: str) -> float:
     values = [
         value
-        for value in (_float_or_none(row.get(value_column)) for row in rows)
+        for value in (float_or_none(row.get(value_column)) for row in rows)
         if value is not None
     ]
     return statistics.fmean(values) if values else float('-inf')
@@ -511,7 +511,7 @@ def _ordered_families_for_summary_rows(rows: Sequence[Mapping[str, object]]) -> 
     grouped: dict[str, list[float]] = {}
     for row in rows:
         family = str(row.get('ExperimentFamilyLabel') or '')
-        value = _float_or_none(row.get('MeanDeltaFacLocMMR'))
+        value = float_or_none(row.get('MeanDeltaFacLocMMR'))
         if not family or value is None:
             continue
         grouped.setdefault(family, []).append(value)
@@ -538,7 +538,7 @@ def _summary_matrix(
         row_key = str(row.get(row_field) or '')
         column_key = str(row.get(column_field) or '')
         if row_key and column_key:
-            by_key[(row_key, column_key)] = _float_or_none(row.get(value_field))
+            by_key[(row_key, column_key)] = float_or_none(row.get(value_field))
     return [
         [by_key.get((row_key, column_key)) for column_key in column_keys] for row_key in row_keys
     ]
@@ -597,12 +597,13 @@ def _draw_family_delta_bars(
     ax.set_yticklabels(labels)
     ax.invert_yaxis()
     ax.grid(axis='x', alpha=0.25, zorder=1)
-    _annotate_horizontal_values(ax=ax, values=values)
+    annotate_horizontal_values(ax=ax, values=values)
 
 
 def _draw_parent_group_guides(*, ax: Any, parent_keys: Sequence[str]) -> None:
     for span_index, (start, end) in enumerate(_parent_group_spans(parent_keys)):
-        band_color = '#EAF3FB' if span_index % 2 == 0 else '#F3F4F6'
+        # band_color = '#EAF3FB' if span_index % 2 == 0 else '#F3F4F6'
+        band_color = '#F3F4F6' if span_index % 2 == 0 else '#EAF3FB'
 
         ax.axhspan(
             start - 0.5,

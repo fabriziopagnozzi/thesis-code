@@ -45,18 +45,16 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
 
 def _chunk_pool_recap(cfg: ExperimentCfg) -> str:
     pools = cfg.generation.chunk_pools
-    return ', '.join(
-        [
-            _pool_role_recap('dominant primary', pools.dominant_primary),
-            _pool_role_recap('other primary', pools.other_primary),
-            _pool_role_recap('secondary', pools.secondary),
-            _pool_role_recap(
-                'niche',
-                pools.niche,
-                suffix=f'; {pools.niche.num_clusters_per_query} active clusters/query',
-            ),
-        ]
-    )
+    return ', '.join([
+        _pool_role_recap('dominant primary', pools.dominant_primary),
+        _pool_role_recap('other primary', pools.other_primary),
+        _pool_role_recap('secondary', pools.secondary),
+        _pool_role_recap(
+            'niche',
+            pools.niche,
+            suffix=f'; {pools.niche.num_clusters_per_query} active clusters/query',
+        ),
+    ])
 
 
 def _pool_role_recap(
@@ -107,12 +105,10 @@ def _budget_category_recap(cfg: ExperimentCfg) -> str:
 
 
 def _lambda_grid_recap(cfg: ExperimentCfg) -> str:
-    return ', '.join(
-        [
-            _single_lambda_grid_recap('MMR', cfg.retrieval.lambdas_mmr),
-            _single_lambda_grid_recap('FacLoc', cfg.retrieval.lambdas_fac_loc),
-        ]
-    )
+    return ', '.join([
+        _single_lambda_grid_recap('MMR', cfg.retrieval.lambdas_mmr),
+        _single_lambda_grid_recap('FacLoc', cfg.retrieval.lambdas_fac_loc),
+    ])
 
 
 def _single_lambda_grid_recap(label: str, grid: LambdaGridCfg) -> str:

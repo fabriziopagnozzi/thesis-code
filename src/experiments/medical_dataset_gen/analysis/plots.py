@@ -5,18 +5,18 @@ from pathlib import Path
 
 from experiments.medical_dataset_gen.analysis.models import PlotFormat
 from experiments.medical_dataset_gen.analysis.plot_aggregates import (
-    _plot_budget_delta_columns,
-    _plot_fcp_family_budget_heatmaps,
-    _plot_metric_budget_outcomes,
-    _plot_metric_family_delta_heatmap,
+    plot_budget_delta_columns,
+    plot_fcp_family_budget_heatmaps,
+    plot_metric_budget_outcomes,
+    plot_metric_family_delta_heatmap,
 )
 from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
-    _plot_dataset_composition,
-    _plot_geometry_pass_rate,
-    _plot_lambda_delta_curve,
-    _plot_lambda_safety_worst_delta,
-    _plot_lambda_stability,
-    _plot_near_optimal_width,
+    plot_dataset_composition,
+    plot_geometry_pass_rate,
+    plot_lambda_delta_curve,
+    plot_lambda_safety_worst_delta,
+    plot_lambda_stability,
+    plot_near_optimal_width,
 )
 from experiments.medical_dataset_gen.analysis.report_config import (
     BUDGET_CATEGORIES,
@@ -73,7 +73,7 @@ def write_figures(
     paths: list[Path] = []
 
     paths.extend(
-        _plot_metric_budget_outcomes(
+        plot_metric_budget_outcomes(
             plt=plt,
             rows=metric_summary_rows,
             output_dir=aggregate_dir,
@@ -81,7 +81,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_metric_family_delta_heatmap(
+        plot_metric_family_delta_heatmap(
             plt=plt,
             rows=metric_family_summary_rows,
             output_dir=aggregate_dir,
@@ -89,7 +89,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_fcp_family_budget_heatmaps(
+        plot_fcp_family_budget_heatmaps(
             plt=plt,
             rows=metric_family_budget_summary_rows,
             output_dir=aggregate_dir,
@@ -101,7 +101,7 @@ def write_figures(
         category_rows = [row for row in budget_rows if row.get('BudgetCategory') == category]
         for spec in DELTA_METRIC_PLOT_SPECS:
             paths.extend(
-                _plot_budget_delta_columns(
+                plot_budget_delta_columns(
                     plt=plt,
                     rows=category_rows,
                     category=category,
@@ -111,7 +111,7 @@ def write_figures(
                 )
             )
     paths.extend(
-        _plot_geometry_pass_rate(
+        plot_geometry_pass_rate(
             plt=plt,
             rows=geometry_rows,
             output_dir=output_dir,
@@ -119,7 +119,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_lambda_stability(
+        plot_lambda_stability(
             plt=plt,
             rows=lambda_rows,
             output_dir=output_dir,
@@ -127,7 +127,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_lambda_safety_worst_delta(
+        plot_lambda_safety_worst_delta(
             plt=plt,
             rows=lambda_safety_rows,
             output_dir=output_dir,
@@ -135,7 +135,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_lambda_delta_curve(
+        plot_lambda_delta_curve(
             plt=plt,
             rows=lambda_grid_delta_rows,
             output_dir=output_dir,
@@ -143,7 +143,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_near_optimal_width(
+        plot_near_optimal_width(
             plt=plt,
             rows=near_optimal_rows,
             output_dir=output_dir,
@@ -151,7 +151,7 @@ def write_figures(
         )
     )
     paths.extend(
-        _plot_dataset_composition(
+        plot_dataset_composition(
             plt=plt,
             rows=dataset_rows,
             output_dir=output_dir,

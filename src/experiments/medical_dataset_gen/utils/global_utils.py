@@ -164,13 +164,13 @@ def load_config(exp: str | None = None) -> ExperimentCfg:
 
     exp_name = resolve_experiment_name(exp_name)
     paths = MedicalDatasetGenPaths(exp_name)
-    raw = _load_raw_experiment_config(paths)
+    raw = load_raw_experiment_config(paths)
     cfg = ExperimentCfg.model_validate(raw)
     cfg.global_.output_experiment = exp_name
     return cfg
 
 
-def _load_raw_experiment_config(paths: MedicalDatasetGenPaths) -> YamlMapping:
+def load_raw_experiment_config(paths: MedicalDatasetGenPaths) -> YamlMapping:
     if not paths.is_subexperiment():
         return _read_yaml_mapping(
             paths.config_path,

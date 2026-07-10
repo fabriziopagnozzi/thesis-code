@@ -15,22 +15,22 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     StrategyName,
 )
 from experiments.medical_dataset_gen.analysis.helpers import (
-    _base_experiment_row,
-    _distribution_category,
-    _float_or_none,
-    _int_or_none,
-    _json_scalar,
-    _lambda_norm,
-    _mean_min_max_for_columns,
-    _numeric_values,
-    _primary_dominance_ratio,
-    _query_scope_label,
-    _ratio,
-    _series_mean,
-    _title_token,
+    base_experiment_row,
+    distribution_category,
     embedding_metadata,
+    float_or_none,
+    int_or_none,
+    json_scalar,
+    lambda_norm,
+    mean_min_max_for_columns,
+    numeric_values,
+    primary_dominance_ratio,
+    query_scope_label,
+    ratio,
+    series_mean,
     short_experiment_id,
     short_token,
+    title_token,
 )
 from experiments.medical_dataset_gen.analysis.models import ExperimentRecord
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
@@ -58,7 +58,7 @@ def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
         'EmbeddingChunks': metadata.get('n_chunks'),
         'EmbeddingQueries': metadata.get('n_queries'),
         'OnlyPassGeometry': record.only_pass_geometry,
-        'QueryScope': _query_scope_label(record.only_pass_geometry),
+        'QueryScope': query_scope_label(record.only_pass_geometry),
         'CandidatePoolN': record.cfg.retrieval.candidate_pool_n if record.cfg else None,
         'KValues': ','.join(str(k) for k in record.cfg.retrieval.k_values) if record.cfg else None,
         'EvaluationMode': record.cfg.evaluation.mode if record.cfg else None,
@@ -74,23 +74,21 @@ def dataset_distribution_row(
     warnings: list[str],
 ) -> dict[str, object]:
     qrels_path = record.paths.table_path('qrels')
-    base = _base_experiment_row(record)
+    base = base_experiment_row(record)
     cfg = record.cfg
-    base.update(
-        {
-            'QrelsPath': str(qrels_path),
-            'ConfiguredGoldChunksPerQuery': cfg.generation.total_gold_chunks() if cfg else None,
-            'ConfiguredDistractorChunksPerQuery': cfg.generation.total_distractor_chunks()
-            if cfg
-            else None,
-            'ConfiguredBackgroundOutlierChunksPerQuery': (
-                cfg.generation.chunk_pools.background_outlier_chunks_per_query() if cfg else None
-            ),
-            'ConfiguredNicheClustersPerQuery': (
-                cfg.generation.chunk_pools.niche.num_clusters_per_query if cfg else None
-            ),
-        }
-    )
+    base.update({
+        'QrelsPath': str(qrels_path),
+        'ConfiguredGoldChunksPerQuery': cfg.generation.total_gold_chunks() if cfg else None,
+        'ConfiguredDistractorChunksPerQuery': cfg.generation.total_distractor_chunks()
+        if cfg
+        else None,
+        'ConfiguredBackgroundOutlierChunksPerQuery': (
+            cfg.generation.chunk_pools.background_outlier_chunks_per_query() if cfg else None
+        ),
+        'ConfiguredNicheClustersPerQuery': (
+            cfg.generation.chunk_pools.niche.num_clusters_per_query if cfg else None
+        ),
+    })
     if not qrels_path.is_file():
         warnings.append(f'{record.name}: qrels missing at {qrels_path}')
         return base
@@ -121,7 +119,7 @@ def dataset_distribution_row(
         per_query_exprs.append((cluster_role == role).sum().alias(column))
 
     per_query = qrels.group_by('query_id').agg(per_query_exprs)
-    summary = _mean_min_max_for_columns(
+    summary = mean_min_max_for_columns(
         per_query,
         columns=[
             'PoolSize',
@@ -132,23 +130,21 @@ def dataset_distribution_row(
             *ROLE_COUNT_COLUMNS.values(),
         ],
     )
-    pool_size = _float_or_none(summary.get('PoolSizeMean'))
-    gold_count = _float_or_none(summary.get('GoldCountMean'))
-    near_miss_count = _float_or_none(summary.get('NearMissDistractorCountMean'))
-    background_count = _float_or_none(summary.get('BackgroundOutlierCountMean'))
+    pool_size = float_or_none(summary.get('PoolSizeMean'))
+    gold_count = float_or_none(summary.get('GoldCountMean'))
+    near_miss_count = float_or_none(summary.get('NearMissDistractorCountMean'))
+    background_count = float_or_none(summary.get('BackgroundOutlierCountMean'))
 
     base.update(summary)
-    base.update(
-        {
-            'QueriesInQrels': per_query.height,
-            'QrelRows': qrels.height,
-            'GoldPercentage': _ratio(gold_count, pool_size),
-            'NearMissDistractorPercentage': _ratio(near_miss_count, pool_size),
-            'BackgroundOutlierPercentage': _ratio(background_count, pool_size),
-            'PrimaryDominanceRatio': _primary_dominance_ratio(summary),
-            'DistributionCategory': _distribution_category(summary),
-        }
-    )
+    base.update({
+        'QueriesInQrels': per_query.height,
+        'QrelRows': qrels.height,
+        'GoldPercentage': ratio(gold_count, pool_size),
+        'NearMissDistractorPercentage': ratio(near_miss_count, pool_size),
+        'BackgroundOutlierPercentage': ratio(background_count, pool_size),
+        'PrimaryDominanceRatio': primary_dominance_ratio(summary),
+        'DistributionCategory': distribution_category(summary),
+    })
     return base
 
 
@@ -158,7 +154,7 @@ def geometry_filter_row(
     warnings: list[str],
 ) -> dict[str, object]:
     geometry_path = record.paths.table_path('geometry_stats')
-    base = _base_experiment_row(record)
+    base = base_experiment_row(record)
     base.update({'GeometryStatsPath': str(geometry_path)})
     if not geometry_path.is_file():
         warnings.append(f'{record.name}: geometry_stats missing at {geometry_path}')
@@ -197,13 +193,13 @@ def geometry_filter_row(
         'jaccard_topk_facloc',
     ):
         if column in columns:
-            base[f'{_title_token(column)}Mean'] = _series_mean(geometry[column])
+            base[f'{title_token(column)}Mean'] = series_mean(geometry[column])
 
     failure_rates: list[tuple[str, float]] = []
     for column in sorted(col for col in columns if col.startswith('fail_')):
-        rate = _series_mean(geometry[column].fill_null(False))
+        rate = series_mean(geometry[column].fill_null(False))
         if rate is not None:
-            base[f'{_title_token(column)}Rate'] = rate
+            base[f'{title_token(column)}Rate'] = rate
             failure_rates.append((column.removeprefix('fail_'), rate))
     failure_rates.sort(key=lambda item: item[1], reverse=True)
     base['TopFailureModes'] = ', '.join(
@@ -241,20 +237,18 @@ def selected_strategy_rows(
     rows: list[dict[str, object]] = []
     for row in selected.iter_rows(named=True):
         strategy = cast(StrategyName, row.get('strategy'))
-        lam = _float_or_none(row.get('lam'))
-        out = _base_experiment_row(record)
-        out.update(
-            {
-                'SelectionSource': source,
-                'strategy': strategy,
-                'k': _int_or_none(row.get('k')),
-                'lam': lam,
-                'lambda_norm': _lambda_norm(record, strategy, lam, stats),
-            }
-        )
+        lam = float_or_none(row.get('lam'))
+        out = base_experiment_row(record)
+        out.update({
+            'SelectionSource': source,
+            'strategy': strategy,
+            'k': int_or_none(row.get('k')),
+            'lam': lam,
+            'lambda_norm': lambda_norm(record, strategy, lam, stats),
+        })
         for metric in EVALUATION_METRICS:
             if metric in row:
-                out[metric] = _json_scalar(row[metric])
+                out[metric] = json_scalar(row[metric])
         rows.append(out)
     return rows
 
@@ -271,7 +265,7 @@ def _selected_stats_frame(
         )
 
     counts = stats.group_by(['strategy', 'k']).agg(pl.len().alias('n_rows'))
-    max_rows_per_group = _int_or_none(counts['n_rows'].max()) or 0
+    max_rows_per_group = int_or_none(counts['n_rows'].max()) or 0
     if max_rows_per_group <= 1:
         return stats.sort([col for col in ('k', 'strategy', 'lam') if col in stats.columns]), (
             'preselected'
@@ -298,9 +292,9 @@ def _selected_stats_frame(
         frames.append(selected)
     if not frames:
         return pl.DataFrame(), 'posthoc_selected'
-    return pl.concat(frames).sort(
-        [col for col in ('k', 'strategy', 'lam') if col in stats.columns]
-    ), ('posthoc_selected')
+    return pl.concat(frames).sort([
+        col for col in ('k', 'strategy', 'lam') if col in stats.columns
+    ]), ('posthoc_selected')
 
 
 def near_optimal_lambda_rows(
@@ -344,23 +338,21 @@ def near_optimal_lambda_rows(
             near_lambdas = [float(value) for value in near['lam'].drop_nulls().to_list()]
             full_span = max(lambdas) - min(lambdas)
             near_span = max(near_lambdas) - min(near_lambdas) if near_lambdas else 0.0
-            out = _base_experiment_row(record)
-            out.update(
-                {
-                    'strategy': strategy,
-                    'k': k,
-                    'GridStatsPath': str(grid_path),
-                    'NearOptimalEpsilon': epsilon,
-                    'BestFCP': best_fcp,
-                    'WorstFCP': worst_fcp,
-                    'FCPRange': best_fcp - worst_fcp,
-                    'NearOptimalLambdaCount': near.height,
-                    'TotalLambdaCount': sub.height,
-                    'NearOptimalLambdaFraction': near.height / sub.height,
-                    'NearOptimalLambdaSpan': near_span,
-                    'NearOptimalLambdaSpanNorm': near_span / full_span if full_span else 0.0,
-                }
-            )
+            out = base_experiment_row(record)
+            out.update({
+                'strategy': strategy,
+                'k': k,
+                'GridStatsPath': str(grid_path),
+                'NearOptimalEpsilon': epsilon,
+                'BestFCP': best_fcp,
+                'WorstFCP': worst_fcp,
+                'FCPRange': best_fcp - worst_fcp,
+                'NearOptimalLambdaCount': near.height,
+                'TotalLambdaCount': sub.height,
+                'NearOptimalLambdaFraction': near.height / sub.height,
+                'NearOptimalLambdaSpan': near_span,
+                'NearOptimalLambdaSpanNorm': near_span / full_span if full_span else 0.0,
+            })
             rows.append(out)
     return rows
 
@@ -392,8 +384,8 @@ def lambda_grid_fcp_delta_rows(
         topk_by_k: dict[int, float] = {}
         topk = stats.filter(pl.col('strategy') == 'top_k')
         for topk_row in topk.iter_rows(named=True):
-            k = _int_or_none(topk_row.get('k'))
-            fcp = _float_or_none(topk_row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC))
+            k = int_or_none(topk_row.get('k'))
+            fcp = float_or_none(topk_row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC))
             if k is not None and fcp is not None:
                 topk_by_k[k] = fcp
 
@@ -404,29 +396,27 @@ def lambda_grid_fcp_delta_rows(
             if strategy not in DIVERSIFYING_STRATEGIES:
                 continue
             typed_strategy = cast(StrategyName, strategy)
-            k = _int_or_none(row.get('k'))
-            lam = _float_or_none(row.get('lam'))
-            fcp = _float_or_none(row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC))
+            k = int_or_none(row.get('k'))
+            lam = float_or_none(row.get('lam'))
+            fcp = float_or_none(row.get(LAMBDA_SELECTION_MAXIMIZING_METRIC))
             if k is None or lam is None or fcp is None:
                 continue
             topk_fcp = topk_by_k.get(k)
             if topk_fcp is None:
                 continue
 
-            out = _base_experiment_row(record)
-            out.update(
-                {
-                    'DataSplit': 'validation',
-                    'GridStatsPath': str(grid_path),
-                    'strategy': typed_strategy,
-                    'k': k,
-                    'lam': lam,
-                    'lambda_norm': _lambda_norm(record, typed_strategy, lam, stats),
-                    'TopK_FCP': topk_fcp,
-                    'Strategy_FCP': fcp,
-                    'DeltaStrategyTopK_FCP': fcp - topk_fcp,
-                }
-            )
+            out = base_experiment_row(record)
+            out.update({
+                'DataSplit': 'validation',
+                'GridStatsPath': str(grid_path),
+                'strategy': typed_strategy,
+                'k': k,
+                'lam': lam,
+                'lambda_norm': lambda_norm(record, typed_strategy, lam, stats),
+                'TopK_FCP': topk_fcp,
+                'Strategy_FCP': fcp,
+                'DeltaStrategyTopK_FCP': fcp - topk_fcp,
+            })
             rows.append(out)
     return rows
 
@@ -438,24 +428,24 @@ def lambda_safety_summary_rows(
     for row in lambda_grid_rows:
         experiment = str(row.get('Experiment') or '')
         strategy = row.get('strategy')
-        k = _int_or_none(row.get('k'))
+        k = int_or_none(row.get('k'))
         if not experiment or strategy not in DIVERSIFYING_STRATEGIES or k is None:
             continue
         grouped.setdefault((experiment, cast(StrategyName, strategy), k), []).append(row)
 
     rows: list[dict[str, object]] = []
     for (_experiment, strategy, k), group in sorted(grouped.items()):
-        deltas = _numeric_values(group, 'DeltaStrategyTopK_FCP')
+        deltas = numeric_values(group, 'DeltaStrategyTopK_FCP')
         if not deltas:
             continue
         lambda_count = len(deltas)
         nonnegative_count = sum(value >= 0.0 for value in deltas)
         best_row = max(
-            group, key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0
+            group, key=lambda row: float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0
         )
         worst_row = min(
             group,
-            key=lambda row: _float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0,
+            key=lambda row: float_or_none(row.get('DeltaStrategyTopK_FCP')) or 0.0,
         )
         first = dict(group[0])
         out = {
@@ -476,24 +466,22 @@ def lambda_safety_summary_rows(
                 'DataSplit',
             )
         }
-        out.update(
-            {
-                'strategy': strategy,
-                'k': k,
-                'LambdaCount': lambda_count,
-                'NonnegativeDeltaLambdaCount': nonnegative_count,
-                'SafeLambdaFraction': nonnegative_count / lambda_count,
-                'WorstDeltaStrategyTopK_FCP': min(deltas),
-                'BestDeltaStrategyTopK_FCP': max(deltas),
-                'MeanDeltaStrategyTopK_FCP': statistics.fmean(deltas),
-                'MedianDeltaStrategyTopK_FCP': statistics.median(deltas),
-                'DeltaStrategyTopK_FCPRange': max(deltas) - min(deltas),
-                'WorstLambda': worst_row.get('lam'),
-                'WorstLambdaNorm': worst_row.get('lambda_norm'),
-                'BestLambda': best_row.get('lam'),
-                'BestLambdaNorm': best_row.get('lambda_norm'),
-            }
-        )
+        out.update({
+            'strategy': strategy,
+            'k': k,
+            'LambdaCount': lambda_count,
+            'NonnegativeDeltaLambdaCount': nonnegative_count,
+            'SafeLambdaFraction': nonnegative_count / lambda_count,
+            'WorstDeltaStrategyTopK_FCP': min(deltas),
+            'BestDeltaStrategyTopK_FCP': max(deltas),
+            'MeanDeltaStrategyTopK_FCP': statistics.fmean(deltas),
+            'MedianDeltaStrategyTopK_FCP': statistics.median(deltas),
+            'DeltaStrategyTopK_FCPRange': max(deltas) - min(deltas),
+            'WorstLambda': worst_row.get('lam'),
+            'WorstLambdaNorm': worst_row.get('lambda_norm'),
+            'BestLambda': best_row.get('lam'),
+            'BestLambdaNorm': best_row.get('lambda_norm'),
+        })
         rows.append(out)
     return rows
 
