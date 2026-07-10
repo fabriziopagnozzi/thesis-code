@@ -165,6 +165,7 @@ def render_thesis_result_macros(
     macros = {
         **_geometry_result_macros(geometry_rows),
         **_comparison_result_macros(comparison_rows, budget_rows),
+        **_embedding_edge_case_result_macros(comparison_rows),
         **_lambda_safety_result_macros(lambda_safety_rows),
         **_alpha_ndcg_result_macros(comparison_rows, budget_rows),
     }
@@ -247,6 +248,37 @@ def _comparison_result_macros(
         'ResultNegativeFacLocMmrRows': _integer(len(negative_rows)),
         'ResultNegativeFacLocMmrFamilySummary': _negative_family_summary(negative_family_counts),
     }
+
+
+def _embedding_edge_case_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose the paired DOM_M03 low-budget reversal used in the thesis claims."""
+    target_distribution = 'DOM_M03_dominance_high'
+    target_budget = 5
+    model_prefixes = {
+        'Bge': 'BAAI/bge-m3',
+        'Qwen': 'Qwen/Qwen3-Embedding-0.6B',
+    }
+    macros: dict[str, str] = {}
+    for label, model_name in model_prefixes.items():
+        match = next(
+            (
+                row
+                for row in rows
+                if row.get('Distribution') == target_distribution
+                and row.get('EmbeddingModel') == model_name
+                and _float(row.get('k')) == target_budget
+            ),
+            None,
+        )
+        macros[f'ResultDom{label}LowFacetCoverageDelta'] = _signed(
+            _float(None if match is None else match.get('Delta_FacLoc_MMR_FacetCoverage'))
+        )
+        macros[f'ResultDom{label}LowFcpDelta'] = _signed(
+            _float(None if match is None else match.get('Delta_FacLoc_MMR_FCP'))
+        )
+    return macros
 
 
 def _lambda_safety_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:

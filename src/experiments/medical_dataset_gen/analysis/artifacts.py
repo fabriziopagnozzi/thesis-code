@@ -20,7 +20,9 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
     for record in records:
         grouped.setdefault(record.distribution_id, []).append(record)
 
-    lines = ['# Experiment Configuration Recap', '']
+    lines = [
+        'The first 3 characters in the Instance name identify the Experiment Family (BAL, BG, DOM, MIS, NIC).\nL, M, S stand for Large, Medium, Small and refer to the overall size of the dataset.\n',
+    ]
     for distribution_id in sorted(grouped):
         group = sorted(grouped[distribution_id], key=lambda record: record.name)
         representative = next((record for record in group if record.cfg is not None), group[0])
@@ -36,9 +38,9 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
             lines.append(f'    Pool: {_chunk_pool_recap(cfg)};')
             lines.append(f'    Background Outliers: {_background_outlier_recap(cfg)}')
             lines.append(f'    Retrieval Budgets: {_budget_category_recap(cfg)}')
-        lines.append('    Embedding variants:')
-        for record in group:
-            lines.append(f'        {_child_config_recap(record)}')
+        # lines.append('    Embedding variants:')
+        # for record in group:
+        #     lines.append(f'        {_child_config_recap(record)}')
         lines.append('')
     return '\n'.join(lines)
 
@@ -52,8 +54,10 @@ def _chunk_pool_recap(cfg: ExperimentCfg) -> str:
         _pool_role_recap(
             'niche',
             pools.niche,
-            suffix=f'; {pools.niche.num_clusters_per_query} active clusters/query',
-        ),
+            suffix=f'; {pools.niche.num_clusters_per_query} niche clusters/query',
+        )
+        if pools.niche.num_clusters_per_query > 0
+        else 'no niche cluster',
     ])
 
 
@@ -75,9 +79,10 @@ def _background_outlier_recap(cfg: ExperimentCfg) -> str:
 
 
 def _background_spec_recap(spec: BackgroundDistractorSpec) -> str:
-    document_label = 'document' if spec.size == 1 else 'documents'
-    cluster_label = 'cluster' if spec.num_clusters == 1 else 'clusters'
-    return f'{spec.num_clusters} {cluster_label}, {spec.size} {document_label} each'
+    if spec.size == 1:
+        return f'{spec.num_clusters} isolated single background outliers.'
+    else:
+        return f'{spec.num_clusters} clusters, {spec.size} documents each'
 
 
 def _k_values_recap(cfg: ExperimentCfg) -> str:
@@ -97,11 +102,7 @@ def _budget_category_recap(cfg: ExperimentCfg) -> str:
     k_values = sorted(int(k) for k in cfg.retrieval.k_values)
     if not k_values:
         return 'none configured'
-    return (
-        f'Low Budget={k_values[0]}, '
-        f'Medium Budget={k_values[len(k_values) // 2]}, '
-        f'High Budget={k_values[-1]}'
-    )
+    return f'Low = {k_values[0]}, Medium = {k_values[len(k_values) // 2]}, High = {k_values[-1]}'
 
 
 def _lambda_grid_recap(cfg: ExperimentCfg) -> str:

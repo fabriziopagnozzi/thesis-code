@@ -1,6 +1,8 @@
 # Code - Primary
 
-## 
+## Paired test
+
+## Template
 
 ## Scale-up the dataset and retrieval
 * "pool_mode: global" to scale up the dataset like Martinenghi wants

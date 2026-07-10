@@ -73,7 +73,7 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
     ('eval_plots', run_eval_plots),
-    # ('geom_plots', run_query_geom_plots),
+    ('geom_plots', run_query_geom_plots),
 ]
 
 

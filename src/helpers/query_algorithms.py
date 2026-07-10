@@ -110,6 +110,7 @@ def fac_loc_lazy_greedy(
     k: int,
     sim_matrix: NDArray[np.float32],
     lam: float = 0.5,
+    normalize_cov_part: bool = True,
     **_kwargs: object,
 ) -> NDArray[np.intp]:
     n = len(sim_to_query)
@@ -126,7 +127,9 @@ def fac_loc_lazy_greedy(
     #     m[i]_0 = 0
     m = np.zeros(n, dtype=np.float64)
 
-    initial_coverage = np.maximum(0, sim_matrix).sum(axis=0) / n
+    initial_coverage = np.maximum(0, sim_matrix).sum(axis=0)
+    if normalize_cov_part:
+        initial_coverage = initial_coverage / n
     initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
 
     # heapq stores min-heap so we use negative value to simulate max-heap
@@ -148,7 +151,10 @@ def fac_loc_lazy_greedy(
             else:
                 # otherwise, recompute the candidate's true marginal gain under the current vector m,
                 #  then push it back and save the freshness info as third tuple elem
-                marginal_cov_gain = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m)) / n
+                marginal_cov_gain = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m))
+                if normalize_cov_part:
+                    initial_coverage = marginal_cov_gain / n
+
                 new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov_gain
                 heapq.heappush(max_heap, (-new_gain, node_idx, curr_step))
 
