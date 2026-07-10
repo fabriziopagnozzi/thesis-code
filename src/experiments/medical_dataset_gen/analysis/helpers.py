@@ -19,6 +19,9 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     StrategyName,
 )
 from experiments.medical_dataset_gen.analysis.models import ExperimentRecord, ScalarItem
+from experiments.medical_dataset_gen.utils.exp_naming import (
+    is_compact_embedding_child_token,
+)
 
 
 def _base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
@@ -314,6 +317,8 @@ def short_token(value: str) -> str:
     canonical_match = re.match(r'^(?P<token>[A-Z]+_[SML]\d{2})(?:_|$)', value)
     if canonical_match is not None:
         return canonical_match.group('token')
+    if is_compact_embedding_child_token(value):
+        return value
     return value.split('_', 1)[0]
 
 

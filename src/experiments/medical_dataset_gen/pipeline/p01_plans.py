@@ -102,26 +102,24 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     )
                     specs.append(spec)
                     if len(primary_axes) == 2:
-                        plans.extend(
-                            (
-                                _materialize_plan(
-                                    cfg,
-                                    ontology,
-                                    spec,
-                                    axis_a,
-                                    axis_b,
-                                    query_id=f'q{next_query_number}',
-                                ),
-                                _materialize_plan(
-                                    cfg,
-                                    ontology,
-                                    spec,
-                                    axis_b,
-                                    axis_a,
-                                    query_id=f'q{next_query_number + 1}',
-                                ),
-                            )
-                        )
+                        plans.extend((
+                            _materialize_plan(
+                                cfg,
+                                ontology,
+                                spec,
+                                axis_a,
+                                axis_b,
+                                query_id=f'q{next_query_number}',
+                            ),
+                            _materialize_plan(
+                                cfg,
+                                ontology,
+                                spec,
+                                axis_b,
+                                axis_a,
+                                query_id=f'q{next_query_number + 1}',
+                            ),
+                        ))
                         next_query_number += 2
                         continue
 
@@ -362,7 +360,7 @@ def _split_for_profile(evidence_profile_id: str) -> DataSplit:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_utils import (
+    from experiments.medical_dataset_gen.utils.logging import (
         setup_logging,
     )
 

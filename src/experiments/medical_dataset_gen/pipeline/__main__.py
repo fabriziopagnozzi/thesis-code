@@ -12,16 +12,15 @@ from typing import Literal, cast, get_args
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
 )
+from experiments.medical_dataset_gen.utils.exp_naming import child_experiment_names
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    child_experiment_names,
-    colorprint,
     load_config,
     paths_for,
-    setup_logging,
 )
 
 # from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
+from experiments.medical_dataset_gen.utils.logging import colorprint, setup_logging
 from helpers.ollama_client import stop_model
 
 from .p01_plans import run_make_query_plans

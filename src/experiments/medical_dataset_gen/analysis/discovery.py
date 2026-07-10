@@ -13,12 +13,14 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
 )
 from experiments.medical_dataset_gen.analysis.models import ExperimentRecord
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.exp_naming import (
+    child_experiment_names,
+    resolve_experiment_name,
+)
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     _load_raw_experiment_config,
-    child_experiment_names,
     load_config,
-    resolve_experiment_name,
 )
 
 

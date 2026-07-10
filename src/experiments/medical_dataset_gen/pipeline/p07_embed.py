@@ -203,7 +203,8 @@ def _fill_deterministic_chunk_embedding_memmaps(
             how='left',
             validate='m:1',
         ).with_columns(
-            pl.when(pl.col('embedding').is_not_null())
+            pl
+            .when(pl.col('embedding').is_not_null())
             .then(pl.col('text_sha256'))
             .otherwise(None)
             .alias('cached_text_sha256')
@@ -334,6 +335,8 @@ def _chunk_documents_with_embedding_cache_keys(
         .with_row_index('_row_idx')
         .with_columns(pl.Series('chunk_embedding_cache_key', keys))
     )
+
+
 def _fill_embedding_memmaps(
     *,
     file: pq.ParquetFile,
@@ -364,7 +367,7 @@ def _fill_embedding_memmaps(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_utils import (
+    from experiments.medical_dataset_gen.utils.logging import (
         setup_logging,
     )
 

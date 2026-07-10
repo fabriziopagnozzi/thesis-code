@@ -22,9 +22,9 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config_from_cli,
     paths_for,
-    setup_logging,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
+from experiments.medical_dataset_gen.utils.logging import setup_logging
 
 _VALIDATION_GRID_PLOT_NAMES: set[EvalPlotFileName] = {
     'metrics_k_curves_for_lambda',
@@ -166,11 +166,7 @@ def _plot_context_for_name(
     uses_validation_grid = (
         cfg.evaluation.mode == 'testing' and plot_name in _VALIDATION_GRID_PLOT_NAMES
     )
-    effective_stats_df = (
-        validation_grid_stats_df
-        if uses_validation_grid
-        else stats_df
-    )
+    effective_stats_df = validation_grid_stats_df if uses_validation_grid else stats_df
     effective_results_df = validation_results_df if uses_validation_grid else results_df
     return {
         'stats_df': effective_stats_df,

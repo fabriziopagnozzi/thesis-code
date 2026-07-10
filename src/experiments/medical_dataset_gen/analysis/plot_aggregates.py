@@ -6,7 +6,13 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import DELTA_METRIC_LABELS
+from experiments.medical_dataset_gen.analysis.analysis_constants import (
+    DELTA_METRIC_LABELS,
+    EXPERIMENT_FAMILIES,
+    EXPERIMENT_FAMILY_COLORS,
+    EXPERIMENT_FAMILY_LABELS,
+    ExperimentFamilyId,
+)
 from experiments.medical_dataset_gen.analysis.helpers import _float_or_none
 from experiments.medical_dataset_gen.analysis.models import (
     BudgetCategory,
@@ -14,10 +20,8 @@ from experiments.medical_dataset_gen.analysis.models import (
     PlotFormat,
 )
 from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
-    _add_family_legend,
     _annotate_horizontal_values,
     _family_color_for_row,
-    _family_grouped_rows,
 )
 from experiments.medical_dataset_gen.analysis.report_config import (
     AGGREGATE_METRIC_ORDER,
@@ -155,9 +159,9 @@ def _plot_metric_family_delta_heatmap(
         ax.set_xticks(range(len(families)))
         ax.set_xticklabels(families, rotation=35, ha='right')
         ax.set_yticks(range(len(metric_labels)))
-        ax.set_yticklabels(
-            [_metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels]
-        )
+        ax.set_yticklabels([
+            _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
+        ])
         for y_index, metric_label in enumerate(metric_labels):
             for x_index, family in enumerate(families):
                 row = _find_summary_row(
@@ -320,8 +324,9 @@ def _plot_budget_delta_columns(
     ]
     if not plot_rows:
         return []
-    plot_rows = _family_grouped_rows(plot_rows, value_columns[0])
+    plot_rows = _budget_delta_grouped_rows(plot_rows, value_columns[0])
     labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
+    parent_keys = [_parent_experiment_key(row) for row in plot_rows]
     colors = [_family_color_for_row(row) for row in plot_rows]
     category_label = BUDGET_CATEGORY_LABELS[category]
     series = [
@@ -343,12 +348,28 @@ def _plot_budget_delta_columns(
     axes = cast(Sequence[Any], axes_obj)
     try:
         for ax, (title, values) in zip(axes, series, strict=True):
-            _draw_family_delta_bars(ax=ax, labels=labels, values=values, colors=colors)
+            _draw_family_delta_bars(
+                ax=ax,
+                labels=labels,
+                values=values,
+                colors=colors,
+                parent_keys=parent_keys,
+            )
             ax.set_title(title)
             ax.set_xlabel(f'{category_label} delta')
-        _add_family_legend(fig=fig, rows=plot_rows)
+        _add_budget_delta_family_legend(fig=fig, rows=plot_rows)
         fig.suptitle(f'{category_label} {spec.title_label} deltas by experiment', y=0.995)
-        fig.tight_layout(rect=(0, 0.03, 1, 0.985))
+        fig.text(
+            0.5,
+            0.018,
+            'Alternating light blue and light grey bands group rows from the same parent experiment; '
+            'thin horizontal lines mark parent changes.',
+            ha='center',
+            va='bottom',
+            fontsize=11,
+            color='#303030',
+        )
+        fig.tight_layout(rect=(0, 0.075, 1, 0.91))
         path = output_dir / f'{spec.filename_token}_{category}_deltas_by_experiment.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -359,6 +380,113 @@ def _plot_budget_delta_columns(
 def _metric_plot_order(metric_label: str) -> int:
     order = {label: index for index, label in enumerate(AGGREGATE_METRIC_ORDER)}
     return order.get(metric_label, len(order))
+
+
+def _budget_delta_grouped_rows(
+    rows: Sequence[Mapping[str, object]],
+    value_column: str,
+) -> list[Mapping[str, object]]:
+    family_groups: dict[str, list[Mapping[str, object]]] = {}
+    for row in rows:
+        family_groups.setdefault(_family_group_key(row), []).append(row)
+
+    ordered_rows: list[Mapping[str, object]] = []
+    for _family_mean, family_key in sorted(
+        (
+            (_mean_row_value(family_rows, value_column), family_key)
+            for family_key, family_rows in family_groups.items()
+        ),
+        key=lambda item: (item[0], item[1]),
+    ):
+        parent_groups: dict[str, list[Mapping[str, object]]] = {}
+        for row in family_groups[family_key]:
+            parent_groups.setdefault(_parent_experiment_key(row), []).append(row)
+
+        for _parent_mean, parent_key in sorted(
+            (
+                (_mean_row_value(parent_rows, value_column), parent_key)
+                for parent_key, parent_rows in parent_groups.items()
+            ),
+            key=lambda item: (item[0], item[1]),
+        ):
+            ordered_rows.extend(
+                sorted(
+                    parent_groups[parent_key],
+                    key=lambda row: (
+                        _float_or_none(row.get(value_column)) or float('-inf'),
+                        str(row.get('ShortExperiment') or row.get('Experiment') or ''),
+                    ),
+                )
+            )
+    return ordered_rows
+
+
+def _family_group_key(row: Mapping[str, object]) -> str:
+    return str(row.get('ExperimentFamily') or row.get('ExperimentFamilyLabel') or 'unknown')
+
+
+def _parent_experiment_key(row: Mapping[str, object]) -> str:
+    experiment = str(row.get('Experiment') or row.get('ShortExperiment') or '')
+    if '/' not in experiment:
+        return experiment
+    return experiment.split('/', 1)[0]
+
+
+def _mean_row_value(rows: Sequence[Mapping[str, object]], value_column: str) -> float:
+    values = [
+        value
+        for value in (_float_or_none(row.get(value_column)) for row in rows)
+        if value is not None
+    ]
+    return statistics.fmean(values) if values else float('-inf')
+
+
+def _parent_group_spans(parent_keys: Sequence[str]) -> list[tuple[int, int]]:
+    if not parent_keys:
+        return []
+
+    spans: list[tuple[int, int]] = []
+    start = 0
+    current_parent = parent_keys[0]
+    for index, parent_key in enumerate(parent_keys[1:], start=1):
+        if parent_key == current_parent:
+            continue
+        spans.append((start, index - 1))
+        start = index
+        current_parent = parent_key
+    spans.append((start, len(parent_keys) - 1))
+    return spans
+
+
+def _add_budget_delta_family_legend(*, fig: Any, rows: Sequence[Mapping[str, object]]) -> None:
+    from matplotlib.patches import Patch
+
+    present = {
+        cast(ExperimentFamilyId, row.get('ExperimentFamily'))
+        for row in rows
+        if isinstance(row.get('ExperimentFamily'), str)
+        and row.get('ExperimentFamily') in EXPERIMENT_FAMILIES
+    }
+    if not present:
+        return
+    ordered: list[ExperimentFamilyId] = [
+        family_id for family_id in EXPERIMENT_FAMILIES if family_id in present
+    ]
+    handles = [
+        Patch(
+            facecolor=EXPERIMENT_FAMILY_COLORS[family_id],
+            label=EXPERIMENT_FAMILY_LABELS[family_id],
+        )
+        for family_id in ordered
+    ]
+    fig.legend(
+        handles=handles,
+        loc='upper center',
+        bbox_to_anchor=(0.5, 0.965),
+        ncol=min(4, len(handles)),
+        frameon=False,
+        fontsize=11,
+    )
 
 
 def _is_core_aggregate_family_row(row: Mapping[str, object]) -> bool:
@@ -460,12 +588,31 @@ def _draw_family_delta_bars(
     labels: Sequence[str],
     values: Sequence[float],
     colors: Sequence[str],
+    parent_keys: Sequence[str],
 ) -> None:
     positions = list(range(len(labels)))
-    ax.barh(positions, values, color=colors)
-    ax.axvline(0.0, color='#303030', linewidth=0.9)
+    _draw_parent_group_guides(ax=ax, parent_keys=parent_keys)
+    ax.barh(positions, values, color=colors, zorder=2)
+    ax.axvline(0.0, color='#303030', linewidth=0.9, zorder=3)
     ax.set_yticks(positions)
     ax.set_yticklabels(labels)
     ax.invert_yaxis()
-    ax.grid(axis='x', alpha=0.25)
+    ax.grid(axis='x', alpha=0.25, zorder=1)
     _annotate_horizontal_values(ax=ax, values=values)
+
+
+def _draw_parent_group_guides(*, ax: Any, parent_keys: Sequence[str]) -> None:
+    for span_index, (start, end) in enumerate(_parent_group_spans(parent_keys)):
+        # band_color = '#EAF3FB' if span_index % 2 == 0 else '#F3F4F6'
+        band_color = '#F3F4F6' if span_index % 2 == 0 else '#EAF3FB'
+
+        ax.axhspan(
+            start - 0.5,
+            end + 0.5,
+            facecolor=band_color,
+            alpha=0.75,
+            linewidth=0,
+            zorder=0,
+        )
+        if start > 0:
+            ax.axhline(start - 0.5, color='#D3DEE8', linewidth=0.7, zorder=1)

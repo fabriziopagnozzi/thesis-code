@@ -299,7 +299,7 @@ def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_utils import (
+    from experiments.medical_dataset_gen.utils.logging import (
         setup_logging,
     )
 

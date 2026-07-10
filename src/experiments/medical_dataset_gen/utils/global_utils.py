@@ -1,19 +1,14 @@
 from __future__ import annotations
 
 import argparse
-import io
-import json
 import os
-import sys
 from collections.abc import Mapping
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NoReturn, cast, get_args
-from uuid import uuid4
 
 import yaml
 
-from experiments.medical_dataset_gen.utils.constants import COLOR_CODES, RESET, ColorLike
+from experiments.medical_dataset_gen.utils.exp_naming import resolve_experiment_name
 from helpers.dir_paths import ROOT_DIR
 
 if TYPE_CHECKING:
@@ -157,106 +152,6 @@ class MedicalDatasetGenPaths:
         return len(Path(self.exp_name).parts) == 2
 
 
-def resolve_experiment_name(exp_name: str, results_dir: Path | None = None) -> str:
-    results_dir = results_dir or MedicalDatasetGenPaths.results_dir
-    exp_path = Path(exp_name)
-    if not exp_path.parts:
-        raise ValueError('experiment name cannot be empty')
-    if exp_path.is_absolute() or len(exp_path.parts) > 2:
-        raise ValueError(
-            f'experiment names are relative and support at most one child level: {exp_name!r}'
-        )
-
-    dir = results_dir / exp_path
-    if dir.is_dir():
-        return exp_name
-
-    alias_target = _resolve_experiment_alias(exp_name, results_dir)
-    if alias_target is not None:
-        return alias_target
-
-    if len(exp_path.parts) == 2:
-        parent_prefix, child_prefix = exp_path.parts
-        parent_name = _resolve_experiment_alias(parent_prefix, results_dir)
-        if parent_name is None:
-            parent_name = _resolve_experiment_dir_prefix(parent_prefix, results_dir).name
-        child_dir = _resolve_experiment_dir_prefix(child_prefix, results_dir / parent_name)
-        return f'{parent_name}/{child_dir.name}'
-
-    matches = sorted(path for path in results_dir.glob(f'{exp_name}*') if path.is_dir())
-    if len(matches) == 1:
-        return matches[0].name
-    elif len(matches) > 1:
-        raise RuntimeError(
-            f'{exp_name!r} is an ambiguous prefix, found many matches: {[m.name for m in matches]}'
-        )
-    else:
-        raise FileNotFoundError(f'no experiment directory prefixed {exp_name!r} in {results_dir}. ')
-
-
-def child_experiment_names(
-    parent_exp_name: str,
-    results_dir: Path | None = None,
-) -> list[str]:
-    results_dir = results_dir or MedicalDatasetGenPaths.results_dir
-    parent_name = resolve_experiment_name(parent_exp_name, results_dir=results_dir)
-    parent_path = results_dir / parent_name
-    if len(Path(parent_name).parts) != 1:
-        return []
-    return [
-        f'{parent_name}/{child_path.name}'
-        for child_path in sorted(parent_path.iterdir())
-        if child_path.is_dir() and (child_path / '_subconfig.yaml').is_file()
-    ]
-
-
-def _resolve_experiment_dir_prefix(prefix: str, parent_dir: Path) -> Path:
-    exact_dir = parent_dir / prefix
-    if exact_dir.is_dir():
-        return exact_dir
-
-    matches = sorted(path for path in parent_dir.glob(f'{prefix}*') if path.is_dir())
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        raise RuntimeError(
-            f'{prefix!r} is an ambiguous prefix in {parent_dir}, '
-            f'found many matches: {[path.name for path in matches]}'
-        )
-    raise FileNotFoundError(f'no experiment directory prefixed {prefix!r} in {parent_dir}. ')
-
-
-def _resolve_experiment_alias(exp_name: str, results_dir: Path) -> str | None:
-    alias_target = _load_experiment_aliases(results_dir).get(exp_name)
-    if alias_target is None:
-        return None
-
-    target_path = Path(alias_target)
-    if target_path.is_absolute() or len(target_path.parts) > 2:
-        raise ValueError(f'experiment alias target must be relative with at most one child: {alias_target!r}')
-    if not (results_dir / target_path).is_dir():
-        raise FileNotFoundError(
-            f'experiment alias {exp_name!r} points to missing directory {alias_target!r}'
-        )
-    return alias_target
-
-
-def _load_experiment_aliases(results_dir: Path) -> dict[str, str]:
-    aliases_path = results_dir / '_experiment_aliases.json'
-    if not aliases_path.is_file():
-        return {}
-    raw = json.loads(aliases_path.read_text())
-    if not isinstance(raw, dict):
-        raise ValueError(f'experiment aliases file must contain a JSON object: {aliases_path}')
-
-    aliases: dict[str, str] = {}
-    for key, value in raw.items():
-        if not isinstance(key, str) or not isinstance(value, str):
-            raise ValueError(f'experiment aliases must map strings to strings: {aliases_path}')
-        aliases[key] = value
-    return aliases
-
-
 def load_config(exp: str | None = None) -> ExperimentCfg:
     from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
@@ -342,89 +237,3 @@ def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
 
 def unreachable_code(err: str) -> NoReturn:
     raise RuntimeError(err)
-
-
-def setup_logging(paths: MedicalDatasetGenPaths, run_id: str | None = None) -> None:
-    main = sys.modules['__main__']
-    script_name = Path(main.__file__ if main.__file__ else f'unknown_script_{uuid4()}').stem
-    suffix = run_id or datetime.now().strftime('%Y%m%dT%H%M%S_%f')
-    log_path = paths.logs_dir / f'{script_name}_{suffix}.log'
-
-    class _Tee(io.TextIOBase):
-        def __init__(self, filepath: Path):
-            self._terminal = sys.stdout
-            self._file = open(filepath, 'w')  # noqa: SIM115
-
-        def write(self, msg: str) -> int:
-            self._terminal.write(msg)
-            self._file.write(msg)
-            return len(msg)
-
-        def flush(self) -> None:
-            self._terminal.flush()
-            self._file.flush()
-
-    sys.stdout = _Tee(log_path)
-
-
-def _normalize_color_name(color: str) -> str:
-    return color.strip().lower().replace('-', '_').replace(' ', '_')
-
-
-def _resolve_color(color: ColorLike) -> int:
-    if isinstance(color, int):
-        if not 0 <= color <= 255:
-            raise ValueError(f'Terminal color code must be between 0 and 255, got {color}')
-        return color
-
-    key = _normalize_color_name(color)
-
-    if key not in COLOR_CODES:
-        raise ValueError(
-            f'Unknown color {color!r}. Use a named color, an int from 0-255, '
-            f"or a string like 'c208'."
-        )
-
-    return COLOR_CODES[key]
-
-
-def colored(color: ColorLike, text: str) -> str:
-    code = _resolve_color(color)
-    return f'\033[38;5;{code}m{text}{RESET}'
-
-
-def colorprint(color: ColorLike, text: str) -> None:
-    print(colored(color, text))
-
-
-def bg_colored(
-    color: ColorLike,
-    text: str,
-    *,
-    fg: ColorLike | None = None,
-    bold: bool = False,
-) -> str:
-    bg_code = _resolve_color(color)
-
-    codes: list[str] = []
-
-    if bold:
-        codes.append('1')
-
-    if fg is not None:
-        fg_code = _resolve_color(fg)
-        codes.append(f'38;5;{fg_code}')
-
-    codes.append(f'48;5;{bg_code}')
-
-    return f'\033[{";".join(codes)}m{text}{RESET}'
-
-
-def bg_colorprint(
-    color: ColorLike,
-    text: str,
-    *,
-    fg: ColorLike | None = None,
-    bold: bool = False,
-) -> None:
-    print(bg_colored(color, text, fg=fg, bold=bold))

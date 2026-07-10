@@ -257,7 +257,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     queries_with_final_split = _assign_post_geometry_splits(queries=queries, geometry=df)
     write_parquet(paths, 'queries', queries_with_final_split)
     slice_stats = (
-        df.group_by(
+        df
+        .group_by(
             'condition_id',
             'cohort_dimension_id',
             'cohort_contrast_family',
@@ -381,15 +382,13 @@ def _strict_gate_failures(
 
 
 def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
-    return sorted(
-        {
-            int(k)
-            for k in [
-                *cfg.retrieval.k_values,
-                cfg.geometry_filter.topk_k,
-            ]
-        }
-    )
+    return sorted({
+        int(k)
+        for k in [
+            *cfg.retrieval.k_values,
+            cfg.geometry_filter.topk_k,
+        ]
+    })
 
 
 def _topk_diagnostics_by_k(
@@ -704,7 +703,7 @@ def _topk_vs_facloc_diagnostics(
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_utils import (
+    from experiments.medical_dataset_gen.utils.logging import (
         setup_logging,
     )
 

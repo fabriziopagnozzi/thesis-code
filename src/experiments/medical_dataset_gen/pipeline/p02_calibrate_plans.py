@@ -181,19 +181,17 @@ def _select_calibration(
             start, end = offsets[facet.facet_id]
             values = similarities[start:end]
             p25, median, p75 = np.percentile(values, [25, 50, 75])
-            facet_stats.append(
-                {
-                    'facet_id': facet.facet_id,
-                    'subgroup_id': facet.subgroup_id,
-                    'axis': facet.axis,
-                    'value_bin': facet.value_bin,
-                    'priority': facet.priority,
-                    'mean_query_sim': float(values.mean()),
-                    'p25_query_sim': float(p25),
-                    'median_query_sim': float(median),
-                    'p75_query_sim': float(p75),
-                }
-            )
+            facet_stats.append({
+                'facet_id': facet.facet_id,
+                'subgroup_id': facet.subgroup_id,
+                'axis': facet.axis,
+                'value_bin': facet.value_bin,
+                'priority': facet.priority,
+                'mean_query_sim': float(values.mean()),
+                'p25_query_sim': float(p25),
+                'median_query_sim': float(median),
+                'p75_query_sim': float(p75),
+            })
         primary_stats = [row for row in facet_stats if row['priority'] == 'primary']
         secondary_stats = [row for row in facet_stats if row['priority'] == 'secondary']
         primary_axis_margin = min(float(row['p25_query_sim']) for row in primary_stats) - max(
@@ -202,17 +200,15 @@ def _select_calibration(
         primary_cohort_mean_gap = abs(
             float(primary_stats[0]['mean_query_sim']) - float(primary_stats[1]['mean_query_sim'])
         )
-        candidate_rows.append(
-            {
-                'template_id': template_id,
-                'template_index': template_index,
-                'primary_axis_probe_margin': primary_axis_margin,
-                'primary_cohort_mean_gap': primary_cohort_mean_gap,
-                'secondary_mean_query_sim': float(
-                    np.mean([float(row['mean_query_sim']) for row in secondary_stats])
-                ),
-            }
-        )
+        candidate_rows.append({
+            'template_id': template_id,
+            'template_index': template_index,
+            'primary_axis_probe_margin': primary_axis_margin,
+            'primary_cohort_mean_gap': primary_cohort_mean_gap,
+            'secondary_mean_query_sim': float(
+                np.mean([float(row['mean_query_sim']) for row in secondary_stats])
+            ),
+        })
         candidate_facet_stats.append(facet_stats)
 
     selected_index = max(
@@ -468,7 +464,7 @@ def _calibration_row_without_embeddings(plan: QueryPlan) -> dict[str, object]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.global_utils import (
+    from experiments.medical_dataset_gen.utils.logging import (
         setup_logging,
     )
 

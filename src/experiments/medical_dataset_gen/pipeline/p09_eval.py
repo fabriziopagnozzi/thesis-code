@@ -57,13 +57,13 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config_from_cli,
     paths_for,
-    setup_logging,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
     read_parquet_if_exists_else_empty_df,
     write_parquet,
 )
+from experiments.medical_dataset_gen.utils.logging import setup_logging
 
 type EvaluationStep = Literal[
     'evaluation_results',
