@@ -60,6 +60,7 @@ REPORT_FILES = (
     'report.md',
     'report_interesting_findings.md',
     'experiment_config_recap.md',
+    'thesis_aggregate_tables.tex',
     'warnings.txt',
     'manifest.json',
     'experiment_manifest.csv',

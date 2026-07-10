@@ -63,6 +63,11 @@ Figures are for visual inspection; cite the CSV values for exact numbers.
 #### `report.md`
 Human-readable overview with the main tables, generated with `tabulate`. It is good for quick inspection, but CSV files are the authoritative machine-readable outputs.
 
+#### `thesis_aggregate_tables.tex`
+LaTex source for the three aggregate longtables imported by `docs/experiments.tex`. The report
+uses `tabulate(..., tablefmt='latex_longtable')` as the structural renderer, then applies the
+thesis-specific captions, headers, metric group rows, row colors, and numeric formatting.
+
 #### `report_interesting_findings.md`
 Shorter diagnostic report focused on notable patterns: largest FacLoc gains, FacLoc worse/tied rows, low geometry pass rates, and embedding summaries.
 

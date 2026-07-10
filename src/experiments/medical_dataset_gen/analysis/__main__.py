@@ -38,6 +38,10 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     ExperimentFamilyId,
     StrategyName,
 )
+from experiments.medical_dataset_gen.analysis.latex_tables import (
+    THESIS_AGGREGATE_TABLES_FILENAME,
+    render_thesis_aggregate_tables,
+)
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
     select_best_lambda_rows,
@@ -228,6 +232,13 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
         write_csv(args.output_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(args.output_dir / 'embedding_model_summary.csv', embedding_summary_rows)
+        (args.output_dir / THESIS_AGGREGATE_TABLES_FILENAME).write_text(
+            render_thesis_aggregate_tables(
+                metric_summary_rows=metric_summary_rows,
+                metric_family_summary_rows=metric_family_summary_rows_data,
+                metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+            )
+        )
 
         figures: list[Path] = []
         if args.plots:
