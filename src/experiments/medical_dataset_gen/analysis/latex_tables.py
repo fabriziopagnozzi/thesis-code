@@ -3,12 +3,19 @@ from __future__ import annotations
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from tabulate import tabulate
 
-THESIS_AGGREGATE_TABLES_FILENAME = 'thesis_aggregate_tables.tex'
-THESIS_RESULT_MACROS_FILENAME = 'thesis_result_macros.tex'
+from experiments.medical_dataset_gen.analysis.report_config import REPORT_METRIC_LABELS
+
+THESIS_AGGREGATE_TABLES_PATH = Path(
+    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/report_tables.tex'
+)
+THESIS_RESULT_MACROS_PATH = Path(
+    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/report_macros.tex'
+)
 
 type TableKind = Literal['metric_budget', 'metric_family', 'metric_family_budget']
 
@@ -44,14 +51,7 @@ THESIS_TABLE_SPECS: tuple[ThesisTableSpec, ...] = (
             r'\textbf{Mean $F-$}\TopK{}',
         ),
         group_macro='MetricSevenGroupRow',
-        metric_order=(
-            'FCP',
-            'FacetCoverage',
-            'Precision',
-            'alpha_nDCG',
-            'AllFacetCleanRate',
-            'Recall',
-        ),
+        metric_order=REPORT_METRIC_LABELS,
     ),
     ThesisTableSpec(
         kind='metric_family',
@@ -70,14 +70,7 @@ THESIS_TABLE_SPECS: tuple[ThesisTableSpec, ...] = (
             r'\textbf{Mean $F-$}\TopK{}',
         ),
         group_macro='MetricSevenGroupRow',
-        metric_order=(
-            'FCP',
-            'FacetCoverage',
-            'Precision',
-            'Recall',
-            'AllFacetCleanRate',
-            'alpha_nDCG',
-        ),
+        metric_order=REPORT_METRIC_LABELS,
     ),
     ThesisTableSpec(
         kind='metric_family_budget',
@@ -97,14 +90,7 @@ THESIS_TABLE_SPECS: tuple[ThesisTableSpec, ...] = (
             r'\textbf{Mean $F-$}\TopK{}',
         ),
         group_macro='MetricNineGroupRow',
-        metric_order=(
-            'FCP',
-            'FacetCoverage',
-            'AllFacetCleanRate',
-            'Precision',
-            'Recall',
-            'alpha_nDCG',
-        ),
+        metric_order=REPORT_METRIC_LABELS,
     ),
 )
 

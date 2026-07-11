@@ -125,6 +125,10 @@ def fac_loc_lazy_greedy(
         initial_coverage /= n
     initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
 
+    # heapq stores min-heap so we use negative value to simulate max-heap
+    priority_q = [(-initial_gains[i], i, 0) for i in range(n)]
+    heapq.heapify(priority_q)
+
     # Let D be the whole dataset to cover
     # m[i] at greedy step t is the current best coverage value for pool item i in D,
     # induced by the selected set S_t:
@@ -132,14 +136,10 @@ def fac_loc_lazy_greedy(
     #     m[i]_0 = 0
     m = np.zeros(n, dtype=np.float64)
 
-    # heapq stores min-heap so we use negative value to simulate max-heap
-    max_heap = [(-initial_gains[i], i, 0) for i in range(n)]
-    heapq.heapify(max_heap)
-
     # Lazy Greedy Selection (exactly k times)
     for curr_step in range(k):
         while True:
-            _, node_idx, last_update_step = heapq.heappop(max_heap)
+            _, node_idx, last_update_step = heapq.heappop(priority_q)
 
             # the popped gain may be outdated if it was computed before the latest update to "m"
             if last_update_step == curr_step:
@@ -156,7 +156,7 @@ def fac_loc_lazy_greedy(
                     marginal_cov_gain /= n
 
                 new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov_gain
-                heapq.heappush(max_heap, (-new_gain, node_idx, curr_step))
+                heapq.heappush(priority_q, (-new_gain, node_idx, curr_step))
 
     return np.array(selected_indices, dtype=np.intp)
 

@@ -41,7 +41,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     parser.add_argument(
         '--max-table-rows',
         type=int,
-        default=12,
+        default=100,
         help='Maximum rows rendered per markdown table.',
     )
     parser.add_argument(

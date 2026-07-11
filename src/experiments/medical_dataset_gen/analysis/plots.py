@@ -20,8 +20,8 @@ from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
 )
 from experiments.medical_dataset_gen.analysis.report_config import (
     BUDGET_CATEGORIES,
-    DELTA_METRIC_PLOT_SPECS,
     LEGACY_LOW_BUDGET_TOKEN,
+    REPORT_METRIC_SPECS,
 )
 
 
@@ -99,7 +99,7 @@ def write_figures(
 
     for category in BUDGET_CATEGORIES:
         category_rows = [row for row in budget_rows if row.get('BudgetCategory') == category]
-        for spec in DELTA_METRIC_PLOT_SPECS:
+        for spec in REPORT_METRIC_SPECS:
             paths.extend(
                 plot_budget_delta_columns(
                     plt=plt,

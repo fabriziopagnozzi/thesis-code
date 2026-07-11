@@ -20,6 +20,7 @@ class DeltaMetricPlotSpec:
     metric_label: DeltaMetricLabel
     title_label: str
     filename_token: str
+    source_metric_name: str
 
 
 @runtime_checkable

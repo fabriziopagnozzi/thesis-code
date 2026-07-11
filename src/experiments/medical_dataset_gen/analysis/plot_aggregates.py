@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from experiments.medical_dataset_gen.analysis.analysis_constants import (
-    DELTA_METRIC_LABELS,
     EXPERIMENT_FAMILIES,
     EXPERIMENT_FAMILY_COLORS,
     EXPERIMENT_FAMILY_LABELS,
@@ -24,10 +23,11 @@ from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     family_color_for_row,
 )
 from experiments.medical_dataset_gen.analysis.report_config import (
-    AGGREGATE_METRIC_ORDER,
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
+    REPORT_METRIC_LABEL_SET,
+    REPORT_METRIC_LABELS,
 )
 
 
@@ -124,7 +124,7 @@ def plot_metric_family_delta_heatmap(
         row
         for row in rows
         if float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
-        and str(row.get('MetricLabel') or '') in DELTA_METRIC_LABELS
+        and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
         and _is_core_aggregate_family_row(row)
     ]
     if not plot_rows:
@@ -159,9 +159,9 @@ def plot_metric_family_delta_heatmap(
         ax.set_xticks(range(len(families)))
         ax.set_xticklabels(families, rotation=35, ha='right')
         ax.set_yticks(range(len(metric_labels)))
-        ax.set_yticklabels([
-            _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
-        ])
+        ax.set_yticklabels(
+            [_metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels]
+        )
         for y_index, metric_label in enumerate(metric_labels):
             for x_index, family in enumerate(families):
                 row = _find_summary_row(
@@ -377,7 +377,7 @@ def plot_budget_delta_columns(
 
 
 def _metric_plot_order(metric_label: str) -> int:
-    order = {label: index for index, label in enumerate(AGGREGATE_METRIC_ORDER)}
+    order = {label: index for index, label in enumerate(REPORT_METRIC_LABELS)}
     return order.get(metric_label, len(order))
 
 

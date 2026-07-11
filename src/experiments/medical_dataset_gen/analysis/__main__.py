@@ -13,8 +13,8 @@ from experiments.medical_dataset_gen.analysis.artifacts import (
 from experiments.medical_dataset_gen.analysis.cli import parse_args
 from experiments.medical_dataset_gen.analysis.discovery import discover_experiments
 from experiments.medical_dataset_gen.analysis.latex_tables import (
-    THESIS_AGGREGATE_TABLES_FILENAME,
-    THESIS_RESULT_MACROS_FILENAME,
+    THESIS_AGGREGATE_TABLES_PATH,
+    THESIS_RESULT_MACROS_PATH,
     render_thesis_aggregate_tables,
     render_thesis_result_macros,
 )
@@ -131,14 +131,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
         write_csv(args.output_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(args.output_dir / 'embedding_model_summary.csv', embedding_summary_rows)
-        (args.output_dir / THESIS_AGGREGATE_TABLES_FILENAME).write_text(
+        (THESIS_AGGREGATE_TABLES_PATH).write_text(
             render_thesis_aggregate_tables(
                 metric_summary_rows=metric_summary_rows,
                 metric_family_summary_rows=metric_family_summary_rows_data,
                 metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             )
         )
-        (args.output_dir / THESIS_RESULT_MACROS_FILENAME).write_text(
+        (THESIS_RESULT_MACROS_PATH).write_text(
             render_thesis_result_macros(
                 geometry_rows=geometry_rows,
                 comparison_rows=comparison_rows,

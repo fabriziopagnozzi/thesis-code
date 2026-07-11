@@ -6,10 +6,8 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 from experiments.medical_dataset_gen.analysis.analysis_constants import (
-    DELTA_METRIC_LABELS,
     DIVERSIFYING_STRATEGIES,
     FCP_TIE_EPSILON,
-    METRIC_LABELS,
     STRATEGIES,
     DeltaMetricLabel,
 )
@@ -29,7 +27,9 @@ from experiments.medical_dataset_gen.analysis.models import BudgetCategory
 from experiments.medical_dataset_gen.analysis.report_config import (
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
-    DELTA_METRIC_PLOT_SPECS,
+    REPORT_METRIC_LABELS,
+    REPORT_METRIC_NAME_TO_LABEL,
+    REPORT_METRIC_SPECS,
 )
 
 
@@ -67,10 +67,10 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             out[f'{label}_lambda'] = row.get('lam') if row else None
             out[f'{label}_lambda_norm'] = row.get('lambda_norm') if row else None
             out[f'{label}_n_queries'] = row.get('n_queries') if row else None
-            for metric, metric_label in METRIC_LABELS.items():
+            for metric, metric_label in REPORT_METRIC_NAME_TO_LABEL.items():
                 out[f'{label}_{metric_label}'] = row.get(metric) if row else None
 
-        for metric_label in DELTA_METRIC_LABELS:
+        for metric_label in REPORT_METRIC_LABELS:
             fac_loc = float_or_none(out.get(f'FacLoc_{metric_label}'))
             mmr = float_or_none(out.get(f'MMR_{metric_label}'))
             top_k = float_or_none(out.get(f'TopK_{metric_label}'))
@@ -233,7 +233,7 @@ def metric_aggregate_summary_rows(
             [row for row in budget_rows if row.get('BudgetCategory') == 'high_budget'],
         ),
     )
-    for spec in DELTA_METRIC_PLOT_SPECS:
+    for spec in REPORT_METRIC_SPECS:
         for budget_category, budget_view, source_rows in view_rows:
             rows.append(
                 _metric_aggregate_row(
@@ -251,8 +251,8 @@ def metric_family_summary_rows(
     comparison_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    metric_order = {spec.metric_label: index for index, spec in enumerate(DELTA_METRIC_PLOT_SPECS)}
-    for spec in DELTA_METRIC_PLOT_SPECS:
+    metric_order = {spec.metric_label: index for index, spec in enumerate(REPORT_METRIC_SPECS)}
+    for spec in REPORT_METRIC_SPECS:
         grouped: dict[str, list[Mapping[str, object]]] = {}
         for row in comparison_rows:
             family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
@@ -283,10 +283,10 @@ def metric_family_budget_summary_rows(
     budget_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    metric_order = {spec.metric_label: index for index, spec in enumerate(DELTA_METRIC_PLOT_SPECS)}
+    metric_order = {spec.metric_label: index for index, spec in enumerate(REPORT_METRIC_SPECS)}
     budget_order = {category: index for index, category in enumerate(BUDGET_CATEGORIES)}
 
-    for spec in DELTA_METRIC_PLOT_SPECS:
+    for spec in REPORT_METRIC_SPECS:
         grouped: dict[tuple[str, BudgetCategory, str], list[Mapping[str, object]]] = {}
         family_groups: dict[str, list[Mapping[str, object]]] = {}
         for row in budget_rows:
@@ -576,19 +576,21 @@ def embedding_model_summary_rows(
     for experiment, manifest in manifest_by_exp.items():
         geometry = geometry_by_exp.get(experiment, {})
         low_budget = low_budget_by_exp.get(experiment, {})
-        run_rows.append({
-            'EmbeddingModel': manifest.get('EmbeddingModel'),
-            'EmbeddingDimension': manifest.get('EmbeddingDimension'),
-            'GeometryPassRate': geometry.get('GeometryPassRate'),
-            'GeometryQueries': geometry.get('GeometryQueries'),
-            'GeometryPassQueries': geometry.get('GeometryPassQueries'),
-            'TopK_FCP': low_budget.get('TopK_FCP'),
-            'MMR_FCP': low_budget.get('MMR_FCP'),
-            'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
-            'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
-            'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
-            'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
-        })
+        run_rows.append(
+            {
+                'EmbeddingModel': manifest.get('EmbeddingModel'),
+                'EmbeddingDimension': manifest.get('EmbeddingDimension'),
+                'GeometryPassRate': geometry.get('GeometryPassRate'),
+                'GeometryQueries': geometry.get('GeometryQueries'),
+                'GeometryPassQueries': geometry.get('GeometryPassQueries'),
+                'TopK_FCP': low_budget.get('TopK_FCP'),
+                'MMR_FCP': low_budget.get('MMR_FCP'),
+                'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
+                'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
+                'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
+                'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
+            }
+        )
 
     grouped: dict[str, list[Mapping[str, object]]] = {}
     for row in run_rows:
