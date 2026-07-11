@@ -7,6 +7,8 @@ results/
 data/
 **/*_config.yaml
 !**/config_examples/*_config.yaml
+**/@pdfs
+**/Images
 
 # this is a git repo from MIT
 experiments/mimic/mimic_*/

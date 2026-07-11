@@ -4,6 +4,15 @@
 
 ## Template
 
+## Hyperparameter tuning may be overly favourable
+
+Selecting a separate λ for every strategy, benchmark instance, and budget provides an upper estimate of tuned performance.
+
+Include:
+- globally tuned λ;
+- one λ per embedding model;
+- cross-family transfer, where λ is selected on some distributions and tested - others;
+
 ## Scale-up the dataset and retrieval
 * "pool_mode: global" to scale up the dataset like Martinenghi wants
     - problem: when focusing on determining the validation/test set for a given query in "pool_mode: global" config, how to deal with facet distractors and background outliers coming from the other queries?
