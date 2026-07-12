@@ -11,10 +11,10 @@ from tabulate import tabulate
 from experiments.medical_dataset_gen.analysis.report_config import REPORT_METRIC_LABELS
 
 THESIS_AGGREGATE_TABLES_PATH = Path(
-    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/report_tables.tex'
+    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/exp_results_tables.tex'
 )
 THESIS_RESULT_MACROS_PATH = Path(
-    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/report_macros.tex'
+    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/exp_results_macros.tex'
 )
 
 type TableKind = Literal['metric_budget', 'metric_family', 'metric_family_budget']
@@ -97,10 +97,10 @@ THESIS_TABLE_SPECS: tuple[ThesisTableSpec, ...] = (
 _METRIC_MACROS = {
     'FCP': r'\FCP{}',
     'FacetCoverage': r'\FacetCoverage{}',
+    'FacetWeightedRecall': r'\FacetWeightedRecall{}',
     'Precision': r'\PrecisionK{}',
     'alpha_nDCG': r'\AlphanDCG{}',
     'AllFacetCleanRate': r'\ACR{}',
-    'Recall': r'\RecallK{}',
 }
 _FAMILY_LABELS = {
     'Balanced clean distributions': 'Balanced clean',

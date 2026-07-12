@@ -29,7 +29,9 @@ METRIC_NAME_TO_FIELD: dict[str, MetricFieldSpec] = {
     'F1@k': MetricFieldSpec('gold_f1', higher_is_better=True),
     'MAP@k': MetricFieldSpec('average_precision_at_k', higher_is_better=True),
     'FacetCoverage@k': MetricFieldSpec('facet_coverage', higher_is_better=True),
-    'MeanFacetRecall@k': MetricFieldSpec('weighted_facet_coverage', higher_is_better=True),
+    # Every required facet receives the same weight, irrespective of how many
+    # gold chunks it contains. This is deliberately distinct from Recall@k.
+    'FacetWeightedRecall@k': MetricFieldSpec('weighted_facet_coverage', higher_is_better=True),
     'FacetCoveragePurity@k': MetricFieldSpec('facet_coverage_purity', higher_is_better=True),
     'AllFacetCleanRate@k': MetricFieldSpec('all_facet_clean', higher_is_better=True),
     'FacetMRR@k': MetricFieldSpec('facet_mrr_at_k', higher_is_better=True),

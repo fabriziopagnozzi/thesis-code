@@ -18,6 +18,7 @@ from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     plot_lambda_stability,
     plot_near_optimal_width,
 )
+from experiments.medical_dataset_gen.analysis.plot_statistical import plot_paired_fcp_forest
 from experiments.medical_dataset_gen.analysis.report_config import (
     BUDGET_CATEGORIES,
     LEGACY_LOW_BUDGET_TOKEN,
@@ -40,6 +41,8 @@ def write_figures(
     metric_summary_rows: Sequence[Mapping[str, object]],
     metric_family_summary_rows: Sequence[Mapping[str, object]],
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
+    paired_cell_rows: Sequence[Mapping[str, object]],
+    paired_suite_rows: Sequence[Mapping[str, object]],
     warnings: list[str],
 ) -> list[Path]:
     try:
@@ -92,6 +95,15 @@ def write_figures(
         plot_fcp_family_budget_heatmaps(
             plt=plt,
             rows=metric_family_budget_summary_rows,
+            output_dir=aggregate_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_paired_fcp_forest(
+            plt=plt,
+            cell_rows=paired_cell_rows,
+            suite_rows=paired_suite_rows,
             output_dir=aggregate_dir,
             plot_format=plot_format,
         )

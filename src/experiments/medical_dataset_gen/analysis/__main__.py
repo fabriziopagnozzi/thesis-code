@@ -34,6 +34,14 @@ from experiments.medical_dataset_gen.analysis.rows import (
     near_optimal_lambda_rows,
     selected_strategy_rows,
 )
+from experiments.medical_dataset_gen.analysis.statistical import (
+    THESIS_STATISTICAL_TABLE_PATH,
+    cell_effect_summary_rows,
+    leave_one_out_sensitivity_rows,
+    render_statistical_latex_table,
+    suite_effect_summary_rows,
+    write_paired_effect_datasets,
+)
 from experiments.medical_dataset_gen.analysis.summaries import (
     budget_category_rows_from_comparisons,
     comparison_by_k_rows,
@@ -103,6 +111,32 @@ def run_report(args: CliArgs) -> ReportOutputs:
             geometry_rows=geometry_rows,
             low_budget_rows=low_budget_rows,
         )
+        paired_profile_effects = write_paired_effect_datasets(
+            records=records,
+            strategy_rows=strategy_rows,
+            output_dir=args.output_dir,
+            warnings=warnings,
+        )
+        paired_cell_rows = cell_effect_summary_rows(
+            profile_effects=paired_profile_effects,
+            budget_rows=budget_rows,
+            bootstrap_replicates=args.bootstrap_replicates,
+            bootstrap_seed=args.bootstrap_seed,
+        )
+        paired_suite_rows = suite_effect_summary_rows(
+            profile_effects=paired_profile_effects,
+            budget_rows=budget_rows,
+            bootstrap_replicates=args.bootstrap_replicates,
+            bootstrap_seed=args.bootstrap_seed,
+        )
+        paired_sensitivity_rows = leave_one_out_sensitivity_rows(
+            profile_effects=paired_profile_effects,
+            budget_rows=budget_rows,
+        )
+        # The partitioned Parquet artifacts are now complete and all summary
+        # rows have been derived. Free the suite-sized profile frame before
+        # matplotlib builds the report figures.
+        del paired_profile_effects
 
         (args.output_dir / f'{LEGACY_LOW_BUDGET_TOKEN}_strategy_summary.csv').unlink(
             missing_ok=True
@@ -131,6 +165,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
         write_csv(args.output_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(args.output_dir / 'embedding_model_summary.csv', embedding_summary_rows)
+        write_csv(args.output_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
+        write_csv(args.output_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
+        write_csv(args.output_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
         (THESIS_AGGREGATE_TABLES_PATH).write_text(
             render_thesis_aggregate_tables(
                 metric_summary_rows=metric_summary_rows,
@@ -146,6 +183,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 lambda_safety_rows=lambda_safety_rows,
             )
         )
+        THESIS_STATISTICAL_TABLE_PATH.write_text(render_statistical_latex_table(paired_suite_rows))
 
         figures: list[Path] = []
         if args.plots:
@@ -169,6 +207,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 metric_summary_rows=metric_summary_rows,
                 metric_family_summary_rows=metric_family_summary_rows_data,
                 metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+                paired_cell_rows=paired_cell_rows,
+                paired_suite_rows=paired_suite_rows,
                 warnings=warnings,
             )
 
@@ -227,6 +267,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'files': list(REPORT_FILES),
                     'lambda_selection_metric': LAMBDA_SELECTION_MAXIMIZING_METRIC,
                     'near_optimal_epsilon': args.near_optimal_epsilon,
+                    'bootstrap_replicates': args.bootstrap_replicates,
+                    'bootstrap_seed': args.bootstrap_seed,
                 },
                 indent=2,
                 sort_keys=True,

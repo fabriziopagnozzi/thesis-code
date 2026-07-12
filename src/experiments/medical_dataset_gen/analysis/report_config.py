@@ -23,6 +23,12 @@ REPORT_METRIC_SPECS: tuple[DeltaMetricPlotSpec, ...] = (
     DeltaMetricPlotSpec('FCP', 'FCP', 'fcp', 'FacetCoveragePurity@k'),
     DeltaMetricPlotSpec('FacetCoverage', 'FacetCoverage@k', 'facet_coverage', 'FacetCoverage@k'),
     DeltaMetricPlotSpec(
+        'FacetWeightedRecall',
+        'FacetWeightedRecall@k',
+        'facet_weighted_recall',
+        'FacetWeightedRecall@k',
+    ),
+    DeltaMetricPlotSpec(
         'AllFacetCleanRate',
         'AllFacetCleanRate@k',
         'all_facet_clean_rate',

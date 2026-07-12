@@ -145,7 +145,7 @@ FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE = 18  # points^2 area for matplotlib
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {
     'FacetCoverage@k': 'FacetCoverage@k',
-    'MeanFacetRecall@k': 'FacetRecall@k',
+    'FacetWeightedRecall@k': 'FacetWeightedRecall@k',
     'FacetCoveragePurity@k': 'FacetCoveragePurity@k',
     'AllFacetCleanRate@k': 'AllFacetCleanRate@k',
     'Precision@k': 'Precision@k',
@@ -207,12 +207,11 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
 # Main benchmark metrics shown in the primary strategy-comparison figures.
 PLOTTED_MAIN_METRIC_NAMES = [
     'FacetCoveragePurity@k',
-    'AllFacetCleanRate@k',
     'FacetCoverage@k',
     'Precision@k',
-    'Recall@k',
+    'FacetWeightedRecall@k',
     'alpha-nDCG@k',
-    # 'MeanFacetRecall@k',
+    'AllFacetCleanRate@k',
     # 'F1@k',
     # 'AnswerROUGE1F1@k',
     # 'AnswerROUGE2Recall@k',
@@ -225,6 +224,7 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
     'BackgroundOutlierRate',
     'PrimaryAxisRate',
     'RedundantGoldRate',
+    'Recall@k',
     'fac',
     'avg_cos',
     'jac',

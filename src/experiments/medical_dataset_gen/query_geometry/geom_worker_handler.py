@@ -85,7 +85,7 @@ _EVAL_STATS_COLUMNS = [
     'FacetCoverage@k',
     'Precision@k',
     'DistractorRate',
-    'MeanFacetRecall@k',
+    'FacetWeightedRecall@k',
     'alpha-nDCG@k',
 ]
 

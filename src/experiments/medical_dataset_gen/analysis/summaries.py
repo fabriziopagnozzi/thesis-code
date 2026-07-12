@@ -7,9 +7,9 @@ from typing import cast
 
 from experiments.medical_dataset_gen.analysis.analysis_constants import (
     DIVERSIFYING_STRATEGIES,
-    FCP_TIE_EPSILON,
     STRATEGIES,
     DeltaMetricLabel,
+    practical_effect_threshold,
 )
 from experiments.medical_dataset_gen.analysis.helpers import (
     boundary_rate,
@@ -80,11 +80,11 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
 
         out['FacLocVsMMR_FCPOutcome'] = delta_outcome(
             float_or_none(out.get('Delta_FacLoc_MMR_FCP')),
-            epsilon=FCP_TIE_EPSILON,
+            epsilon=practical_effect_threshold('FCP'),
         )
         out['FacLocVsMMR_AllFacetCleanRateOutcome'] = delta_outcome(
             float_or_none(out.get('Delta_FacLoc_MMR_AllFacetCleanRate')),
-            epsilon=FCP_TIE_EPSILON,
+            epsilon=practical_effect_threshold('AllFacetCleanRate'),
         )
         out['FCPWinner'] = winner_for_metric(out, 'FCP')
         out['AllFacetCleanRateWinner'] = winner_for_metric(out, 'AllFacetCleanRate')
@@ -365,14 +365,16 @@ def _metric_group_summary_row(
         'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
         'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
         'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
-        'TieEpsilon': FCP_TIE_EPSILON,
+        'TieEpsilon': practical_effect_threshold(metric),
     }
     _add_outcome_percentages(
         out,
         rows=len(complete_rows),
-        facloc_better=sum(delta > FCP_TIE_EPSILON for delta in deltas_fm),
-        facloc_tied=sum(abs(delta) <= FCP_TIE_EPSILON for delta in deltas_fm),
-        facloc_worse=sum(delta < -FCP_TIE_EPSILON for delta in deltas_fm),
+        facloc_better=sum(delta > practical_effect_threshold(metric) for delta in deltas_fm),
+        facloc_tied=sum(
+            abs(delta) <= practical_effect_threshold(metric) for delta in deltas_fm
+        ),
+        facloc_worse=sum(delta < -practical_effect_threshold(metric) for delta in deltas_fm),
         facloc_topk_better=sum(delta > 0.0 for delta in deltas_ft),
         mmr_topk_better=sum(delta > 0.0 for delta in deltas_mt),
     )
@@ -425,9 +427,10 @@ def _metric_aggregate_row(
     deltas_fm = numeric_values(complete_rows, delta_fm_col)
     deltas_ft = numeric_values(complete_rows, delta_ft_col)
     deltas_mt = numeric_values(complete_rows, delta_mt_col)
-    facloc_better = sum(delta > FCP_TIE_EPSILON for delta in deltas_fm)
-    facloc_tied = sum(abs(delta) <= FCP_TIE_EPSILON for delta in deltas_fm)
-    facloc_worse = sum(delta < -FCP_TIE_EPSILON for delta in deltas_fm)
+    threshold = practical_effect_threshold(metric)
+    facloc_better = sum(delta > threshold for delta in deltas_fm)
+    facloc_tied = sum(abs(delta) <= threshold for delta in deltas_fm)
+    facloc_worse = sum(delta < -threshold for delta in deltas_fm)
     return {
         'Metric': metric_title,
         'MetricLabel': metric,
@@ -454,7 +457,7 @@ def _metric_aggregate_row(
         'MedianDeltaFacLocMMR': statistics.median(deltas_fm) if deltas_fm else None,
         'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
         'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
-        'TieEpsilon': FCP_TIE_EPSILON,
+        'TieEpsilon': threshold,
     }
 
 

@@ -39,6 +39,8 @@ class CliArgs:
     plots: bool
     plot_format: PlotFormat
     near_optimal_epsilon: float
+    bootstrap_replicates: int
+    bootstrap_seed: int
 
 
 @dataclass(frozen=True)

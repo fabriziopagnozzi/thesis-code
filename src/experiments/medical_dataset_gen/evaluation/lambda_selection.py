@@ -21,7 +21,7 @@ LambdaSelectionMetricRow = TypedDict(
         'F1@k': NotRequired[float],
         'MAP@k': NotRequired[float],
         'FacetCoverage@k': NotRequired[float],
-        'MeanFacetRecall@k': NotRequired[float],
+        'FacetWeightedRecall@k': NotRequired[float],
         'FacetCoveragePurity@k': NotRequired[float],
         'AllFacetCleanRate@k': NotRequired[float],
         'FacetMRR@k': NotRequired[float],

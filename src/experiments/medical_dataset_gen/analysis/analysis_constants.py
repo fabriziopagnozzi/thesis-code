@@ -2,8 +2,6 @@ from typing import Literal, get_args
 
 from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
 
-FCP_TIE_EPSILON = 0.05
-
 type StrategyName = Literal['top_k', 'mmr', 'fac_loc']
 STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')
 DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
@@ -11,12 +9,27 @@ DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
 type DeltaMetricLabel = Literal[
     'FCP',
     'FacetCoverage',
+    'FacetWeightedRecall',
     'AllFacetCleanRate',
     'Precision',
-    'Recall',
     'alpha_nDCG',
 ]
 DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_args(DeltaMetricLabel.__value__))
+
+# Thresholds to set for each metric to identify when methods are tied
+PRACTICAL_EFFECT_THRESHOLDS: dict[DeltaMetricLabel, float] = {
+    'FCP': 0.05,
+    'FacetCoverage': 0.05,
+    'FacetWeightedRecall': 0.05,
+    'AllFacetCleanRate': 0.05,
+    'Precision': 0.05,
+    'alpha_nDCG': 0.05,
+}
+
+
+def practical_effect_threshold(metric: DeltaMetricLabel) -> float:
+    return PRACTICAL_EFFECT_THRESHOLDS[metric]
+
 
 type ExperimentFamilyId = Literal[
     'balanced_clean',
@@ -62,8 +75,6 @@ REPORT_FILES = (
     'txt_report.md',
     'txt_report_highlights.md',
     'txt_experiments_config_recap.md',
-    'thesis_aggregate_tables.tex',
-    'thesis_result_macros.tex',
     'warnings.txt',
     'manifest.json',
     'experiment_manifest.csv',
@@ -83,6 +94,11 @@ REPORT_FILES = (
     'lambda_safety_summary.csv',
     'near_optimal_lambda_width.csv',
     'embedding_model_summary.csv',
+    'paired_query_effects/',
+    'paired_profile_effects/',
+    'paired_cell_effect_summary.csv',
+    'paired_suite_effect_summary.csv',
+    'paired_leave_one_out_sensitivity.csv',
 )
 ANALYSIS_EXCLUDED_METRICS = frozenset({
     'MAP@k',
@@ -101,6 +117,7 @@ EVALUATION_METRICS = (
 )
 METRIC_LABEL_OVERRIDES = {
     'FacetCoveragePurity@k': 'FCP',
+    'FacetWeightedRecall@k': 'FacetWeightedRecall',
     'alpha-nDCG@k': 'alpha_nDCG',
 }
 METRIC_LABELS = {

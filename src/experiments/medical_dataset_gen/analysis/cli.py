@@ -68,6 +68,18 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         default=0.01,
         help='A lambda is near-optimal when FCP is within this absolute margin of the best FCP.',
     )
+    parser.add_argument(
+        '--bootstrap-replicates',
+        type=int,
+        default=1000,
+        help='Number of deterministic profile-cluster bootstrap replicates for paired inference.',
+    )
+    parser.add_argument(
+        '--bootstrap-seed',
+        type=int,
+        default=20260712,
+        help='Random seed for deterministic paired-inference bootstrap resampling.',
+    )
     parsed = parser.parse_args(argv)
     results_dir = parsed.results_dir.expanduser().resolve()
     output_dir = (
@@ -86,4 +98,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         plots=not bool(parsed.no_plots),
         plot_format=cast(PlotFormat, parsed.plot_format),
         near_optimal_epsilon=max(0.0, float(parsed.near_optimal_epsilon)),
+        bootstrap_replicates=max(100, int(parsed.bootstrap_replicates)),
+        bootstrap_seed=int(parsed.bootstrap_seed),
     )

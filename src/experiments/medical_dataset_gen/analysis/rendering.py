@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from experiments.medical_dataset_gen.analysis.analysis_constants import (
-    FCP_TIE_EPSILON,
     REPORT_FILES,
+    practical_effect_threshold,
 )
 from experiments.medical_dataset_gen.analysis.helpers import (
     bullets,
@@ -382,7 +382,7 @@ def render_interesting_findings(
         f'- FacLoc beats MMR on `{LAMBDA_SELECTION_MAXIMIZING_METRIC}` in '
         f'{len(facloc_better_rows)}/{len(complete_fcp_rows)} experiment-k comparisons; '
         f'it is worse in `{len(facloc_worse_rows)}` and tied within '
-        f'`±{FCP_TIE_EPSILON:.3f}` FCP in `{len(facloc_tied_rows)}`.'
+        f'`±{practical_effect_threshold("FCP"):.3f}` FCP in `{len(facloc_tied_rows)}`.'
     )
     lines.append(
         f'- FacLoc beats top-k on `{LAMBDA_SELECTION_MAXIMIZING_METRIC}` in '

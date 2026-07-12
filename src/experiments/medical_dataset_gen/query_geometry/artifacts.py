@@ -49,7 +49,7 @@ _STATS_BEST_SORT = [
     'FacetCoverage@k',
     'Precision@k',
     'DistractorRate',
-    'MeanFacetRecall@k',
+    'FacetWeightedRecall@k',
     'alpha-nDCG@k',
 ]
 _STATS_BEST_DESC = [True, True, True, True, False, True, True]
