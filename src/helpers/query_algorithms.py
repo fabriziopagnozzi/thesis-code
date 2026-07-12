@@ -40,7 +40,7 @@ def mmr(
     """
     Maximal Marginal Relevance.
     score(i) = lam * cos(q, i) - (1-lam) * max_{j in W} cos(i, j)
-    W = last `window` selected items (None = all selected).
+    W = last `window` selected items (None = all selected). We always use None.
     """
     n = len(sim_to_query)
     k = min(k, n)
