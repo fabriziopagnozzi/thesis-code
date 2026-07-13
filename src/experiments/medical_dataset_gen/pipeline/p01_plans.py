@@ -13,7 +13,6 @@ from itertools import combinations
 import polars as pl
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
-    exclusive_distinct_subgroup_label,
     get_axis_pair_profiles,
     get_selected_conditions,
     load_ontology,
@@ -285,7 +284,7 @@ def _materialize_plan(
                 condition_id=spec.condition_key,
                 condition_display=spec.condition_display,
                 subgroup_id=cohort_id,
-                subgroup_label=_query_local_subgroup_label(spec, cohort_id, cohort),
+                subgroup_label=cohort.label,
                 subgroup_axis=cohort.axis,
                 subgroup_field=cohort.field,
                 subgroup_value=cohort.value,
@@ -332,12 +331,8 @@ def _materialize_plan(
         template_id=template_id,
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
-        **_query_local_prefixed_fields(  # type: ignore[arg-type]
-            spec, 'subgroup_a', spec.subgroup_a_id, spec.subgroup_a
-        ),
-        **_query_local_prefixed_fields(  # type: ignore[arg-type]
-            spec, 'subgroup_b', spec.subgroup_b_id, spec.subgroup_b
-        ),
+        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),  # type: ignore[arg-type]
+        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),  # type: ignore[arg-type]
         cohort_contrast_id=spec.cohort_contrast_id,
         cohort_contrast_family=spec.cohort_contrast_family,
         cohort_dimension_id=spec.cohort_dimension_id,
@@ -350,28 +345,6 @@ def _materialize_plan(
         facets=facets,
         logical_form=logical_form,
     )
-
-
-def _query_local_prefixed_fields(
-    spec: QueryPlanSpec,
-    prefix: str,
-    subgroup_id: str,
-    subgroup: SubgroupOntology,
-) -> dict[str, object]:
-    fields = subgroup.prefixed_fields(prefix, subgroup_id)
-    fields[f'{prefix}_label'] = _query_local_subgroup_label(spec, subgroup_id, subgroup)
-    return fields
-
-
-def _query_local_subgroup_label(
-    spec: QueryPlanSpec,
-    subgroup_id: str,
-    subgroup: SubgroupOntology,
-) -> str:
-    if spec.cohort_contrast_family != 'distinct_comorbidity':
-        return subgroup.label
-    excluded = spec.subgroup_b if subgroup_id == spec.subgroup_a_id else spec.subgroup_a
-    return exclusive_distinct_subgroup_label(subgroup, excluded)
 
 
 def _stable_id(prefix: str, *parts: object) -> str:

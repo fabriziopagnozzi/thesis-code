@@ -11,7 +11,7 @@ from pydantic import ConfigDict
 
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotName
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    BenchmarkModel,
+    BenchmarkPydanticModel,
     ChunkPoolScope,
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
@@ -66,14 +66,14 @@ type GeometryChunkLike = ChunkDocumentRecord | GeometryChunkRecord
 type GeometryQrelLike = QrelRecord | GeometryQrelRecord
 
 
-class GeometrySelection(BenchmarkModel):
+class GeometrySelection(BenchmarkPydanticModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     local_indices: NDArray[np.intp]
     lam: float | None
 
 
-class GeometryArtifact(BenchmarkModel):
+class GeometryArtifact(BenchmarkPydanticModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     query_id: str
@@ -103,7 +103,7 @@ class GeometryArtifact(BenchmarkModel):
     selection_group: str | None = None
 
 
-class GeometryFilterStatsRow(BenchmarkModel):
+class GeometryFilterStatsRow(BenchmarkPydanticModel):
     # The filter stage adds dynamic topk_{k}_* diagnostic columns, so the
     # stable schema is typed here and the flattened per-k fields are allowed as
     # validated extras.

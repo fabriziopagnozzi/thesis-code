@@ -185,7 +185,7 @@ def load_raw_experiment_config(paths: MedicalDatasetGenPaths) -> YamlMapping:
         paths.subconfig_path,
         missing_message='Create _subconfig.yaml for the subexperiment overrides.',
     )
-    if 'generation' in sub_raw:
+    if 'generation' in sub_raw and 'chunk_pools' in sub_raw['generation']:  # type: ignore
         raise ValueError(
             f'{paths.subconfig_path} cannot override generation. '
             'Subexperiments must keep the parent dataset distribution unchanged.'

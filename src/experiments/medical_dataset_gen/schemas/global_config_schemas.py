@@ -26,11 +26,11 @@ from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverride
 from helpers.embedder import EmbeddingModelName
 
 
-class ConfigModel(BaseModel):
+class BasePydanticCfgModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
-class GlobalCfg(ConfigModel):
+class GlobalCfg(BasePydanticCfgModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
     output_experiment: str = 'v2'
@@ -40,7 +40,7 @@ class GlobalCfg(ConfigModel):
 type DistractorChange = Literal['condition', 'subgroup', 'axis', 'axis_value_bin']
 
 
-class DistractorSpec(ConfigModel):
+class DistractorSpec(BasePydanticCfgModel):
     size: int = Field(ge=1)
     changes: list[DistractorChange] = Field(min_length=1)
 
@@ -124,7 +124,7 @@ class BackgroundDistractorSpec(DistractorSpec):
     )
 
 
-class LocalChunkPoolCfg(ConfigModel):
+class LocalChunkPoolCfg(BasePydanticCfgModel):
     size: PositiveInt
     distractors: list[DistractorSpec] = Field(default_factory=list)
 
@@ -136,53 +136,15 @@ class NicheChunkPoolCfg(LocalChunkPoolCfg):
     num_clusters_per_query: int = Field(default=0, ge=0, le=2)
 
 
-class ChunkPoolsCfg(ConfigModel):
-    chunk_min_words: PositiveInt = 25
-    chunk_max_words: PositiveInt = 90
+class ChunkPoolsCfg(BasePydanticCfgModel):
+    chunk_min_words: PositiveInt = 1
+    chunk_max_words: PositiveInt = 999999
     chunk_word_tolerance: PositiveInt = 2
 
-    dominant_primary: LocalChunkPoolCfg = Field(
-        default_factory=lambda: LocalChunkPoolCfg(
-            size=24,
-            distractors=[
-                DistractorSpec(size=3, changes=['subgroup']),
-                DistractorSpec(size=2, changes=['condition']),
-                DistractorSpec(size=2, changes=['condition', 'subgroup']),
-                DistractorSpec(size=1, changes=['subgroup', 'axis']),
-            ],
-        )
-    )
-    other_primary: LocalChunkPoolCfg = Field(
-        default_factory=lambda: LocalChunkPoolCfg(
-            size=20,
-            distractors=[
-                DistractorSpec(size=2, changes=['subgroup']),
-                DistractorSpec(size=2, changes=['condition']),
-                DistractorSpec(size=2, changes=['condition', 'subgroup']),
-            ],
-        )
-    )
-    secondary: LocalChunkPoolCfg = Field(
-        default_factory=lambda: LocalChunkPoolCfg(
-            size=14,
-            distractors=[
-                DistractorSpec(size=2, changes=['subgroup']),
-                DistractorSpec(size=2, changes=['condition']),
-                DistractorSpec(size=2, changes=['condition', 'subgroup']),
-            ],
-        )
-    )
-    niche: NicheChunkPoolCfg = Field(
-        default_factory=lambda: NicheChunkPoolCfg(
-            size=4,
-            num_clusters_per_query=0,
-            distractors=[
-                DistractorSpec(size=2, changes=['subgroup']),
-                DistractorSpec(size=2, changes=['condition']),
-                DistractorSpec(size=2, changes=['condition', 'subgroup']),
-            ],
-        )
-    )
+    dominant_primary: LocalChunkPoolCfg
+    other_primary: LocalChunkPoolCfg
+    secondary: LocalChunkPoolCfg
+    niche: NicheChunkPoolCfg
     background_outliers: list[BackgroundDistractorSpec] = Field(
         default_factory=lambda: [BackgroundDistractorSpec()]
     )
@@ -195,7 +157,7 @@ class ChunkPoolsCfg(ConfigModel):
             + self.niche.num_clusters_per_query * self.niche.size
         )
 
-    def point_distractor_chunks_per_query(self) -> int:
+    def near_miss_distractors_per_query(self) -> int:
         return (
             self.dominant_primary.total_distractor_chunks()
             + self.other_primary.total_distractor_chunks()
@@ -203,14 +165,14 @@ class ChunkPoolsCfg(ConfigModel):
             + self.niche.num_clusters_per_query * self.niche.total_distractor_chunks()
         )
 
-    def background_outlier_chunks_per_query(self) -> int:
+    def background_outliers_per_query(self) -> int:
         return sum(spec.size * spec.num_clusters for spec in self.background_outliers)
 
     def total_distractor_chunks(self) -> int:
-        return self.point_distractor_chunks_per_query() + self.background_outlier_chunks_per_query()
+        return self.near_miss_distractors_per_query() + self.background_outliers_per_query()
 
 
-class GenerationLlmConfig(ConfigModel):
+class GenerationLlmConfig(BasePydanticCfgModel):
     use_llm_chunk_generation: bool = False
     use_llm_chunk_rewriting: bool = False
     use_llm_query_paraphrase: bool = False
@@ -221,7 +183,7 @@ class GenerationLlmConfig(ConfigModel):
     num_ctx: PositiveInt = 4096
 
 
-class AxisPairPolicyOverrideCfg(ConfigModel):
+class AxisPairPolicyOverrideCfg(BasePydanticCfgModel):
     axes: tuple[ClinicalAxis, ClinicalAxis]
     allowed_primary_axes: list[ClinicalAxis] | None = None
     blocked_profile_ids: list[str] = Field(default_factory=list)
@@ -258,19 +220,20 @@ class AxisPairPolicyOverrideCfg(ConfigModel):
         return set(self.axes) == {left, right}
 
 
-class GenerationCfg(ConfigModel):
+class GenerationCfg(BasePydanticCfgModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
     chunk_text_style: ChunkTextStyle = 'semantic_hardened'
     excluded_clinical_axes: list[ClinicalAxis] = Field(
-        default_factory=lambda: ['diagnostic_evidence_type']
+        # default_factory=lambda: ['diagnostic_evidence_type']
+        default_factory=list
     )
 
     calibration_mode: PlanCalibrationMode = 'rotating'
     calibration_probe_chunks_per_facet: PositiveInt = 8
     axis_pair_policy_overrides: list[AxisPairPolicyOverrideCfg] = Field(default_factory=list)
 
-    chunk_pools: ChunkPoolsCfg = Field(default_factory=ChunkPoolsCfg)
+    chunk_pools: ChunkPoolsCfg
     llm_config: GenerationLlmConfig = Field(default_factory=GenerationLlmConfig)
 
     @model_validator(mode='after')
@@ -283,6 +246,7 @@ class GenerationCfg(ConfigModel):
                 'generation.chunk_pools.niche.size must be smaller than '
                 'generation.chunk_pools.secondary.size when niche clusters are enabled'
             )
+
         seen_pairs: set[frozenset[ClinicalAxis]] = set()
         for override in self.axis_pair_policy_overrides:
             key = frozenset(override.axes)
@@ -291,8 +255,10 @@ class GenerationCfg(ConfigModel):
                     'generation.axis_pair_policy_overrides must be unique per unordered axis pair'
                 )
             seen_pairs.add(key)
+
         if len(self.excluded_clinical_axes) != len(set(self.excluded_clinical_axes)):
             raise ValueError('generation.excluded_clinical_axes must not contain duplicates')
+
         active_axes = set(CLINICAL_AXIS_LIST) - set(self.excluded_clinical_axes)
         if len(active_axes) < 2:
             raise ValueError('generation.excluded_clinical_axes must leave at least two axes')
@@ -313,7 +279,7 @@ class GenerationCfg(ConfigModel):
         return None
 
 
-class EmbeddingCfg(ConfigModel):
+class EmbeddingCfg(BasePydanticCfgModel):
     model_name: EmbeddingModelName = 'multi-qa-mpnet-base-cos-v1'
     batch_size: PositiveInt = 64
     device: str = 'cuda'
@@ -323,7 +289,7 @@ class EmbeddingCfg(ConfigModel):
     normalize: bool = True
 
 
-class LambdaGridCfg(ConfigModel):
+class LambdaGridCfg(BasePydanticCfgModel):
     start: float = Field(ge=0.0, le=1.0)
     stop: float = Field(ge=0.0, le=1.0)
     num_values: PositiveInt
@@ -340,7 +306,7 @@ class LambdaGridCfg(ConfigModel):
         })
 
 
-class RetrievalCfg(ConfigModel):
+class RetrievalCfg(BasePydanticCfgModel):
     pool_scope: ChunkPoolScope = 'query_local'
     candidate_pool_n: PositiveInt = 999_999_999
     k_values: list[PositiveInt] = Field(default_factory=lambda: [6, 10, 14])
@@ -375,11 +341,11 @@ class RetrievalCfg(ConfigModel):
 type GeometryStressHorizonBasis = Literal['competitive_pool_mass']
 
 
-class GeometryFilterCfg(ConfigModel):
+class GeometryFilterCfg(BasePydanticCfgModel):
     """Predeclared validity and relative-depth stress criteria for query geometry."""
 
     stress_horizon_basis: GeometryStressHorizonBasis = 'competitive_pool_mass'
-    stress_horizon_fraction: float = Field(default=0.12, gt=0.0, le=1.0)
+    stress_horizon_fraction: float = Field(default=0.05, gt=0.0, le=1.0)
     stress_horizon_min_k: PositiveInt = 4
     stress_horizon_max_k: PositiveInt = 24
     min_primary_axis_fraction: float = Field(default=0.50, gt=0.0, le=1.0)
@@ -406,14 +372,14 @@ type LambdaSelectionTieBreak = Literal['lower_lambda', 'higher_lambda']
 type EvaluationMode = Literal['exploring', 'testing']
 
 
-class LambdaSelectionCfg(ConfigModel):
+class LambdaSelectionCfg(BasePydanticCfgModel):
     tie_break: LambdaSelectionTieBreak = 'lower_lambda'
 
 
 type EvalPlotTheme = Literal['dark', 'light']
 
 
-class EvaluationCfg(ConfigModel):
+class EvaluationCfg(BasePydanticCfgModel):
     mode: EvaluationMode = 'testing'
     workers: PositiveInt | None = None
     all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
@@ -421,7 +387,7 @@ class EvaluationCfg(ConfigModel):
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
 
 
-class QueryGeometryCfg(ConfigModel):
+class QueryGeometryCfg(BasePydanticCfgModel):
     n_queries: PositiveInt = 6
     query_ids: list[str] = Field(default_factory=list)
     query_selection: Literal['mixed', 'best'] = 'mixed'
@@ -439,10 +405,10 @@ class QueryGeometryCfg(ConfigModel):
     random_state: PositiveInt = 42
 
 
-class ExperimentCfg(ConfigModel):
+class ExperimentCfg(BasePydanticCfgModel):
     dataset_schema_version: Literal[2] = 2
     global_: GlobalCfg = Field(alias='global')
-    generation: GenerationCfg = Field(default_factory=GenerationCfg)
+    generation: GenerationCfg
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
     retrieval: RetrievalCfg = Field(default_factory=RetrievalCfg)
     geometry_filter: GeometryFilterCfg = Field(default_factory=GeometryFilterCfg)

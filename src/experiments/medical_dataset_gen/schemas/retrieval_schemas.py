@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 from pydantic import ConfigDict
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    BenchmarkModel,
+    BenchmarkPydanticModel,
     ClinicalAxis,
     ClusterRole,
     CohortContrastFamily,
@@ -31,7 +31,7 @@ type QueryIdToFacetMap = dict[str, FacetIdToGoldChunks]
 type TopKDiagnosticsByK = dict[int, TopKDiagnostics]
 
 
-class QrelRecord(BenchmarkModel):
+class QrelRecord(BenchmarkPydanticModel):
     query_id: str
     evidence_profile_id: str
     pool_id: str
@@ -52,7 +52,7 @@ class QrelRecord(BenchmarkModel):
     support_type: ChunkSupport | None = None
 
 
-class QueryRecord(BenchmarkModel):
+class QueryRecord(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
     query_id: str
@@ -73,7 +73,7 @@ class QueryRecord(BenchmarkModel):
     query_text: str = ''
 
 
-class ChunkDocumentRecord(BenchmarkModel):
+class ChunkDocumentRecord(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
     chunk_id: str
@@ -90,7 +90,7 @@ class ChunkDocumentRecord(BenchmarkModel):
     admission_id: str | int | None = None
 
 
-class ChunkMembershipRecord(BenchmarkModel):
+class ChunkMembershipRecord(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
     chunk_id: str

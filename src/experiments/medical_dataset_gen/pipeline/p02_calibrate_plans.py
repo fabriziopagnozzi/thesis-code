@@ -295,7 +295,7 @@ def _semantic_probe_gate(
     sims = probe_vectors @ query_vector
     chunk_pools = cfg.generation.chunk_pools
     competitive_pool_mass = (
-        chunk_pools.gold_chunks_per_query() + chunk_pools.point_distractor_chunks_per_query()
+        chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
     )
     stress_horizon_k = cfg.geometry_filter.stress_horizon(
         competitive_pool_mass=competitive_pool_mass

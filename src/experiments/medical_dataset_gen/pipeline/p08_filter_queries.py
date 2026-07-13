@@ -181,7 +181,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             query_qrels=query_qrels,
             chunk_id_to_idx=maps['chunk_id_to_idx'],
             chunk_vectors=chunk_vectors,
-            expected_background_chunks=cfg.generation.chunk_pools.background_outlier_chunks_per_query(),
+            expected_background_chunks=cfg.generation.chunk_pools.background_outliers_per_query(),
         )
 
         diagnostics = _topk_vs_facloc_diagnostics(
@@ -229,7 +229,8 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'primary_axis_stress_count': primary_axis_topk_count,
                 'primary_axis_stress_fraction': primary_topk['primary_axis_fraction'],
                 'n_topk_retrieved_facets': n_topk_retrieved_facets,
-                'stress_horizon_retrieved_facet_fraction': n_topk_retrieved_facets / len(query_facets),
+                'stress_horizon_retrieved_facet_fraction': n_topk_retrieved_facets
+                / len(query_facets),
                 'max_retrieved_facet_fraction': cfg.geometry_filter.max_retrieved_facet_fraction,
                 'rank_where_all_facets_first_covered': all_facet_rank,
                 'all_facets_covered_before_stress_horizon': (
@@ -354,9 +355,7 @@ def _strict_gate_failures(
 ) -> StrictGeometryFailures:
     return {
         'fail_missing_facet': n_facets_present != n_facets,
-        'fail_weak_primary_axis_dominance': (
-            primary_axis_fraction < cfg.min_primary_axis_fraction
-        ),
+        'fail_weak_primary_axis_dominance': (primary_axis_fraction < cfg.min_primary_axis_fraction),
         'fail_excess_stress_horizon_facet_coverage': (
             n_topk_retrieved_facets / n_facets > cfg.max_retrieved_facet_fraction
         ),
@@ -366,7 +365,7 @@ def _strict_gate_failures(
 
 def _competitive_pool_mass(cfg: ExperimentCfg) -> int:
     chunk_pools = cfg.generation.chunk_pools
-    return chunk_pools.gold_chunks_per_query() + chunk_pools.point_distractor_chunks_per_query()
+    return chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
 
 
 def _diagnostic_k_values(cfg: ExperimentCfg, *, stress_horizon_k: int) -> list[int]:

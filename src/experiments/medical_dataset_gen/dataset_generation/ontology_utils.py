@@ -259,52 +259,6 @@ def get_axis_bins(ontology: MedicalOntology, axis: ClinicalAxis) -> list[str]:
     return bins
 
 
-def exclusive_distinct_subgroup_label(
-    included: SubgroupOntology,
-    excluded: SubgroupOntology,
-) -> str:
-    return f'{included.label} but without {subgroup_core_phrase(excluded)}'
-
-
-def exclusive_distinct_subgroup_phrase(
-    included: SubgroupOntology,
-    excluded: SubgroupOntology,
-) -> str:
-    return f'{subgroup_core_phrase(included)} without {subgroup_core_phrase(excluded)}'
-
-
-def subgroup_core_phrase(subgroup: SubgroupOntology) -> str:
-    special_cases = {
-        'immunosuppression': 'immunosuppression',
-        'frailty': 'baseline frailty',
-    }
-    if subgroup.value in special_cases:
-        return special_cases[subgroup.value]
-
-    for form in [subgroup.label, *subgroup.aliases, *subgroup.surface_phrases]:
-        core = _strip_patient_prefixes(form)
-        if not core or core.startswith('patients '):
-            continue
-        if core.endswith(' patients'):
-            continue
-        return core
-    return subgroup.label
-
-
-def _strip_patient_prefixes(text: str) -> str:
-    normalized = ' '.join(text.split())
-    for prefix in (
-        'patients with ',
-        'patient with ',
-        'patients receiving ',
-        'history of ',
-        'with ',
-    ):
-        if normalized.lower().startswith(prefix):
-            return normalized[len(prefix) :].strip()
-    return normalized
-
-
 def _ontology_path(cfg: ExperimentCfg) -> Path:
     if cfg.generation.ontology_path:
         return Path(cfg.generation.ontology_path)

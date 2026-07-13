@@ -878,20 +878,18 @@ def _topk_coverage_rows(
             if not row.get('is_gold')
         )
         top_facet, _top_facet_count = _counter_top(facet_counts)
-        rows.append(
-            {
-                'k': k,
-                'k_lt_dominant_target': _lt(k, dominant_target),
-                'gold': sum(1 for row in selected if row.get('is_gold')),
-                'non_gold': sum(1 for row in selected if not row.get('is_gold')),
-                'facets_hit': ', '.join(sorted(facet_counts)),
-                'n_facets_hit': len(facet_counts),
-                'dominant_facet_count': facet_counts.get(dominant_facet_id, 0),
-                'top_facet': top_facet,
-                'facet_counts': _json(dict(sorted(facet_counts.items()))),
-                'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
-            }
-        )
+        rows.append({
+            'k': k,
+            'k_lt_dominant_target': _lt(k, dominant_target),
+            'gold': sum(1 for row in selected if row.get('is_gold')),
+            'non_gold': sum(1 for row in selected if not row.get('is_gold')),
+            'facets_hit': ', '.join(sorted(facet_counts)),
+            'n_facets_hit': len(facet_counts),
+            'dominant_facet_count': facet_counts.get(dominant_facet_id, 0),
+            'top_facet': top_facet,
+            'facet_counts': _json(dict(sorted(facet_counts.items()))),
+            'distractor_counts': _json(dict(sorted(distractor_counts.items()))),
+        })
     return rows
 
 
@@ -908,20 +906,18 @@ def _facet_rank_rows(
         facet_rows = by_facet.get(facet_id, [])
         sims = [float(row['sim_to_query']) for row in facet_rows]
         ranks = [int(row['rank']) for row in facet_rows]
-        rows.append(
-            {
-                'facet_id': facet_id,
-                'label': _facet_label(facet),
-                'role': facet.get('cluster_role'),
-                'target_gold_chunks': facet.get('target_gold_chunks'),
-                'first_rank': min(ranks) if ranks else None,
-                'first_five_ranks': ', '.join(str(rank) for rank in sorted(ranks)[:5]),
-                'n_in_pool': len(facet_rows),
-                'mean_query_sim': float(np.mean(sims)) if sims else None,
-                'max_query_sim': max(sims) if sims else None,
-                'min_query_sim': min(sims) if sims else None,
-            }
-        )
+        rows.append({
+            'facet_id': facet_id,
+            'label': _facet_label(facet),
+            'role': facet.get('cluster_role'),
+            'target_gold_chunks': facet.get('target_gold_chunks'),
+            'first_rank': min(ranks) if ranks else None,
+            'first_five_ranks': ', '.join(str(rank) for rank in sorted(ranks)[:5]),
+            'n_in_pool': len(facet_rows),
+            'mean_query_sim': float(np.mean(sims)) if sims else None,
+            'max_query_sim': max(sims) if sims else None,
+            'min_query_sim': min(sims) if sims else None,
+        })
     return rows
 
 
@@ -935,25 +931,24 @@ def _render_composition(lines: list[str], composition_df: pl.DataFrame, *, detai
         ('By label id', ['label_id']),
     ]
     if detail == 'full':
-        groups.extend(
-            [
-                ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
-                (
-                    'By condition/subgroup/axis/value',
-                    ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
-                ),
-                (
-                    'By text generation and soft warnings',
-                    ['text_generation_source', 'validation_soft_warning_count'],
-                ),
-            ]
-        )
+        groups.extend([
+            ('By facet/target/role', ['facet_id', 'target_facet_id', 'cluster_role']),
+            (
+                'By condition/subgroup/axis/value',
+                ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
+            ),
+            (
+                'By text generation and soft warnings',
+                ['text_generation_source', 'validation_soft_warning_count'],
+            ),
+        ])
 
     for title, keys in groups:
         lines.append('')
         lines.append(f'{title}:')
         group = (
-            composition_df.group_by(keys)
+            composition_df
+            .group_by(keys)
             .agg(
                 pl.len().alias('n'),
                 pl.col('rank').min().alias('first_rank'),
@@ -1012,20 +1007,18 @@ def _render_embedding_separability(
                 centroids[facet_id] = centroid
         else:
             sims = np.asarray([], dtype=np.float32)
-        per_facet_rows.append(
-            {
-                'facet_id': facet_id,
-                'label': _facet_label(facet),
-                'role': facet.get('cluster_role'),
-                'n': len(ids),
-                'mean_query_sim': float(sims.mean()) if len(sims) else None,
-                'max_query_sim': float(sims.max()) if len(sims) else None,
-                'min_query_sim': float(sims.min()) if len(sims) else None,
-                'query_to_centroid': float(centroids[facet_id] @ query_vector)
-                if facet_id in centroids
-                else None,
-            }
-        )
+        per_facet_rows.append({
+            'facet_id': facet_id,
+            'label': _facet_label(facet),
+            'role': facet.get('cluster_role'),
+            'n': len(ids),
+            'mean_query_sim': float(sims.mean()) if len(sims) else None,
+            'max_query_sim': float(sims.max()) if len(sims) else None,
+            'min_query_sim': float(sims.min()) if len(sims) else None,
+            'query_to_centroid': float(centroids[facet_id] @ query_vector)
+            if facet_id in centroids
+            else None,
+        })
     lines.append('')
     lines.append('Per-facet query similarity:')
     _table(
@@ -1076,13 +1069,11 @@ def _render_selection_snapshot(
     sim_matrix = candidate_vectors @ candidate_vectors.T
     snapshot_ks = [
         value
-        for value in _dedupe(
-            [
-                *ctx.cfg.retrieval.k_values,
-                ctx.cfg.query_geometry.plot_k,
-                _configured_stress_horizon(ctx.cfg),
-            ]
-        )
+        for value in _dedupe([
+            *ctx.cfg.retrieval.k_values,
+            ctx.cfg.query_geometry.plot_k,
+            _configured_stress_horizon(ctx.cfg),
+        ])
         if value <= len(ranked_rows)
     ]
     lambdas_by_strategy = _snapshot_lambdas(ctx.cfg)
@@ -1133,26 +1124,25 @@ def _render_selection_snapshot(
 
     if ctx.eval_results.height > 0 and 'query_id' in ctx.eval_results.columns:
         eval_rows = (
-            ctx.eval_results.filter(pl.col('query_id') == query_id)
-            .select(
-                [
-                    col
-                    for col in [
-                        'strategy',
-                        'lam',
-                        'k',
-                        'gold_precision',
-                        'facet_coverage',
-                        'weighted_facet_coverage',
-                        'distractor_rate',
-                        'primary_axis_rate',
-                        'max_facet_concentration',
-                        'avg_cos',
-                        'jaccard_vs_topk',
-                    ]
-                    if col in ctx.eval_results.columns
+            ctx.eval_results
+            .filter(pl.col('query_id') == query_id)
+            .select([
+                col
+                for col in [
+                    'strategy',
+                    'lam',
+                    'k',
+                    'gold_precision',
+                    'facet_coverage',
+                    'weighted_facet_coverage',
+                    'distractor_rate',
+                    'primary_axis_rate',
+                    'max_facet_concentration',
+                    'avg_cos',
+                    'jaccard_vs_topk',
                 ]
-            )
+                if col in ctx.eval_results.columns
+            ])
             .sort(['k', 'strategy', 'lam'])
         )
         if eval_rows.height:
@@ -1265,22 +1255,20 @@ def _render_chunk_text(
         ('validation_soft_warning_count', row.get('validation_soft_warning_count')),
     ]
     if not compact:
-        metadata.extend(
-            [
-                ('facet_id', row.get('facet_id')),
-                ('target_facet_id', row.get('target_facet_id')),
-                ('cluster_id', row.get('cluster_id')),
-                ('patient_age', row.get('patient_age')),
-                ('patient_sex', row.get('patient_sex')),
-                ('note_style', row.get('note_style')),
-                ('approx_words', row.get('approx_words')),
-                ('text_generation_source', row.get('text_generation_source')),
-                ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
-                ('fact_id', row.get('fact_id')),
-                ('must_mention', row.get('must_mention')),
-                ('must_not_mention', row.get('must_not_mention')),
-            ]
-        )
+        metadata.extend([
+            ('facet_id', row.get('facet_id')),
+            ('target_facet_id', row.get('target_facet_id')),
+            ('cluster_id', row.get('cluster_id')),
+            ('patient_age', row.get('patient_age')),
+            ('patient_sex', row.get('patient_sex')),
+            ('note_style', row.get('note_style')),
+            ('approx_words', row.get('approx_words')),
+            ('text_generation_source', row.get('text_generation_source')),
+            ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
+            ('fact_id', row.get('fact_id')),
+            ('must_mention', row.get('must_mention')),
+            ('must_not_mention', row.get('must_not_mention')),
+        ])
     _kv(lines, metadata)
     text = str(row.get('text') or '').strip()
     if chunk_text_chars > 0 and len(text) > chunk_text_chars:
@@ -1445,15 +1433,13 @@ def _rank_candidate_pools(
         rows = []
         for rank, local_idx in enumerate(order, start=1):
             chunk_idx = int(candidate_indices[int(local_idx)])
-            rows.append(
-                {
-                    'rank': rank,
-                    'chunk_id': str(idx_to_chunk_id[chunk_idx]),
-                    'chunk_idx': chunk_idx,
-                    'sim_to_query': float(sims[int(local_idx)]),
-                    'candidate_pool_size_before_topn': len(candidate_indices),
-                }
-            )
+            rows.append({
+                'rank': rank,
+                'chunk_id': str(idx_to_chunk_id[chunk_idx]),
+                'chunk_idx': chunk_idx,
+                'sim_to_query': float(sims[int(local_idx)]),
+                'candidate_pool_size_before_topn': len(candidate_indices),
+            })
         ranked[query_id] = rows
     return ranked
 
@@ -1545,7 +1531,7 @@ def _diagnostic_top_ks(ctx: _RenderContext, pool_size: int) -> list[int]:
 def _configured_stress_horizon(cfg: ExperimentCfg) -> int:
     chunk_pools = cfg.generation.chunk_pools
     competitive_pool_mass = (
-        chunk_pools.gold_chunks_per_query() + chunk_pools.point_distractor_chunks_per_query()
+        chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
     )
     return cfg.geometry_filter.stress_horizon(competitive_pool_mass=competitive_pool_mass)
 
@@ -1604,20 +1590,16 @@ def _counter_top(counter: Counter[str]) -> tuple[str | None, int]:
 
 def _snapshot_lambdas(cfg: ExperimentCfg) -> dict[str, list[float]]:
     return {
-        'mmr': _snapshot_lambda_values(
-            [
-                float(value)
-                for value in cfg.retrieval.lambda_values_for_strategy('mmr')
-                if value is not None
-            ]
-        ),
-        'fac_loc': _snapshot_lambda_values(
-            [
-                float(value)
-                for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
-                if value is not None
-            ]
-        ),
+        'mmr': _snapshot_lambda_values([
+            float(value)
+            for value in cfg.retrieval.lambda_values_for_strategy('mmr')
+            if value is not None
+        ]),
+        'fac_loc': _snapshot_lambda_values([
+            float(value)
+            for value in cfg.retrieval.lambda_values_for_strategy('fac_loc')
+            if value is not None
+        ]),
     }
 
 

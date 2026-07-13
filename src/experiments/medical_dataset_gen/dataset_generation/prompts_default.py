@@ -136,7 +136,6 @@ class MedicalDatasetGenDefaultPrompts:
             Output contract:
             - Return exactly one paragraph and nothing else.
             - No headings, bullets, JSON, quotation marks around the paragraph, or commentary.
-            - Do not mention benchmark construction, facets, clusters, axes, labels, source rows, prompt instructions, or IDs.
             - Do not introduce any evidence besides what's already included.
 
             Style target:

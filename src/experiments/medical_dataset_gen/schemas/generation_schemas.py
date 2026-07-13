@@ -34,17 +34,14 @@ type CohortContrastFamily = Literal[
 ]
 
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
-
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
-
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
-
-type DataSplit = Literal['validation', 'test']
+type ConditionKey = str
 type PatientSex = Literal['female', 'male']
 
-type ConditionKey = str
+type DataSplit = Literal['validation', 'test']
 
 
 class QueryOutputRow(TypedDict):
@@ -84,37 +81,37 @@ class GoldAnswerOutputRow(TypedDict):
     supporting_facet_ids_json: str
 
 
-class BenchmarkModel(BaseModel):
+class BenchmarkPydanticModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
-class TreatmentDurationPayload(BenchmarkModel):
+class TreatmentDurationPayload(BenchmarkPydanticModel):
     axis: Literal['treatment_duration']
     duration_days: int
     treatment: str
 
 
-class RehabOutcomePayload(BenchmarkModel):
+class RehabOutcomePayload(BenchmarkPydanticModel):
     axis: Literal['rehab_outcome']
     outcome: str
 
 
-class ComplicationBurdenPayload(BenchmarkModel):
+class ComplicationBurdenPayload(BenchmarkPydanticModel):
     axis: Literal['complication_burden']
     detail: str
 
 
-class AcuteClinicalCoursePayload(BenchmarkModel):
+class AcuteClinicalCoursePayload(BenchmarkPydanticModel):
     axis: Literal['acute_clinical_course']
     detail: str
 
 
-class CareIntensityPayload(BenchmarkModel):
+class CareIntensityPayload(BenchmarkPydanticModel):
     axis: Literal['care_intensity']
     detail: str
 
 
-class DiagnosticEvidencePayload(BenchmarkModel):
+class DiagnosticEvidencePayload(BenchmarkPydanticModel):
     axis: Literal['diagnostic_evidence_type']
     detail: str
 
@@ -148,7 +145,7 @@ def parse_axis_payload(value: str) -> AxisFactPayload:
     return model.model_validate(payload)
 
 
-class AnswerSourceFact(BenchmarkModel):
+class AnswerSourceFact(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
     query_id: str
@@ -167,7 +164,7 @@ class AnswerSourceFact(BenchmarkModel):
         return self
 
 
-class AnswerFact(BenchmarkModel):
+class AnswerFact(BenchmarkPydanticModel):
     facet_id: str
     subgroup_label: str
     axis: ClinicalAxis
@@ -175,7 +172,7 @@ class AnswerFact(BenchmarkModel):
     supporting_fact_ids: list[str]
 
 
-class TreatmentDurationCourse(BenchmarkModel):
+class TreatmentDurationCourse(BenchmarkPydanticModel):
     surface_forms: list[str] = Field(min_length=1)
     bins: dict[str, list[int]]
 
@@ -199,7 +196,7 @@ class TreatmentDurationCourse(BenchmarkModel):
         return self
 
 
-class TreatmentDurationAxisValues(BenchmarkModel):
+class TreatmentDurationAxisValues(BenchmarkPydanticModel):
     axis: Literal['treatment_duration']
     treatments: dict[str, TreatmentDurationCourse]
 
@@ -227,27 +224,27 @@ class TreatmentDurationAxisValues(BenchmarkModel):
         return self
 
 
-class RehabOutcomeAxisValues(BenchmarkModel):
+class RehabOutcomeAxisValues(BenchmarkPydanticModel):
     axis: Literal['rehab_outcome']
     bins: dict[str, list[str]]
 
 
-class ComplicationBurdenAxisValues(BenchmarkModel):
+class ComplicationBurdenAxisValues(BenchmarkPydanticModel):
     axis: Literal['complication_burden']
     bins: dict[str, list[str]]
 
 
-class AcuteClinicalCourseAxisValues(BenchmarkModel):
+class AcuteClinicalCourseAxisValues(BenchmarkPydanticModel):
     axis: Literal['acute_clinical_course']
     bins: dict[str, list[str]]
 
 
-class CareIntensityAxisValues(BenchmarkModel):
+class CareIntensityAxisValues(BenchmarkPydanticModel):
     axis: Literal['care_intensity']
     bins: dict[str, list[str]]
 
 
-class DiagnosticEvidenceAxisValues(BenchmarkModel):
+class DiagnosticEvidenceAxisValues(BenchmarkPydanticModel):
     axis: Literal['diagnostic_evidence_type']
     bins: dict[str, list[str]]
 
@@ -263,7 +260,7 @@ type ConditionAxisValues = Annotated[
 ]
 
 
-class SubgroupOntology(BenchmarkModel):
+class SubgroupOntology(BenchmarkPydanticModel):
     dimension_id: str
     level_id: str
     axis: SubgroupAxis
@@ -289,20 +286,20 @@ class SubgroupOntology(BenchmarkModel):
         }
 
 
-class CohortContrast(BenchmarkModel):
+class CohortContrast(BenchmarkPydanticModel):
     id: str
     dimension_id: str
     cohort_a_id: str
     cohort_b_id: str
 
 
-class DistinctComorbidityContrast(BenchmarkModel):
+class DistinctComorbidityContrast(BenchmarkPydanticModel):
     id: str
     cohort_a_id: str
     cohort_b_id: str
 
 
-class ConditionOntology(BenchmarkModel):
+class ConditionOntology(BenchmarkPydanticModel):
     display: str
     allowed_comorbidity_contrast_ids: list[str] = Field(default_factory=list)
     allowed_distinct_comorbidity_contrasts: list[DistinctComorbidityContrast] = Field(
@@ -320,13 +317,13 @@ class ConditionOntology(BenchmarkModel):
         return self
 
 
-class AxisPairProfile(BenchmarkModel):
+class AxisPairProfile(BenchmarkPydanticModel):
     id: str
     cohort_a_bins: tuple[str, str]
     cohort_b_bins: tuple[str, str]
 
 
-class ClinicalAxisOntology(BenchmarkModel):
+class ClinicalAxisOntology(BenchmarkPydanticModel):
     label: str
     allow_as_primary: bool
     query_focus: str
@@ -342,14 +339,14 @@ class ClinicalAxisOntology(BenchmarkModel):
         return self
 
 
-class AxisPairConditionOverride(BenchmarkModel):
+class AxisPairConditionOverride(BenchmarkPydanticModel):
     condition_id: ConditionKey
     allowed_primary_axes: list[ClinicalAxis] | None = None
     blocked_profile_ids: list[str] = Field(default_factory=list)
     rationale: str | None = None
 
 
-class AxisPairOntology(BenchmarkModel):
+class AxisPairOntology(BenchmarkPydanticModel):
     axes: tuple[ClinicalAxis, ClinicalAxis]
     profiles: list[AxisPairProfile]
     allowed_primary_axes: list[ClinicalAxis] | None = None
@@ -386,11 +383,11 @@ class AxisPairOntology(BenchmarkModel):
         return self
 
 
-class PatientDefaults(BenchmarkModel):
+class PatientDefaults(BenchmarkPydanticModel):
     age_range: tuple[int, int]
 
 
-class MedicalOntology(BenchmarkModel):
+class MedicalOntology(BenchmarkPydanticModel):
     patient_defaults: PatientDefaults
     conditions: dict[ConditionKey, ConditionOntology]
     subgroups: dict[SubgroupKey, SubgroupOntology]
@@ -475,14 +472,12 @@ class MedicalOntology(BenchmarkModel):
         return self
 
 
-_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset(
-    {
-        'complicated',
-        'metastatic',
-        'mild',
-        'uncomplicated',
-    }
-)
+_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset({
+    'complicated',
+    'metastatic',
+    'mild',
+    'uncomplicated',
+})
 
 
 def _is_comorbidity_present_absent_contrast(cohorts: list[SubgroupOntology]) -> bool:
@@ -659,7 +654,7 @@ def _normalize_subgroup_text(text: str) -> str:
     return ' '.join(str(text).casefold().replace('-', ' ').split())
 
 
-class QueryPlanFacet(BenchmarkModel):
+class QueryPlanFacet(BenchmarkPydanticModel):
     facet_id: str
     condition_id: ConditionKey
     condition_display: str
@@ -676,7 +671,7 @@ class QueryPlanFacet(BenchmarkModel):
     priority: Literal['primary', 'secondary']
 
 
-class QueryLogicalForm(BenchmarkModel):
+class QueryLogicalForm(BenchmarkPydanticModel):
     query_type: QueryType = Field(alias='type')
     condition: str
     subgroups: list[str]
@@ -690,7 +685,7 @@ class QueryLogicalForm(BenchmarkModel):
     model_config = ConfigDict(extra='forbid', populate_by_name=True)
 
 
-class QueryPlanSpec(BenchmarkModel):
+class QueryPlanSpec(BenchmarkPydanticModel):
     evidence_profile_id: str
     cohort_contrast_id: str
     cohort_contrast_family: CohortContrastFamily
@@ -708,7 +703,7 @@ class QueryPlanSpec(BenchmarkModel):
     subgroup_b: SubgroupOntology
 
 
-class QueryPlan(BenchmarkModel):
+class QueryPlan(BenchmarkPydanticModel):
     query_id: str
     evidence_profile_id: str
     pool_id: str
@@ -827,7 +822,7 @@ class QueryPlan(BenchmarkModel):
         }
 
 
-class ClinicalFact(BenchmarkModel):
+class ClinicalFact(BenchmarkPydanticModel):
     query_id: str
     evidence_profile_id: str
     pool_id: str
@@ -875,7 +870,7 @@ class ClinicalFact(BenchmarkModel):
         return self
 
 
-class ChunkGenerationCacheEntry(BenchmarkModel):
+class ChunkGenerationCacheEntry(BenchmarkPydanticModel):
     cache_version: int
     fact_id: str
     fact_chunk_reuse_key: str | None = None
@@ -954,12 +949,12 @@ class ChunkRow(ClinicalFact):
         )
 
 
-class CohortEvidenceTemplates(BenchmarkModel):
+class CohortEvidenceTemplates(BenchmarkPydanticModel):
     comorbidity_present: list[str]
     comorbidity_reference: list[str]
 
 
-class ChunkTemplateUtils(BenchmarkModel):
+class ChunkTemplateUtils(BenchmarkPydanticModel):
     hidden_benchmark_terms: list[str]
     duration_phrase_templates: list[str]
     note_style_templates: dict[str, list[str]]
@@ -967,15 +962,15 @@ class ChunkTemplateUtils(BenchmarkModel):
     axis_sentence_templates: dict[ChunkTextStyle, dict[ClinicalAxis, dict[str, list[str]]]]
 
 
-class QueryTemplateSpec(BenchmarkModel):
+class QueryTemplateSpec(BenchmarkPydanticModel):
     id: str
     template: str
 
 
-class AnswerTemplateSpec(BenchmarkModel):
+class AnswerTemplateSpec(BenchmarkPydanticModel):
     template: str
 
 
-class QueryTemplateData(BenchmarkModel):
+class QueryTemplateData(BenchmarkPydanticModel):
     query_templates: list[QueryTemplateSpec]
     answer_template: AnswerTemplateSpec

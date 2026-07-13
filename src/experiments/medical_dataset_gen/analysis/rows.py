@@ -83,7 +83,7 @@ def dataset_distribution_row(
         if cfg
         else None,
         'ConfiguredBackgroundOutlierChunksPerQuery': (
-            cfg.generation.chunk_pools.background_outlier_chunks_per_query() if cfg else None
+            cfg.generation.chunk_pools.background_outliers_per_query() if cfg else None
         ),
         'ConfiguredNicheClustersPerQuery': (
             cfg.generation.chunk_pools.niche.num_clusters_per_query if cfg else None

@@ -10,7 +10,7 @@ from pydantic import ConfigDict, Json
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AnswerFact,
-    BenchmarkModel,
+    BenchmarkPydanticModel,
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
@@ -40,7 +40,7 @@ type ChunkEmbeddingMatrix = NDArray[np.float32]
 type EmbeddingIdArray = Sequence[object]
 
 
-class GoldAnswerRecord(BenchmarkModel):
+class GoldAnswerRecord(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
     query_id: str
