@@ -656,13 +656,13 @@ def _axis_payload(
     if axis == 'treatment_duration':
         if not isinstance(axis_values, TreatmentDurationAxisValues):
             raise TypeError(f'{condition_id}/{axis} has the wrong axis-values payload')
-        treatment_courses = list(axis_values.treatments.values())
-        treatment_course = rng.choice(treatment_courses)
+        treatment_course_id, treatment_course = rng.choice(list(axis_values.treatments.items()))
         duration_days = rng.choice(treatment_course.bins[value_bin])
         return TreatmentDurationPayload(
             axis=axis,
             duration_days=duration_days,
             treatment=rng.choice(treatment_course.surface_forms),
+            treatment_course_id=treatment_course_id,
         )
     values: tuple[Any, Any] | list[str] = axis_values.bins[value_bin]
     if axis == 'rehab_outcome':

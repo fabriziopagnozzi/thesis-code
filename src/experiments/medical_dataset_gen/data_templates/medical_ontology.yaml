@@ -483,7 +483,6 @@ conditions:
                             - intravenous furosemide
                             - intravenous bumetanide
                             - metolazone-assisted diuresis
-                            - intravenous nitroglycerin
                         bins:
                             short:
                                 - 2
@@ -3824,7 +3823,7 @@ clinical_axes:
                 - critical-care staffing with continuous bedside monitoring
     diagnostic_evidence_type:
         label: dominant diagnostic evidence modality
-        allow_as_primary: true
+        allow_as_primary: false
         query_focus: the dominant diagnostic evidence modality represented in the note, without assuming other diagnostic evidence was absent
         exact_terms:
             - diagnostic evidence source
@@ -4151,6 +4150,8 @@ axis_pairs:
     - axes:
           - treatment_duration
           - diagnostic_evidence_type
+      allowed_primary_axes: []
+      rationale: both active inpatient treatment interval and dominant diagnostic evidence modality are retained only as secondary context in the main benchmark, so this pair has no valid primary axis and is suppressed.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -4169,6 +4170,9 @@ axis_pairs:
     - axes:
           - rehab_outcome
           - diagnostic_evidence_type
+      allowed_primary_axes:
+          - rehab_outcome
+      rationale: diagnostic evidence is retained as secondary context because diagnostic-primary queries empirically failed primary-axis dominance, while functional outcome remained stable as the dominant retrieval axis.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -4187,6 +4191,9 @@ axis_pairs:
     - axes:
           - complication_burden
           - diagnostic_evidence_type
+      allowed_primary_axes:
+          - complication_burden
+      rationale: diagnostic evidence is retained as secondary context because diagnostic-primary queries empirically failed primary-axis dominance, while complication burden remains the dominant retrieval axis for this pair.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -4205,6 +4212,9 @@ axis_pairs:
     - axes:
           - acute_clinical_course
           - diagnostic_evidence_type
+      allowed_primary_axes:
+          - acute_clinical_course
+      rationale: diagnostic evidence is retained as secondary context because diagnostic-primary queries empirically failed primary-axis dominance, while acute clinical course remains the dominant retrieval axis for this pair.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -4223,6 +4233,9 @@ axis_pairs:
     - axes:
           - care_intensity
           - diagnostic_evidence_type
+      allowed_primary_axes:
+          - care_intensity
+      rationale: diagnostic evidence is retained as secondary context because diagnostic-primary queries empirically failed primary-axis dominance, while highest care setting remained stable as the dominant retrieval axis.
       profiles:
           - id: low_high
             cohort_a_bins:

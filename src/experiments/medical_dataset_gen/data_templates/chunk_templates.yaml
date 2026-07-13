@@ -9,7 +9,7 @@ note_style_templates:
     cohort_first:
         seen:
             - id: outer_cohort_first_seen_1
-              template: "{cohort_sentence} {patient} then presented with {presentation} and was treated for {condition}. {axis_sentence}"
+              template: "{cohort_sentence} {patient} presented with {presentation} and was treated for {condition}. {axis_sentence}"
         heldout:
             - id: outer_cohort_first_heldout_1
               template: "{cohort_sentence} In this hospitalization, {patient_lower} had {condition} after {presentation}. {axis_sentence}"
@@ -136,83 +136,83 @@ axis_sentence_templates:
                 seen:
                     direct_fact:
                         - id: treatment_duration_short_seen_direct_fact
-                          template: "{pronoun_cap} completed {axis_value}, and the medication list was closed afterward."
+                          template: "{pronoun_cap} completed {axis_value}; {treatment_completion_clause}."
                     temporal_course:
                         - id: treatment_duration_short_seen_temporal_course
-                          template: "The MAR shows {axis_value}; subsequent orders moved toward discharge planning."
+                          template: "The active treatment record shows {axis_value}; {treatment_completion_clause}."
                     clinical_assessment:
                         - id: treatment_duration_short_seen_clinical_assessment
-                          template: "After reassessment, the team documented {axis_value} as the completed inpatient course."
+                          template: "After reassessment, the team documented {axis_value}; {treatment_completion_clause}."
                     contrast_or_alternative:
                         - id: treatment_duration_short_seen_contrast_or_alternative
-                          template: "No further doses were scheduled after {axis_value}; outpatient instructions covered follow-up."
+                          template: "{treatment_completion_clause_cap} after {axis_value}."
                     fragmented_or_split_evidence:
                         - id: treatment_duration_short_seen_fragmented_or_split_evidence
-                          template: "Medication course: {axis_value}. Later notes: regimen complete."
+                          template: "Treatment record: {axis_value}. {treatment_completion_clause_cap}."
                 heldout:
                     clinical_assessment:
                         - id: treatment_duration_short_heldout_clinical_assessment
-                          template: "Pharmacy reconciliation listed {axis_value} before the active order was discontinued."
+                          template: "The active treatment record listed {axis_value}; {treatment_completion_clause}."
                     contrast_or_alternative:
                         - id: treatment_duration_short_heldout_contrast_or_alternative
-                          template: "Orders were reviewed, then stopped after {axis_value}."
+                          template: "Orders were reviewed after {axis_value}; {treatment_completion_clause}."
                     fragmented_or_split_evidence:
                         - id: treatment_duration_short_heldout_fragmented_or_split_evidence
-                          template: "Orders reviewed. Completed course: {axis_value}. Discharge medications reconciled."
+                          template: "Orders reviewed. Treatment record: {axis_value}. {treatment_completion_clause_cap}."
             standard:
                 seen:
                     direct_fact:
                         - id: treatment_duration_standard_seen_direct_fact
-                          template: "{pronoun_cap} completed {axis_value}, and the medication list was closed afterward."
+                          template: "{pronoun_cap} completed {axis_value}; {treatment_completion_clause}."
                     temporal_course:
                         - id: treatment_duration_standard_seen_temporal_course
-                          template: "The MAR shows {axis_value}; subsequent orders moved toward discharge planning."
+                          template: "The active treatment record shows {axis_value}; {treatment_completion_clause}."
                     clinical_assessment:
                         - id: treatment_duration_standard_seen_clinical_assessment
-                          template: "After reassessment, the team documented {axis_value} as the completed inpatient course."
+                          template: "After reassessment, the team documented {axis_value}; {treatment_completion_clause}."
                     contrast_or_alternative:
                         - id: treatment_duration_standard_seen_contrast_or_alternative
-                          template: "No further doses were scheduled after {axis_value}; outpatient instructions covered follow-up."
+                          template: "{treatment_completion_clause_cap} after {axis_value}."
                     fragmented_or_split_evidence:
                         - id: treatment_duration_standard_seen_fragmented_or_split_evidence
-                          template: "Medication course: {axis_value}. Later notes: regimen complete."
+                          template: "Treatment record: {axis_value}. {treatment_completion_clause_cap}."
                 heldout:
                     clinical_assessment:
                         - id: treatment_duration_standard_heldout_clinical_assessment
-                          template: "Pharmacy reconciliation listed {axis_value} before the active order was discontinued."
+                          template: "The active treatment record listed {axis_value}; {treatment_completion_clause}."
                     contrast_or_alternative:
                         - id: treatment_duration_standard_heldout_contrast_or_alternative
-                          template: "Orders were reviewed, then stopped after {axis_value}."
+                          template: "Orders were reviewed after {axis_value}; {treatment_completion_clause}."
                     fragmented_or_split_evidence:
                         - id: treatment_duration_standard_heldout_fragmented_or_split_evidence
-                          template: "Orders reviewed. Completed course: {axis_value}. Discharge medications reconciled."
+                          template: "Orders reviewed. Treatment record: {axis_value}. {treatment_completion_clause_cap}."
             prolonged:
                 seen:
                     direct_fact:
                         - id: treatment_duration_prolonged_seen_direct_fact
-                          template: "{pronoun_cap} completed {axis_value}, and the medication list was closed afterward."
+                          template: "{pronoun_cap} completed {axis_value}; {treatment_completion_clause}."
                     temporal_course:
                         - id: treatment_duration_prolonged_seen_temporal_course
-                          template: "The MAR shows {axis_value}; subsequent orders moved toward discharge planning."
+                          template: "The active treatment record shows {axis_value}; {treatment_completion_clause}."
                     clinical_assessment:
                         - id: treatment_duration_prolonged_seen_clinical_assessment
-                          template: "After reassessment, the team documented {axis_value} as the completed inpatient course."
+                          template: "After reassessment, the team documented {axis_value}; {treatment_completion_clause}."
                     contrast_or_alternative:
                         - id: treatment_duration_prolonged_seen_contrast_or_alternative
-                          template: "No further doses were scheduled after {axis_value}; outpatient instructions covered follow-up."
+                          template: "{treatment_completion_clause_cap} after {axis_value}."
                     fragmented_or_split_evidence:
                         - id: treatment_duration_prolonged_seen_fragmented_or_split_evidence
-                          template: "Medication course: {axis_value}. Later notes: regimen complete."
+                          template: "Treatment record: {axis_value}. {treatment_completion_clause_cap}."
                 heldout:
                     clinical_assessment:
                         - id: treatment_duration_prolonged_heldout_clinical_assessment
-                          template: "Pharmacy reconciliation listed {axis_value} before the active order was discontinued."
+                          template: "The active treatment record listed {axis_value}; {treatment_completion_clause}."
                     contrast_or_alternative:
                         - id: treatment_duration_prolonged_heldout_contrast_or_alternative
-                          template: "Orders were reviewed, then stopped after {axis_value}."
+                          template: "Orders were reviewed after {axis_value}; {treatment_completion_clause}."
                     fragmented_or_split_evidence:
                         - id: treatment_duration_prolonged_heldout_fragmented_or_split_evidence
-                          template: "Orders reviewed. Completed course: {axis_value}. Discharge medications reconciled."
+                          template: "Orders reviewed. Treatment record: {axis_value}. {treatment_completion_clause_cap}."
         rehab_outcome:
             home_rehab:
                 seen:
@@ -221,7 +221,7 @@ axis_sentence_templates:
                           template: "The discharge plan listed {axis_value}."
                     temporal_course:
                         - id: rehab_outcome_home_rehab_seen_temporal_course
-                          template: "By the final therapy note, the plan included {axis_value}."
+                          template: "The final therapy note documented {axis_value}."
                     clinical_assessment:
                         - id: rehab_outcome_home_rehab_seen_clinical_assessment
                           template: "Therapy documented the functional plan as {axis_value}."
@@ -248,7 +248,7 @@ axis_sentence_templates:
                           template: "The discharge plan listed {axis_value}."
                     temporal_course:
                         - id: rehab_outcome_inpatient_rehab_seen_temporal_course
-                          template: "By the final therapy note, the plan included {axis_value}."
+                          template: "The final therapy note documented {axis_value}."
                     clinical_assessment:
                         - id: rehab_outcome_inpatient_rehab_seen_clinical_assessment
                           template: "Therapy documented the functional plan as {axis_value}."
@@ -275,7 +275,7 @@ axis_sentence_templates:
                           template: "The discharge plan listed {axis_value}."
                     temporal_course:
                         - id: rehab_outcome_persistent_deficit_seen_temporal_course
-                          template: "By the final therapy note, the plan included {axis_value}."
+                          template: "The final therapy note documented {axis_value}."
                     clinical_assessment:
                         - id: rehab_outcome_persistent_deficit_seen_clinical_assessment
                           template: "Therapy documented the functional plan as {axis_value}."

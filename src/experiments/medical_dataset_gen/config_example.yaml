@@ -3,11 +3,11 @@ global:
     conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
 
 generation:
-    query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 8,384 queries with the bundled ontology).
+    query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 6,174 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
     chunk_text_style: semantic_hardened # "semantic_hardened" removes axis/bin label statements from chunks; "ontology_explicit" keeps the older controlled sanity-check tier.
     chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families. Calibration probes always use seen.
-    excluded_clinical_axes: [] # Example to drop diagnostic evidence from query/chunk generation: [diagnostic_evidence_type].
+    excluded_clinical_axes: [] # Example to drop even secondary diagnostic evidence from query/chunk generation: [diagnostic_evidence_type].
     axis_pair_policy_overrides: [] # Optional config-layer pair gating applied after ontology policies, keyed by unordered axis pair.
 
     calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.

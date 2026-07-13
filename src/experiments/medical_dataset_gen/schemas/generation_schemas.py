@@ -104,6 +104,7 @@ class TreatmentDurationPayload(BenchmarkPydanticModel):
     axis: Literal['treatment_duration']
     duration_days: int
     treatment: str
+    treatment_course_id: str | None = None
 
 
 class RehabOutcomePayload(BenchmarkPydanticModel):
@@ -469,7 +470,16 @@ class MedicalOntology(BenchmarkPydanticModel):
             if len(pair.profiles) < 2:
                 raise ValueError('each axis pair must define at least two joint profiles')
             left, right = pair.axes
-            if not any(self.clinical_axes[axis].allow_as_primary for axis in pair.axes):
+            candidate_primary_axes = (
+                list(pair.axes) if pair.allowed_primary_axes is None else pair.allowed_primary_axes
+            )
+            explicitly_suppressed = pair.allowed_primary_axes == []
+            if (
+                not explicitly_suppressed
+                and not any(
+                    self.clinical_axes[axis].allow_as_primary for axis in candidate_primary_axes
+                )
+            ):
                 raise ValueError(f'axis pair {left!r}/{right!r} has no permitted primary axis')
             profile_ids = [profile.id for profile in pair.profiles]
             if len(profile_ids) != len(set(profile_ids)):

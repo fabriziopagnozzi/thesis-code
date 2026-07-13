@@ -31,7 +31,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
-GENERATION_CACHE_VERSION = 12
+GENERATION_CACHE_VERSION = 13
 REWRITE_CACHE_VERSION = 4
 
 

@@ -206,6 +206,46 @@ def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
     )
 
 
+def _treatment_completion_clause(payload: TreatmentDurationPayload) -> str:
+    treatment = payload.treatment.lower()
+    course_id = (payload.treatment_course_id or '').lower()
+    if 'plasma' in treatment or 'exchange' in treatment:
+        return 'no further exchange sessions were scheduled'
+    if any(
+        token in treatment
+        for token in (
+            'corticosteroid',
+            'dexamethasone',
+            'hydrocortisone',
+            'methylprednisolone',
+            'prednisone',
+            'steroid',
+        )
+    ):
+        return 'no additional inpatient steroid doses were planned'
+    if 'antibiotic' in course_id:
+        return 'no further inpatient antibiotic doses were scheduled'
+    if 'antiviral' in course_id:
+        return 'no further inpatient antiviral doses were scheduled'
+    if 'prophylaxis' in course_id and 'ceftriaxone' in treatment:
+        return 'no further inpatient prophylaxis doses were scheduled'
+    if any(token in course_id for token in ('anticoagulation', 'antithrombotic')):
+        return 'the inpatient antithrombotic transition was documented as complete'
+    if 'decongestion' in course_id:
+        return 'IV decongestion was stepped down afterward'
+    if 'albumin' in treatment:
+        return 'the albumin infusion interval was documented as complete'
+    if 'encephalopathy' in course_id:
+        return 'the inpatient encephalopathy regimen was documented as complete'
+    if any(token in course_id for token in ('immunosuppression', 'antiinflammatory')):
+        return 'the inpatient immunosuppression plan was finalized'
+    if 'supportive_care' in course_id:
+        return 'supportive measures were tapered afterward'
+    if 'infusion' in course_id:
+        return 'the inpatient infusion order was documented as complete'
+    return 'the active inpatient order was documented as complete'
+
+
 def _cohort_sentence(
     fact: ClinicalFact,
     patient: PatientNarrative,
@@ -243,8 +283,10 @@ def _axis_sentence(
 ) -> tuple[str, str | None, str | None]:
     if isinstance(payload, TreatmentDurationPayload):
         axis_value = _duration_axis_value(payload, rng)
+        treatment_completion_clause = _treatment_completion_clause(payload)
     elif isinstance(payload, RehabOutcomePayload):
         axis_value = payload.outcome
+        treatment_completion_clause = ''
     elif isinstance(
         payload,
         (
@@ -255,6 +297,7 @@ def _axis_sentence(
         ),
     ):
         axis_value = payload.detail
+        treatment_completion_clause = ''
     else:
         raise TypeError(type(payload))
     if text_style == 'ontology_explicit':
@@ -272,6 +315,8 @@ def _axis_sentence(
                 pronoun_cap=patient.pronoun_cap,
                 possessive=patient.possessive,
                 possessive_cap=patient.possessive_cap,
+                treatment_completion_clause=treatment_completion_clause,
+                treatment_completion_clause_cap=_sentence_start(treatment_completion_clause),
             ),
             None,
             f'ontology_explicit_{fact.axis}_{fact.value_bin}_{index + 1}',
@@ -291,6 +336,8 @@ def _axis_sentence(
             pronoun_cap=patient.pronoun_cap,
             possessive=patient.possessive,
             possessive_cap=patient.possessive_cap,
+            treatment_completion_clause=treatment_completion_clause,
+            treatment_completion_clause_cap=_sentence_start(treatment_completion_clause),
         ),
         family,
         template_spec.id,
