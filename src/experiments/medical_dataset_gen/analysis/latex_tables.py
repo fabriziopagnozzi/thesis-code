@@ -97,6 +97,7 @@ THESIS_TABLE_SPECS: tuple[ThesisTableSpec, ...] = (
 _METRIC_MACROS = {
     'FCP': r'\FCP{}',
     'FacetCoverage': r'\FacetCoverage{}',
+    'AllFacetCoverageRate': r'\AllFacetCoverageRate{}',
     'FacetWeightedRecall': r'\FacetWeightedRecall{}',
     'Precision': r'\PrecisionK{}',
     'alpha_nDCG': r'\AlphanDCG{}',

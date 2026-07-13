@@ -175,7 +175,7 @@ def main() -> None:
     for name, fn in stages_to_run:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
-        colorprint('bright_green', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
+        colorprint('gold', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
         # input_fingerprints = provenance.before_stage(name)
         fn(cfg, paths)
         # provenance.after_stage(name, input_fingerprints)
@@ -239,7 +239,7 @@ def _run_standalone_script_sequence(
         setup_logging(paths)
 
     colorprint(
-        'teal', f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]})'
+        'aqua', f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]})'
     )
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
 

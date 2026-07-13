@@ -14,7 +14,10 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     BenchmarkModel,
     ChunkPoolScope,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+    ExperimentCfg,
+    GeometryStressHorizonBasis,
+)
 from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     ChunkDocumentRecord,
     QrelRecord,
@@ -112,7 +115,9 @@ class GeometryFilterStatsRow(BenchmarkModel):
     cohort_contrast_family: str
     pool_scope: ChunkPoolScope
     pool_size: int
-    topk_k: int
+    stress_horizon_basis: GeometryStressHorizonBasis
+    stress_horizon_competitive_pool_mass: int
+    stress_horizon_k: int
     n_facets: int
     n_facets_present: int
     all_facets_present: bool
@@ -122,12 +127,13 @@ class GeometryFilterStatsRow(BenchmarkModel):
     dominant_primary_topk_fraction: float
     primary_axis: str
     secondary_axis: str
-    primary_axis_topk_count: int
-    primary_axis_topk_fraction: float
+    primary_axis_stress_count: int
+    primary_axis_stress_fraction: float
     n_topk_retrieved_facets: int
-    max_topk_retrieved_facets: int | None
+    stress_horizon_retrieved_facet_fraction: float
+    max_retrieved_facet_fraction: float
     rank_where_all_facets_first_covered: int | None
-    all_facets_covered_before_primary_k: bool
+    all_facets_covered_before_stress_horizon: bool
     n_distractors_in_pool: int
     n_near_miss_distractors_in_pool: int
     mean_in_facet_similarity: float
@@ -141,11 +147,7 @@ class GeometryFilterStatsRow(BenchmarkModel):
     passes_filter: bool
     fail_missing_facet: bool
     fail_weak_primary_axis_dominance: bool
-    fail_too_many_topk_facets: bool
-    fail_weak_facet_separation: bool
-    fail_weak_same_axis_cohort_separation: bool
-    fail_weak_same_cohort_axis_separation: bool
-    fail_too_few_near_miss_distractors: bool
+    fail_excess_stress_horizon_facet_coverage: bool
     fail_missing_or_malformed_background_outlier: bool
     facets_present_json: str
     topk_retrieved_facets_json: str

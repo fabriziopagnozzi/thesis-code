@@ -21,7 +21,7 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
         grouped.setdefault(record.distribution_id, []).append(record)
 
     lines = [
-        'The first 3 characters in the Instance name identify the Experiment Family (BAL, BG, DOM, MIS, NIC).\nL, M, S stand for Large, Medium, Small and refer to the overall size of the dataset.\n',
+        'The first 3 characters in the Instance name identify the Experiment Family (BAL, BG, DOM, MIS, NIC).\nL, M, S stand for Large, Medium, Small and refer to the overall size of the dataset.\nGlobally, Retrieval Budgets are: Low = 6, Medium = 10, High = 14 document chunks.\n',
     ]
     for distribution_id in sorted(grouped):
         group = sorted(grouped[distribution_id], key=lambda record: record.name)
@@ -37,7 +37,7 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
             cfg = representative.cfg
             lines.append(f'    Pool: {_chunk_pool_recap(cfg)};')
             lines.append(f'    Background Outliers: {_background_outlier_recap(cfg)}')
-            lines.append(f'    Retrieval Budgets: {_budget_category_recap(cfg)}')
+            # lines.append(f'    Retrieval Budgets: {_budget_category_recap(cfg)}')
         # lines.append('    Embedding variants:')
         # for record in group:
         #     lines.append(f'        {_child_config_recap(record)}')
@@ -80,7 +80,7 @@ def _background_outlier_recap(cfg: ExperimentCfg) -> str:
 
 def _background_spec_recap(spec: BackgroundDistractorSpec) -> str:
     if spec.size == 1:
-        return f'{spec.num_clusters} isolated single background outliers.'
+        return f'{spec.num_clusters} isolated single points.'
     else:
         return f'{spec.num_clusters} clusters, {spec.size} documents each'
 
@@ -119,10 +119,10 @@ def _single_lambda_grid_recap(label: str, grid: LambdaGridCfg) -> str:
 def _geometry_filter_recap(cfg: ExperimentCfg) -> str:
     geometry = cfg.geometry_filter
     return (
-        f'top-k window {geometry.topk_k}, '
-        f'max retrieved facets {geometry.max_topk_retrieved_facets}, '
-        f'min primary-axis count {geometry.min_primary_axis_count}, '
-        f'min distractors {geometry.min_distractors_in_pool}'
+        f'{geometry.stress_horizon_basis} horizon {geometry.stress_horizon_fraction:.0%} '
+        f'clamped to [{geometry.stress_horizon_min_k}, {geometry.stress_horizon_max_k}], '
+        f'max retrieved-facet fraction {geometry.max_retrieved_facet_fraction:.0%}, '
+        f'min primary-axis fraction {geometry.min_primary_axis_fraction:.0%}'
     )
 
 

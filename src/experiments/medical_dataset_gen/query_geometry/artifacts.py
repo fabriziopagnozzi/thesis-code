@@ -46,16 +46,18 @@ _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [
     'FacetCoveragePurity@k',
     'AllFacetCleanRate@k',
+    'AllFacetCoverageRate@k',
     'FacetCoverage@k',
     'Precision@k',
     'DistractorRate',
     'FacetWeightedRecall@k',
     'alpha-nDCG@k',
 ]
-_STATS_BEST_DESC = [True, True, True, True, False, True, True]
+_STATS_BEST_DESC = [True, True, True, True, True, False, True, True]
 _QUERY_BEST_SORT = [
     'facet_coverage_purity',
     'all_facet_clean',
+    'all_facet_coverage',
     'facet_coverage',
     'gold_precision',
     'distractor_rate',
@@ -63,7 +65,7 @@ _QUERY_BEST_SORT = [
     'alpha_ndcg',
     'gold_recall',
 ]
-_QUERY_BEST_DESC = [True, True, True, True, False, True, True, True]
+_QUERY_BEST_DESC = [True, True, True, True, True, False, True, True, True]
 
 _QUERY_SELECTION_SORT = [
     'selection_score',

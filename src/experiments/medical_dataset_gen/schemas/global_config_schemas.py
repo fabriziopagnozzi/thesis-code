@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import ceil
 from typing import Literal
 
 import numpy as np
@@ -330,13 +331,13 @@ class LambdaGridCfg(ConfigModel):
 
 class RetrievalCfg(ConfigModel):
     pool_scope: ChunkPoolScope = 'query_local'
-    candidate_pool_n: PositiveInt = 300
-    k_values: list[PositiveInt] = Field(default_factory=lambda: [5, 10, 20])
+    candidate_pool_n: PositiveInt = 999_999_999
+    k_values: list[PositiveInt] = Field(default_factory=lambda: [6, 10, 14])
     lambdas_mmr: LambdaGridCfg = Field(
-        default_factory=lambda: LambdaGridCfg(start=0.05, stop=0.95, num_values=60)
+        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.99, num_values=99)
     )
     lambdas_fac_loc: LambdaGridCfg = Field(
-        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.40, num_values=60)
+        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.99, num_values=99)
     )
     strategies: set[Literal['top_k', 'mmr', 'fac_loc']] = Field(
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
@@ -358,14 +359,34 @@ class RetrievalCfg(ConfigModel):
         raise ValueError(f'unknown retrieval strategy: {strategy!r}')
 
 
+type GeometryStressHorizonBasis = Literal['competitive_pool_mass']
+
+
 class GeometryFilterCfg(ConfigModel):
-    topk_k: PositiveInt = 20
-    min_primary_axis_count: PositiveInt = 14
-    max_topk_retrieved_facets: PositiveInt | None = 2
-    min_in_minus_cross_similarity: PositiveFloat = 0.03
-    min_same_axis_cohort_gap: PositiveFloat = 0.03
-    min_same_cohort_axis_gap: PositiveFloat = 0.03
-    min_distractors_in_pool: PositiveInt = 10
+    """Predeclared validity and relative-depth stress criteria for query geometry."""
+
+    stress_horizon_basis: GeometryStressHorizonBasis = 'competitive_pool_mass'
+    stress_horizon_fraction: float = Field(default=0.12, gt=0.0, le=1.0)
+    stress_horizon_min_k: PositiveInt = 4
+    stress_horizon_max_k: PositiveInt = 24
+    min_primary_axis_fraction: float = Field(default=0.50, gt=0.0, le=1.0)
+    max_retrieved_facet_fraction: float = Field(default=0.50, gt=0.0, le=1.0)
+
+    @model_validator(mode='after')
+    def _validate_stress_horizon_bounds(self) -> GeometryFilterCfg:
+        if self.stress_horizon_min_k > self.stress_horizon_max_k:
+            raise ValueError('stress_horizon_min_k must not exceed stress_horizon_max_k')
+        return self
+
+    def stress_horizon(self, *, competitive_pool_mass: int) -> int:
+        """Resolve a fixed-within-distribution rank horizon before retrieval is observed."""
+        if competitive_pool_mass < 1:
+            raise ValueError('competitive_pool_mass must be positive')
+        if self.stress_horizon_basis == 'competitive_pool_mass':
+            raw_horizon = ceil(self.stress_horizon_fraction * competitive_pool_mass)
+        else:
+            raise ValueError(f'unsupported stress horizon basis: {self.stress_horizon_basis}')
+        return min(max(raw_horizon, self.stress_horizon_min_k), self.stress_horizon_max_k)
 
 
 type LambdaSelectionTieBreak = Literal['lower_lambda', 'higher_lambda']

@@ -50,9 +50,9 @@ PAIRED_METRIC_SPECS: tuple[PairedMetricSpec, ...] = (
     PairedMetricSpec('FCP', 'FacetCoveragePurity@k', 'facet_coverage_purity'),
     PairedMetricSpec('FacetCoverage', 'FacetCoverage@k', 'facet_coverage'),
     PairedMetricSpec(
-        'FacetWeightedRecall',
-        'FacetWeightedRecall@k',
-        'weighted_facet_coverage',
+        'AllFacetCoverageRate',
+        'AllFacetCoverageRate@k',
+        'all_facet_coverage',
     ),
     PairedMetricSpec('AllFacetCleanRate', 'AllFacetCleanRate@k', 'all_facet_clean'),
     PairedMetricSpec('Precision', 'Precision@k', 'gold_precision'),
@@ -332,6 +332,15 @@ def _paired_query_effects_for_record(
     except Exception as exc:
         warnings.append(f'{record.name}: could not inspect evaluation_results ({exc})')
         return pl.DataFrame()
+    schema_columns = set(schema)
+    source_metric_columns = set(metric_columns)
+    derive_all_facet_coverage = (
+        'all_facet_coverage' in source_metric_columns
+        and 'all_facet_coverage' not in schema_columns
+        and 'facet_coverage' in schema_columns
+    )
+    if derive_all_facet_coverage:
+        source_metric_columns.remove('all_facet_coverage')
     required_columns = {
         'query_id',
         'evidence_profile_id',
@@ -339,9 +348,9 @@ def _paired_query_effects_for_record(
         'strategy',
         'k',
         'lam',
-        *metric_columns,
+        *source_metric_columns,
     }
-    missing = sorted(required_columns - set(schema))
+    missing = sorted(required_columns - schema_columns)
     if missing:
         warnings.append(f'{record.name}: paired inference missing columns {", ".join(missing)}')
         return pl.DataFrame()
@@ -364,6 +373,10 @@ def _paired_query_effects_for_record(
         .filter(pl.any_horizontal(selection_masks))
         .collect()
     )
+    if derive_all_facet_coverage:
+        selected = selected.with_columns(
+            (pl.col('facet_coverage') == 1.0).cast(pl.Float64).alias('all_facet_coverage')
+        )
     if selected.is_empty():
         warnings.append(f'{record.name}: no selected held-out rows for paired inference')
         return pl.DataFrame()

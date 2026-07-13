@@ -284,7 +284,14 @@ def _semantic_probe_gate(
         }
 
     sims = probe_vectors @ query_vector
-    topk_k = min(int(cfg.geometry_filter.topk_k), len(probe['texts']))
+    chunk_pools = cfg.generation.chunk_pools
+    competitive_pool_mass = (
+        chunk_pools.gold_chunks_per_query() + chunk_pools.point_distractor_chunks_per_query()
+    )
+    stress_horizon_k = cfg.geometry_filter.stress_horizon(
+        competitive_pool_mass=competitive_pool_mass
+    )
+    topk_k = min(stress_horizon_k, len(probe['texts']))
     ranked_idx = np.argsort(-sims)[:topk_k]
     facet_by_id = {facet.facet_id: facet for facet in plan.facets}
     topk_labels = [probe['labels'][int(index)] for index in ranked_idx]
@@ -292,30 +299,15 @@ def _semantic_probe_gate(
         1 for facet_id in topk_labels if facet_by_id[facet_id].axis == plan.primary_axis
     )
     n_topk_retrieved_facets = len(set(topk_labels))
-    primary_axis_target = min(
-        int(cfg.geometry_filter.min_primary_axis_count),
-        sum(
-            end - start
-            for facet_id, (start, end) in probe['offsets'].items()
-            if facet_by_id[facet_id].axis == plan.primary_axis
-        ),
-    )
+    primary_axis_fraction = primary_axis_topk_count / max(topk_k, 1)
+    retrieved_facet_fraction = n_topk_retrieved_facets / max(len(plan.facets), 1)
     separation = _probe_facet_separation(plan, probe, probe_vectors)
-    max_facets = cfg.geometry_filter.max_topk_retrieved_facets
     failures = {
-        'fail_too_many_topk_facets': (
-            max_facets is not None and n_topk_retrieved_facets > max_facets
+        'fail_excess_stress_horizon_facet_coverage': (
+            retrieved_facet_fraction > cfg.geometry_filter.max_retrieved_facet_fraction
         ),
-        'fail_weak_primary_axis_dominance': primary_axis_topk_count < primary_axis_target,
-        'fail_weak_facet_separation': (
-            separation['in_minus_cross_similarity']
-            < float(cfg.geometry_filter.min_in_minus_cross_similarity)
-        ),
-        'fail_weak_same_axis_cohort_separation': (
-            separation['same_axis_cohort_gap'] < float(cfg.geometry_filter.min_same_axis_cohort_gap)
-        ),
-        'fail_weak_same_cohort_axis_separation': (
-            separation['same_cohort_axis_gap'] < float(cfg.geometry_filter.min_same_cohort_axis_gap)
+        'fail_weak_primary_axis_dominance': (
+            primary_axis_fraction < cfg.geometry_filter.min_primary_axis_fraction
         ),
     }
     failure_reasons = [name for name, failed in failures.items() if failed]
@@ -325,7 +317,7 @@ def _semantic_probe_gate(
         'semantic_gate_failures_json': json.dumps(failures, sort_keys=True),
         'semantic_gate_failure_reasons_json': json.dumps(failure_reasons),
         'probe_topk_k': topk_k,
-        'probe_primary_axis_target': primary_axis_target,
+        'probe_primary_axis_target': cfg.geometry_filter.min_primary_axis_fraction * topk_k,
         'probe_primary_axis_topk_count': primary_axis_topk_count,
         'probe_topk_retrieved_facets': n_topk_retrieved_facets,
         'probe_mean_in_facet_similarity': separation['mean_in_facet_similarity'],

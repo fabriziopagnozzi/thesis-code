@@ -384,12 +384,15 @@ def _render_diagnostics(
             ('candidate_pool_n_used', ctx.pool_n),
             ('embedding_model', ctx.cfg.embeddings.model_name),
             ('generation.calibration_mode', ctx.cfg.generation.calibration_mode),
-            ('geometry.topk_k', ctx.cfg.geometry_filter.topk_k),
+            ('geometry.stress_horizon_k', _configured_stress_horizon(ctx.cfg)),
             (
-                'geometry.max_topk_retrieved_facets',
-                ctx.cfg.geometry_filter.max_topk_retrieved_facets,
+                'geometry.max_retrieved_facet_fraction',
+                ctx.cfg.geometry_filter.max_retrieved_facet_fraction,
             ),
-            ('geometry.min_primary_axis_count', ctx.cfg.geometry_filter.min_primary_axis_count),
+            (
+                'geometry.min_primary_axis_fraction',
+                ctx.cfg.geometry_filter.min_primary_axis_fraction,
+            ),
             ('retrieval.k_values', ctx.cfg.retrieval.k_values),
             (
                 'retrieval.lambdas_mmr',
@@ -728,24 +731,23 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         preferred = [
             'passes_filter',
             'pool_size',
-            'topk_k',
+            'stress_horizon_k',
             'n_facets_present',
             'topk_dominant_count',
             'dominant_primary_facet_id',
             'dominant_primary_topk_count',
             'dominant_primary_topk_fraction',
-            'primary_axis_topk_count',
-            'primary_axis_topk_fraction',
+            'primary_axis_stress_count',
+            'primary_axis_stress_fraction',
             'n_topk_retrieved_facets',
-            'max_topk_retrieved_facets',
+            'max_retrieved_facet_fraction',
             'rank_where_all_facets_first_covered',
-            'all_facets_covered_before_primary_k',
+            'all_facets_covered_before_stress_horizon',
             'mean_in_facet_similarity',
             'mean_cross_facet_similarity',
             'in_minus_cross_similarity',
             'fail_weak_primary_axis_dominance',
-            'fail_too_many_topk_facets',
-            'fail_weak_facet_separation',
+            'fail_excess_stress_horizon_facet_coverage',
             'n_near_miss_distractors_in_pool',
             'n_background_outliers_in_pool',
             'query_to_gold_mean',
@@ -759,7 +761,7 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'passes_filter',
         'pool_scope',
         'pool_size',
-        'topk_k',
+        'stress_horizon_k',
         'n_facets',
         'n_facets_present',
         'all_facets_present',
@@ -767,12 +769,12 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'dominant_primary_facet_id',
         'dominant_primary_topk_count',
         'dominant_primary_topk_fraction',
-        'primary_axis_topk_count',
-        'primary_axis_topk_fraction',
+        'primary_axis_stress_count',
+        'primary_axis_stress_fraction',
         'n_topk_retrieved_facets',
-        'max_topk_retrieved_facets',
+        'max_retrieved_facet_fraction',
         'rank_where_all_facets_first_covered',
-        'all_facets_covered_before_primary_k',
+        'all_facets_covered_before_stress_horizon',
         'n_distractors_in_pool',
         'n_near_miss_distractors_in_pool',
         'mean_in_facet_similarity',
@@ -780,11 +782,7 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'in_minus_cross_similarity',
         'fail_missing_facet',
         'fail_weak_primary_axis_dominance',
-        'fail_weak_same_axis_cohort_separation',
-        'fail_weak_same_cohort_axis_separation',
-        'fail_too_many_topk_facets',
-        'fail_weak_facet_separation',
-        'fail_too_few_near_miss_distractors',
+        'fail_excess_stress_horizon_facet_coverage',
         'fail_missing_or_malformed_background_outlier',
         'facets_present_json',
         'topk_retrieved_facets_json',
@@ -1082,7 +1080,7 @@ def _render_selection_snapshot(
             [
                 *ctx.cfg.retrieval.k_values,
                 ctx.cfg.query_geometry.plot_k,
-                ctx.cfg.geometry_filter.topk_k,
+                _configured_stress_horizon(ctx.cfg),
             ]
         )
         if value <= len(ranked_rows)
@@ -1538,10 +1536,18 @@ def _diagnostic_top_ks(ctx: _RenderContext, pool_size: int) -> list[int]:
     values = [
         *ctx.cfg.retrieval.k_values,
         ctx.cfg.query_geometry.plot_k,
-        ctx.cfg.geometry_filter.topk_k,
+        _configured_stress_horizon(ctx.cfg),
         *ctx.extra_top_ks,
     ]
     return [value for value in sorted(set(values)) if 0 < value <= pool_size]
+
+
+def _configured_stress_horizon(cfg: ExperimentCfg) -> int:
+    chunk_pools = cfg.generation.chunk_pools
+    competitive_pool_mass = (
+        chunk_pools.gold_chunks_per_query() + chunk_pools.point_distractor_chunks_per_query()
+    )
+    return cfg.geometry_filter.stress_horizon(competitive_pool_mass=competitive_pool_mass)
 
 
 def _rank_all_facets_covered(ranked_rows: list[dict[str, Any]]) -> int | None:

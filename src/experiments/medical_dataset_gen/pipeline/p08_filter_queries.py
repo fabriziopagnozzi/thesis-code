@@ -61,11 +61,7 @@ from experiments.medical_dataset_gen.utils.io_utils import (
 class StrictGeometryFailures(TypedDict):
     fail_missing_facet: bool
     fail_weak_primary_axis_dominance: bool
-    fail_too_many_topk_facets: bool
-    fail_weak_facet_separation: bool
-    fail_weak_same_axis_cohort_separation: bool
-    fail_weak_same_cohort_axis_separation: bool
-    fail_too_few_near_miss_distractors: bool
+    fail_excess_stress_horizon_facet_coverage: bool
     fail_missing_or_malformed_background_outlier: bool
 
 
@@ -94,8 +90,11 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
     facet_gold = build_query_to_facet_gold_map(qrels)
     qrels_by_query_chunk = get_qrels_by_query_chunk(qrels)
-    primary_k = int(cfg.geometry_filter.topk_k)
-    diagnostic_k_values = _diagnostic_k_values(cfg)
+    competitive_pool_mass = _competitive_pool_mass(cfg)
+    stress_horizon_k = cfg.geometry_filter.stress_horizon(
+        competitive_pool_mass=competitive_pool_mass
+    )
+    diagnostic_k_values = _diagnostic_k_values(cfg, stress_horizon_k=stress_horizon_k)
     rows: list[dict[str, object]] = []
 
     for query_row in tqdm(
@@ -140,16 +139,16 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             primary_axis=query.primary_axis,
             k_values=diagnostic_k_values,
         )
-        primary_topk = topk_by_k[primary_k]
+        primary_topk = topk_by_k[stress_horizon_k]
         topk_dominant = _topk_dominant_count(
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
-            k=primary_k,
+            k=stress_horizon_k,
         )
         topk_retrieved_facets = _topk_retrieved_facets(
             topn_chunk_ids=topn_chunk_ids,
             query_qrels=query_qrels,
-            k=primary_k,
+            k=stress_horizon_k,
         )
         n_topk_retrieved_facets = len(topk_retrieved_facets)
         dominant_primary_topk_count = int(primary_topk['dominant_primary_count'])
@@ -189,19 +188,15 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             topn_global=topn_global,
             topn_sims=topn_sims,
             chunk_vectors=chunk_vectors,
-            k=primary_k,
+            k=stress_horizon_k,
         )
 
         failures = _strict_gate_failures(
             cfg.geometry_filter,
             n_facets_present=n_facets_present,
             n_facets=len(query_facets),
-            primary_axis_topk_count=primary_axis_topk_count,
+            primary_axis_fraction=float(primary_topk['primary_axis_fraction']),
             n_topk_retrieved_facets=n_topk_retrieved_facets,
-            in_minus_cross_similarity=separation['in_minus_cross_similarity'],
-            same_axis_cohort_gap=separation['same_axis_cohort_gap'],
-            same_cohort_axis_gap=separation['same_cohort_axis_gap'],
-            n_near_miss_distractors=n_near_miss_distractors,
             background_outlier_complete=bool(background_diagnostics['background_outlier_complete']),
         )
         passes = not any(failures.values())
@@ -219,7 +214,9 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'calibration_warning': calibration_warning_by_query.get(qid, False),
                 'pool_scope': cfg.retrieval.pool_scope,
                 'pool_size': len(topn_global),
-                'topk_k': primary_k,
+                'stress_horizon_basis': cfg.geometry_filter.stress_horizon_basis,
+                'stress_horizon_competitive_pool_mass': competitive_pool_mass,
+                'stress_horizon_k': stress_horizon_k,
                 'n_facets': len(query_facets),
                 'n_facets_present': n_facets_present,
                 'all_facets_present': n_facets_present == len(query_facets),
@@ -229,13 +226,14 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'dominant_primary_topk_fraction': primary_topk['dominant_primary_fraction'],
                 'primary_axis': query.primary_axis,
                 'secondary_axis': query.secondary_axis,
-                'primary_axis_topk_count': primary_axis_topk_count,
-                'primary_axis_topk_fraction': primary_topk['primary_axis_fraction'],
+                'primary_axis_stress_count': primary_axis_topk_count,
+                'primary_axis_stress_fraction': primary_topk['primary_axis_fraction'],
                 'n_topk_retrieved_facets': n_topk_retrieved_facets,
-                'max_topk_retrieved_facets': cfg.geometry_filter.max_topk_retrieved_facets,
+                'stress_horizon_retrieved_facet_fraction': n_topk_retrieved_facets / len(query_facets),
+                'max_retrieved_facet_fraction': cfg.geometry_filter.max_retrieved_facet_fraction,
                 'rank_where_all_facets_first_covered': all_facet_rank,
-                'all_facets_covered_before_primary_k': (
-                    all_facet_rank is not None and all_facet_rank <= primary_k
+                'all_facets_covered_before_stress_horizon': (
+                    all_facet_rank is not None and all_facet_rank <= stress_horizon_k
                 ),
                 'n_distractors_in_pool': n_distractors,
                 'n_near_miss_distractors_in_pool': n_near_miss_distractors,
@@ -350,43 +348,33 @@ def _strict_gate_failures(
     *,
     n_facets_present: int,
     n_facets: int,
-    primary_axis_topk_count: int,
+    primary_axis_fraction: float,
     n_topk_retrieved_facets: int,
-    in_minus_cross_similarity: float,
-    same_axis_cohort_gap: float,
-    same_cohort_axis_gap: float,
-    n_near_miss_distractors: int,
     background_outlier_complete: bool,
 ) -> StrictGeometryFailures:
-    max_facets = cfg.max_topk_retrieved_facets
     return {
         'fail_missing_facet': n_facets_present != n_facets,
-        'fail_weak_primary_axis_dominance': (primary_axis_topk_count < cfg.min_primary_axis_count),
-        'fail_too_many_topk_facets': (
-            max_facets is not None and n_topk_retrieved_facets > max_facets
+        'fail_weak_primary_axis_dominance': (
+            primary_axis_fraction < cfg.min_primary_axis_fraction
         ),
-        'fail_weak_facet_separation': (
-            in_minus_cross_similarity < cfg.min_in_minus_cross_similarity
-        ),
-        'fail_weak_same_axis_cohort_separation': (
-            same_axis_cohort_gap < cfg.min_same_axis_cohort_gap
-        ),
-        'fail_weak_same_cohort_axis_separation': (
-            same_cohort_axis_gap < cfg.min_same_cohort_axis_gap
-        ),
-        'fail_too_few_near_miss_distractors': (
-            n_near_miss_distractors < cfg.min_distractors_in_pool
+        'fail_excess_stress_horizon_facet_coverage': (
+            n_topk_retrieved_facets / n_facets > cfg.max_retrieved_facet_fraction
         ),
         'fail_missing_or_malformed_background_outlier': not background_outlier_complete,
     }
 
 
-def _diagnostic_k_values(cfg: ExperimentCfg) -> list[int]:
+def _competitive_pool_mass(cfg: ExperimentCfg) -> int:
+    chunk_pools = cfg.generation.chunk_pools
+    return chunk_pools.gold_chunks_per_query() + chunk_pools.point_distractor_chunks_per_query()
+
+
+def _diagnostic_k_values(cfg: ExperimentCfg, *, stress_horizon_k: int) -> list[int]:
     return sorted({
         int(k)
         for k in [
             *cfg.retrieval.k_values,
-            cfg.geometry_filter.topk_k,
+            stress_horizon_k,
         ]
     })
 

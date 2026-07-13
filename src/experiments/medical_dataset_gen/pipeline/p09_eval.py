@@ -200,6 +200,7 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
     agg_exprs: list[pl.Expr] = [
         pl.col('query_id').n_unique().alias('n_queries'),
         pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
+        _all_facet_coverage_expr(results),
         pl.col('weighted_facet_coverage').mean().alias('FacetWeightedRecall@k'),
         pl.col('facet_coverage_purity').mean().alias('FacetCoveragePurity@k'),
         pl.col('all_facet_clean').mean().alias('AllFacetCleanRate@k'),
@@ -481,6 +482,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         pl.col('gold_f1').mean().alias('F1@k'),
         pl.col('average_precision_at_k').mean().alias('MAP@k'),
         pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
+        _all_facet_coverage_expr(results),
         pl.col('weighted_facet_coverage').mean().alias('FacetWeightedRecall@k'),
         pl.col('facet_coverage_purity').mean().alias('FacetCoveragePurity@k'),
         pl.col('all_facet_clean').mean().alias('AllFacetCleanRate@k'),
@@ -521,6 +523,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'F1@k',
         'MAP@k',
         'FacetCoverage@k',
+        'AllFacetCoverageRate@k',
         'FacetWeightedRecall@k',
         'FacetCoveragePurity@k',
         'AllFacetCleanRate@k',
@@ -542,6 +545,17 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
     ]
 
     return stats.select([col for col in STATS_DF_ORDERED_COLS if col in stats.columns])
+
+
+def _all_facet_coverage_expr(results: pl.DataFrame) -> pl.Expr:
+    if 'all_facet_coverage' in results.columns:
+        return pl.col('all_facet_coverage').mean().alias('AllFacetCoverageRate@k')
+    return (
+        (pl.col('facet_coverage') == 1.0)
+        .cast(pl.Float64)
+        .mean()
+        .alias('AllFacetCoverageRate@k')
+    )
 
 
 def stats_for_evaluation_mode(

@@ -184,7 +184,7 @@ def geometry_filter_row(
         'n_background_outliers_in_pool',
         'n_background_outlier_clusters_in_pool',
         'n_topk_retrieved_facets',
-        'primary_axis_topk_fraction',
+        'primary_axis_stress_fraction',
         'dominant_primary_topk_fraction',
         'fac_topk',
         'fac_facloc',

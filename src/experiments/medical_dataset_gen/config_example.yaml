@@ -85,7 +85,7 @@ retrieval:
     strategies: [top_k, mmr, fac_loc]
     pool_scope: query_local
     candidate_pool_n: 10_000 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
-    k_values: [6, 7, 8, 9]
+    # k_values: [6, 10, 14]
     lambdas_mmr: # MMR uses lambda on its full relevance-diversity scale.
         start: 0.02
         stop: 0.90
@@ -99,13 +99,12 @@ retrieval:
     only_pass_geometry: true # If true, evaluation skips queries that fail the geometric prefilter.
 
 geometry_filter:
-    topk_k: 20 # k used by the strict geometry gate; match the stricter RAG context budget.
-    min_primary_axis_count: 14 # Minimum number of top-20 results from the declared primary axis.
-    max_topk_retrieved_facets: 2 # Maximum distinct gold facets represented in the top-k geometry window.
-    min_in_minus_cross_similarity: 0.03 # Required separation between mean in-facet and cross-facet cosine similarity.
-    min_same_axis_cohort_gap: 0.03
-    min_same_cohort_axis_gap: 0.03
-    min_distractors_in_pool: 10 # Minimum number of hard distractors in the candidate pool.
+    stress_horizon_basis: competitive_pool_mass # Gold plus near-miss chunks define the relative rank-depth gate.
+    stress_horizon_fraction: 0.12 # Inspect this fraction of the configured competitive pool mass.
+    stress_horizon_min_k: 4
+    stress_horizon_max_k: 24
+    min_primary_axis_fraction: 0.50 # At least half of the stress-horizon results must belong to the primary axis.
+    max_retrieved_facet_fraction: 0.50 # At most half of the required facets may appear by the stress horizon.
 
 evaluation:
     mode: exploring # "exploring" aggregates all evaluated queries; "testing" tunes lambdas on validation and reports held-out test metrics.

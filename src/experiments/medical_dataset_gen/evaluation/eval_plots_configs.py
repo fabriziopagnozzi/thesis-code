@@ -45,15 +45,15 @@ DEFAULT_ENABLED_EVAL_PLOT_NAMES: list[EvalPlotFileName] = [
     'metrics_k_curves_for_lambda',
     # 'metrics_heatmap_k_lambda_grid',
     # 'metrics_heatmap_k_lambda_grid_html',
-    'metrics_distributions',
+    # 'metrics_distributions',
     'metrics_delta_vs_topk_k_curves_for_lambda',
     'metrics_delta_vs_topk_at_best_lambda_for_k',
     'diagnostics_at_best_lambda_for_k',
     'diagnostics_k_curves_for_lambda',
-    'profiles_metrics_by_k_at_best_lambda',
-    'profiles_diagnostics_by_k_at_best_lambda',
-    'answer_metrics_at_best_lambda_for_k',
-    'answer_metrics_k_curves_for_lambda',
+    # 'profiles_metrics_by_k_at_best_lambda',
+    # 'profiles_diagnostics_by_k_at_best_lambda',
+    # 'answer_metrics_at_best_lambda_for_k',
+    # 'answer_metrics_k_curves_for_lambda',
 ]
 
 ANSWER_ROUGE_EVAL_PLOT_FILE_NAMES = {
@@ -145,6 +145,7 @@ FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE = 18  # points^2 area for matplotlib
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {
     'FacetCoverage@k': 'FacetCoverage@k',
+    'AllFacetCoverageRate@k': 'AllFacetCoverageRate@k',
     'FacetWeightedRecall@k': 'FacetWeightedRecall@k',
     'FacetCoveragePurity@k': 'FacetCoveragePurity@k',
     'AllFacetCleanRate@k': 'AllFacetCleanRate@k',
@@ -190,7 +191,7 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
     'metrics_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.2, 3.4, 1.4),
     'metrics_delta_vs_topk_at_best_lambda_for_k': PlotGridLayout(2, 3, 4.83, 3.4, 1.4),
     'answer_metrics_at_best_lambda_for_k': PlotGridLayout(1, 3, 4.2, 3.4, 1.4),
-    'diagnostics_at_best_lambda_for_k': PlotGridLayout(3, 3, 4.2, 3.4, 1.4),
+    'diagnostics_at_best_lambda_for_k': PlotGridLayout(4, 3, 4.2, 3.4, 1.4),
     # -------------------------------------------
     # Dynamically adapted rows/cols based on num of subplots to handle
     'metrics_k_curves_for_lambda': PlotGridLayout(1, 1, 4.0, 2.0, 2.0),
@@ -208,10 +209,10 @@ DEFAULT_PLOT_GRID_LAYOUTS: dict[EvalPlotFileName, PlotGridLayout] = {
 PLOTTED_MAIN_METRIC_NAMES = [
     'FacetCoveragePurity@k',
     'FacetCoverage@k',
+    'AllFacetCoverageRate@k',
     'Precision@k',
-    'FacetWeightedRecall@k',
-    'alpha-nDCG@k',
     'AllFacetCleanRate@k',
+    'alpha-nDCG@k',
     # 'F1@k',
     # 'AnswerROUGE1F1@k',
     # 'AnswerROUGE2Recall@k',
@@ -224,6 +225,7 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
     'BackgroundOutlierRate',
     'PrimaryAxisRate',
     'RedundantGoldRate',
+    'FacetWeightedRecall@k',
     'Recall@k',
     'fac',
     'avg_cos',

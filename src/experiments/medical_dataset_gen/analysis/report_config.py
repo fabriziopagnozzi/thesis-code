@@ -23,10 +23,10 @@ REPORT_METRIC_SPECS: tuple[DeltaMetricPlotSpec, ...] = (
     DeltaMetricPlotSpec('FCP', 'FCP', 'fcp', 'FacetCoveragePurity@k'),
     DeltaMetricPlotSpec('FacetCoverage', 'FacetCoverage@k', 'facet_coverage', 'FacetCoverage@k'),
     DeltaMetricPlotSpec(
-        'FacetWeightedRecall',
-        'FacetWeightedRecall@k',
-        'facet_weighted_recall',
-        'FacetWeightedRecall@k',
+        'AllFacetCoverageRate',
+        'AllFacetCoverageRate@k',
+        'all_facet_coverage_rate',
+        'AllFacetCoverageRate@k',
     ),
     DeltaMetricPlotSpec(
         'AllFacetCleanRate',
@@ -35,6 +35,12 @@ REPORT_METRIC_SPECS: tuple[DeltaMetricPlotSpec, ...] = (
         'AllFacetCleanRate@k',
     ),
     DeltaMetricPlotSpec('Precision', 'Precision@k', 'precision', 'Precision@k'),
+    # DeltaMetricPlotSpec(
+    #     'FacetWeightedRecall',
+    #     'FacetWeightedRecall@k',
+    #     'facet_weighted_recall',
+    #     'FacetWeightedRecall@k',
+    # ),
     # DeltaMetricPlotSpec('Recall', 'Recall@k', 'recall', 'Recall@k'),
     DeltaMetricPlotSpec('alpha_nDCG', 'alpha-nDCG@k', 'alpha_ndcg', 'alpha-nDCG@k'),
 )

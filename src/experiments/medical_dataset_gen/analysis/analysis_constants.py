@@ -9,8 +9,9 @@ DIVERSIFYING_STRATEGIES: tuple[StrategyName, ...] = ('mmr', 'fac_loc')
 type DeltaMetricLabel = Literal[
     'FCP',
     'FacetCoverage',
-    'FacetWeightedRecall',
+    'AllFacetCoverageRate',
     'AllFacetCleanRate',
+    'FacetWeightedRecall',
     'Precision',
     'alpha_nDCG',
 ]
@@ -20,8 +21,9 @@ DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_args(DeltaMetricLabel.__v
 PRACTICAL_EFFECT_THRESHOLDS: dict[DeltaMetricLabel, float] = {
     'FCP': 0.05,
     'FacetCoverage': 0.05,
-    'FacetWeightedRecall': 0.05,
+    'AllFacetCoverageRate': 0.05,
     'AllFacetCleanRate': 0.05,
+    'FacetWeightedRecall': 0.05,
     'Precision': 0.05,
     'alpha_nDCG': 0.05,
 }
@@ -118,6 +120,7 @@ EVALUATION_METRICS = (
 METRIC_LABEL_OVERRIDES = {
     'FacetCoveragePurity@k': 'FCP',
     'FacetWeightedRecall@k': 'FacetWeightedRecall',
+    'AllFacetCoverageRate@k': 'AllFacetCoverageRate',
     'alpha-nDCG@k': 'alpha_nDCG',
 }
 METRIC_LABELS = {
@@ -152,6 +155,7 @@ TABLE_HEADERS = {
     'TopFailureModes': 'Top failures',
     'Delta_FacLoc_MMR_FCP': 'F-MM FCP',
     'Delta_FacLoc_TopK_FCP': 'F-Top FCP',
+    'Delta_FacLoc_MMR_AllFacetCoverageRate': 'F-MM AllCov',
     'Delta_FacLoc_MMR_AllFacetCleanRate': 'F-MM Clean',
     'FacLocVsMMR_FCPOutcome': 'F vs M',
     'FacLocBetterRows': 'F > M',
@@ -176,6 +180,10 @@ TABLE_HEADERS = {
     'Delta_FacLoc_MMR_FCP_max': 'Max F-M FCP',
     'Delta_FacLoc_TopK_FCP_mean': 'Mean F-Top FCP',
     'Delta_MMR_TopK_FCP_mean': 'Mean M-Top FCP',
+    'Delta_FacLoc_MMR_AllFacetCoverageRate_mean': 'Mean F-M AllCov',
+    'TopK_AllFacetCoverageRate': 'Top AllCov',
+    'MMR_AllFacetCoverageRate': 'MMR AllCov',
+    'FacLoc_AllFacetCoverageRate': 'FacLoc AllCov',
     'Delta_FacLoc_MMR_AllFacetCleanRate_mean': 'Mean F-M Clean',
     'TopK_AllFacetCleanRate': 'Top Clean',
     'MMR_AllFacetCleanRate': 'MMR Clean',

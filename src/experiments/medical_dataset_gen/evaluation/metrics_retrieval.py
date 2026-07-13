@@ -34,6 +34,7 @@ def compute_retrieval_metrics(
         float(facet_coverage_metrics['facet_coverage']) == 1.0
         and float(relevance['gold_precision']) >= all_clean_rate_precision_threshold
     )
+    all_facet_coverage = float(float(facet_coverage_metrics['facet_coverage']) == 1.0)
     diversified_ranking = _diversified_ranking_metrics(
         selected_chunk_ids, query_qrels, facet_to_gold, all_gold_ids
     )
@@ -52,6 +53,7 @@ def compute_retrieval_metrics(
         **relevance,
         **facet_coverage_metrics,
         'facet_coverage_purity': float(facet_coverage_purity),
+        'all_facet_coverage': float(all_facet_coverage),
         'all_facet_clean': float(all_facet_clean),
         **diversified_ranking,
         **redundancy,
