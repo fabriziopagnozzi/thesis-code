@@ -14,8 +14,10 @@ from pydantic import (
 )
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    CLINICAL_AXIS_LIST,
     AxisPairConditionOverride,
     ChunkPoolScope,
+    ChunkTextStyle,
     ClinicalAxis,
     ConditionKey,
     PlanCalibrationMode,
@@ -259,6 +261,10 @@ class AxisPairPolicyOverrideCfg(ConfigModel):
 class GenerationCfg(ConfigModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
+    chunk_text_style: ChunkTextStyle = 'semantic_hardened'
+    excluded_clinical_axes: list[ClinicalAxis] = Field(
+        default_factory=lambda: ['diagnostic_evidence_type']
+    )
 
     calibration_mode: PlanCalibrationMode = 'rotating'
     calibration_probe_chunks_per_facet: PositiveInt = 8
@@ -285,6 +291,11 @@ class GenerationCfg(ConfigModel):
                     'generation.axis_pair_policy_overrides must be unique per unordered axis pair'
                 )
             seen_pairs.add(key)
+        if len(self.excluded_clinical_axes) != len(set(self.excluded_clinical_axes)):
+            raise ValueError('generation.excluded_clinical_axes must not contain duplicates')
+        active_axes = set(CLINICAL_AXIS_LIST) - set(self.excluded_clinical_axes)
+        if len(active_axes) < 2:
+            raise ValueError('generation.excluded_clinical_axes must leave at least two axes')
         return self
 
     def total_gold_chunks(self) -> int:

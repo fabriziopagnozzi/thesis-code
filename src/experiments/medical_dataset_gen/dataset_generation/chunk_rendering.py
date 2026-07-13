@@ -23,6 +23,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkRow,
     ChunkState,
+    ChunkTextStyle,
     ClinicalFact,
     MedicalOntology,
 )
@@ -69,11 +70,17 @@ def generate_llm_chunk(
             num_ctx=cfg.generation.llm_config.num_ctx,
             chunk_min_words=cfg.generation.chunk_pools.chunk_min_words,
             chunk_max_words=cfg.generation.chunk_pools.chunk_max_words,
+            text_style=cfg.generation.chunk_text_style,
             revision_feedback=feedback,
         )
         last_text = candidate_text
         word_count = len(candidate_text.split())
-        validation = validate_chunk_text(candidate_text, fact, ontology)
+        validation = validate_chunk_text(
+            candidate_text,
+            fact,
+            ontology,
+            text_style=cfg.generation.chunk_text_style,
+        )
         word_errors = word_count_errors(
             word_count,
             min_words=cfg.generation.chunk_pools.chunk_min_words,
@@ -110,10 +117,16 @@ def rewrite_llm_chunk(
             num_ctx=cfg.generation.llm_config.num_ctx,
             chunk_min_words=cfg.generation.chunk_pools.chunk_min_words,
             chunk_max_words=cfg.generation.chunk_pools.chunk_max_words,
+            text_style=cfg.generation.chunk_text_style,
             revision_feedback=feedback,
         )
         word_count = len(candidate_text.split())
-        validation = validate_chunk_text(candidate_text, fact, ontology)
+        validation = validate_chunk_text(
+            candidate_text,
+            fact,
+            ontology,
+            text_style=cfg.generation.chunk_text_style,
+        )
         word_errors = word_count_errors(
             word_count,
             min_words=cfg.generation.chunk_pools.chunk_min_words,
@@ -140,6 +153,7 @@ def generate_chunk_text_with_llm(
     num_ctx: int,
     chunk_min_words: int,
     chunk_max_words: int,
+    text_style: ChunkTextStyle,
     revision_feedback: str | None = None,
 ) -> str:
     prompt = MedicalDatasetGenDefaultPrompts.chunk_generation_prompt(
@@ -147,6 +161,11 @@ def generate_chunk_text_with_llm(
         ontology=ontology,
         patient_descriptor=patient_descriptor(fact),
         forbidden_terms=TEMPLATE_DATA.hidden_benchmark_terms,
+        required_facts=_required_facts_for_text_style(
+            fact,
+            ontology,
+            text_style=text_style,
+        ),
         min_words=chunk_min_words,
         max_words=chunk_max_words,
         revision_feedback=revision_feedback,
@@ -171,13 +190,18 @@ def rewrite_chunk_text_with_llm(
     num_ctx: int,
     chunk_min_words: int,
     chunk_max_words: int,
+    text_style: ChunkTextStyle,
     revision_feedback: str | None = None,
 ) -> str:
     prompt = MedicalDatasetGenDefaultPrompts.chunk_rewrite_prompt(
         fact=fact,
         draft_text=draft_text,
         patient_descriptor=patient_descriptor(fact),
-        required_facts=list(fact.must_mention),
+        required_facts=_required_facts_for_text_style(
+            fact,
+            ontology,
+            text_style=text_style,
+        ),
         forbidden_facts=list(fact.must_not_mention),
         min_words=chunk_min_words,
         max_words=chunk_max_words,
@@ -205,6 +229,20 @@ def _cleanup_generated_text(text: str) -> str:
     return squash_whitespaces(_SECTION_HEADER_RE.sub('', text))
 
 
+def _required_facts_for_text_style(
+    fact: ClinicalFact,
+    ontology: MedicalOntology | None,
+    *,
+    text_style: ChunkTextStyle,
+) -> list[str]:
+    if text_style == 'ontology_explicit':
+        return list(fact.must_mention)
+    omitted = {fact.axis_bin_term.casefold()}
+    if ontology is not None:
+        omitted.add(ontology.clinical_axes[fact.axis].label.casefold())
+    return [item for item in fact.must_mention if item.casefold() not in omitted]
+
+
 def word_count_ok(word_count: int, min_words: int, max_words: int, tolerance: int) -> bool:
     return (min_words - tolerance) <= word_count <= (max_words + tolerance)
 
@@ -217,10 +255,14 @@ def word_count_errors(word_count: int, min_words: int, max_words: int, tolerance
     return [f'word_count={word_count} above maximum {max_words} (tolerance {tolerance})']
 
 
-def render_canonical_chunk_text(fact: ClinicalFact, ontology: MedicalOntology) -> str:
+def render_canonical_chunk_text(
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    text_style: ChunkTextStyle = 'semantic_hardened',
+) -> str:
     """Render deterministic chunk prose from the reusable semantic chunk key."""
     rng = Random(_stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
-    return render_chunk_text_template(fact, ontology, rng)
+    return render_chunk_text_template(fact, ontology, rng, text_style=text_style)
 
 
 def new_chunk_state(
@@ -255,7 +297,12 @@ def finalize_chunk_row(
     cache_key_fn: Callable[[ExperimentCfg, ClinicalFact], str] | None = None,
 ) -> tuple[ChunkRow, ChunkGenerationCacheEntry | None]:
     final_text = state.final_text
-    validation = validate_chunk_text(final_text, fact, ontology)
+    validation = validate_chunk_text(
+        final_text,
+        fact,
+        ontology,
+        text_style=cfg.generation.chunk_text_style,
+    )
     if validation.hard_errors:
         raise RuntimeError('; '.join(validation.hard_errors))
     state.validation_soft_warnings = list(validation.soft_warnings)

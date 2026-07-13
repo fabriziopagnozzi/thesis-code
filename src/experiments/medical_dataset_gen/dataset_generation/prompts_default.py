@@ -28,6 +28,7 @@ class MedicalDatasetGenDefaultPrompts:
         ontology: MedicalOntology,
         patient_descriptor: str,
         forbidden_terms: list[str],
+        required_facts: list[str],
         min_words: int,
         max_words: int,
         revision_feedback: str | None = None,
@@ -40,7 +41,7 @@ class MedicalDatasetGenDefaultPrompts:
         style_directive = _chunk_style_directive(fact)
 
         payload = parse_axis_payload(fact.axis_payload_json)
-        required_lines = '\n'.join(f'- {item}' for item in fact.must_mention)
+        required_lines = '\n'.join(f'- {item}' for item in required_facts)
         evidence = inspect.cleandoc(f"""
             Evidence focus: {fact.axis.replace('_', ' ')}.
             Required facts to preserve exactly:

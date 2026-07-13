@@ -20,22 +20,36 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 5
-                        - 7
-                    standard:
-                        - 10
-                        - 14
-                    prolonged:
-                        - 21
-                        - 28
                 treatments:
-                    - acyclovir
-                    - corticosteroids
-                    - intravenous acyclovir
-                    - intravenous methylprednisolone
-                    - plasma-exchange therapy
+                    antiviral_course:
+                        surface_forms:
+                            - acyclovir
+                            - intravenous acyclovir
+                        bins:
+                            short:
+                                - 5
+                                - 7
+                            standard:
+                                - 10
+                                - 14
+                            prolonged:
+                                - 21
+                                - 28
+                    inpatient_immunotherapy_course:
+                        surface_forms:
+                            - corticosteroids
+                            - intravenous methylprednisolone
+                            - plasma-exchange therapy
+                        bins:
+                            short:
+                                - 3
+                                - 5
+                            standard:
+                                - 7
+                                - 10
+                            prolonged:
+                                - 14
+                                - 21
             acute_clinical_course:
                 axis: acute_clinical_course
                 bins:
@@ -167,22 +181,24 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 3
-                        - 5
-                    standard:
-                        - 7
-                        - 10
-                    prolonged:
-                        - 14
-                        - 21
                 treatments:
-                    - ceftriaxone
-                    - azithromycin
-                    - ampicillin-sulbactam
-                    - levofloxacin
-                    - piperacillin-tazobactam
+                    antibiotic_course:
+                        surface_forms:
+                            - ceftriaxone
+                            - azithromycin
+                            - ampicillin-sulbactam
+                            - levofloxacin
+                            - piperacillin-tazobactam
+                        bins:
+                            short:
+                                - 3
+                                - 5
+                            standard:
+                                - 7
+                                - 10
+                            prolonged:
+                                - 14
+                                - 21
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -314,22 +330,22 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 4
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 10
-                        - 14
                 treatments:
-                    - aspirin
-                    - clopidogrel
-                    - dual antiplatelet therapy
-                    - high-intensity atorvastatin
-                    - therapeutic anticoagulation transition
+                    inpatient_antithrombotic_initiation:
+                        surface_forms:
+                            - aspirin and clopidogrel during inpatient stroke care
+                            - dual antiplatelet therapy during the inpatient stay
+                            - therapeutic anticoagulation transition while inpatient
+                        bins:
+                            short:
+                                - 2
+                                - 3
+                            standard:
+                                - 5
+                                - 7
+                            prolonged:
+                                - 10
+                                - 14
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -461,23 +477,23 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 3
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 10
-                        - 14
                 treatments:
-                    - intravenous furosemide
-                    - spironolactone
-                    - intravenous bumetanide
-                    - metolazone
-                    - torsemide
-                    - intravenous nitroglycerin
+                    intravenous_decongestion_interval:
+                        surface_forms:
+                            - intravenous furosemide
+                            - intravenous bumetanide
+                            - metolazone-assisted diuresis
+                            - intravenous nitroglycerin
+                        bins:
+                            short:
+                                - 2
+                                - 3
+                            standard:
+                                - 5
+                                - 7
+                            prolonged:
+                                - 10
+                                - 14
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -605,22 +621,33 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 7
-                        - 10
-                    standard:
-                        - 10
-                        - 14
-                    prolonged:
-                        - 14
-                        - 21
                 treatments:
-                    - ceftriaxone
-                    - vancomycin
-                    - ampicillin
-                    - meropenem
-                    - adjunctive dexamethasone
+                    antibiotic_course:
+                        surface_forms:
+                            - ceftriaxone
+                            - vancomycin
+                            - ampicillin
+                            - meropenem
+                        bins:
+                            short:
+                                - 7
+                            standard:
+                                - 10
+                                - 14
+                            prolonged:
+                                - 21
+                                - 28
+                    adjunctive_steroid_course:
+                        surface_forms:
+                            - adjunctive dexamethasone
+                        bins:
+                            short:
+                                - 2
+                            standard:
+                                - 4
+                            prolonged:
+                                - 6
+                                - 8
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -744,22 +771,22 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 3
-                        - 5
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 10
-                        - 14
                 treatments:
-                    - intravenous methylprednisolone
-                    - plasma exchange
-                    - high-dose oral prednisone
-                    - oral prednisone taper
-                    - therapeutic plasma-exchange series
+                    relapse_immunotherapy_course:
+                        surface_forms:
+                            - intravenous methylprednisolone
+                            - plasma exchange
+                            - high-dose oral prednisone
+                            - oral prednisone taper
+                            - therapeutic plasma-exchange series
+                        bins:
+                            short:
+                                - 3
+                            standard:
+                                - 5
+                            prolonged:
+                                - 7
+                                - 10
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -891,22 +918,24 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 14
-                        - 21
-                    standard:
-                        - 28
-                        - 42
-                    prolonged:
-                        - 42
-                        - 56
                 treatments:
-                    - vancomycin
-                    - cefepime
-                    - ceftriaxone
-                    - nafcillin
-                    - daptomycin
+                    antibiotic_course:
+                        surface_forms:
+                            - vancomycin
+                            - cefepime
+                            - ceftriaxone
+                            - nafcillin
+                            - daptomycin
+                        bins:
+                            short:
+                                - 14
+                                - 21
+                            standard:
+                                - 28
+                                - 42
+                            prolonged:
+                                - 49
+                                - 56
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1034,23 +1063,22 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 3
-                    standard:
-                        - 4
-                        - 6
-                    prolonged:
-                        - 7
-                        - 10
                 treatments:
-                    - heparin infusion
-                    - apixaban
-                    - enoxaparin
-                    - rivaroxaban
-                    - warfarin bridge therapy
-                    - catheter-directed thrombolysis
+                    inpatient_anticoagulation_phase:
+                        surface_forms:
+                            - heparin infusion
+                            - enoxaparin bridge therapy
+                            - warfarin bridge therapy
+                        bins:
+                            short:
+                                - 2
+                                - 3
+                            standard:
+                                - 4
+                                - 6
+                            prolonged:
+                                - 7
+                                - 10
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1182,22 +1210,31 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 3
-                        - 5
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 7
-                        - 10
                 treatments:
-                    - prednisone
-                    - azithromycin
-                    - ipratropium-albuterol nebulizers
-                    - doxycycline
-                    - intravenous methylprednisolone
+                    systemic_corticosteroid_course:
+                        surface_forms:
+                            - prednisone
+                            - intravenous methylprednisolone
+                        bins:
+                            short:
+                                - 3
+                                - 4
+                            standard:
+                                - 5
+                            prolonged:
+                                - 7
+                                - 10
+                    antibiotic_course:
+                        surface_forms:
+                            - azithromycin
+                            - doxycycline
+                        bins:
+                            short:
+                                - 3
+                            standard:
+                                - 5
+                            prolonged:
+                                - 7
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1325,23 +1362,25 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 14
-                        - 21
-                    standard:
-                        - 28
-                        - 42
-                    prolonged:
-                        - 42
-                        - 56
                 treatments:
-                    - ceftriaxone
-                    - nafcillin
-                    - vancomycin
-                    - daptomycin
-                    - gentamicin
-                    - ampicillin
+                    antibiotic_course:
+                        surface_forms:
+                            - ceftriaxone
+                            - nafcillin
+                            - vancomycin
+                            - daptomycin
+                            - gentamicin
+                            - ampicillin
+                        bins:
+                            short:
+                                - 14
+                                - 21
+                            standard:
+                                - 28
+                                - 42
+                            prolonged:
+                                - 49
+                                - 56
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1473,23 +1512,25 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 10
-                        - 14
-                    standard:
-                        - 21
-                        - 28
-                    prolonged:
-                        - 42
-                        - 56
                 treatments:
-                    - vancomycin
-                    - cefazolin
-                    - daptomycin
-                    - ceftriaxone
-                    - levofloxacin
-                    - linezolid
+                    antibiotic_course:
+                        surface_forms:
+                            - vancomycin
+                            - cefazolin
+                            - daptomycin
+                            - ceftriaxone
+                            - levofloxacin
+                            - linezolid
+                        bins:
+                            short:
+                                - 10
+                                - 14
+                            standard:
+                                - 21
+                                - 28
+                            prolonged:
+                                - 42
+                                - 56
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1622,22 +1663,23 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 5
-                        - 7
-                    standard:
-                        - 10
-                        - 14
-                    prolonged:
-                        - 14
-                        - 21
                 treatments:
-                    - ceftriaxone
-                    - piperacillin-tazobactam
-                    - cefepime
-                    - ertapenem
-                    - levofloxacin
+                    antibiotic_course:
+                        surface_forms:
+                            - ceftriaxone
+                            - piperacillin-tazobactam
+                            - cefepime
+                            - ertapenem
+                            - levofloxacin
+                        bins:
+                            short:
+                                - 5
+                                - 7
+                            standard:
+                                - 10
+                                - 14
+                            prolonged:
+                                - 21
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1769,23 +1811,25 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 7
-                        - 10
-                    standard:
-                        - 14
-                        - 21
-                    prolonged:
-                        - 28
-                        - 42
                 treatments:
-                    - vancomycin
-                    - piperacillin-tazobactam
-                    - cefepime plus metronidazole
-                    - ampicillin-sulbactam
-                    - ertapenem
-                    - linezolid
+                    antibiotic_course:
+                        surface_forms:
+                            - vancomycin
+                            - piperacillin-tazobactam
+                            - cefepime plus metronidazole
+                            - ampicillin-sulbactam
+                            - ertapenem
+                            - linezolid
+                        bins:
+                            short:
+                                - 7
+                                - 10
+                            standard:
+                                - 14
+                                - 21
+                            prolonged:
+                                - 28
+                                - 42
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -1914,22 +1958,34 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 4
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 8
-                        - 12
                 treatments:
-                    - lactulose
-                    - rifaximin
-                    - polyethylene glycol catharsis
-                    - intravenous albumin
-                    - ceftriaxone prophylaxis
+                    inpatient_encephalopathy_therapy_interval:
+                        surface_forms:
+                            - lactulose titration during admission
+                            - rifaximin initiation during admission
+                            - polyethylene glycol catharsis
+                        bins:
+                            short:
+                                - 2
+                                - 4
+                            standard:
+                                - 5
+                                - 7
+                            prolonged:
+                                - 8
+                                - 12
+                    infection_prophylaxis_or_albumin_interval:
+                        surface_forms:
+                            - intravenous albumin
+                            - ceftriaxone prophylaxis
+                        bins:
+                            short:
+                                - 2
+                                - 3
+                            standard:
+                                - 5
+                            prolonged:
+                                - 7
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2057,23 +2113,22 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 3
-                        - 5
-                    standard:
-                        - 7
-                        - 10
-                    prolonged:
-                        - 14
-                        - 21
                 treatments:
-                    - intravenous methylprednisolone
-                    - cyclophosphamide
-                    - mycophenolate mofetil
-                    - rituximab
-                    - oral prednisone taper
-                    - hydroxychloroquine
+                    immunosuppression_induction_interval:
+                        surface_forms:
+                            - intravenous methylprednisolone
+                            - cyclophosphamide induction
+                            - oral prednisone taper initiation
+                        bins:
+                            short:
+                                - 3
+                                - 5
+                            standard:
+                                - 7
+                                - 10
+                            prolonged:
+                                - 14
+                                - 21
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2205,22 +2260,23 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 5
-                        - 7
-                    standard:
-                        - 10
-                        - 14
-                    prolonged:
-                        - 14
-                        - 21
                 treatments:
-                    - cefazolin
-                    - vancomycin
-                    - ceftriaxone
-                    - clindamycin
-                    - linezolid
+                    antibiotic_course:
+                        surface_forms:
+                            - cefazolin
+                            - vancomycin
+                            - ceftriaxone
+                            - clindamycin
+                            - linezolid
+                        bins:
+                            short:
+                                - 5
+                                - 7
+                            standard:
+                                - 10
+                                - 14
+                            prolonged:
+                                - 21
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2344,23 +2400,22 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 3
-                        - 5
-                    standard:
-                        - 6
-                        - 9
-                    prolonged:
-                        - 10
-                        - 14
                 treatments:
-                    - intravenous methylprednisolone
-                    - infliximab
-                    - cyclosporine
-                    - vedolizumab
-                    - oral prednisone taper
-                    - mesalamine
+                    inpatient_antiinflammatory_rescue_interval:
+                        surface_forms:
+                            - intravenous methylprednisolone
+                            - cyclosporine infusion
+                            - oral prednisone taper initiation
+                        bins:
+                            short:
+                                - 3
+                                - 5
+                            standard:
+                                - 6
+                                - 9
+                            prolonged:
+                                - 10
+                                - 14
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2489,22 +2544,24 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 4
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 8
-                        - 12
                 treatments:
-                    - intravenous fluids
-                    - enteral nutrition support
-                    - lactated Ringer fluid resuscitation
-                    - opioid analgesia
-                    - nasojejunal enteral feeding
+                    supportive_care_interval:
+                        surface_forms:
+                            - intravenous fluids
+                            - enteral nutrition support
+                            - lactated Ringer fluid resuscitation
+                            - opioid analgesia
+                            - nasojejunal enteral feeding
+                        bins:
+                            short:
+                                - 2
+                                - 4
+                            standard:
+                                - 5
+                                - 7
+                            prolonged:
+                                - 8
+                                - 12
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2633,22 +2690,24 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 4
-                    standard:
-                        - 5
-                        - 7
-                    prolonged:
-                        - 8
-                        - 12
                 treatments:
-                    - ceftriaxone plus metronidazole
-                    - piperacillin-tazobactam
-                    - cefepime plus metronidazole
-                    - ampicillin-sulbactam
-                    - ciprofloxacin plus metronidazole
+                    antibiotic_course:
+                        surface_forms:
+                            - ceftriaxone plus metronidazole
+                            - piperacillin-tazobactam
+                            - cefepime plus metronidazole
+                            - ampicillin-sulbactam
+                            - ciprofloxacin plus metronidazole
+                        bins:
+                            short:
+                                - 2
+                                - 4
+                            standard:
+                                - 5
+                                - 7
+                            prolonged:
+                                - 8
+                                - 12
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2777,22 +2836,24 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 4
-                        - 6
-                    standard:
-                        - 7
-                        - 10
-                    prolonged:
-                        - 12
-                        - 18
                 treatments:
-                    - ceftriaxone plus metronidazole
-                    - piperacillin-tazobactam
-                    - ertapenem
-                    - ciprofloxacin plus metronidazole
-                    - meropenem
+                    antibiotic_course:
+                        surface_forms:
+                            - ceftriaxone plus metronidazole
+                            - piperacillin-tazobactam
+                            - ertapenem
+                            - ciprofloxacin plus metronidazole
+                            - meropenem
+                        bins:
+                            short:
+                                - 4
+                                - 6
+                            standard:
+                                - 7
+                                - 10
+                            prolonged:
+                                - 12
+                                - 18
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -2924,22 +2985,22 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 2
-                        - 3
-                    standard:
-                        - 4
-                        - 5
-                    prolonged:
-                        - 6
-                        - 8
                 treatments:
-                    - intravenous pantoprazole
-                    - octreotide infusion
-                    - endoscopic hemostasis
-                    - packed red blood cell transfusion
-                    - ceftriaxone prophylaxis
+                    infusion_or_prophylaxis_interval:
+                        surface_forms:
+                            - intravenous pantoprazole
+                            - octreotide infusion
+                            - ceftriaxone prophylaxis
+                        bins:
+                            short:
+                                - 2
+                                - 3
+                            standard:
+                                - 4
+                                - 5
+                            prolonged:
+                                - 6
+                                - 8
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -3071,22 +3132,24 @@ conditions:
         axis_values:
             treatment_duration:
                 axis: treatment_duration
-                bins:
-                    short:
-                        - 7
-                        - 10
-                    standard:
-                        - 14
-                        - 21
-                    prolonged:
-                        - 21
-                        - 28
                 treatments:
-                    - cefazolin
-                    - vancomycin
-                    - ceftriaxone
-                    - nafcillin
-                    - daptomycin
+                    antibiotic_course:
+                        surface_forms:
+                            - cefazolin
+                            - vancomycin
+                            - ceftriaxone
+                            - nafcillin
+                            - daptomycin
+                        bins:
+                            short:
+                                - 7
+                                - 10
+                            standard:
+                                - 14
+                                - 21
+                            prolonged:
+                                - 28
+                                - 35
             rehab_outcome:
                 axis: rehab_outcome
                 bins:
@@ -3586,9 +3649,9 @@ subgroups:
             - no chronic inflammatory autoimmune condition
 clinical_axes:
     treatment_duration:
-        label: treatment duration
+        label: active inpatient treatment interval
         allow_as_primary: false
-        query_focus: total treatment days, length of active therapy, and whether the treatment course was short, standard, or prolonged
+        query_focus: documented days of active inpatient therapy and whether the regimen ended early, followed an expected interval, or required extended treatment
         exact_terms:
             - treatment duration
             - therapy duration
@@ -3623,9 +3686,9 @@ clinical_axes:
                 - extended treatment course
                 - longer-than-usual therapy interval
     rehab_outcome:
-        label: rehabilitation outcome
+        label: functional outcome and discharge support
         allow_as_primary: true
-        query_focus: discharge rehabilitation destination and whether recovery involved home rehabilitation, inpatient rehabilitation, or a persistent functional deficit
+        query_focus: discharge functional status, therapy destination, and support needs
         exact_terms:
             - rehabilitation outcome
             - rehab outcome
@@ -3760,9 +3823,9 @@ clinical_axes:
                 - ICU-level nursing with continuous cardiorespiratory review
                 - critical-care staffing with continuous bedside monitoring
     diagnostic_evidence_type:
-        label: diagnostic evidence source
+        label: dominant diagnostic evidence modality
         allow_as_primary: true
-        query_focus: whether diagnosis was supported mainly by bedside and laboratory pattern, structural or visual testing, or specimen-based or specialized confirmatory testing
+        query_focus: the dominant diagnostic evidence modality represented in the note, without assuming other diagnostic evidence was absent
         exact_terms:
             - diagnostic evidence source
             - diagnostic evidence type

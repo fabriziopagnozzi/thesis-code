@@ -11,6 +11,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CareIntensityPayload,
     ChunkTemplateUtils,
     ClinicalFact,
+    ChunkTextStyle,
     ComplicationBurdenPayload,
     DiagnosticEvidencePayload,
     MedicalOntology,
@@ -71,7 +72,12 @@ def available_note_styles() -> list[str]:
     return list(TEMPLATE_DATA.note_style_templates)
 
 
-def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rng: Random) -> str:
+def render_chunk_text_template(
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    rng: Random,
+    text_style: ChunkTextStyle = 'semantic_hardened',
+) -> str:
     payload = parse_axis_payload(fact.axis_payload_json)
     patient = patient_narrative(fact)
     axis = ontology.clinical_axes[fact.axis]
@@ -92,6 +98,7 @@ def render_chunk_text_template(fact: ClinicalFact, ontology: MedicalOntology, rn
             patient=patient,
             axis_term=axis.label,
             rng=rng,
+            text_style=text_style,
         ),
     }
     templates = TEMPLATE_DATA.note_style_templates.get(
@@ -134,6 +141,7 @@ def _axis_sentence(
     patient: PatientNarrative,
     axis_term: str,
     rng: Random,
+    text_style: ChunkTextStyle,
 ) -> str:
     if isinstance(payload, TreatmentDurationPayload):
         axis_value = _duration_axis_value(payload, rng)
@@ -151,7 +159,9 @@ def _axis_sentence(
         axis_value = payload.detail
     else:
         raise TypeError(type(payload))
-    template = rng.choice(TEMPLATE_DATA.axis_sentence_templates[fact.axis][fact.value_bin])
+    template = rng.choice(
+        TEMPLATE_DATA.axis_sentence_templates[text_style][fact.axis][fact.value_bin]
+    )
     return template.format(
         axis_term=axis_term,
         axis_bin_term=fact.axis_bin_term,
@@ -164,7 +174,10 @@ def _axis_sentence(
 
 
 def validate_chunk_text(
-    text: str, fact: ClinicalFact, ontology: MedicalOntology
+    text: str,
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    text_style: ChunkTextStyle = 'semantic_hardened',
 ) -> ChunkValidation:
     lower = text.lower()
     hard_errors: list[str] = []
@@ -180,9 +193,9 @@ def validate_chunk_text(
         hard_errors.append(f'missing condition evidence: {fact.condition_display}')
     if not _contains_subgroup_evidence(text, fact, ontology):
         hard_errors.append(f'missing subgroup evidence: {fact.subgroup_label}')
-    if not _contains_axis_evidence(text, fact, ontology):
+    if text_style == 'ontology_explicit' and not _contains_axis_evidence(text, fact, ontology):
         hard_errors.append(f'missing target-axis evidence: {fact.axis}')
-    if fact.axis_bin_term.lower() not in lower:
+    if text_style == 'ontology_explicit' and fact.axis_bin_term.lower() not in lower:
         hard_errors.append(f'missing value-bin evidence: {fact.axis_bin_term}')
 
     payload = parse_axis_payload(fact.axis_payload_json)

@@ -228,7 +228,12 @@ def render_chunks_sequential(
                     + '; '.join(attempt_errors)
                 )
                 continue
-            validation = validate_chunk_text(final_text, fact, ontology)
+            validation = validate_chunk_text(
+                final_text,
+                fact,
+                ontology,
+                text_style=cfg.generation.chunk_text_style,
+            )
             state = new_chunk_state(
                 final_text,
                 text_generation_source='llm',
@@ -237,7 +242,11 @@ def render_chunks_sequential(
                 validation=validation,
             )
         else:
-            draft_text = render_canonical_chunk_text(fact, ontology)
+            draft_text = render_canonical_chunk_text(
+                fact,
+                ontology,
+                cfg.generation.chunk_text_style,
+            )
             if cfg.generation.llm_config.use_llm_chunk_rewriting:
                 cached = cached_rewrite_chunk_state(
                     cfg=cfg,
@@ -268,7 +277,12 @@ def render_chunks_sequential(
                         text_generation_source='fallback',
                         llm_attempted=True,
                         llm_rejected=True,
-                        validation=validate_chunk_text(final_text, fact, ontology),
+                        validation=validate_chunk_text(
+                            final_text,
+                            fact,
+                            ontology,
+                            text_style=cfg.generation.chunk_text_style,
+                        ),
                     )
                     cache_key = None
                 else:
@@ -278,7 +292,12 @@ def render_chunks_sequential(
                         text_generation_source='llm',
                         llm_attempted=True,
                         llm_rejected=False,
-                        validation=validate_chunk_text(final_text, fact, ontology),
+                        validation=validate_chunk_text(
+                            final_text,
+                            fact,
+                            ontology,
+                            text_style=cfg.generation.chunk_text_style,
+                        ),
                     )
                     cache_key = rewrite_key
             else:
@@ -288,7 +307,12 @@ def render_chunks_sequential(
                     text_generation_source='fallback',
                     llm_attempted=False,
                     llm_rejected=False,
-                    validation=validate_chunk_text(final_text, fact, ontology),
+                    validation=validate_chunk_text(
+                        final_text,
+                        fact,
+                        ontology,
+                        text_style=cfg.generation.chunk_text_style,
+                    ),
                 )
 
         try:
@@ -437,13 +461,22 @@ def _render_deterministic_chunk_batch(
 
     for offset, fact_row in enumerate(fact_rows):
         fact = ClinicalFact.model_validate(fact_row)
-        draft_text = render_canonical_chunk_text(fact, _deterministic_worker_ontology)
+        draft_text = render_canonical_chunk_text(
+            fact,
+            _deterministic_worker_ontology,
+            _deterministic_worker_cfg.generation.chunk_text_style,
+        )
         state = new_chunk_state(
             draft_text,
             text_generation_source='fallback',
             llm_attempted=False,
             llm_rejected=False,
-            validation=validate_chunk_text(draft_text, fact, _deterministic_worker_ontology),
+            validation=validate_chunk_text(
+                draft_text,
+                fact,
+                _deterministic_worker_ontology,
+                text_style=_deterministic_worker_cfg.generation.chunk_text_style,
+            ),
         )
         try:
             row, _ = finalize_chunk_row(

@@ -36,6 +36,7 @@ type CohortContrastFamily = Literal[
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 
 type ChunkPoolScope = Literal['query_local']
+type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
 
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
@@ -174,10 +175,56 @@ class AnswerFact(BenchmarkModel):
     supporting_fact_ids: list[str]
 
 
+class TreatmentDurationCourse(BenchmarkModel):
+    surface_forms: list[str] = Field(min_length=1)
+    bins: dict[str, list[int]]
+
+    @model_validator(mode='after')
+    def _validate_day_bins(self) -> TreatmentDurationCourse:
+        seen: dict[int, str] = {}
+        for bin_id, days in self.bins.items():
+            if not days:
+                raise ValueError(f'treatment-duration bin {bin_id!r} must not be empty')
+            if any(day < 1 for day in days):
+                raise ValueError(f'treatment-duration bin {bin_id!r} contains nonpositive days')
+            if len(days) != len(set(days)):
+                raise ValueError(f'treatment-duration bin {bin_id!r} repeats a duration day')
+            for day in days:
+                previous = seen.get(day)
+                if previous is not None:
+                    raise ValueError(
+                        f'treatment-duration day {day} appears in both {previous!r} and {bin_id!r}'
+                    )
+                seen[day] = bin_id
+        return self
+
+
 class TreatmentDurationAxisValues(BenchmarkModel):
     axis: Literal['treatment_duration']
-    treatments: list[str]
-    bins: dict[str, tuple[int, int]]
+    treatments: dict[str, TreatmentDurationCourse]
+
+    @property
+    def bins(self) -> dict[str, list[int]]:
+        merged: dict[str, list[int]] = {}
+        for treatment in self.treatments.values():
+            for bin_id, days in treatment.bins.items():
+                merged.setdefault(bin_id, []).extend(days)
+        return merged
+
+    @model_validator(mode='after')
+    def _validate_treatment_courses(self) -> TreatmentDurationAxisValues:
+        if not self.treatments:
+            raise ValueError('treatment_duration must define at least one treatment course')
+        expected_bins: set[str] | None = None
+        for treatment_id, treatment in self.treatments.items():
+            if expected_bins is None:
+                expected_bins = set(treatment.bins)
+            elif set(treatment.bins) != expected_bins:
+                raise ValueError(
+                    'all treatment-duration courses must define the same value bins; '
+                    f'{treatment_id!r} differs'
+                )
+        return self
 
 
 class RehabOutcomeAxisValues(BenchmarkModel):
@@ -917,7 +964,7 @@ class ChunkTemplateUtils(BenchmarkModel):
     duration_phrase_templates: list[str]
     note_style_templates: dict[str, list[str]]
     cohort_evidence_templates: CohortEvidenceTemplates
-    axis_sentence_templates: dict[ClinicalAxis, dict[str, list[str]]]
+    axis_sentence_templates: dict[ChunkTextStyle, dict[ClinicalAxis, dict[str, list[str]]]]
 
 
 class QueryTemplateSpec(BenchmarkModel):

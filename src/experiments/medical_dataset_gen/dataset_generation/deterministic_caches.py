@@ -18,7 +18,7 @@ from helpers.embedder import MODEL_PROFILES
 # Bump when the persisted deterministic document cache schema changes.
 DETERMINISTIC_CHUNK_DOCUMENT_CACHE_VERSION = 1
 # Bump when deterministic rendering semantics change without a template/ontology file change.
-DETERMINISTIC_RENDER_VERSION = 1
+DETERMINISTIC_RENDER_VERSION = 2
 # Bump when the persisted chunk embedding cache schema or key semantics change.
 CHUNK_EMBEDDING_CACHE_VERSION = 1
 # Two hash characters keep each cache shard near 1/256 of a signature cache.
@@ -47,6 +47,7 @@ def deterministic_render_signature(cfg: ExperimentCfg) -> str:
         'deterministic_render_version': DETERMINISTIC_RENDER_VERSION,
         'ontology_sha256': _file_fingerprint(_ontology_path(cfg)),
         'chunk_templates_sha256': _file_fingerprint(_chunk_template_path()),
+        'chunk_text_style': cfg.generation.chunk_text_style,
         'chunk_min_words': cfg.generation.chunk_pools.chunk_min_words,
         'chunk_max_words': cfg.generation.chunk_pools.chunk_max_words,
         'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,

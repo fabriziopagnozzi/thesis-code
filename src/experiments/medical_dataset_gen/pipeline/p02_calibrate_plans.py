@@ -18,6 +18,7 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import q
 from experiments.medical_dataset_gen.pipeline.p03_facts import make_gold_fact
 from experiments.medical_dataset_gen.pipeline.p05_queries_answers import render_query
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ChunkTextStyle,
     MedicalOntology,
     QueryPlan,
     QueryPlanFacet,
@@ -71,7 +72,10 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
             dynamic_ncols=True,
         ):
             batch = plans[start : start + plans_per_batch]
-            probes = [_prepare_probe(plan, ontology, probe_n) for plan in batch]
+            probes = [
+                _prepare_probe(plan, ontology, probe_n, cfg.generation.chunk_text_style)
+                for plan in batch
+            ]
             query_vectors = embedder.embed_queries(
                 [
                     render_query(plan, ontology, template_id=template_id)
@@ -135,7 +139,12 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
     return updated_df
 
 
-def _prepare_probe(plan: QueryPlan, ontology: MedicalOntology, probe_n: int) -> FacetProbe:
+def _prepare_probe(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    probe_n: int,
+    chunk_text_style: ChunkTextStyle,
+) -> FacetProbe:
     if len(plan.facets) != plan.n_facets:
         raise ValueError(
             f'query {plan.query_id} declares {plan.n_facets} facets but contains {len(plan.facets)}'
@@ -148,7 +157,7 @@ def _prepare_probe(plan: QueryPlan, ontology: MedicalOntology, probe_n: int) -> 
         start = len(texts)
         for local_idx in range(probe_n):
             fact = make_gold_fact(plan, facet, ontology, local_idx, rng)
-            texts.append(render_canonical_chunk_text(fact, ontology))
+            texts.append(render_canonical_chunk_text(fact, ontology, chunk_text_style))
             labels.append(facet.facet_id)
         offsets[facet.facet_id] = (start, len(texts))
     return {'texts': texts, 'offsets': offsets, 'labels': labels}

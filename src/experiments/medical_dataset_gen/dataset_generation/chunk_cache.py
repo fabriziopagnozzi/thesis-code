@@ -28,8 +28,8 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
-GENERATION_CACHE_VERSION = 10
-REWRITE_CACHE_VERSION = 2
+GENERATION_CACHE_VERSION = 11
+REWRITE_CACHE_VERSION = 3
 
 
 @dataclass
@@ -92,6 +92,7 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
     payload: dict[str, object] = {
         'cache_version': GENERATION_CACHE_VERSION,
         'source': 'llm' if cfg.generation.llm_config.use_llm_chunk_generation else 'fallback',
+        'chunk_text_style': cfg.generation.chunk_text_style,
         'fact_chunk_reuse_key': fact.chunk_reuse_key,
         'condition_id': fact.condition_id,
         'condition_display': fact.condition_display,
@@ -132,6 +133,7 @@ def chunk_rewrite_cache_key(
         'llm_temperature': cfg.generation.llm_config.temperature,
         'llm_num_ctx': cfg.generation.llm_config.num_ctx,
         'draft_text_sha256': hashlib.sha256(draft_text.encode()).hexdigest(),
+        'chunk_text_style': cfg.generation.chunk_text_style,
         'fact_chunk_reuse_key': fact.chunk_reuse_key,
         'condition_id': fact.condition_id,
         'condition_display': fact.condition_display,
@@ -174,7 +176,12 @@ def cached_chunk_state(
         return None
 
     cached_text = cached.text
-    validation = validate_chunk_text(cached_text, fact, ontology)
+    validation = validate_chunk_text(
+        cached_text,
+        fact,
+        ontology,
+        text_style=cfg.generation.chunk_text_style,
+    )
     errors = [*validation.hard_errors]
     errors.extend(
         word_count_errors(
@@ -226,7 +233,12 @@ def cached_rewrite_chunk_state(
         return None
 
     cached_text = cached.text
-    validation = validate_chunk_text(cached_text, fact, ontology)
+    validation = validate_chunk_text(
+        cached_text,
+        fact,
+        ontology,
+        text_style=cfg.generation.chunk_text_style,
+    )
     errors = [*validation.hard_errors]
     errors.extend(
         word_count_errors(

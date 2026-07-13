@@ -14,6 +14,8 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     available_note_styles,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
+    exclusive_distinct_subgroup_label,
+    exclusive_distinct_subgroup_phrase,
     get_axis_bins,
     load_ontology,
     other_conditions,
@@ -35,6 +37,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryPlanFacet,
     RehabOutcomePayload,
     SubgroupAxis,
+    SubgroupOntology,
     TreatmentDurationAxisValues,
     TreatmentDurationPayload,
 )
@@ -534,7 +537,14 @@ def make_base_fact(
     subgroup = ontology.subgroups[subgroup_id]
     age = _patient_age(subgroup.patient_age_range, ontology.patient_defaults.age_range, surface_rng)
     sex: PatientSex = _patient_sex(subgroup.patient_sex, surface_rng)
-    phrase = surface_rng.choice(subgroup.surface_phrases)
+    phrase = _query_local_subgroup_phrase(plan, ontology, subgroup_id, subgroup, surface_rng)
+    display_subgroup_label = _query_local_subgroup_label(
+        plan,
+        ontology,
+        subgroup_id,
+        subgroup,
+        fallback_label=subgroup_label,
+    )
     # A shared human-readable anchor keeps documents from the same semantic bin
     # cohesive while their condition-specific payloads and note styles still vary.
     axis_bin_term = ontology.clinical_axes[axis].bin_terms[value_bin][0]
@@ -553,7 +563,9 @@ def make_base_fact(
     if subgroup_dimension_id != 'age_band':
         must_mention.insert(1, phrase)
     must_not_mention = [
-        label for label in (plan.subgroup_a_label, plan.subgroup_b_label) if label != subgroup_label
+        label
+        for label in (plan.subgroup_a_label, plan.subgroup_b_label)
+        if label != display_subgroup_label
     ]
     return ClinicalFact(
         query_id=plan.query_id,
@@ -571,7 +583,7 @@ def make_base_fact(
         condition_id=condition_id,
         condition_display=condition_display,
         subgroup_id=subgroup_id,
-        subgroup_label=subgroup_label,
+        subgroup_label=display_subgroup_label,
         subgroup_axis=subgroup_axis,
         subgroup_field=subgroup_field,
         subgroup_value=subgroup_value,
@@ -597,6 +609,49 @@ def make_base_fact(
     )
 
 
+def _query_local_subgroup_label(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    subgroup_id: str,
+    subgroup: SubgroupOntology,
+    *,
+    fallback_label: str,
+) -> str:
+    if plan.cohort_contrast_family != 'distinct_comorbidity':
+        return fallback_label
+    excluded = _distinct_contrast_excluded_subgroup(plan, ontology, subgroup_id)
+    if excluded is None:
+        return fallback_label
+    return exclusive_distinct_subgroup_label(subgroup, excluded)
+
+
+def _query_local_subgroup_phrase(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    subgroup_id: str,
+    subgroup: SubgroupOntology,
+    rng: Random,
+) -> str:
+    if plan.cohort_contrast_family != 'distinct_comorbidity':
+        return rng.choice(subgroup.surface_phrases)
+    excluded = _distinct_contrast_excluded_subgroup(plan, ontology, subgroup_id)
+    if excluded is None:
+        return rng.choice(subgroup.surface_phrases)
+    return exclusive_distinct_subgroup_phrase(subgroup, excluded)
+
+
+def _distinct_contrast_excluded_subgroup(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    subgroup_id: str,
+) -> SubgroupOntology | None:
+    if subgroup_id == plan.subgroup_a_id:
+        return ontology.subgroups[plan.subgroup_b_id]
+    if subgroup_id == plan.subgroup_b_id:
+        return ontology.subgroups[plan.subgroup_a_id]
+    return None
+
+
 def _axis_payload(
     ontology: MedicalOntology,
     condition_id: ConditionKey,
@@ -611,11 +666,13 @@ def _axis_payload(
     if axis == 'treatment_duration':
         if not isinstance(axis_values, TreatmentDurationAxisValues):
             raise TypeError(f'{condition_id}/{axis} has the wrong axis-values payload')
-        low, high = axis_values.bins[value_bin]
+        treatment_courses = list(axis_values.treatments.values())
+        treatment_course = rng.choice(treatment_courses)
+        duration_days = rng.choice(treatment_course.bins[value_bin])
         return TreatmentDurationPayload(
             axis=axis,
-            duration_days=rng.randint(low, high),
-            treatment=rng.choice(axis_values.treatments),
+            duration_days=duration_days,
+            treatment=rng.choice(treatment_course.surface_forms),
         )
     values: tuple[Any, Any] | list[str] = axis_values.bins[value_bin]
     if axis == 'rehab_outcome':
