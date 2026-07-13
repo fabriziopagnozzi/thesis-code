@@ -13,13 +13,13 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 
 class MedicalDatasetGenDefaultPrompts:
     chunk_generation_prompt_id = 'chunk_generation_v4_axis_payload'
-    chunk_rewrite_prompt_id = 'chunk_rewrite_v2_axis_payload'
+    chunk_rewrite_prompt_id = 'chunk_rewrite_v3_lexical_artifact_control'
 
     chunk_generation_system = inspect.cleandoc("""
         You write concise, realistic synthetic clinical note fragments for retrieval evaluation.
     """)
     chunk_rewrite_system = inspect.cleandoc("""
-        You rewrite synthetic clinical evidence chunks into more natural clinical prose while preserving the provided facts exactly.
+        You rewrite synthetic clinical evidence chunks into natural clinical prose while preserving the provided facts exactly and avoiding benchmark-style wording.
     """)
 
     @staticmethod
@@ -117,7 +117,6 @@ class MedicalDatasetGenDefaultPrompts:
         style_label = fact.note_style.replace('_', ' ')
         required_block = '\n'.join(f'- {fact_line}' for fact_line in required_facts)
         forbidden_block = '\n'.join(f'- {fact_line}' for fact_line in forbidden_facts)
-        facet_focus = f'{fact.axis.replace("_", " ")}: {fact.axis_payload_json}'
 
         revision_block = ''
         if revision_feedback:
@@ -131,19 +130,24 @@ class MedicalDatasetGenDefaultPrompts:
 
         return inspect.cleandoc(f"""
             Rewrite the draft note below into more natural, varied clinical prose for a synthetic retrieval benchmark.
-            Preserve the structured facts exactly. Improve wording and sentence flow, but do not change the underlying evidence.
+            Preserve the required clinical facts exactly in meaning. Improve wording and sentence flow, but do not change the underlying evidence.
 
             Output contract:
             - Return exactly one paragraph and nothing else.
             - No headings, bullets, JSON, quotation marks around the paragraph, or commentary.
-            - Do not mention benchmark construction, facets, clusters, source rows, prompt instructions, or IDs.
+            - Do not mention benchmark construction, facets, clusters, axes, labels, source rows, prompt instructions, or IDs.
             - Do not introduce any evidence besides what's already included.
 
             Style target:
             - Clinical note style: {style_label}
             - Length: {min_words}-{max_words} words
-            - Clinical focus: {facet_focus}
             - Patient anchor to preserve: {patient_descriptor}
+
+            Lexical artifact control:
+            - Do not copy the draft wording except for required clinical entities, cohort descriptors, and clinically necessary values.
+            - Avoid abstract category labels such as treatment duration, rehabilitation outcome, complication burden, resource utilization, mortality risk, or follow-up intensity unless the wording is clinically unavoidable.
+            - Express the evidence through concrete clinical observations, care decisions, course details, outcomes, or follow-up plans rather than naming the evidence category.
+            - Vary sentence openings, verbs, clause order, and temporal framing across rewrites.
 
             Required facts to preserve:
             {required_block}

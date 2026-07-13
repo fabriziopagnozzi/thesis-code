@@ -34,7 +34,7 @@ __all__ = [
     'QueryRecord',
 ]
 
-type EvaluationResultScalar = str | int | float | None
+type EvaluationResultScalar = str | int | float | bool | None
 type EvaluationResultRow = dict[str, EvaluationResultScalar]
 type ChunkEmbeddingMatrix = NDArray[np.float32]
 type EmbeddingIdArray = Sequence[object]
@@ -104,5 +104,4 @@ class EvaluationWorkerState(TypedDict):
     gold_by_query: dict[str, set[str]]
     qrels_by_query_chunk: dict[str, dict[str, LightweightQrelRecord]]
     answer_refs_by_query: dict[str, AnswerReferenceTexts]
-    pass_map: dict[str, bool]
     k_values: list[int]

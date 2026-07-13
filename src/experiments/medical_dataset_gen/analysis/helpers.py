@@ -287,11 +287,7 @@ def strategy_label(strategy: StrategyName) -> str:
 
 
 def query_scope_label(only_pass_geometry: bool | None) -> str:
-    if only_pass_geometry is True:
-        return 'pass-only'
-    if only_pass_geometry is False:
-        return 'all-query'
-    return 'unknown'
+    return 'all-query'
 
 
 def title_token(value: str) -> str:

@@ -64,9 +64,10 @@ class ExperimentRecord:
 
     @property
     def only_pass_geometry(self) -> bool | None:
-        if self.cfg is None:
-            return None
-        return bool(self.cfg.retrieval.only_pass_geometry)
+        # Retained for report-column compatibility with older artifacts. The
+        # current evaluation contract always scores all queries and stores the
+        # geometry pass flag per query.
+        return None
 
 
 @dataclass(frozen=True)

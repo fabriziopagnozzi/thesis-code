@@ -343,7 +343,9 @@ class RetrievalCfg(ConfigModel):
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
     )
     mmr_window: int | None = None
-    only_pass_geometry: bool = True
+    # Deprecated no-op retained so older saved configs still validate. Evaluation
+    # now scores all queries and records the geometry pass flag per query.
+    only_pass_geometry: bool | None = None
     compute_answer_rouge: bool = True
 
     def lambda_values_for_strategy(

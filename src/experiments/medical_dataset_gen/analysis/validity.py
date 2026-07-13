@@ -47,7 +47,6 @@ _K = 'k'
 _N_QUERIES = 'n_queries'
 _VALIDATION_SPLIT = 'validation'
 _TEST_SPLIT = 'test'
-_ALL_QUERY_SUFFIX = '_allq'
 _WORD_RE = re.compile(r'[A-Za-z0-9]+')
 _TEXT_SAMPLE_SIZE = 5_000
 _JACCARD_QUERY_LIMIT = 128
@@ -104,31 +103,23 @@ def geometry_population_strategy_rows(
 ) -> list[dict[str, object]]:
     """Report all-query, eligible-query, and ineligible-query performance.
 
-    The all-query runs reuse the same rendered corpus and embeddings as their
-    pass-filtered sibling; only the evaluation query set differs. Joining the
-    sibling geometry flags lets the report quantify how much the conclusions
-    depend on the geometry filter.
+    Current evaluation writes every query to evaluation_results.parquet and
+    stores the geometry pass flag on each row. Population views are therefore
+    derived from each experiment's own result table rather than from separate
+    all-query sibling branches.
     """
-    records_by_name = {record.name: record for record in records}
-    all_query_records = [record for record in records if record.only_pass_geometry is False]
     rows: list[dict[str, object]] = []
-    for record in all_query_records:
-        geometry_record = _geometry_sibling_record(record, records_by_name)
-        if geometry_record is None:
-            warnings.append(f'{record.name}: no pass-filtered sibling for population analysis')
-            continue
-
+    for record in records:
         results_path = record.paths.table_path('evaluation_results')
-        geometry_path = geometry_record.paths.table_path('geometry_stats')
         if not results_path.is_file():
             warnings.append(f'{record.name}: evaluation_results missing at {results_path}')
             continue
-        if not geometry_path.is_file():
-            warnings.append(f'{record.name}: geometry_stats missing at {geometry_path}')
-            continue
 
         try:
-            results = _load_population_results(results_path, geometry_path)
+            results = _load_population_results(
+                results_path,
+                geometry_path=record.paths.table_path('geometry_stats'),
+            )
         except Exception as exc:
             warnings.append(f'{record.name}: could not load population results ({exc})')
             continue
@@ -141,7 +132,6 @@ def geometry_population_strategy_rows(
             rows.extend(
                 _population_selected_strategy_rows(
                     record=record,
-                    geometry_record=geometry_record,
                     population=population,
                     results=population_results,
                     warnings=warnings,
@@ -210,8 +200,6 @@ def _load_stats_bundles(
 ) -> list[_StatsBundle]:
     bundles: list[_StatsBundle] = []
     for record in records:
-        if record.only_pass_geometry is False:
-            continue
         selection_path = record.paths.table_path('evaluation_selection_stats')
         report_path = record.paths.table_path('evaluation_report_grid_stats')
         if not selection_path.is_file() or not report_path.is_file():
@@ -504,7 +492,7 @@ def _strategy_row_from_stats(
     return out
 
 
-def _load_population_results(results_path: Path, geometry_path: Path) -> pl.DataFrame:
+def _load_population_results(results_path: Path, *, geometry_path: Path) -> pl.DataFrame:
     needed_columns = [
         _QUERY_ID,
         _SPLIT,
@@ -533,15 +521,38 @@ def _load_population_results(results_path: Path, geometry_path: Path) -> pl.Data
         'jaccard_vs_topk',
     ]
     available = set(pl.scan_parquet(results_path).collect_schema().names())
+    pass_column = _population_pass_column(available)
     selected_columns = [column for column in needed_columns if column in available]
+    if pass_column is not None:
+        selected_columns.append(pass_column)
     results = pl.scan_parquet(results_path).select(selected_columns)
-    geometry = pl.scan_parquet(geometry_path).select(
-        pl.col(_QUERY_ID),
-        pl.col('passes_filter').fill_null(False),
+    if pass_column is None:
+        collected = results.collect()
+        if geometry_path.is_file() and _QUERY_ID in collected.columns:
+            geometry = pl.read_parquet(geometry_path, columns=[_QUERY_ID, 'passes_filter'])
+            return collected.join(
+                geometry.select(
+                    _QUERY_ID,
+                    pl.col('passes_filter').fill_null(False).alias('passes_geometry_filter'),
+                ),
+                on=_QUERY_ID,
+                how='left',
+            ).with_columns(pl.col('passes_geometry_filter').fill_null(False))
+        return collected.with_columns(pl.lit(True).alias('passes_geometry_filter'))
+    if pass_column == 'passes_geometry_filter':
+        return results.with_columns(pl.col(pass_column).fill_null(False)).collect()
+    return (
+        results.rename({pass_column: 'passes_geometry_filter'})
+        .with_columns(pl.col('passes_geometry_filter').fill_null(False))
+        .collect()
     )
-    return results.join(geometry, on=_QUERY_ID, how='left').with_columns(
-        pl.col('passes_filter').fill_null(False)
-    ).collect()
+
+
+def _population_pass_column(columns: set[str]) -> str | None:
+    for column in ('passes_geometry_filter', 'passes_filter'):
+        if column in columns:
+            return column
+    return None
 
 
 def _filter_geometry_population(
@@ -551,13 +562,12 @@ def _filter_geometry_population(
     pass_value = _POPULATION_PASS_FILTER_VALUE[population]
     if pass_value is None:
         return results
-    return results.filter(pl.col('passes_filter') == pass_value)
+    return results.filter(pl.col('passes_geometry_filter') == pass_value)
 
 
 def _population_selected_strategy_rows(
     *,
     record: ExperimentRecord,
-    geometry_record: ExperimentRecord,
     population: GeometryPopulation,
     results: pl.DataFrame,
     warnings: list[str],
@@ -584,7 +594,6 @@ def _population_selected_strategy_rows(
             rows.append(
                 _population_row_from_stats(
                     record=record,
-                    geometry_record=geometry_record,
                     population=population,
                     stats=report_grid_stats,
                     row=topk.row(0, named=True),
@@ -618,7 +627,6 @@ def _population_selected_strategy_rows(
             rows.append(
                 _population_row_from_stats(
                     record=record,
-                    geometry_record=geometry_record,
                     population=population,
                     stats=report_grid_stats,
                     row=report_row,
@@ -633,7 +641,6 @@ def _population_selected_strategy_rows(
 def _population_row_from_stats(
     *,
     record: ExperimentRecord,
-    geometry_record: ExperimentRecord,
     population: GeometryPopulation,
     stats: pl.DataFrame,
     row: Mapping[str, object],
@@ -643,7 +650,7 @@ def _population_row_from_stats(
     lam = float_or_none(row.get(_LAMBDA))
     out = base_experiment_row(record)
     out.update({
-        'GeometrySourceExperiment': geometry_record.name,
+        'GeometrySourceExperiment': record.name,
         'GeometryPopulation': population,
         'GeometryPopulationLabel': _POPULATION_LABELS[population],
         'PopulationPassFilterValue': _POPULATION_PASS_FILTER_VALUE[population],
@@ -661,20 +668,6 @@ def _population_row_from_stats(
     return out
 
 
-def _geometry_sibling_record(
-    record: ExperimentRecord,
-    records_by_name: Mapping[str, ExperimentRecord],
-) -> ExperimentRecord | None:
-    parts = Path(record.name).parts
-    if len(parts) != 2:
-        return None
-    distribution, child = parts
-    if not child.endswith(_ALL_QUERY_SUFFIX):
-        return None
-    sibling_name = f'{distribution}/{child.removesuffix(_ALL_QUERY_SUFFIX)}'
-    return records_by_name.get(sibling_name)
-
-
 def _copy_metric_values(out: dict[str, object], row: Mapping[str, object]) -> None:
     for metric in EVALUATION_METRICS:
         if metric in row:
@@ -687,8 +680,7 @@ def _representative_distribution_records(
     candidates = [
         record
         for record in records
-        if record.only_pass_geometry is not False
-        and record.paths.table_path('chunk_documents').is_file()
+        if record.paths.table_path('chunk_documents').is_file()
         and record.paths.table_path('qrels').is_file()
     ]
     preferred_run_order = {

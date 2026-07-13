@@ -58,6 +58,11 @@ PAIRED_METRIC_SPECS: tuple[PairedMetricSpec, ...] = (
     PairedMetricSpec('Precision', 'Precision@k', 'gold_precision'),
     PairedMetricSpec('alpha_nDCG', 'alpha-nDCG@k', 'alpha_ndcg'),
 )
+_PAIRED_STRATEGY_LABELS: tuple[tuple[StrategyName, str], ...] = (
+    ('top_k', 'TopK'),
+    ('mmr', 'MMR'),
+    ('fac_loc', 'FacLoc'),
+)
 
 
 def write_paired_effect_datasets(
@@ -290,9 +295,11 @@ def render_statistical_latex_table(rows: Sequence[Mapping[str, object]]) -> str:
         effect = _format_signed(row.get('MeanDeltaFacLocMMR'))
         ci = f'[{_format_signed(row.get("CI95Low"))}, {_format_signed(row.get("CI95High"))}]'
         interpretation = _latex_escape(str(row.get('PracticalConclusion') or ''))
+        distributions = int_or_none(row.get('Distributions')) or 0
+        runs = int_or_none(row.get('Runs')) or 0
         lines.append(
-            f'{scope} & {budget} & {int(row.get("Distributions") or 0)} & '
-            f'{int(row.get("Runs") or 0)} & {effect} & {ci} & {interpretation} \\\\'
+            f'{scope} & {budget} & {distributions} & '
+            f'{runs} & {effect} & {ci} & {interpretation} \\\\'
         )
     lines.extend([r'\bottomrule', r'\end{longtable}', r'}', ''])
     return '\n'.join(lines)
@@ -383,7 +390,7 @@ def _paired_query_effects_for_record(
 
     keys = ['query_id', 'evidence_profile_id', 'k']
     strategy_frames: dict[StrategyName, pl.DataFrame] = {}
-    for strategy, label in (('top_k', 'TopK'), ('mmr', 'MMR'), ('fac_loc', 'FacLoc')):
+    for strategy, label in _PAIRED_STRATEGY_LABELS:
         sub = selected.filter(pl.col('strategy') == strategy)
         duplicate_count = sub.group_by(*keys).len().filter(pl.col('len') > 1).height
         if duplicate_count:
@@ -411,7 +418,7 @@ def _paired_query_effects_for_record(
         'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
         'EmbeddingModel': record.embedding_model,
-        'QueryScope': 'pass-only' if record.only_pass_geometry else 'all-query',
+        'QueryScope': 'all-query',
     }
     frames: list[pl.DataFrame] = []
     for spec in PAIRED_METRIC_SPECS:

@@ -106,16 +106,9 @@ def run_evaluate(
             qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
             for qid, facet_map in facet_gold.items()
         }
-        pass_map = {
-            str(query_id): bool(passes_filter)
-            for query_id, passes_filter in zip(
-                geometry['query_id'].to_list(),
-                geometry['passes_filter'].to_list(),
-                strict=True,
-            )
-        }
         geometry_dimensions = geometry.select(
             'query_id',
+            pl.col('passes_filter').fill_null(False).alias('passes_geometry_filter'),
             'calibration_warning',
             'n_topk_retrieved_facets',
         )
@@ -123,10 +116,8 @@ def run_evaluate(
             queries=queries,
             facet_gold=facet_gold,
             gold_by_query=gold_by_query,
-            pass_map=pass_map,
-            only_pass_geometry=cfg.retrieval.only_pass_geometry,
         )
-        del queries, qrels, geometry, facet_gold, gold_by_query, pass_map
+        del queries, qrels, geometry, facet_gold, gold_by_query
         gc.collect()
 
         eval_results_df = pl.DataFrame(
@@ -194,9 +185,11 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'primary_axis',
         'secondary_axis',
         'template_id',
+        'passes_geometry_filter',
         'calibration_warning',
         'n_topk_retrieved_facets',
     ]
+    slice_columns = [column for column in slice_columns if column in results.columns]
     agg_exprs: list[pl.Expr] = [
         pl.col('query_id').n_unique().alias('n_queries'),
         pl.col('facet_coverage').mean().alias('FacetCoverage@k'),
@@ -322,9 +315,6 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
     query: LightweightQueryRecord | None = worker_state['queries_by_id'].get(qid)
     if query is None:
         return []
-    if cfg.retrieval.only_pass_geometry and not bool(worker_state['pass_map'].get(qid, False)):
-        return []
-
     query_facet_gold = worker_state['facet_gold'].get(qid)
     query_all_gold = worker_state['gold_by_query'].get(qid)
     if not query_facet_gold or not query_all_gold:
@@ -454,16 +444,12 @@ def _get_query_ids_to_evaluate(
     queries: pl.DataFrame,
     facet_gold: dict[str, dict[str, list[str]]],
     gold_by_query: dict[str, set[str]],
-    pass_map: dict[str, bool],
-    only_pass_geometry: bool,
 ) -> list[str]:
     query_ids: list[str] = []
 
     for query in queries.iter_rows(named=True):
         qid = str(query['query_id'])
 
-        if only_pass_geometry and not bool(pass_map.get(qid, False)):
-            continue
         if not facet_gold.get(qid) or not gold_by_query.get(qid):
             continue
         query_ids.append(qid)

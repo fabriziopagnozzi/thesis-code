@@ -262,22 +262,9 @@ def _geometry_pass_rate_rows(
             row
             for row in rows
             if float_or_none(row.get('GeometryPassRate')) is not None
-            and _is_pass_only_geometry_row(row)
         ],
         'GeometryPassRate',
     )
-
-
-def _is_pass_only_geometry_row(row: Mapping[str, object]) -> bool:
-    only_pass_geometry = row.get('OnlyPassGeometry')
-    if isinstance(only_pass_geometry, bool):
-        return only_pass_geometry
-
-    query_scope = row.get('QueryScope')
-    if isinstance(query_scope, str):
-        return query_scope.strip().lower() == 'pass-only'
-
-    return False
 
 
 def plot_lambda_stability(

@@ -18,7 +18,7 @@ from experiments.medical_dataset_gen.analysis.latex_tables import (
     render_thesis_aggregate_tables,
     render_thesis_result_macros,
 )
-from experiments.medical_dataset_gen.analysis.models import CliArgs, ExperimentRecord, ReportOutputs
+from experiments.medical_dataset_gen.analysis.models import CliArgs, ReportOutputs
 from experiments.medical_dataset_gen.analysis.plots import write_figures
 from experiments.medical_dataset_gen.analysis.rendering import (
     render_interesting_findings,
@@ -71,16 +71,13 @@ def run_report(args: CliArgs) -> ReportOutputs:
     try:
         args.output_dir.mkdir(parents=True, exist_ok=True)
         warnings: list[str] = []
-        plot_and_recap_records = discover_experiments(
+        records = discover_experiments(
             args.results_dir,
             include_scrapped=args.include_scrapped,
             requested_experiments=args.experiments,
             warnings=warnings,
-            include_all_query=True,
         )
-        records = [
-            record for record in plot_and_recap_records if record.only_pass_geometry is not False
-        ]
+        plot_and_recap_records = records
 
         manifest_rows = [experiment_manifest_row(record) for record in records]
         dataset_rows = [dataset_distribution_row(record, warnings=warnings) for record in records]
@@ -247,17 +244,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
 
         figures: list[Path] = []
         if args.plots:
-            plot_budget_rows = _plot_budget_rows(
-                records=plot_and_recap_records,
-                base_records=records,
-                base_budget_rows=budget_rows,
-                warnings=warnings,
-            )
             figures = write_figures(
                 output_dir=args.output_dir / '_figures',
                 plot_format=args.plot_format,
                 max_rows=args.max_table_rows,
-                budget_rows=plot_budget_rows,
+                budget_rows=budget_rows,
                 geometry_rows=geometry_rows,
                 lambda_rows=lambda_rows,
                 lambda_grid_delta_rows=lambda_grid_delta_rows,
@@ -369,28 +360,6 @@ def _dedupe_warnings(warnings: list[str]) -> list[str]:
 def _should_write_thesis_outputs(args: CliArgs) -> bool:
     default_output_dir = args.results_dir / '_reports' / 'experiment_comparison'
     return args.output_dir.resolve() == default_output_dir.resolve()
-
-
-def _plot_budget_rows(
-    *,
-    records: list[ExperimentRecord],
-    base_records: list[ExperimentRecord],
-    base_budget_rows: list[dict[str, object]],
-    warnings: list[str],
-) -> list[dict[str, object]]:
-    base_names = {str(record.name) for record in base_records}
-    extra_records = [record for record in records if str(record.name) not in base_names]
-    if not extra_records:
-        return base_budget_rows
-
-    extra_strategy_rows: list[dict[str, object]] = []
-    for record in extra_records:
-        extra_strategy_rows.extend(selected_strategy_rows(record, warnings=warnings))
-    extra_comparison_rows = comparison_by_k_rows(extra_strategy_rows)
-    return [
-        *base_budget_rows,
-        *budget_category_rows_from_comparisons(extra_comparison_rows),
-    ]
 
 
 def main() -> None:

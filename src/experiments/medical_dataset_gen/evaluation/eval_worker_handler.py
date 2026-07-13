@@ -54,7 +54,6 @@ _QREL_COLUMNS = [
     'axis',
     'is_gold',
 ]
-_GEOMETRY_WORKER_COLUMNS = ['query_id', 'passes_filter']
 _GOLD_ANSWER_COLUMNS = [
     'query_id',
     'answer_text',
@@ -94,7 +93,6 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
     qrels = load_selected_parquet_columns(
         paths, 'qrels', _QREL_COLUMNS, optional_columns=['cluster_id']
     )
-    geometry = load_selected_parquet_columns(paths, 'geometry_stats', _GEOMETRY_WORKER_COLUMNS)
 
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays_mmap_ids(paths)
     maps = _build_evaluation_index_maps(
@@ -116,15 +114,6 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
         qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
         for qid, facet_map in facet_gold.items()
     }
-    pass_map = {
-        str(query_id): bool(passes_filter)
-        for query_id, passes_filter in zip(
-            geometry['query_id'].to_list(),
-            geometry['passes_filter'].to_list(),
-            strict=True,
-        )
-    }
-
     worker_state: EvaluationWorkerState = {
         'cfg': cfg,
         'queries_by_id': build_lightweight_query_map(queries),
@@ -136,7 +125,6 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
         'gold_by_query': query_id_to_gold_chunks,
         'qrels_by_query_chunk': get_qrels_by_query_chunk(qrels),
         'answer_refs_by_query': answer_refs_by_query,
-        'pass_map': pass_map,
         'k_values': sorted(set(int(k) for k in cfg.retrieval.k_values)),
     }
     set_evaluation_worker_state(worker_state)
