@@ -113,25 +113,6 @@ class MedicalDatasetGenPaths:
     def get_result_dir(self, table: SyntheticMedicalDatasetTableName) -> Path:
         return self.table_path(table).parent
 
-    def deterministic_chunk_documents_cache_dir(self, render_signature: str) -> Path:
-        return self.cache_dir / 'deterministic_chunk_documents' / render_signature
-
-    def deterministic_chunk_documents_bucket_path(
-        self,
-        render_signature: str,
-        bucket: str,
-    ) -> Path:
-        return self.deterministic_chunk_documents_cache_dir(render_signature) / f'{bucket}.parquet'
-
-    def deterministic_chunk_documents_lock_path(
-        self,
-        render_signature: str,
-        bucket: str,
-    ) -> Path:
-        return self.deterministic_chunk_documents_bucket_path(render_signature, bucket).with_suffix(
-            '.parquet.lock'
-        )
-
     def chunk_embeddings_cache_dir(self, embedding_signature: str) -> Path:
         return self.cache_dir / 'chunk_embeddings' / embedding_signature
 

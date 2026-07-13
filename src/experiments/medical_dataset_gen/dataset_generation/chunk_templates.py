@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 from random import Random
@@ -9,9 +11,11 @@ import yaml
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
     CareIntensityPayload,
+    ChunkSurfaceGroup,
+    ChunkSurfacePolicy,
     ChunkTemplateUtils,
-    ClinicalFact,
     ChunkTextStyle,
+    ClinicalFact,
     ComplicationBurdenPayload,
     DiagnosticEvidencePayload,
     MedicalOntology,
@@ -42,6 +46,20 @@ class ChunkValidation:
 
 
 @dataclass(frozen=True)
+class ChunkTemplateProvenance:
+    outer_template_family: str | None
+    outer_template_id: str | None
+    axis_template_family: str | None
+    axis_template_id: str | None
+
+
+@dataclass(frozen=True)
+class RenderedChunkTemplate:
+    text: str
+    provenance: ChunkTemplateProvenance
+
+
+@dataclass(frozen=True)
 class PatientNarrative:
     subject: str
     pronoun: str
@@ -68,8 +86,25 @@ def _load_template_utils() -> ChunkTemplateUtils:
 TEMPLATE_DATA = _load_template_utils()
 
 
-def available_note_styles() -> list[str]:
-    return list(TEMPLATE_DATA.note_style_templates)
+def available_note_styles(surface_group: ChunkSurfaceGroup | None = None) -> list[str]:
+    if surface_group is None:
+        return list(TEMPLATE_DATA.note_style_templates)
+    return [
+        family
+        for family, templates in TEMPLATE_DATA.note_style_templates.items()
+        if templates.templates_for_group(surface_group)
+    ]
+
+
+def select_chunk_surface_group(
+    split: str,
+    policy: ChunkSurfacePolicy = 'split_heldout',
+) -> ChunkSurfaceGroup:
+    if policy == 'seen_only':
+        return 'seen'
+    if policy == 'heldout_only':
+        return 'heldout'
+    return 'heldout' if split == 'test' else 'seen'
 
 
 def render_chunk_text_template(
@@ -77,10 +112,42 @@ def render_chunk_text_template(
     ontology: MedicalOntology,
     rng: Random,
     text_style: ChunkTextStyle = 'semantic_hardened',
+    surface_group: ChunkSurfaceGroup | None = None,
 ) -> str:
+    return render_chunk_text_template_result(
+        fact,
+        ontology,
+        rng,
+        text_style=text_style,
+        surface_group=surface_group,
+    ).text
+
+
+def render_chunk_text_template_result(
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    rng: Random,
+    text_style: ChunkTextStyle = 'semantic_hardened',
+    surface_group: ChunkSurfaceGroup | None = None,
+) -> RenderedChunkTemplate:
     payload = parse_axis_payload(fact.axis_payload_json)
     patient = patient_narrative(fact)
     axis = ontology.clinical_axes[fact.axis]
+    resolved_surface_group = surface_group or fact.chunk_surface_group
+    axis_sentence, axis_template_family, axis_template_id = _axis_sentence(
+        fact,
+        payload,
+        patient=patient,
+        axis_term=axis.label,
+        rng=rng,
+        text_style=text_style,
+        surface_group=resolved_surface_group,
+    )
+    outer_template_family, outer_template_id, outer_template = _outer_template(
+        fact,
+        resolved_surface_group,
+        text_style=text_style,
+    )
     context = {
         'patient': patient.subject_cap,
         'patient_lower': patient.subject,
@@ -91,20 +158,45 @@ def render_chunk_text_template(
         'age': fact.patient_age,
         'condition': fact.condition_display,
         'presentation': rng.choice(ontology.conditions[fact.condition_id].presentations),
-        'cohort_sentence': _cohort_sentence(fact, patient, rng),
-        'axis_sentence': _axis_sentence(
-            fact,
-            payload,
-            patient=patient,
-            axis_term=axis.label,
-            rng=rng,
-            text_style=text_style,
-        ),
+        'cohort_sentence': _cohort_sentence(fact, patient, rng, resolved_surface_group),
+        'axis_sentence': axis_sentence,
     }
-    templates = TEMPLATE_DATA.note_style_templates.get(
-        fact.note_style, TEMPLATE_DATA.note_style_templates['brief_hospital_course']
+    return RenderedChunkTemplate(
+        text=squash_whitespaces(outer_template.format(**context)),
+        provenance=ChunkTemplateProvenance(
+            outer_template_family=outer_template_family,
+            outer_template_id=outer_template_id,
+            axis_template_family=axis_template_family,
+            axis_template_id=axis_template_id,
+        ),
     )
-    return squash_whitespaces(rng.choice(templates).format(**context))
+
+
+def _outer_template(
+    fact: ClinicalFact,
+    surface_group: ChunkSurfaceGroup,
+    *,
+    text_style: ChunkTextStyle,
+) -> tuple[str | None, str | None, str]:
+    if text_style == 'ontology_explicit':
+        legacy_templates = [
+            '{patient} was admitted with {condition} after {presentation}. '
+            '{cohort_sentence} {axis_sentence}',
+            '{patient} was hospitalized for {condition} after presenting with {presentation}. '
+            '{cohort_sentence} {axis_sentence}',
+        ]
+        index = _stable_index(fact, surface_group, 'outer_explicit', len(legacy_templates))
+        return None, f'ontology_explicit_outer_{index + 1}', legacy_templates[index]
+
+    family = _canonical_outer_family(fact.note_style)
+    bucket = TEMPLATE_DATA.note_style_templates.get(family)
+    if bucket is None:
+        family = next(iter(TEMPLATE_DATA.note_style_templates))
+        bucket = TEMPLATE_DATA.note_style_templates[family]
+    choices = bucket.templates_for_group(surface_group)
+    index = _stable_index(fact, surface_group, f'outer:{family}', len(choices))
+    selected = choices[index]
+    return family, selected.id, selected.template
 
 
 def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
@@ -114,17 +206,22 @@ def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
     )
 
 
-def _cohort_sentence(fact: ClinicalFact, patient: PatientNarrative, rng: Random) -> str:
+def _cohort_sentence(
+    fact: ClinicalFact,
+    patient: PatientNarrative,
+    rng: Random,
+    surface_group: ChunkSurfaceGroup,
+) -> str:
     templates = TEMPLATE_DATA.cohort_evidence_templates
     # Age and sex are already expressed by the patient descriptor. Repeating
     # them as a separate sentence produces unnatural prose without adding evidence.
     if fact.subgroup_dimension_id in {'age_band', 'sex'}:
         return ''
     if fact.subgroup_is_reference:
-        choices = templates.comorbidity_reference
+        choices = templates.comorbidity_reference.templates_for_group(surface_group)
     else:
-        choices = templates.comorbidity_present
-    return rng.choice(choices).format(
+        choices = templates.comorbidity_present.templates_for_group(surface_group)
+    return rng.choice(choices).template.format(
         subgroup_phrase=fact.clinical_subgroup_phrase,
         age=fact.patient_age,
         pronoun=patient.pronoun,
@@ -142,7 +239,8 @@ def _axis_sentence(
     axis_term: str,
     rng: Random,
     text_style: ChunkTextStyle,
-) -> str:
+    surface_group: ChunkSurfaceGroup,
+) -> tuple[str, str | None, str | None]:
     if isinstance(payload, TreatmentDurationPayload):
         axis_value = _duration_axis_value(payload, rng)
     elif isinstance(payload, RehabOutcomePayload):
@@ -159,18 +257,74 @@ def _axis_sentence(
         axis_value = payload.detail
     else:
         raise TypeError(type(payload))
-    template = rng.choice(
-        TEMPLATE_DATA.axis_sentence_templates[text_style][fact.axis][fact.value_bin]
+    if text_style == 'ontology_explicit':
+        templates = TEMPLATE_DATA.axis_sentence_templates.ontology_explicit[fact.axis][
+            fact.value_bin
+        ]
+        index = _stable_index(fact, surface_group, 'axis_explicit', len(templates))
+        template = templates[index]
+        return (
+            template.format(
+                axis_term=axis_term,
+                axis_bin_term=fact.axis_bin_term,
+                axis_value=axis_value,
+                pronoun=patient.pronoun,
+                pronoun_cap=patient.pronoun_cap,
+                possessive=patient.possessive,
+                possessive_cap=patient.possessive_cap,
+            ),
+            None,
+            f'ontology_explicit_{fact.axis}_{fact.value_bin}_{index + 1}',
+        )
+
+    semantic_templates = TEMPLATE_DATA.axis_sentence_templates.semantic_hardened[fact.axis][
+        fact.value_bin
+    ].template_specs(surface_group)
+    index = _stable_index(fact, surface_group, 'axis_semantic', len(semantic_templates))
+    family, template_spec = semantic_templates[index]
+    return (
+        template_spec.template.format(
+            axis_term=axis_term,
+            axis_bin_term=fact.axis_bin_term,
+            axis_value=axis_value,
+            pronoun=patient.pronoun,
+            pronoun_cap=patient.pronoun_cap,
+            possessive=patient.possessive,
+            possessive_cap=patient.possessive_cap,
+        ),
+        family,
+        template_spec.id,
     )
-    return template.format(
-        axis_term=axis_term,
-        axis_bin_term=fact.axis_bin_term,
-        axis_value=axis_value,
-        pronoun=patient.pronoun,
-        pronoun_cap=patient.pronoun_cap,
-        possessive=patient.possessive,
-        possessive_cap=patient.possessive_cap,
-    )
+
+
+def _canonical_outer_family(note_style: str) -> str:
+    legacy_styles = {
+        'brief_hospital_course': 'admission_course',
+        'progress_note': 'embedded_course',
+        'discharge_summary': 'cohort_first',
+    }
+    return legacy_styles.get(note_style, note_style)
+
+
+def _stable_index(
+    fact: ClinicalFact,
+    surface_group: ChunkSurfaceGroup,
+    purpose: str,
+    size: int,
+) -> int:
+    if size < 1:
+        raise ValueError(f'cannot choose from an empty template list for {purpose}')
+    payload = {
+        'condition_id': fact.condition_id,
+        'subgroup_id': fact.subgroup_id,
+        'axis': fact.axis,
+        'value_bin': fact.value_bin,
+        'axis_payload_json': fact.axis_payload_json,
+        'surface_group': surface_group,
+        'purpose': purpose,
+    }
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    return int(digest[:16], 16) % size
 
 
 def validate_chunk_text(

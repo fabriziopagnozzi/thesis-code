@@ -11,8 +11,9 @@ import polars as pl
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     TEMPLATE_DATA,
     ChunkValidation,
+    RenderedChunkTemplate,
     patient_descriptor,
-    render_chunk_text_template,
+    render_chunk_text_template_result,
     squash_whitespaces,
     validate_chunk_text,
 )
@@ -23,6 +24,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkGenerationCacheEntry,
     ChunkRow,
     ChunkState,
+    ChunkSurfaceGroup,
     ChunkTextStyle,
     ClinicalFact,
     MedicalOntology,
@@ -255,14 +257,31 @@ def word_count_errors(word_count: int, min_words: int, max_words: int, tolerance
     return [f'word_count={word_count} above maximum {max_words} (tolerance {tolerance})']
 
 
+def render_canonical_chunk(
+    fact: ClinicalFact,
+    ontology: MedicalOntology,
+    text_style: ChunkTextStyle = 'semantic_hardened',
+) -> RenderedChunkTemplate:
+    """Render deterministic chunk prose from the reusable semantic chunk key."""
+    rng = Random(_stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
+    return render_chunk_text_template_result(fact, ontology, rng, text_style=text_style)
+
+
 def render_canonical_chunk_text(
     fact: ClinicalFact,
     ontology: MedicalOntology,
     text_style: ChunkTextStyle = 'semantic_hardened',
+    surface_group: ChunkSurfaceGroup | None = None,
 ) -> str:
     """Render deterministic chunk prose from the reusable semantic chunk key."""
     rng = Random(_stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
-    return render_chunk_text_template(fact, ontology, rng, text_style=text_style)
+    return render_chunk_text_template_result(
+        fact,
+        ontology,
+        rng,
+        text_style=text_style,
+        surface_group=surface_group,
+    ).text
 
 
 def new_chunk_state(
@@ -271,9 +290,11 @@ def new_chunk_state(
     llm_attempted: bool,
     llm_rejected: bool,
     validation: ChunkValidation,
+    rendered_template: RenderedChunkTemplate | None = None,
     cache_hit: bool = False,
     cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss',
 ) -> ChunkState:
+    provenance = rendered_template.provenance if rendered_template is not None else None
     return ChunkState(
         final_text=final_text,
         text_generation_source=text_generation_source,
@@ -282,6 +303,10 @@ def new_chunk_state(
         cache_hit=cache_hit,
         cache_hit_kind=cache_hit_kind,
         validation_soft_warnings=list(validation.soft_warnings),
+        outer_template_family=provenance.outer_template_family if provenance is not None else None,
+        outer_template_id=provenance.outer_template_id if provenance is not None else None,
+        axis_template_family=provenance.axis_template_family if provenance is not None else None,
+        axis_template_id=provenance.axis_template_id if provenance is not None else None,
     )
 
 
@@ -337,18 +362,7 @@ def finalize_chunk_row(
             llm_rejected=state.llm_rejected,
         )
 
-    row = ChunkRow.from_fact(
-        fact,
-        chunk_id=chunk_id(index),
-        final_text=final_text,
-        word_count=word_count,
-        text_generation_source=state.text_generation_source,
-        llm_attempted=state.llm_attempted,
-        llm_rejected=state.llm_rejected,
-        cache_hit=state.cache_hit,
-        cache_hit_kind=state.cache_hit_kind,
-        validation_soft_warnings=list(state.validation_soft_warnings),
-    )
+    row = ChunkRow.from_state(fact, chunk_id=chunk_id(index), state=state)
     return row, cache_entry
 
 

@@ -17,6 +17,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
     AxisPairConditionOverride,
     ChunkPoolScope,
+    ChunkSurfacePolicy,
     ChunkTextStyle,
     ClinicalAxis,
     ConditionKey,
@@ -224,6 +225,7 @@ class GenerationCfg(BasePydanticCfgModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
     chunk_text_style: ChunkTextStyle = 'semantic_hardened'
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout'
     excluded_clinical_axes: list[ClinicalAxis] = Field(
         # default_factory=lambda: ['diagnostic_evidence_type']
         default_factory=list

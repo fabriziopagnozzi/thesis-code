@@ -12,6 +12,7 @@ import pyarrow.parquet as pq
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     available_note_styles,
+    select_chunk_surface_group,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axis_bins,
@@ -24,6 +25,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
     AxisFactPayload,
     CareIntensityPayload,
+    ChunkSurfacePolicy,
     ClinicalAxis,
     ClinicalFact,
     ComplicationBurdenPayload,
@@ -72,7 +74,14 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             facts: list[ClinicalFact] = []
             for facet in plan.facets:
                 facts.extend(
-                    make_gold_fact(plan, facet, ontology, local_idx, rng)
+                    make_gold_fact(
+                        plan,
+                        facet,
+                        ontology,
+                        local_idx,
+                        rng,
+                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
+                    )
                     for local_idx in range(facet.target_gold_chunks)
                 )
             facts.extend(
@@ -81,6 +90,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     ontology,
                     rng,
                     cfg.generation.chunk_pools,
+                    chunk_surface_policy=cfg.generation.chunk_surface_policy,
                 )
             )
             facts.extend(
@@ -89,6 +99,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     ontology,
                     rng,
                     cfg.generation.chunk_pools.background_outliers,
+                    chunk_surface_policy=cfg.generation.chunk_surface_policy,
                 )
             )
             _assert_query_local_chunk_reuse_keys(plan.query_id, facts)
@@ -149,6 +160,7 @@ def make_gold_fact(
     ontology: MedicalOntology,
     local_idx: int,
     rng: Random,
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> ClinicalFact:
     cohort = ontology.subgroups[facet.subgroup_id]
     return make_base_fact(
@@ -173,6 +185,7 @@ def make_gold_fact(
         value_bin=facet.value_bin,
         cluster_id=facet.cluster_id,
         cluster_role=facet.cluster_role,
+        chunk_surface_policy=chunk_surface_policy,
     )
 
 
@@ -181,12 +194,22 @@ def make_distractor_facts(
     ontology: MedicalOntology,
     rng: Random,
     chunk_pools: ChunkPoolsCfg,
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> list[ClinicalFact]:
     """Create the configured mix of point distractors for one query-local pool."""
     rows: list[ClinicalFact] = []
     for facet in plan.facets:
         local_cfg = _local_distractor_config_for_facet(chunk_pools, facet)
-        rows.extend(make_local_distractor_facts(plan, facet, ontology, rng, local_cfg))
+        rows.extend(
+            make_local_distractor_facts(
+                plan,
+                facet,
+                ontology,
+                rng,
+                local_cfg,
+                chunk_surface_policy=chunk_surface_policy,
+            )
+        )
     return rows
 
 
@@ -209,6 +232,7 @@ def make_local_distractor_facts(
     ontology: MedicalOntology,
     rng: Random,
     distractor_config: list[DistractorSpec],
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> list[ClinicalFact]:
     rows: list[ClinicalFact] = []
     for spec_idx, spec in enumerate(distractor_config):
@@ -222,6 +246,7 @@ def make_local_distractor_facts(
                     spec=spec,
                     spec_idx=spec_idx,
                     local_idx=local_idx,
+                    chunk_surface_policy=chunk_surface_policy,
                 )
             )
     return rows
@@ -236,6 +261,7 @@ def make_local_distractor_fact(
     spec: DistractorSpec,
     spec_idx: int,
     local_idx: int,
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> ClinicalFact:
     distractor_type = _distractor_type_slug(spec)
     scope = _distractor_scope(distractor_type, spec_idx)
@@ -273,6 +299,7 @@ def make_local_distractor_fact(
         # The target facet becomes part of the reuse scope so per-facet local
         # distractor pools stay distinct even when their semantic shells match.
         reuse_scope=f'distractor:{scope}:target_{target.facet_id}',
+        chunk_surface_policy=chunk_surface_policy,
     )
 
 
@@ -433,6 +460,7 @@ def make_background_outlier_facts(
     ontology: MedicalOntology,
     rng: Random,
     specs: list[BackgroundDistractorSpec],
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> list[ClinicalFact]:
     rows: list[ClinicalFact] = []
     for spec_idx, spec in enumerate(specs):
@@ -478,6 +506,7 @@ def make_background_outlier_facts(
                         value_bin=value_bin,
                         cluster_id=cluster_id,
                         cluster_role='background_outlier',
+                        chunk_surface_policy=chunk_surface_policy,
                     )
                 )
     return rows
@@ -517,10 +546,12 @@ def make_base_fact(
     cluster_id: str,
     cluster_role,
     reuse_scope: str | None = None,
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> ClinicalFact:
     payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx)
     payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
     resolved_reuse_scope = reuse_scope or ('gold' if is_gold else f'distractor:{distractor_type}')
+    chunk_surface_group = select_chunk_surface_group(plan.split, chunk_surface_policy)
     reuse_key = _chunk_reuse_key(
         condition_id,
         subgroup_id,
@@ -529,8 +560,21 @@ def make_base_fact(
         payload_json,
         local_idx,
         resolved_reuse_scope,
+        chunk_surface_group,
     )
     surface_rng = Random(_stable_seed(reuse_key))
+    template_rng = Random(
+        _stable_seed(
+            'template',
+            condition_id,
+            subgroup_id,
+            axis,
+            value_bin,
+            payload_json,
+            local_idx,
+            chunk_surface_group,
+        )
+    )
     subgroup = ontology.subgroups[subgroup_id]
     age = _patient_age(subgroup.patient_age_range, ontology.patient_defaults.age_range, surface_rng)
     sex: PatientSex = _patient_sex(subgroup.patient_sex, surface_rng)
@@ -590,7 +634,8 @@ def make_base_fact(
         patient_age=age,
         patient_sex=sex,
         clinical_subgroup_phrase=phrase,
-        note_style=surface_rng.choice(NOTE_STYLE_IDS),
+        note_style=template_rng.choice(NOTE_STYLE_IDS),
+        chunk_surface_group=chunk_surface_group,
         split=plan.split,
         must_mention=must_mention,
         must_not_mention=must_not_mention,
@@ -666,10 +711,11 @@ def _chunk_reuse_key(
     payload_json: str,
     local_idx: int,
     reuse_scope: str,
+    chunk_surface_group: str,
 ) -> str:
     raw = json.dumps(
         {
-            'schema': 2,
+            'schema': 3,
             'condition_id': condition_id,
             'subgroup_id': subgroup_id,
             'axis': axis,
@@ -677,6 +723,7 @@ def _chunk_reuse_key(
             'payload': payload_json,
             'local_idx': local_idx,
             'reuse_scope': reuse_scope,
+            'chunk_surface_group': chunk_surface_group,
         },
         sort_keys=True,
     )

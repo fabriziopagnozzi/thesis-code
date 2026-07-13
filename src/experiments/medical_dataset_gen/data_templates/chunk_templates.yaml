@@ -1,22 +1,71 @@
 note_style_templates:
-    brief_hospital_course:
-        - "{patient} was admitted with {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
-        - "{patient} was hospitalized for {condition} after presenting with {presentation}. {cohort_sentence} {axis_sentence}"
-    progress_note:
-        - During admission for {condition}, {patient_lower} was treated after presenting with {presentation}. {cohort_sentence} {axis_sentence}
-        - "{patient} presented with {presentation} and was treated for {condition}. {cohort_sentence} {axis_sentence}"
-    discharge_summary:
-        - "{patient} was treated for {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
-        - Following presentation with {presentation}, {patient_lower} was managed for {condition}. {cohort_sentence} {axis_sentence}
+    admission_course:
+        seen:
+            - id: outer_admission_course_seen_1
+              template: "{patient} was admitted with {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
+        heldout:
+            - id: outer_admission_course_heldout_1
+              template: "{patient} came in after {presentation} and was managed for {condition}. {axis_sentence} {cohort_sentence}"
+    cohort_first:
+        seen:
+            - id: outer_cohort_first_seen_1
+              template: "{cohort_sentence} {patient} then presented with {presentation} and was treated for {condition}. {axis_sentence}"
+        heldout:
+            - id: outer_cohort_first_heldout_1
+              template: "{cohort_sentence} In this hospitalization, {patient_lower} had {condition} after {presentation}. {axis_sentence}"
+    embedded_course:
+        seen:
+            - id: outer_embedded_course_seen_1
+              template: "{patient} presented with {presentation} and was treated for {condition}. Appetite, pain control, and nursing needs were reviewed during the stay. {cohort_sentence} {axis_sentence}"
+        heldout:
+            - id: outer_embedded_course_heldout_1
+              template: "After presentation with {presentation}, {patient_lower} was treated for {condition}. Routine labs and diet orders were followed. {axis_sentence} {cohort_sentence}"
+    axis_first:
+        seen:
+            - id: outer_axis_first_seen_1
+              template: "{axis_sentence} {patient} had been admitted for {condition} after {presentation}. {cohort_sentence}"
+        heldout:
+            - id: outer_axis_first_heldout_1
+              template: "{axis_sentence} The same chart described {patient_lower} as hospitalized with {condition} after {presentation}. {cohort_sentence}"
+    fragmented_note:
+        seen:
+            - id: outer_fragmented_note_seen_1
+              template: "{patient}; presentation with {presentation}; working problem: {condition}. {cohort_sentence} Course detail: {axis_sentence}"
+        heldout:
+            - id: outer_fragmented_note_heldout_1
+              template: "Patient: {patient_lower}. Reason for stay: {condition} after {presentation}. {cohort_sentence} Entry: {axis_sentence}"
 
 cohort_evidence_templates:
     comorbidity_present:
-        - "{possessive_cap} established medical history included {subgroup_phrase}."
-        - "At admission, {subgroup_phrase} was an active comorbidity."
-        - "{pronoun_cap} had a history of {subgroup_phrase}."
+        seen:
+            - id: cohort_present_seen_1
+              template: "{possessive_cap} established medical history included {subgroup_phrase}."
+            - id: cohort_present_seen_2
+              template: "At intake, {subgroup_phrase} was listed among active conditions."
+            - id: cohort_present_seen_3
+              template: "The admitting history carried {subgroup_phrase}."
+        heldout:
+            - id: cohort_present_heldout_1
+              template: "Prior records noted {subgroup_phrase}."
+            - id: cohort_present_heldout_2
+              template: "Medication reconciliation and history review both referenced {subgroup_phrase}."
+            - id: cohort_present_heldout_3
+              template: "The chart background included {subgroup_phrase}."
     comorbidity_reference:
-        - "Baseline comorbidity review documented {subgroup_phrase}."
-        - "Admission history noted {subgroup_phrase}."
+        seen:
+            - id: cohort_reference_seen_1
+              template: "Baseline comorbidity review documented {subgroup_phrase}."
+            - id: cohort_reference_seen_2
+              template: "Admission history noted {subgroup_phrase}."
+            - id: cohort_reference_seen_3
+              template: "The intake problem list recorded {subgroup_phrase}."
+        heldout:
+            - id: cohort_reference_heldout_1
+              template: "Chart review before orders listed {subgroup_phrase}."
+            - id: cohort_reference_heldout_2
+              template: "The background history section carried {subgroup_phrase}."
+            - id: cohort_reference_heldout_3
+              template: "Pre-round review identified {subgroup_phrase}."
 
 axis_sentence_templates:
     ontology_explicit:
@@ -80,67 +129,500 @@ axis_sentence_templates:
             specimen_or_specialized_test:
                 - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
                 - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
+    
     semantic_hardened:
         treatment_duration:
             short:
-                - "{pronoun_cap} completed {axis_value}, and no additional inpatient days of that regimen were documented."
-                - "Active inpatient therapy stopped after {axis_value}, with discharge planning proceeding after the last scheduled dose."
+                seen:
+                    direct_fact:
+                        - id: treatment_duration_short_seen_direct_fact
+                          template: "{pronoun_cap} completed {axis_value}, and the medication list was closed afterward."
+                    temporal_course:
+                        - id: treatment_duration_short_seen_temporal_course
+                          template: "The MAR shows {axis_value}; subsequent orders moved toward discharge planning."
+                    clinical_assessment:
+                        - id: treatment_duration_short_seen_clinical_assessment
+                          template: "After reassessment, the team documented {axis_value} as the completed inpatient course."
+                    contrast_or_alternative:
+                        - id: treatment_duration_short_seen_contrast_or_alternative
+                          template: "No further doses were scheduled after {axis_value}; outpatient instructions covered follow-up."
+                    fragmented_or_split_evidence:
+                        - id: treatment_duration_short_seen_fragmented_or_split_evidence
+                          template: "Medication course: {axis_value}. Later notes: regimen complete."
+                heldout:
+                    clinical_assessment:
+                        - id: treatment_duration_short_heldout_clinical_assessment
+                          template: "Pharmacy reconciliation listed {axis_value} before the active order was discontinued."
+                    contrast_or_alternative:
+                        - id: treatment_duration_short_heldout_contrast_or_alternative
+                          template: "Orders were reviewed, then stopped after {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: treatment_duration_short_heldout_fragmented_or_split_evidence
+                          template: "Orders reviewed. Completed course: {axis_value}. Discharge medications reconciled."
             standard:
-                - "{pronoun_cap} received {axis_value} before the regimen was completed during the admission."
-                - "The inpatient regimen continued for {axis_value}, then was stopped as planned."
+                seen:
+                    direct_fact:
+                        - id: treatment_duration_standard_seen_direct_fact
+                          template: "{pronoun_cap} completed {axis_value}, and the medication list was closed afterward."
+                    temporal_course:
+                        - id: treatment_duration_standard_seen_temporal_course
+                          template: "The MAR shows {axis_value}; subsequent orders moved toward discharge planning."
+                    clinical_assessment:
+                        - id: treatment_duration_standard_seen_clinical_assessment
+                          template: "After reassessment, the team documented {axis_value} as the completed inpatient course."
+                    contrast_or_alternative:
+                        - id: treatment_duration_standard_seen_contrast_or_alternative
+                          template: "No further doses were scheduled after {axis_value}; outpatient instructions covered follow-up."
+                    fragmented_or_split_evidence:
+                        - id: treatment_duration_standard_seen_fragmented_or_split_evidence
+                          template: "Medication course: {axis_value}. Later notes: regimen complete."
+                heldout:
+                    clinical_assessment:
+                        - id: treatment_duration_standard_heldout_clinical_assessment
+                          template: "Pharmacy reconciliation listed {axis_value} before the active order was discontinued."
+                    contrast_or_alternative:
+                        - id: treatment_duration_standard_heldout_contrast_or_alternative
+                          template: "Orders were reviewed, then stopped after {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: treatment_duration_standard_heldout_fragmented_or_split_evidence
+                          template: "Orders reviewed. Completed course: {axis_value}. Discharge medications reconciled."
             prolonged:
-                - "{pronoun_cap} remained on {axis_value} because the inpatient team extended active therapy before discharge."
-                - "The regimen continued through {axis_value}, with the extra inpatient days documented in the medication course."
+                seen:
+                    direct_fact:
+                        - id: treatment_duration_prolonged_seen_direct_fact
+                          template: "{pronoun_cap} completed {axis_value}, and the medication list was closed afterward."
+                    temporal_course:
+                        - id: treatment_duration_prolonged_seen_temporal_course
+                          template: "The MAR shows {axis_value}; subsequent orders moved toward discharge planning."
+                    clinical_assessment:
+                        - id: treatment_duration_prolonged_seen_clinical_assessment
+                          template: "After reassessment, the team documented {axis_value} as the completed inpatient course."
+                    contrast_or_alternative:
+                        - id: treatment_duration_prolonged_seen_contrast_or_alternative
+                          template: "No further doses were scheduled after {axis_value}; outpatient instructions covered follow-up."
+                    fragmented_or_split_evidence:
+                        - id: treatment_duration_prolonged_seen_fragmented_or_split_evidence
+                          template: "Medication course: {axis_value}. Later notes: regimen complete."
+                heldout:
+                    clinical_assessment:
+                        - id: treatment_duration_prolonged_heldout_clinical_assessment
+                          template: "Pharmacy reconciliation listed {axis_value} before the active order was discontinued."
+                    contrast_or_alternative:
+                        - id: treatment_duration_prolonged_heldout_contrast_or_alternative
+                          template: "Orders were reviewed, then stopped after {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: treatment_duration_prolonged_heldout_fragmented_or_split_evidence
+                          template: "Orders reviewed. Completed course: {axis_value}. Discharge medications reconciled."
         rehab_outcome:
             home_rehab:
-                - "At discharge, {axis_value} had been arranged."
-                - "The discharge plan sent {pronoun} home with {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: rehab_outcome_home_rehab_seen_direct_fact
+                          template: "The discharge plan listed {axis_value}."
+                    temporal_course:
+                        - id: rehab_outcome_home_rehab_seen_temporal_course
+                          template: "By the final therapy note, the plan included {axis_value}."
+                    clinical_assessment:
+                        - id: rehab_outcome_home_rehab_seen_clinical_assessment
+                          template: "Therapy documented the functional plan as {axis_value}."
+                    contrast_or_alternative:
+                        - id: rehab_outcome_home_rehab_seen_contrast_or_alternative
+                          template: "After disposition review, the signed plan recorded {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: rehab_outcome_home_rehab_seen_fragmented_or_split_evidence
+                          template: "Disposition planning: {axis_value}. Equipment and follow-up were reviewed."
+                heldout:
+                    clinical_assessment:
+                        - id: rehab_outcome_home_rehab_heldout_clinical_assessment
+                          template: "The last mobility assessment supported {axis_value}."
+                    contrast_or_alternative:
+                        - id: rehab_outcome_home_rehab_heldout_contrast_or_alternative
+                          template: "Final disposition planning specified {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: rehab_outcome_home_rehab_heldout_fragmented_or_split_evidence
+                          template: "PT/OT note finalized. Disposition detail: {axis_value}."
             inpatient_rehab:
-                - "At discharge, ongoing functional needs led to {axis_value}."
-                - "Because independent mobility remained unsafe, {axis_value} was arranged."
+                seen:
+                    direct_fact:
+                        - id: rehab_outcome_inpatient_rehab_seen_direct_fact
+                          template: "The discharge plan listed {axis_value}."
+                    temporal_course:
+                        - id: rehab_outcome_inpatient_rehab_seen_temporal_course
+                          template: "By the final therapy note, the plan included {axis_value}."
+                    clinical_assessment:
+                        - id: rehab_outcome_inpatient_rehab_seen_clinical_assessment
+                          template: "Therapy documented the functional plan as {axis_value}."
+                    contrast_or_alternative:
+                        - id: rehab_outcome_inpatient_rehab_seen_contrast_or_alternative
+                          template: "After disposition review, the signed plan recorded {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: rehab_outcome_inpatient_rehab_seen_fragmented_or_split_evidence
+                          template: "Disposition planning: {axis_value}. Equipment and follow-up were reviewed."
+                heldout:
+                    clinical_assessment:
+                        - id: rehab_outcome_inpatient_rehab_heldout_clinical_assessment
+                          template: "The last mobility assessment supported {axis_value}."
+                    contrast_or_alternative:
+                        - id: rehab_outcome_inpatient_rehab_heldout_contrast_or_alternative
+                          template: "Final disposition planning specified {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: rehab_outcome_inpatient_rehab_heldout_fragmented_or_split_evidence
+                          template: "PT/OT note finalized. Disposition detail: {axis_value}."
             persistent_deficit:
-                - "At discharge, remaining functional problems included {axis_value}."
-                - "Discharge assessment showed {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: rehab_outcome_persistent_deficit_seen_direct_fact
+                          template: "The discharge plan listed {axis_value}."
+                    temporal_course:
+                        - id: rehab_outcome_persistent_deficit_seen_temporal_course
+                          template: "By the final therapy note, the plan included {axis_value}."
+                    clinical_assessment:
+                        - id: rehab_outcome_persistent_deficit_seen_clinical_assessment
+                          template: "Therapy documented the functional plan as {axis_value}."
+                    contrast_or_alternative:
+                        - id: rehab_outcome_persistent_deficit_seen_contrast_or_alternative
+                          template: "After disposition review, the signed plan recorded {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: rehab_outcome_persistent_deficit_seen_fragmented_or_split_evidence
+                          template: "Disposition planning: {axis_value}. Equipment and follow-up were reviewed."
+                heldout:
+                    clinical_assessment:
+                        - id: rehab_outcome_persistent_deficit_heldout_clinical_assessment
+                          template: "The last mobility assessment supported {axis_value}."
+                    contrast_or_alternative:
+                        - id: rehab_outcome_persistent_deficit_heldout_contrast_or_alternative
+                          template: "Final disposition planning specified {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: rehab_outcome_persistent_deficit_heldout_fragmented_or_split_evidence
+                          template: "PT/OT note finalized. Disposition detail: {axis_value}."
         complication_burden:
             none_documented:
-                - "During the admission, {pronoun} had {axis_value}."
-                - "The hospital stay was free of a serious adverse event; documentation noted {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: complication_burden_none_documented_seen_direct_fact
+                          template: "The course documentation recorded {axis_value}."
+                    temporal_course:
+                        - id: complication_burden_none_documented_seen_temporal_course
+                          template: "Partway through hospitalization, notes described {axis_value}."
+                    clinical_assessment:
+                        - id: complication_burden_none_documented_seen_clinical_assessment
+                          template: "Daily assessment listed {axis_value} in the active problem review."
+                    contrast_or_alternative:
+                        - id: complication_burden_none_documented_seen_contrast_or_alternative
+                          template: "The team revised the daily plan around {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: complication_burden_none_documented_seen_fragmented_or_split_evidence
+                          template: "Course event: {axis_value}. Follow-up entries tracked the response."
+                heldout:
+                    clinical_assessment:
+                        - id: complication_burden_none_documented_heldout_clinical_assessment
+                          template: "Sign-out summarized the interval event as {axis_value}."
+                    contrast_or_alternative:
+                        - id: complication_burden_none_documented_heldout_contrast_or_alternative
+                          template: "Follow-up notes later recorded {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: complication_burden_none_documented_heldout_fragmented_or_split_evidence
+                          template: "Interval update: {axis_value}. Team response documented."
             limited_complication:
-                - "During the admission, {pronoun} developed {axis_value}, which resolved before discharge."
-                - "The only adverse event noted was {axis_value}, and it did not require a major regimen change."
+                seen:
+                    direct_fact:
+                        - id: complication_burden_limited_complication_seen_direct_fact
+                          template: "The course documentation recorded {axis_value}."
+                    temporal_course:
+                        - id: complication_burden_limited_complication_seen_temporal_course
+                          template: "Partway through hospitalization, notes described {axis_value}."
+                    clinical_assessment:
+                        - id: complication_burden_limited_complication_seen_clinical_assessment
+                          template: "Daily assessment listed {axis_value} in the active problem review."
+                    contrast_or_alternative:
+                        - id: complication_burden_limited_complication_seen_contrast_or_alternative
+                          template: "The team revised the daily plan around {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: complication_burden_limited_complication_seen_fragmented_or_split_evidence
+                          template: "Course event: {axis_value}. Follow-up entries tracked the response."
+                heldout:
+                    clinical_assessment:
+                        - id: complication_burden_limited_complication_heldout_clinical_assessment
+                          template: "Sign-out summarized the interval event as {axis_value}."
+                    contrast_or_alternative:
+                        - id: complication_burden_limited_complication_heldout_contrast_or_alternative
+                          template: "Follow-up notes later recorded {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: complication_burden_limited_complication_heldout_fragmented_or_split_evidence
+                          template: "Interval update: {axis_value}. Team response documented."
             major_complication:
-                - "The admission was complicated by {axis_value}."
-                - "During the hospital stay, {pronoun} developed {axis_value}, requiring a substantial change in management."
+                seen:
+                    direct_fact:
+                        - id: complication_burden_major_complication_seen_direct_fact
+                          template: "The course documentation recorded {axis_value}."
+                    temporal_course:
+                        - id: complication_burden_major_complication_seen_temporal_course
+                          template: "Partway through hospitalization, notes described {axis_value}."
+                    clinical_assessment:
+                        - id: complication_burden_major_complication_seen_clinical_assessment
+                          template: "Daily assessment listed {axis_value} in the active problem review."
+                    contrast_or_alternative:
+                        - id: complication_burden_major_complication_seen_contrast_or_alternative
+                          template: "The team revised the daily plan around {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: complication_burden_major_complication_seen_fragmented_or_split_evidence
+                          template: "Course event: {axis_value}. Follow-up entries tracked the response."
+                heldout:
+                    clinical_assessment:
+                        - id: complication_burden_major_complication_heldout_clinical_assessment
+                          template: "Sign-out summarized the interval event as {axis_value}."
+                    contrast_or_alternative:
+                        - id: complication_burden_major_complication_heldout_contrast_or_alternative
+                          template: "Follow-up notes later recorded {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: complication_burden_major_complication_heldout_fragmented_or_split_evidence
+                          template: "Interval update: {axis_value}. Team response documented."
         acute_clinical_course:
             early_stabilization:
-                - "Early in the admission, {pronoun} showed {axis_value}."
-                - "{axis_value} occurred soon after management began."
+                seen:
+                    direct_fact:
+                        - id: acute_clinical_course_early_stabilization_seen_direct_fact
+                          template: "The hospital course showed {axis_value}."
+                    temporal_course:
+                        - id: acute_clinical_course_early_stabilization_seen_temporal_course
+                          template: "Serial notes later described {axis_value}."
+                    clinical_assessment:
+                        - id: acute_clinical_course_early_stabilization_seen_clinical_assessment
+                          template: "Bedside reassessment documented {axis_value}."
+                    contrast_or_alternative:
+                        - id: acute_clinical_course_early_stabilization_seen_contrast_or_alternative
+                          template: "Initial plans were adjusted after {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: acute_clinical_course_early_stabilization_seen_fragmented_or_split_evidence
+                          template: "Course trajectory: {axis_value}. Monitoring notes continued."
+                heldout:
+                    clinical_assessment:
+                        - id: acute_clinical_course_early_stabilization_heldout_clinical_assessment
+                          template: "The next reassessment summarized the response as {axis_value}."
+                    contrast_or_alternative:
+                        - id: acute_clinical_course_early_stabilization_heldout_contrast_or_alternative
+                          template: "Later reassessment noted {axis_value} while the plan was reviewed."
+                    fragmented_or_split_evidence:
+                        - id: acute_clinical_course_early_stabilization_heldout_fragmented_or_split_evidence
+                          template: "Trend update: {axis_value}. Team plan reviewed."
             delayed_improvement:
-                - "Improvement was not immediate; {pronoun} had {axis_value}."
-                - "The early response remained incomplete, with {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: acute_clinical_course_delayed_improvement_seen_direct_fact
+                          template: "The hospital course showed {axis_value}."
+                    temporal_course:
+                        - id: acute_clinical_course_delayed_improvement_seen_temporal_course
+                          template: "Serial notes later described {axis_value}."
+                    clinical_assessment:
+                        - id: acute_clinical_course_delayed_improvement_seen_clinical_assessment
+                          template: "Bedside reassessment documented {axis_value}."
+                    contrast_or_alternative:
+                        - id: acute_clinical_course_delayed_improvement_seen_contrast_or_alternative
+                          template: "Initial plans were adjusted after {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: acute_clinical_course_delayed_improvement_seen_fragmented_or_split_evidence
+                          template: "Course trajectory: {axis_value}. Monitoring notes continued."
+                heldout:
+                    clinical_assessment:
+                        - id: acute_clinical_course_delayed_improvement_heldout_clinical_assessment
+                          template: "The next reassessment summarized the response as {axis_value}."
+                    contrast_or_alternative:
+                        - id: acute_clinical_course_delayed_improvement_heldout_contrast_or_alternative
+                          template: "Later reassessment noted {axis_value} while the plan was reviewed."
+                    fragmented_or_split_evidence:
+                        - id: acute_clinical_course_delayed_improvement_heldout_fragmented_or_split_evidence
+                          template: "Trend update: {axis_value}. Team plan reviewed."
             refractory_or_worsening:
-                - "During the admission, {pronoun} experienced {axis_value}."
-                - "Serial assessment showed {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: acute_clinical_course_refractory_or_worsening_seen_direct_fact
+                          template: "The hospital course showed {axis_value}."
+                    temporal_course:
+                        - id: acute_clinical_course_refractory_or_worsening_seen_temporal_course
+                          template: "Serial notes later described {axis_value}."
+                    clinical_assessment:
+                        - id: acute_clinical_course_refractory_or_worsening_seen_clinical_assessment
+                          template: "Bedside reassessment documented {axis_value}."
+                    contrast_or_alternative:
+                        - id: acute_clinical_course_refractory_or_worsening_seen_contrast_or_alternative
+                          template: "Initial plans were adjusted after {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: acute_clinical_course_refractory_or_worsening_seen_fragmented_or_split_evidence
+                          template: "Course trajectory: {axis_value}. Monitoring notes continued."
+                heldout:
+                    clinical_assessment:
+                        - id: acute_clinical_course_refractory_or_worsening_heldout_clinical_assessment
+                          template: "The next reassessment summarized the response as {axis_value}."
+                    contrast_or_alternative:
+                        - id: acute_clinical_course_refractory_or_worsening_heldout_contrast_or_alternative
+                          template: "Later reassessment noted {axis_value} while the plan was reviewed."
+                    fragmented_or_split_evidence:
+                        - id: acute_clinical_course_refractory_or_worsening_heldout_fragmented_or_split_evidence
+                          template: "Trend update: {axis_value}. Team plan reviewed."
         care_intensity:
             ward_level:
-                - "The highest hospital setting documented was {axis_value}."
-                - "Care was delivered in {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: care_intensity_ward_level_seen_direct_fact
+                          template: "The room and unit record listed {axis_value}."
+                    temporal_course:
+                        - id: care_intensity_ward_level_seen_temporal_course
+                          template: "During the stay, bed placement was documented as {axis_value}."
+                    clinical_assessment:
+                        - id: care_intensity_ward_level_seen_clinical_assessment
+                          template: "Nursing assignment records show {axis_value}."
+                    contrast_or_alternative:
+                        - id: care_intensity_ward_level_seen_contrast_or_alternative
+                          template: "After bed assignment review, the chart listed {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: care_intensity_ward_level_seen_fragmented_or_split_evidence
+                          template: "Bed placement: {axis_value}. Nursing handoff updated."
+                heldout:
+                    clinical_assessment:
+                        - id: care_intensity_ward_level_heldout_clinical_assessment
+                          template: "The bed board entry for the stay recorded {axis_value}."
+                    contrast_or_alternative:
+                        - id: care_intensity_ward_level_heldout_contrast_or_alternative
+                          template: "After placement review, the recorded location was {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: care_intensity_ward_level_heldout_fragmented_or_split_evidence
+                          template: "Location log: {axis_value}. Handoff completed."
             monitored_bed:
-                - "The highest hospital setting documented was {axis_value}."
-                - "{pronoun_cap} was managed in {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: care_intensity_monitored_bed_seen_direct_fact
+                          template: "The room and unit record listed {axis_value}."
+                    temporal_course:
+                        - id: care_intensity_monitored_bed_seen_temporal_course
+                          template: "During the stay, bed placement was documented as {axis_value}."
+                    clinical_assessment:
+                        - id: care_intensity_monitored_bed_seen_clinical_assessment
+                          template: "Nursing assignment records show {axis_value}."
+                    contrast_or_alternative:
+                        - id: care_intensity_monitored_bed_seen_contrast_or_alternative
+                          template: "After bed assignment review, the chart listed {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: care_intensity_monitored_bed_seen_fragmented_or_split_evidence
+                          template: "Bed placement: {axis_value}. Nursing handoff updated."
+                heldout:
+                    clinical_assessment:
+                        - id: care_intensity_monitored_bed_heldout_clinical_assessment
+                          template: "The bed board entry for the stay recorded {axis_value}."
+                    contrast_or_alternative:
+                        - id: care_intensity_monitored_bed_heldout_contrast_or_alternative
+                          template: "After placement review, the recorded location was {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: care_intensity_monitored_bed_heldout_fragmented_or_split_evidence
+                          template: "Location log: {axis_value}. Handoff completed."
             intensive_care:
-                - "The highest hospital setting documented was {axis_value}."
-                - "{pronoun_cap} was managed in {axis_value}."
+                seen:
+                    direct_fact:
+                        - id: care_intensity_intensive_care_seen_direct_fact
+                          template: "The room and unit record listed {axis_value}."
+                    temporal_course:
+                        - id: care_intensity_intensive_care_seen_temporal_course
+                          template: "During the stay, bed placement was documented as {axis_value}."
+                    clinical_assessment:
+                        - id: care_intensity_intensive_care_seen_clinical_assessment
+                          template: "Nursing assignment records show {axis_value}."
+                    contrast_or_alternative:
+                        - id: care_intensity_intensive_care_seen_contrast_or_alternative
+                          template: "After bed assignment review, the chart listed {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: care_intensity_intensive_care_seen_fragmented_or_split_evidence
+                          template: "Bed placement: {axis_value}. Nursing handoff updated."
+                heldout:
+                    clinical_assessment:
+                        - id: care_intensity_intensive_care_heldout_clinical_assessment
+                          template: "The bed board entry for the stay recorded {axis_value}."
+                    contrast_or_alternative:
+                        - id: care_intensity_intensive_care_heldout_contrast_or_alternative
+                          template: "After placement review, the recorded location was {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: care_intensity_intensive_care_heldout_fragmented_or_split_evidence
+                          template: "Location log: {axis_value}. Handoff completed."
         diagnostic_evidence_type:
             bedside_laboratory_pattern:
-                - "Diagnosis was supported chiefly by {axis_value}."
-                - "The record emphasized {axis_value} as the key diagnostic support."
+                seen:
+                    direct_fact:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_seen_direct_fact
+                          template: "The working conclusion relied on {axis_value}."
+                    temporal_course:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_seen_temporal_course
+                          template: "After review, the chart cited {axis_value}."
+                    clinical_assessment:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_seen_clinical_assessment
+                          template: "The assessment referenced {axis_value} when explaining the case."
+                    contrast_or_alternative:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_seen_contrast_or_alternative
+                          template: "Other data were reviewed, but documentation centered on {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_seen_fragmented_or_split_evidence
+                          template: "Workup summary: {axis_value}. Assessment signed."
+                heldout:
+                    clinical_assessment:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_heldout_clinical_assessment
+                          template: "The final assessment tied the conclusion to {axis_value}."
+                    contrast_or_alternative:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_heldout_contrast_or_alternative
+                          template: "The final note emphasized {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: diagnostic_evidence_type_bedside_laboratory_pattern_heldout_fragmented_or_split_evidence
+                          template: "Review item: {axis_value}. Final note entered."
             structural_visual_evidence:
-                - "Diagnosis was supported chiefly by {axis_value}."
-                - "The record emphasized {axis_value} as the key diagnostic support."
+                seen:
+                    direct_fact:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_seen_direct_fact
+                          template: "The working conclusion relied on {axis_value}."
+                    temporal_course:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_seen_temporal_course
+                          template: "After review, the chart cited {axis_value}."
+                    clinical_assessment:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_seen_clinical_assessment
+                          template: "The assessment referenced {axis_value} when explaining the case."
+                    contrast_or_alternative:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_seen_contrast_or_alternative
+                          template: "Other data were reviewed, but documentation centered on {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_seen_fragmented_or_split_evidence
+                          template: "Workup summary: {axis_value}. Assessment signed."
+                heldout:
+                    clinical_assessment:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_heldout_clinical_assessment
+                          template: "The final assessment tied the conclusion to {axis_value}."
+                    contrast_or_alternative:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_heldout_contrast_or_alternative
+                          template: "The final note emphasized {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: diagnostic_evidence_type_structural_visual_evidence_heldout_fragmented_or_split_evidence
+                          template: "Review item: {axis_value}. Final note entered."
             specimen_or_specialized_test:
-                - "Diagnosis was supported chiefly by {axis_value}."
-                - "The record emphasized {axis_value} as the key diagnostic support."
+                seen:
+                    direct_fact:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_seen_direct_fact
+                          template: "The working conclusion relied on {axis_value}."
+                    temporal_course:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_seen_temporal_course
+                          template: "After review, the chart cited {axis_value}."
+                    clinical_assessment:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_seen_clinical_assessment
+                          template: "The assessment referenced {axis_value} when explaining the case."
+                    contrast_or_alternative:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_seen_contrast_or_alternative
+                          template: "Other data were reviewed, but documentation centered on {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_seen_fragmented_or_split_evidence
+                          template: "Workup summary: {axis_value}. Assessment signed."
+                heldout:
+                    clinical_assessment:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_heldout_clinical_assessment
+                          template: "The final assessment tied the conclusion to {axis_value}."
+                    contrast_or_alternative:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_heldout_contrast_or_alternative
+                          template: "The final note emphasized {axis_value}."
+                    fragmented_or_split_evidence:
+                        - id: diagnostic_evidence_type_specimen_or_specialized_test_heldout_fragmented_or_split_evidence
+                          template: "Review item: {axis_value}. Final note entered."
 
 duration_phrase_templates:
     - "{duration_days} days of {treatment}"

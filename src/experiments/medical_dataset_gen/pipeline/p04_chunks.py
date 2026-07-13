@@ -30,17 +30,12 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     new_chunk_state,
     reject_row,
     rejects_frame,
-    render_canonical_chunk_text,
+    render_canonical_chunk,
     rewrite_llm_chunk,
     row_from_state,
 )
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_text,
-)
-from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
-    deterministic_chunk_id,
-    deterministic_render_signature,
-    materialize_global_deterministic_documents,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
@@ -91,6 +86,18 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             '[chunks] use_llm_chunk_rewriting is ignored when use_llm_chunk_generation is enabled'
         )
 
+    if (
+        not cfg.generation.llm_config.use_llm_chunk_generation
+        and not cfg.generation.llm_config.use_llm_chunk_rewriting
+    ):
+        return _render_chunks_deterministic_parallel(
+            cfg=cfg,
+            paths=paths,
+            facts=facts,
+            ontology=ontology,
+        )
+
+    fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
     local_cache_path = paths.experiment_dir / 'chunk_generation_cache.jsonl'
     shared_cache_path = paths.root / '_cache' / 'chunk_generation_cache.jsonl'
     rewrite_cache_path = paths.root / '_cache' / 'chunk_rewrite_cache.jsonl'
@@ -122,19 +129,6 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
             f'({len(rewrite_cache.by_fact_id):,} exact fact keys, '
             f'{len(rewrite_cache.by_reuse_key):,} reusable keys)'
         )
-
-    if (
-        not cfg.generation.llm_config.use_llm_chunk_generation
-        and not cfg.generation.llm_config.use_llm_chunk_rewriting
-    ):
-        return _render_chunks_deterministic_parallel(
-            cfg=cfg,
-            paths=paths,
-            facts=facts,
-            ontology=ontology,
-        )
-
-    fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
 
     if cfg.generation.llm_config.use_llm_chunk_generation:
         rows, rejects, failed_queries = render_chunks_grouped_llm(
@@ -242,11 +236,12 @@ def render_chunks_sequential(
                 validation=validation,
             )
         else:
-            draft_text = render_canonical_chunk_text(
+            rendered_draft = render_canonical_chunk(
                 fact,
                 ontology,
                 cfg.generation.chunk_text_style,
             )
+            draft_text = rendered_draft.text
             if cfg.generation.llm_config.use_llm_chunk_rewriting:
                 cached = cached_rewrite_chunk_state(
                     cfg=cfg,
@@ -254,6 +249,7 @@ def render_chunks_sequential(
                     ontology=ontology,
                     cache=rewrite_cache,
                     draft_text=draft_text,
+                    rendered_template=rendered_draft,
                 )
                 if cached is not None:
                     rows.append(row_from_state(i, fact, cached[0]))
@@ -283,6 +279,7 @@ def render_chunks_sequential(
                             ontology,
                             text_style=cfg.generation.chunk_text_style,
                         ),
+                        rendered_template=rendered_draft,
                     )
                     cache_key = None
                 else:
@@ -298,6 +295,7 @@ def render_chunks_sequential(
                             ontology,
                             text_style=cfg.generation.chunk_text_style,
                         ),
+                        rendered_template=rendered_draft,
                     )
                     cache_key = rewrite_key
             else:
@@ -313,6 +311,7 @@ def render_chunks_sequential(
                         ontology,
                         text_style=cfg.generation.chunk_text_style,
                     ),
+                    rendered_template=rendered_draft,
                 )
 
         try:
@@ -409,12 +408,7 @@ def _render_chunks_deterministic_parallel(
             kept_rows += len(rows)
 
     chunk_rows = _chunk_rows_frame(rows_all) if rows_all else pl.DataFrame()
-    render_signature = deterministic_render_signature(cfg)
-    chunk_documents, chunk_memberships = _write_normalized_chunks(
-        paths,
-        chunk_rows,
-        render_signature=render_signature,
-    )
+    chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
 
     write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
     if chunks_with_soft_warnings:
@@ -461,11 +455,12 @@ def _render_deterministic_chunk_batch(
 
     for offset, fact_row in enumerate(fact_rows):
         fact = ClinicalFact.model_validate(fact_row)
-        draft_text = render_canonical_chunk_text(
+        rendered_draft = render_canonical_chunk(
             fact,
             _deterministic_worker_ontology,
             _deterministic_worker_cfg.generation.chunk_text_style,
         )
+        draft_text = rendered_draft.text
         state = new_chunk_state(
             draft_text,
             text_generation_source='fallback',
@@ -477,6 +472,7 @@ def _render_deterministic_chunk_batch(
                 _deterministic_worker_ontology,
                 text_style=_deterministic_worker_cfg.generation.chunk_text_style,
             ),
+            rendered_template=rendered_draft,
         )
         try:
             row, _ = finalize_chunk_row(
@@ -528,7 +524,6 @@ def _chunk_rows_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
 def _write_normalized_chunks(
     paths: MedicalDatasetGenPaths,
     chunk_rows: pl.DataFrame,
-    render_signature: str | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     if len(chunk_rows) == 0:
         chunk_documents = pl.DataFrame()
@@ -551,7 +546,7 @@ def _write_normalized_chunks(
         )
 
     doc_keys = chunk_rows.select('chunk_reuse_key').unique(maintain_order=True)
-    doc_key_to_id = _doc_key_to_chunk_id(doc_keys['chunk_reuse_key'].to_list(), render_signature)
+    doc_key_to_id = _doc_key_to_chunk_id(doc_keys['chunk_reuse_key'].to_list())
 
     with_doc_id = chunk_rows.with_columns(
         pl
@@ -587,6 +582,11 @@ def _write_normalized_chunks(
         'patient_sex',
         'clinical_subgroup_phrase',
         'note_style',
+        'chunk_surface_group',
+        'outer_template_family',
+        'outer_template_id',
+        'axis_template_family',
+        'axis_template_id',
         'validation_soft_warning_count',
         'validation_soft_warnings_json',
     ]
@@ -617,12 +617,6 @@ def _write_normalized_chunks(
         .unique(subset=['chunk_id'], keep='first', maintain_order=True)
         .sort('chunk_id')
     )
-    if render_signature is not None:
-        chunk_documents = materialize_global_deterministic_documents(
-            paths,
-            render_signature,
-            chunk_documents,
-        ).sort('chunk_id')
     chunk_memberships = with_doc_id.select([
         col for col in membership_cols if col in with_doc_id.columns
     ])
@@ -650,13 +644,8 @@ def _write_normalized_chunks(
     return chunk_documents, chunk_memberships
 
 
-def _doc_key_to_chunk_id(
-    chunk_reuse_keys: list[str],
-    render_signature: str | None,
-) -> dict[str, str]:
-    if render_signature is None:
-        return {key: chunk_id(idx) for idx, key in enumerate(chunk_reuse_keys)}
-    return {key: deterministic_chunk_id(render_signature, key) for key in chunk_reuse_keys}
+def _doc_key_to_chunk_id(chunk_reuse_keys: list[str]) -> dict[str, str]:
+    return {key: chunk_id(idx) for idx, key in enumerate(chunk_reuse_keys)}
 
 
 if __name__ == '__main__':

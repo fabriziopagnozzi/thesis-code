@@ -16,7 +16,10 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     new_chunk_state,
     word_count_errors,
 )
-from experiments.medical_dataset_gen.dataset_generation.chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
+    RenderedChunkTemplate,
+    validate_chunk_text,
+)
 from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
@@ -28,8 +31,8 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
-GENERATION_CACHE_VERSION = 11
-REWRITE_CACHE_VERSION = 3
+GENERATION_CACHE_VERSION = 12
+REWRITE_CACHE_VERSION = 4
 
 
 @dataclass
@@ -105,6 +108,7 @@ def chunk_generation_cache_key(cfg: ExperimentCfg, fact: ClinicalFact) -> str:
         'patient_sex': fact.patient_sex,
         'clinical_subgroup_phrase': fact.clinical_subgroup_phrase,
         'note_style': fact.note_style,
+        'chunk_surface_group': fact.chunk_surface_group,
         'chunk_min_words': cfg.generation.chunk_pools.chunk_min_words,
         'chunk_max_words': cfg.generation.chunk_pools.chunk_max_words,
         'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,
@@ -146,6 +150,7 @@ def chunk_rewrite_cache_key(
         'patient_sex': fact.patient_sex,
         'clinical_subgroup_phrase': fact.clinical_subgroup_phrase,
         'note_style': fact.note_style,
+        'chunk_surface_group': fact.chunk_surface_group,
         'chunk_min_words': cfg.generation.chunk_pools.chunk_min_words,
         'chunk_max_words': cfg.generation.chunk_pools.chunk_max_words,
         'chunk_word_tolerance': cfg.generation.chunk_pools.chunk_word_tolerance,
@@ -220,6 +225,7 @@ def cached_rewrite_chunk_state(
     ontology: MedicalOntology,
     cache: GenerationCache,
     draft_text: str,
+    rendered_template: RenderedChunkTemplate | None = None,
 ) -> tuple[ChunkState, str] | None:
     current_cache_key = chunk_rewrite_cache_key(cfg, fact, draft_text)
     hit_kind: Literal['fact_id', 'reuse_key'] = 'fact_id'
@@ -261,6 +267,7 @@ def cached_rewrite_chunk_state(
             cache_hit=True,
             cache_hit_kind=hit_kind,
             validation=validation,
+            rendered_template=rendered_template,
         ),
         hit_kind,
     )

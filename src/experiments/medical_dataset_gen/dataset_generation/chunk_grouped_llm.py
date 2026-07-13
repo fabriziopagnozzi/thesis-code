@@ -26,11 +26,14 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     generate_llm_chunk,
     new_chunk_state,
     reject_row,
-    render_canonical_chunk_text,
+    render_canonical_chunk,
     rewrite_llm_chunk,
     row_from_state,
 )
-from experiments.medical_dataset_gen.dataset_generation.chunk_templates import validate_chunk_text
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
+    RenderedChunkTemplate,
+    validate_chunk_text,
+)
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkRow,
     ClinicalFact,
@@ -393,19 +396,29 @@ def _render_rewrite_query_group(
     pbar: tqdm,
 ) -> tuple[int, int, int, int]:
     draft_text_by_index: dict[int, str] = {}
+    rendered_draft_by_index: dict[int, RenderedChunkTemplate] = {}
     rewrite_key_by_index: dict[int, str] = {}
     missing_groups: dict[str, list[tuple[int, ClinicalFact]]] = {}
     exact_cache_hits = 0
     reusable_cache_hits = 0
 
     for idx, fact in query_group:
-        draft_text = render_canonical_chunk_text(
+        rendered_draft = render_canonical_chunk(
             fact,
             ontology,
             cfg.generation.chunk_text_style,
         )
+        draft_text = rendered_draft.text
         draft_text_by_index[idx] = draft_text
-        cached = cached_rewrite_chunk_state(cfg, fact, ontology, cache, draft_text)
+        rendered_draft_by_index[idx] = rendered_draft
+        cached = cached_rewrite_chunk_state(
+            cfg,
+            fact,
+            ontology,
+            cache,
+            draft_text,
+            rendered_template=rendered_draft,
+        )
         if cached is not None:
             state, hit_kind = cached
             rows[idx] = row_from_state(idx, fact, state)
@@ -436,6 +449,7 @@ def _render_rewrite_query_group(
             continue
 
         draft_text = draft_text_by_index[idx]
+        rendered_draft = rendered_draft_by_index[idx]
         rewrite_key = rewrite_key_by_index[idx]
         rewritten_text, attempt_errors = rewrite_results[rewrite_key]
         if attempt_errors:
@@ -454,6 +468,7 @@ def _render_rewrite_query_group(
                     ontology,
                     text_style=cfg.generation.chunk_text_style,
                 ),
+                rendered_template=rendered_draft,
             )
             cache_key = None
         else:
@@ -468,6 +483,7 @@ def _render_rewrite_query_group(
                     ontology,
                     text_style=cfg.generation.chunk_text_style,
                 ),
+                rendered_template=rendered_draft,
             )
             cache_key = rewrite_key
 

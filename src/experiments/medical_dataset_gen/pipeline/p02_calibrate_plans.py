@@ -157,7 +157,14 @@ def _prepare_probe(
         start = len(texts)
         for local_idx in range(probe_n):
             fact = make_gold_fact(plan, facet, ontology, local_idx, rng)
-            texts.append(render_canonical_chunk_text(fact, ontology, chunk_text_style))
+            texts.append(
+                render_canonical_chunk_text(
+                    fact,
+                    ontology,
+                    chunk_text_style,
+                    surface_group='seen',
+                )
+            )
             labels.append(facet.facet_id)
         offsets[facet.facet_id] = (start, len(texts))
     return {'texts': texts, 'offsets': offsets, 'labels': labels}

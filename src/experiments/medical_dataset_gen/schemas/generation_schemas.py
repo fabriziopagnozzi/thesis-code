@@ -36,6 +36,21 @@ type CohortContrastFamily = Literal[
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
+type ChunkSurfaceGroup = Literal['seen', 'heldout']
+CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_args(ChunkSurfaceGroup.__value__))
+type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']
+type AxisTemplateFamily = Literal[
+    'direct_fact',
+    'temporal_course',
+    'clinical_assessment',
+    'contrast_or_alternative',
+    'fragmented_or_split_evidence',
+]
+AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](
+    get_args(AxisTemplateFamily.__value__)
+)
+SEEN_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
+HELDOUT_AXIS_TEMPLATE_FAMILIES = list[AxisTemplateFamily](AXIS_TEMPLATE_FAMILY_LIST[2:])
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
 type ConditionKey = str
@@ -858,6 +873,7 @@ class ClinicalFact(BenchmarkPydanticModel):
     patient_sex: PatientSex
     clinical_subgroup_phrase: str
     note_style: str
+    chunk_surface_group: ChunkSurfaceGroup = 'seen'
     split: DataSplit
     must_mention: list[str] = Field(default_factory=list)
     must_not_mention: list[str] = Field(default_factory=list)
@@ -890,6 +906,10 @@ class ChunkState:
     cache_hit: bool = False
     cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss'
     validation_soft_warnings: list[str] = field(default_factory=list[str])
+    outer_template_family: str | None = None
+    outer_template_id: str | None = None
+    axis_template_family: str | None = None
+    axis_template_id: str | None = None
 
 
 class ChunkRow(ClinicalFact):
@@ -901,6 +921,10 @@ class ChunkRow(ClinicalFact):
     llm_rejected: bool
     generation_cache_hit: bool
     generation_cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key']
+    outer_template_family: str | None = None
+    outer_template_id: str | None = None
+    axis_template_family: str | None = None
+    axis_template_id: str | None = None
     validation_soft_warning_count: int
     validation_soft_warnings_json: str
 
@@ -918,6 +942,10 @@ class ChunkRow(ClinicalFact):
         cache_hit: bool,
         cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'],
         validation_soft_warnings: list[str],
+        outer_template_family: str | None = None,
+        outer_template_id: str | None = None,
+        axis_template_family: str | None = None,
+        axis_template_id: str | None = None,
     ) -> ChunkRow:
         return cls(
             **fact.model_dump(mode='python'),
@@ -929,6 +957,10 @@ class ChunkRow(ClinicalFact):
             llm_rejected=llm_rejected,
             generation_cache_hit=cache_hit,
             generation_cache_hit_kind=cache_hit_kind,
+            outer_template_family=outer_template_family,
+            outer_template_id=outer_template_id,
+            axis_template_family=axis_template_family,
+            axis_template_id=axis_template_id,
             validation_soft_warning_count=len(validation_soft_warnings),
             validation_soft_warnings_json=json.dumps(validation_soft_warnings, sort_keys=True),
         )
@@ -946,20 +978,129 @@ class ChunkRow(ClinicalFact):
             cache_hit=state.cache_hit,
             cache_hit_kind=state.cache_hit_kind,
             validation_soft_warnings=list(state.validation_soft_warnings),
+            outer_template_family=state.outer_template_family,
+            outer_template_id=state.outer_template_id,
+            axis_template_family=state.axis_template_family,
+            axis_template_id=state.axis_template_id,
         )
 
 
+class TemplateSpec(BenchmarkPydanticModel):
+    id: str
+    template: str
+
+
+class SurfaceTemplateBucket(BenchmarkPydanticModel):
+    seen: list[TemplateSpec] = Field(min_length=1)
+    heldout: list[TemplateSpec] = Field(min_length=1)
+
+    def templates_for_group(self, surface_group: ChunkSurfaceGroup) -> list[TemplateSpec]:
+        if surface_group == 'seen':
+            return self.seen
+        return self.heldout
+
+
 class CohortEvidenceTemplates(BenchmarkPydanticModel):
-    comorbidity_present: list[str]
-    comorbidity_reference: list[str]
+    comorbidity_present: SurfaceTemplateBucket
+    comorbidity_reference: SurfaceTemplateBucket
+
+
+class SemanticAxisBinTemplates(BenchmarkPydanticModel):
+    seen: dict[AxisTemplateFamily, list[TemplateSpec]]
+    heldout: dict[AxisTemplateFamily, list[TemplateSpec]]
+
+    @model_validator(mode='after')
+    def _validate_surface_counts(self) -> SemanticAxisBinTemplates:
+        self._validate_group('seen', self.seen, SEEN_AXIS_TEMPLATE_FAMILIES)
+        self._validate_group('heldout', self.heldout, HELDOUT_AXIS_TEMPLATE_FAMILIES)
+        return self
+
+    @staticmethod
+    def _validate_group(
+        surface_group: ChunkSurfaceGroup,
+        templates: dict[AxisTemplateFamily, list[TemplateSpec]],
+        expected_families: list[AxisTemplateFamily],
+    ) -> None:
+        expected = set(expected_families)
+        actual = set(templates)
+        if actual != expected:
+            raise ValueError(
+                f'semantic_hardened {surface_group} families must be {sorted(expected)}; '
+                f'got {sorted(actual)}'
+            )
+        empty = [family for family, specs in templates.items() if not specs]
+        if empty:
+            raise ValueError(f'semantic_hardened {surface_group} families are empty: {empty}')
+
+    def template_specs(
+        self,
+        surface_group: ChunkSurfaceGroup,
+    ) -> list[tuple[AxisTemplateFamily, TemplateSpec]]:
+        templates = self.seen if surface_group == 'seen' else self.heldout
+        families = SEEN_AXIS_TEMPLATE_FAMILIES if surface_group == 'seen' else HELDOUT_AXIS_TEMPLATE_FAMILIES
+        return [
+            (family, spec)
+            for family in families
+            for spec in templates.get(family, [])
+        ]
+
+
+class ChunkAxisSentenceTemplates(BenchmarkPydanticModel):
+    ontology_explicit: dict[ClinicalAxis, dict[str, list[str]]]
+    semantic_hardened: dict[ClinicalAxis, dict[str, SemanticAxisBinTemplates]]
 
 
 class ChunkTemplateUtils(BenchmarkPydanticModel):
     hidden_benchmark_terms: list[str]
     duration_phrase_templates: list[str]
-    note_style_templates: dict[str, list[str]]
+    note_style_templates: dict[str, SurfaceTemplateBucket]
     cohort_evidence_templates: CohortEvidenceTemplates
-    axis_sentence_templates: dict[ChunkTextStyle, dict[ClinicalAxis, dict[str, list[str]]]]
+    axis_sentence_templates: ChunkAxisSentenceTemplates
+
+    @model_validator(mode='after')
+    def _validate_semantic_hardened_template_inventory(self) -> ChunkTemplateUtils:
+        template_ids: set[str] = set()
+        duplicate_ids: set[str] = set()
+        for bucket in self.note_style_templates.values():
+            for spec in [*bucket.seen, *bucket.heldout]:
+                if spec.id in template_ids:
+                    duplicate_ids.add(spec.id)
+                template_ids.add(spec.id)
+        for bucket in (
+            self.cohort_evidence_templates.comorbidity_present,
+            self.cohort_evidence_templates.comorbidity_reference,
+        ):
+            for spec in [*bucket.seen, *bucket.heldout]:
+                if spec.id in template_ids:
+                    duplicate_ids.add(spec.id)
+                template_ids.add(spec.id)
+        for axis, bins in self.axis_sentence_templates.semantic_hardened.items():
+            seen_families_by_bin: set[frozenset[AxisTemplateFamily]] = set()
+            heldout_families_by_bin: set[frozenset[AxisTemplateFamily]] = set()
+            for value_bin, grouped in bins.items():
+                seen_specs = grouped.template_specs('seen')
+                heldout_specs = grouped.template_specs('heldout')
+                total = len(seen_specs) + len(heldout_specs)
+                if len(seen_specs) != 5 or len(heldout_specs) != 3 or total != 8:
+                    raise ValueError(
+                        f'semantic_hardened {axis}/{value_bin} must define exactly '
+                        f'5 seen and 3 heldout templates; got {len(seen_specs)} seen '
+                        f'and {len(heldout_specs)} heldout'
+                    )
+                seen_families_by_bin.add(frozenset(family for family, _ in seen_specs))
+                heldout_families_by_bin.add(frozenset(family for family, _ in heldout_specs))
+                for _, spec in [*seen_specs, *heldout_specs]:
+                    if spec.id in template_ids:
+                        duplicate_ids.add(spec.id)
+                    template_ids.add(spec.id)
+            if len(seen_families_by_bin) != 1 or len(heldout_families_by_bin) != 1:
+                raise ValueError(
+                    f'semantic_hardened template families must be identical across bins '
+                    f'for axis {axis}'
+                )
+        if duplicate_ids:
+            raise ValueError(f'duplicate chunk template ids: {sorted(duplicate_ids)}')
+        return self
 
 
 class QueryTemplateSpec(BenchmarkPydanticModel):
