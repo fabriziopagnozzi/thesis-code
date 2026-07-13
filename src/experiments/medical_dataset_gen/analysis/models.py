@@ -39,8 +39,8 @@ class CliArgs:
     plots: bool
     plot_format: PlotFormat
     near_optimal_epsilon: float
-    bootstrap_replicates: int
-    bootstrap_seed: int
+    bootstrap_replicates: int = 1000
+    bootstrap_seed: int = 20260712
 
 
 @dataclass(frozen=True)

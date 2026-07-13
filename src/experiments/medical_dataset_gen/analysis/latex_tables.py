@@ -242,7 +242,15 @@ def _embedding_edge_case_result_macros(
 ) -> dict[str, str]:
     """Expose the paired DOM_M03 low-budget reversal used in the thesis claims."""
     target_distribution = 'DOM_M03_dominance_high'
-    target_budget = 5
+    matching_budgets = sorted(
+        {
+            int(k)
+            for row in rows
+            if row.get('Distribution') == target_distribution
+            and (k := _float(row.get('k'))) is not None
+        }
+    )
+    target_budget = matching_budgets[0] if matching_budgets else None
     model_prefixes = {
         'Bge': 'BAAI/bge-m3',
         'Qwen': 'Qwen/Qwen3-Embedding-0.6B',
@@ -255,6 +263,7 @@ def _embedding_edge_case_result_macros(
                 for row in rows
                 if row.get('Distribution') == target_distribution
                 and row.get('EmbeddingModel') == model_name
+                and target_budget is not None
                 and _float(row.get('k')) == target_budget
             ),
             None,

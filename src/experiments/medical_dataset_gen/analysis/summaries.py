@@ -34,17 +34,23 @@ from experiments.medical_dataset_gen.analysis.report_config import (
 
 
 def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, int], dict[str, Mapping[str, object]]] = {}
+    grouped: dict[tuple[str, int, str, str], dict[str, Mapping[str, object]]] = {}
     for row in strategy_rows:
         experiment = str(row.get('Experiment') or '')
         k = int_or_none(row.get('k'))
         strategy = row.get('strategy')
         if not experiment or k is None or strategy not in STRATEGIES:
             continue
-        grouped.setdefault((experiment, k), {})[cast(str, strategy)] = row
+        geometry_population = str(row.get('GeometryPopulation') or '')
+        lambda_policy = str(row.get('LambdaPolicy') or '')
+        grouped.setdefault((experiment, k, geometry_population, lambda_policy), {})[
+            cast(str, strategy)
+        ] = row
 
     rows: list[dict[str, object]] = []
-    for (experiment, k), by_strategy in sorted(grouped.items()):
+    for (experiment, k, _geometry_population, _lambda_policy), by_strategy in sorted(
+        grouped.items()
+    ):
         first = next(iter(by_strategy.values()))
         out = {
             'Experiment': experiment,
@@ -60,6 +66,11 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             'QueryScope': first.get('QueryScope'),
             'k': k,
             'SelectionSource': first.get('SelectionSource'),
+            'LambdaPolicy': first.get('LambdaPolicy'),
+            'GeometrySourceExperiment': first.get('GeometrySourceExperiment'),
+            'GeometryPopulation': first.get('GeometryPopulation'),
+            'GeometryPopulationLabel': first.get('GeometryPopulationLabel'),
+            'PopulationPassFilterValue': first.get('PopulationPassFilterValue'),
         }
         for strategy in STRATEGIES:
             row = by_strategy.get(strategy)
@@ -353,6 +364,9 @@ def _metric_group_summary_row(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
+    topk_col = f'TopK_{metric}'
+    mmr_col = f'MMR_{metric}'
+    facloc_col = f'FacLoc_{metric}'
     complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
     deltas_fm = numeric_values(complete_rows, delta_fm_col)
     deltas_ft = numeric_values(complete_rows, delta_ft_col)
@@ -365,6 +379,9 @@ def _metric_group_summary_row(
         'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
         'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
         'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
+        'MeanTopK': _mean_or_none(numeric_values(complete_rows, topk_col)),
+        'MeanMMR': _mean_or_none(numeric_values(complete_rows, mmr_col)),
+        'MeanFacLoc': _mean_or_none(numeric_values(complete_rows, facloc_col)),
         'TieEpsilon': practical_effect_threshold(metric),
     }
     _add_outcome_percentages(
@@ -423,6 +440,9 @@ def _metric_aggregate_row(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
+    topk_col = f'TopK_{metric}'
+    mmr_col = f'MMR_{metric}'
+    facloc_col = f'FacLoc_{metric}'
     complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
     deltas_fm = numeric_values(complete_rows, delta_fm_col)
     deltas_ft = numeric_values(complete_rows, delta_ft_col)
@@ -457,8 +477,15 @@ def _metric_aggregate_row(
         'MedianDeltaFacLocMMR': statistics.median(deltas_fm) if deltas_fm else None,
         'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
         'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
+        'MeanTopK': _mean_or_none(numeric_values(complete_rows, topk_col)),
+        'MeanMMR': _mean_or_none(numeric_values(complete_rows, mmr_col)),
+        'MeanFacLoc': _mean_or_none(numeric_values(complete_rows, facloc_col)),
         'TieEpsilon': threshold,
     }
+
+
+def _mean_or_none(values: Sequence[float]) -> float | None:
+    return statistics.fmean(values) if values else None
 
 
 def low_budget_rows_from_comparisons(

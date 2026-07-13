@@ -53,6 +53,12 @@ from experiments.medical_dataset_gen.analysis.summaries import (
     metric_family_budget_summary_rows,
     metric_family_summary_rows,
 )
+from experiments.medical_dataset_gen.analysis.validity import (
+    geometry_population_strategy_rows,
+    global_lambda_strategy_rows,
+    lodo_lambda_strategy_rows,
+    synthetic_artifact_diagnostic_rows,
+)
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
 )
@@ -95,6 +101,33 @@ def run_report(args: CliArgs) -> ReportOutputs:
         lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
         lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
         comparison_rows = comparison_by_k_rows(strategy_rows)
+        geometry_population_strategy_rows_data = geometry_population_strategy_rows(
+            plot_and_recap_records,
+            warnings=warnings,
+        )
+        geometry_population_comparison_rows = comparison_by_k_rows(
+            geometry_population_strategy_rows_data
+        )
+        global_lambda_strategy_rows_data = global_lambda_strategy_rows(records, warnings=warnings)
+        global_lambda_comparison_rows = comparison_by_k_rows(global_lambda_strategy_rows_data)
+        global_lambda_budget_rows = budget_category_rows_from_comparisons(
+            global_lambda_comparison_rows
+        )
+        global_lambda_metric_summary_rows = metric_aggregate_summary_rows(
+            comparison_rows=global_lambda_comparison_rows,
+            budget_rows=global_lambda_budget_rows,
+        )
+        lodo_lambda_strategy_rows_data = lodo_lambda_strategy_rows(records, warnings=warnings)
+        lodo_lambda_comparison_rows = comparison_by_k_rows(lodo_lambda_strategy_rows_data)
+        lodo_lambda_budget_rows = budget_category_rows_from_comparisons(lodo_lambda_comparison_rows)
+        lodo_lambda_metric_summary_rows = metric_aggregate_summary_rows(
+            comparison_rows=lodo_lambda_comparison_rows,
+            budget_rows=lodo_lambda_budget_rows,
+        )
+        synthetic_artifact_diagnostic_rows_data = synthetic_artifact_diagnostic_rows(
+            records,
+            warnings=warnings,
+        )
         family_summary_rows = experiment_family_summary_rows(comparison_rows)
         budget_rows = budget_category_rows_from_comparisons(comparison_rows)
         family_budget_summary_rows = experiment_family_budget_summary_rows(budget_rows)
@@ -147,6 +180,30 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'geometry_filter_summary.csv', geometry_rows)
         write_csv(args.output_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(args.output_dir / 'comparison_by_k.csv', comparison_rows)
+        write_csv(
+            args.output_dir / 'geometry_population_strategy_by_k.csv',
+            geometry_population_strategy_rows_data,
+        )
+        write_csv(
+            args.output_dir / 'geometry_population_comparison_by_k.csv',
+            geometry_population_comparison_rows,
+        )
+        write_csv(args.output_dir / 'global_lambda_strategy_by_k.csv', global_lambda_strategy_rows_data)
+        write_csv(args.output_dir / 'global_lambda_comparison_by_k.csv', global_lambda_comparison_rows)
+        write_csv(
+            args.output_dir / 'global_lambda_metric_aggregate_summary.csv',
+            global_lambda_metric_summary_rows,
+        )
+        write_csv(args.output_dir / 'lodo_lambda_strategy_by_k.csv', lodo_lambda_strategy_rows_data)
+        write_csv(args.output_dir / 'lodo_lambda_comparison_by_k.csv', lodo_lambda_comparison_rows)
+        write_csv(
+            args.output_dir / 'lodo_lambda_metric_aggregate_summary.csv',
+            lodo_lambda_metric_summary_rows,
+        )
+        write_csv(
+            args.output_dir / 'synthetic_artifact_diagnostics.csv',
+            synthetic_artifact_diagnostic_rows_data,
+        )
         write_csv(args.output_dir / 'experiment_family_summary.csv', family_summary_rows)
         write_csv(
             args.output_dir / 'experiment_family_budget_summary.csv',
@@ -168,22 +225,25 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(args.output_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
         write_csv(args.output_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
         write_csv(args.output_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
-        (THESIS_AGGREGATE_TABLES_PATH).write_text(
-            render_thesis_aggregate_tables(
-                metric_summary_rows=metric_summary_rows,
-                metric_family_summary_rows=metric_family_summary_rows_data,
-                metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+        if _should_write_thesis_outputs(args):
+            (THESIS_AGGREGATE_TABLES_PATH).write_text(
+                render_thesis_aggregate_tables(
+                    metric_summary_rows=metric_summary_rows,
+                    metric_family_summary_rows=metric_family_summary_rows_data,
+                    metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+                )
             )
-        )
-        (THESIS_RESULT_MACROS_PATH).write_text(
-            render_thesis_result_macros(
-                geometry_rows=geometry_rows,
-                comparison_rows=comparison_rows,
-                budget_rows=budget_rows,
-                lambda_safety_rows=lambda_safety_rows,
+            (THESIS_RESULT_MACROS_PATH).write_text(
+                render_thesis_result_macros(
+                    geometry_rows=geometry_rows,
+                    comparison_rows=comparison_rows,
+                    budget_rows=budget_rows,
+                    lambda_safety_rows=lambda_safety_rows,
+                )
             )
-        )
-        THESIS_STATISTICAL_TABLE_PATH.write_text(render_statistical_latex_table(paired_suite_rows))
+            THESIS_STATISTICAL_TABLE_PATH.write_text(
+                render_statistical_latex_table(paired_suite_rows)
+            )
 
         figures: list[Path] = []
         if args.plots:
@@ -212,6 +272,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 warnings=warnings,
             )
 
+        warnings = _dedupe_warnings(warnings)
         report_text = render_report(
             args=args,
             records=records,
@@ -269,6 +330,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'near_optimal_epsilon': args.near_optimal_epsilon,
                     'bootstrap_replicates': args.bootstrap_replicates,
                     'bootstrap_seed': args.bootstrap_seed,
+                    'validity_outputs': {
+                        'geometry_population_runs': len(geometry_population_strategy_rows_data),
+                        'global_lambda_runs': len(global_lambda_strategy_rows_data),
+                        'lodo_lambda_runs': len(lodo_lambda_strategy_rows_data),
+                        'synthetic_artifact_diagnostic_rows': len(
+                            synthetic_artifact_diagnostic_rows_data
+                        ),
+                    },
                 },
                 indent=2,
                 sort_keys=True,
@@ -284,6 +353,22 @@ def run_report(args: CliArgs) -> ReportOutputs:
         )
     finally:
         MedicalDatasetGenPaths.results_dir = old_results_dir
+
+
+def _dedupe_warnings(warnings: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for warning in warnings:
+        if warning in seen:
+            continue
+        seen.add(warning)
+        deduped.append(warning)
+    return deduped
+
+
+def _should_write_thesis_outputs(args: CliArgs) -> bool:
+    default_output_dir = args.results_dir / '_reports' / 'experiment_comparison'
+    return args.output_dir.resolve() == default_output_dir.resolve()
 
 
 def _plot_budget_rows(
