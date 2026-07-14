@@ -9,6 +9,7 @@ import polars as pl
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
+from experiments.medical_dataset_gen.evaluation.eval_plot_data import EvaluationResultLookup
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     DEFAULT_EVAL_PLOT_THEME,
     DEFAULT_PLOT_GRID_LAYOUTS,
@@ -45,6 +46,7 @@ def plot_metrics_at_best_lambda_for_k(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    result_lookup: EvaluationResultLookup | None = None,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Metric-vs-k lines.
@@ -53,6 +55,7 @@ def plot_metrics_at_best_lambda_for_k(
     lambda* path for each k, with the exact lambda annotated at each marker.
     """
     _set_active_plot_theme(plot_theme)
+    result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
 
     k_values = sorted(stats_df['k'].unique().to_list())
@@ -72,7 +75,7 @@ def plot_metrics_at_best_lambda_for_k(
                 xs = sorted(sub['k'].unique().to_list())
                 ys = [_cell_value(sub, k, None, stats_col) for k in xs]
                 ci = [
-                    ci_half_width(_query_vals(results_df, strategy, k, None, result_col))
+                    ci_half_width(result_lookup.query_values(strategy, k, None, result_col))
                     for k in xs
                 ]
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
@@ -86,7 +89,9 @@ def plot_metrics_at_best_lambda_for_k(
             lams = [float(v) for v in best_df['lam'].to_list()]
             k_to_lam = dict(zip(xs, lams, strict=True))
             ci = [
-                ci_half_width(_query_vals(results_df, strategy, k, k_to_lam.get(k), result_col))
+                    ci_half_width(
+                        result_lookup.query_values(strategy, k, k_to_lam.get(k), result_col)
+                    )
                 for k in xs
             ]
             ax.plot(
@@ -661,6 +666,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
+    result_lookup: EvaluationResultLookup | None = None,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
@@ -669,6 +675,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     For lower-is-better diagnostics, negative bars are favorable.
     """
     _set_active_plot_theme(plot_theme)
+    result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -694,7 +701,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     for row_idx, (stats_col, result_col, title, higher_is_better) in enumerate(metrics):
         row_ylim = _shared_delta_vs_topk_ylim(
             stats_df,
-            results_df,
+            result_lookup,
             metric=stats_col,
             result_col=result_col,
             strategies=diversity_strategies,
@@ -722,7 +729,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
                     )
                     strat_val = float(sub[stats_col][0]) if sub.height > 0 else ref_val
                     deltas.append(strat_val - ref_val)
-                    cis.append(_paired_delta_ci(results_df, strategy, k, lam, result_col))
+                    cis.append(result_lookup.paired_delta_ci(strategy, k, lam, result_col))
 
                 y = np.asarray(deltas, dtype=float)
                 ci = np.asarray([0.0 if np.isnan(c) else c for c in cis], dtype=float)
@@ -789,10 +796,12 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    result_lookup: EvaluationResultLookup | None = None,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Paired delta bars using lambda* per strategy and k, with per-bar lambda labels."""
     _set_active_plot_theme(plot_theme)
+    result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -828,7 +837,7 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
                     strat_val = ref_val
                     lam = None
                 deltas.append(strat_val - ref_val)
-                cis.append(_paired_delta_ci(results_df, strategy, k, lam, result_col))
+                cis.append(result_lookup.paired_delta_ci(strategy, k, lam, result_col))
                 selected_lambdas.append(lam)
 
             ci_display = [0.0 if np.isnan(c) else c for c in cis]
@@ -1158,10 +1167,12 @@ def plot_answer_metrics_at_best_lambda_for_k(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
+    result_lookup: EvaluationResultLookup | None = None,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Auxiliary answer-token overlap diagnostics."""
     _set_active_plot_theme(plot_theme)
+    result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
 
     metrics = _available_answer_rouge_metrics(stats_df, results_df)
@@ -1184,7 +1195,7 @@ def plot_answer_metrics_at_best_lambda_for_k(
                 xs = sorted(sub['k'].unique().to_list())
                 ys = [_cell_value(sub, k, None, stats_col) for k in xs]
                 ci = [
-                    ci_half_width(_query_vals(results_df, strategy, k, None, result_col))
+                    ci_half_width(result_lookup.query_values(strategy, k, None, result_col))
                     for k in xs
                 ]
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
@@ -1198,7 +1209,9 @@ def plot_answer_metrics_at_best_lambda_for_k(
             lams = [float(v) for v in best_df['lam'].to_list()]
             k_to_lam = dict(zip(xs, lams, strict=True))
             ci = [
-                ci_half_width(_query_vals(results_df, strategy, k, k_to_lam.get(k), result_col))
+                    ci_half_width(
+                        result_lookup.query_values(strategy, k, k_to_lam.get(k), result_col)
+                    )
                 for k in xs
             ]
             ax.plot(
@@ -1628,7 +1641,7 @@ def _shared_lambda_sensitivity_ylim(
 
 def _shared_delta_vs_topk_ylim(
     stats_df: pl.DataFrame,
-    results_df: pl.DataFrame,
+    result_lookup: EvaluationResultLookup,
     *,
     metric: str,
     result_col: str,
@@ -1648,7 +1661,7 @@ def _shared_delta_vs_topk_ylim(
                     (pl.col('strategy') == strategy) & (pl.col('k') == k) & (pl.col('lam') == lam)
                 )
                 delta = float(sub[metric][0]) - ref_val if sub.height > 0 else 0.0
-                ci = _paired_delta_ci(results_df, strategy, k, lam, result_col)
+                ci = result_lookup.paired_delta_ci(strategy, k, lam, result_col)
                 ci_display = 0.0 if _is_nonfinite_float(ci) else ci
                 values.extend([delta - ci_display, delta, delta + ci_display])
 

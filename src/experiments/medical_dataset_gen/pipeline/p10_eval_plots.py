@@ -8,6 +8,7 @@ from typing import Literal, cast
 
 import polars as pl
 
+from experiments.medical_dataset_gen.evaluation.eval_plot_data import EvaluationResultLookup
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     ANSWER_ROUGE_EVAL_PLOT_FILE_NAMES,
     DEFAULT_ENABLED_EVAL_PLOT_NAMES,
@@ -102,6 +103,8 @@ def run_eval_plots(
             validation_grid_stats_df=validation_grid_stats_df,
             results_df=plot_results_df,
             validation_results_df=validation_results_df,
+            result_lookup=EvaluationResultLookup(plot_results_df),
+            validation_result_lookup=EvaluationResultLookup(validation_results_df),
             out_dir=out_dir,
         )
         selected_job_names = (
@@ -158,6 +161,8 @@ def build_plot_jobs(
     validation_grid_stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     validation_results_df: pl.DataFrame,
+    result_lookup: EvaluationResultLookup,
+    validation_result_lookup: EvaluationResultLookup,
     out_dir: Path,
 ) -> list[tuple[EvalPlotFileName, Callable[[], None]]]:
     available_plot_names: list[EvalPlotFileName] = [
@@ -177,6 +182,8 @@ def build_plot_jobs(
                     validation_grid_stats_df=validation_grid_stats_df,
                     results_df=results_df,
                     validation_results_df=validation_results_df,
+                    result_lookup=result_lookup,
+                    validation_result_lookup=validation_result_lookup,
                     out_dir=out_dir,
                 ),
             ),
@@ -193,6 +200,8 @@ def _plot_context_for_name(
     validation_grid_stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     validation_results_df: pl.DataFrame,
+    result_lookup: EvaluationResultLookup,
+    validation_result_lookup: EvaluationResultLookup,
     out_dir: Path,
 ) -> EvalPlotCallContext:
     uses_validation_grid = (
@@ -200,9 +209,13 @@ def _plot_context_for_name(
     )
     effective_stats_df = validation_grid_stats_df if uses_validation_grid else stats_df
     effective_results_df = validation_results_df if uses_validation_grid else results_df
+    effective_result_lookup = (
+        validation_result_lookup if uses_validation_grid else result_lookup
+    )
     return {
         'stats_df': effective_stats_df,
         'results_df': effective_results_df,
+        'result_lookup': effective_result_lookup,
         'out_dir': out_dir,
         'lambda_selection': cfg.evaluation.lambda_selection,
         'plot_theme': cfg.evaluation.plot_theme,

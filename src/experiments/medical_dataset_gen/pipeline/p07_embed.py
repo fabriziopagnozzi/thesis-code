@@ -180,7 +180,7 @@ def _fill_deterministic_chunk_embedding_memmaps(
 
     embedding_signature = chunk_embedding_signature(cfg)
     cache_dir = paths.chunk_embeddings_cache_dir(embedding_signature)
-    chunk_documents = _chunk_documents_with_embedding_cache_keys(paths, embedding_signature)
+    chunk_documents = _chunk_documents_for_embedding_cache(paths)
     cache = load_matching_chunk_embedding_cache_by_text(
         paths=paths,
         embedding_signature=embedding_signature,
@@ -210,58 +210,65 @@ def _fill_deterministic_chunk_embedding_memmaps(
             .alias('cached_text_sha256')
         )
 
-    miss_rows: list[dict[str, object]] = []
-    hits = 0
+    hit_rows = joined.filter(pl.col('embedding').is_not_null())
+    miss_rows = joined.filter(pl.col('embedding').is_null())
+    invalid_dimensions = hit_rows.filter(
+        pl.col('dimension').is_null() | (pl.col('dimension') != dim)
+    )
+    if invalid_dimensions.height:
+        chunk_id_value = str(invalid_dimensions['chunk_id'][0])
+        cached_dimension = invalid_dimensions['dimension'][0]
+        raise RuntimeError(
+            f'cached embedding dimension mismatch for {chunk_id_value}: '
+            f'{cached_dimension} != {dim}'
+        )
+    invalid_hashes = hit_rows.filter(pl.col('cached_text_sha256') != pl.col('text_sha256'))
+    if invalid_hashes.height:
+        raise RuntimeError(
+            f'cached text hash mismatch for {invalid_hashes["chunk_id"][0]!s}'
+        )
+
+    # Copy cached vectors in bounded columnar batches. Materializing named Python
+    # dictionaries for every document dominates startup time on large cache hits.
+    hit_copy_batch_size = max(cfg.embeddings.batch_size * 16, 1)
+    for start in range(0, hit_rows.height, hit_copy_batch_size):
+        hit_batch = hit_rows.slice(start, hit_copy_batch_size)
+        row_indices = np.asarray(hit_batch['_row_idx'].to_numpy(), dtype=np.intp)
+        vectors_for_batch = np.asarray(hit_batch['embedding'].to_list(), dtype=np.float32)
+        if vectors_for_batch.shape != (hit_batch.height, dim):
+            raise RuntimeError(
+                'cached embedding shape mismatch: '
+                f'{vectors_for_batch.shape} != {(hit_batch.height, dim)}'
+            )
+        vectors[row_indices] = vectors_for_batch
+        ids[row_indices] = np.asarray(hit_batch['chunk_id'].to_list(), dtype=ids.dtype)
+
+    hits = hit_rows.height
     new_cache_keys: set[str] = set()
-    for row in joined.iter_rows(named=True):
-        row_index = int(row['_row_idx'])
-        chunk_id_value = str(row['chunk_id'])
-        ids[row_index] = chunk_id_value
-        embedding = row.get('embedding')
-        if embedding is None:
-            miss_rows.append(row)
-            continue
-        cached_dimension = row.get('dimension')
-        if not isinstance(cached_dimension, int):
-            raise RuntimeError(f'cached embedding dimension is invalid for {chunk_id_value}')
-        if cached_dimension != dim:
-            raise RuntimeError(
-                f'cached embedding dimension mismatch for {chunk_id_value}: '
-                f'{cached_dimension} != {dim}'
-            )
-        if str(row['cached_text_sha256']) != str(row['text_sha256']):
-            raise RuntimeError(f'cached text hash mismatch for {chunk_id_value}')
-        vector = np.asarray(embedding, dtype=np.float32)
-        if vector.shape != (dim,):
-            raise RuntimeError(
-                f'cached embedding shape mismatch for {chunk_id_value}: {vector.shape} != {(dim,)}'
-            )
-        vectors[row_index] = vector
-        hits += 1
 
     print(
         '[embed] deterministic chunk embedding cache: '
-        f'{hits:,} hit(s), {len(miss_rows):,} miss(es) -> {cache_dir}\n'
+        f'{hits:,} hit(s), {miss_rows.height:,} miss(es) -> {cache_dir}\n'
         'Starting embedding...\n'
     )
 
     effective_batch_size = max(1, batch_size)
     for start in tqdm(
-        range(0, len(miss_rows), effective_batch_size),
+        range(0, miss_rows.height, effective_batch_size),
         desc='Embedding uncached deterministic chunks',
         dynamic_ncols=True,
     ):
-        batch_rows = miss_rows[start : start + effective_batch_size]
+        batch_rows = miss_rows.slice(start, effective_batch_size)
         batch_vectors = np.asarray(
-            embed_fn([str(row['text']) for row in batch_rows]),
+            [str(value) for value in batch_rows['text'].to_list()],
             dtype=np.float32,
         )
-        if batch_vectors.shape != (len(batch_rows), dim):
+        if batch_vectors.shape != (batch_rows.height, dim):
             raise RuntimeError(
-                f'embedding batch shape mismatch: {batch_vectors.shape} != {(len(batch_rows), dim)}'
+                f'embedding batch shape mismatch: {batch_vectors.shape} != {(batch_rows.height, dim)}'
             )
         batch_cache_rows: list[dict[str, object]] = []
-        for row, vector in zip(batch_rows, batch_vectors, strict=True):
+        for row, vector in zip(batch_rows.iter_rows(named=True), batch_vectors, strict=True):
             raw_row_index = row['_row_idx']
             if not isinstance(raw_row_index, int):
                 raise RuntimeError('missing chunk row index while writing cached embeddings')
@@ -269,7 +276,10 @@ def _fill_deterministic_chunk_embedding_memmaps(
             chunk_id_value = str(row['chunk_id'])
             vectors[row_index] = vector
             ids[row_index] = chunk_id_value
-            cache_key = str(row['chunk_embedding_cache_key'])
+            cache_key = chunk_embedding_cache_key(
+                embedding_signature,
+                str(row['text_sha256']),
+            )
             if cache_key in new_cache_keys:
                 continue
             new_cache_keys.add(cache_key)
@@ -309,32 +319,22 @@ def _fill_deterministic_chunk_embedding_memmaps(
     return chunk_documents.height, stats
 
 
-def _chunk_documents_with_embedding_cache_keys(
-    paths: MedicalDatasetGenPaths,
-    embedding_signature: str,
-) -> pl.DataFrame:
-    docs = pl.read_parquet(paths.table_path('chunk_documents'))
+def _chunk_documents_for_embedding_cache(paths: MedicalDatasetGenPaths) -> pl.DataFrame:
+    document_path = paths.table_path('chunk_documents')
+    available_columns = set(pq.ParquetFile(document_path).schema.names)
     required_columns = {'chunk_id', 'text'}
-    missing = sorted(required_columns - set(docs.columns))
+    missing = sorted(required_columns - available_columns)
     if missing:
         raise RuntimeError(f'chunk_documents missing required embedding columns: {missing}')
+    document_columns = ['chunk_id', 'text']
+    if 'text_sha256' in available_columns:
+        document_columns.append('text_sha256')
+    docs = pl.read_parquet(document_path, columns=document_columns)
     if 'text_sha256' not in docs.columns:
         docs = docs.with_columns(
             pl.Series('text_sha256', [text_sha256(str(value)) for value in docs['text'].to_list()])
         )
-    keys = [
-        chunk_embedding_cache_key(
-            embedding_signature,
-            str(text_hash),
-        )
-        for text_hash in docs['text_sha256'].to_list()
-    ]
-    return (
-        docs
-        .select('chunk_id', 'text', 'text_sha256')
-        .with_row_index('_row_idx')
-        .with_columns(pl.Series('chunk_embedding_cache_key', keys))
-    )
+    return docs.select('chunk_id', 'text', 'text_sha256').with_row_index('_row_idx')
 
 
 def _fill_embedding_memmaps(

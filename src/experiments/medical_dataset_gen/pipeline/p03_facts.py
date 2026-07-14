@@ -53,6 +53,8 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
+_FACTS_WRITE_BATCH_ROWS = 131_072
+
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     if (
@@ -67,6 +69,20 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
     writer: pq.ParquetWriter | None = None
     total = 0
     last = pl.DataFrame()
+    pending_facts: list[ClinicalFact] = []
+
+    def flush_pending_facts() -> None:
+        nonlocal writer, last
+        if not pending_facts:
+            return
+        frame = _facts_frame(pending_facts)
+        table = frame.to_arrow()
+        if writer is None:
+            writer = pq.ParquetWriter(path, table.schema)
+        writer.write_table(table)
+        last = frame
+        pending_facts.clear()
+
     try:
         for plan_row in plans.iter_rows(named=True):
             plan = QueryPlan.model_validate(plan_row)
@@ -103,13 +119,13 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                 )
             )
             _assert_query_local_chunk_reuse_keys(plan.query_id, facts)
-            frame = _facts_frame([fact.model_dump(mode='python') for fact in facts])
-            table = frame.to_arrow()
-            if writer is None:
-                writer = pq.ParquetWriter(path, table.schema)
-            writer.write_table(table)
-            total += len(frame)
-            last = frame
+            pending_facts.extend(facts)
+            total += len(facts)
+            # Batching avoids thousands of tiny Parquet row groups while preserving
+            # plan order, which downstream answer construction relies on.
+            if len(pending_facts) >= _FACTS_WRITE_BATCH_ROWS:
+                flush_pending_facts()
+        flush_pending_facts()
     finally:
         if writer is not None:
             writer.close()
@@ -122,8 +138,10 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
 NOTE_STYLE_IDS = available_note_styles()
 
 
-def _facts_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
-    return pl.from_dicts(rows, infer_schema_length=None)
+def _facts_frame(facts: list[ClinicalFact]) -> pl.DataFrame:
+    return pl.from_dicts(
+        [fact.model_dump(mode='python') for fact in facts], infer_schema_length=None
+    )
 
 
 def _assert_query_local_chunk_reuse_keys(query_id: str, facts: list[ClinicalFact]) -> None:

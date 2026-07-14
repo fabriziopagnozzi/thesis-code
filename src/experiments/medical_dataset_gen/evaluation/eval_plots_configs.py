@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Literal, get_args
 
 import polars as pl
 
+from experiments.medical_dataset_gen.evaluation.eval_plot_data import EvaluationResultLookup
 from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
 
 if TYPE_CHECKING:
@@ -11,7 +12,9 @@ if TYPE_CHECKING:
 
 DEFAULT_EVAL_PLOT_THEME: EvalPlotTheme = 'light'
 
-type EvalPlotCallContext = dict[str, pl.DataFrame | Path | LambdaSelectionCfg | EvalPlotTheme | str]
+type EvalPlotCallContext = dict[
+    str, pl.DataFrame | Path | LambdaSelectionCfg | EvalPlotTheme | str | EvaluationResultLookup
+]
 
 type EvalPlotFileName = Literal[
     # -------------------------------------------
