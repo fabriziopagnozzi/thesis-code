@@ -259,10 +259,8 @@ def _fill_deterministic_chunk_embedding_memmaps(
         dynamic_ncols=True,
     ):
         batch_rows = miss_rows.slice(start, effective_batch_size)
-        batch_vectors = np.asarray(
-            [str(value) for value in batch_rows['text'].to_list()],
-            dtype=np.float32,
-        )
+        batch_texts = [str(value) for value in batch_rows['text'].to_list()]
+        batch_vectors = np.asarray(embed_fn(batch_texts), dtype=np.float32)
         if batch_vectors.shape != (batch_rows.height, dim):
             raise RuntimeError(
                 f'embedding batch shape mismatch: {batch_vectors.shape} != {(batch_rows.height, dim)}'

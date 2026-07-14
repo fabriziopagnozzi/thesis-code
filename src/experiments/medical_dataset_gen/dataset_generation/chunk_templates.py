@@ -184,8 +184,14 @@ def _outer_template(
             '{cohort_sentence} {axis_sentence}',
             '{patient} was hospitalized for {condition} after presenting with {presentation}. '
             '{cohort_sentence} {axis_sentence}',
+            '{cohort_sentence} {patient} then received inpatient care for {condition} '
+            'after {presentation}. {axis_sentence}',
+            '{axis_sentence} {patient} had been admitted for {condition} after {presentation}. '
+            '{cohort_sentence}',
+            '{patient} presented with {presentation} and was treated for {condition}. '
+            'The chart also noted routine nursing review. {cohort_sentence} {axis_sentence}',
         ]
-        index = _stable_index(fact, surface_group, 'outer_explicit', len(legacy_templates))
+        index = _stable_index(fact, 'seen', 'outer_explicit', len(legacy_templates))
         return None, f'ontology_explicit_outer_{index + 1}', legacy_templates[index]
 
     family = _canonical_outer_family(fact.note_style)
@@ -304,7 +310,7 @@ def _axis_sentence(
         templates = TEMPLATE_DATA.axis_sentence_templates.ontology_explicit[fact.axis][
             fact.value_bin
         ]
-        index = _stable_index(fact, surface_group, 'axis_explicit', len(templates))
+        index = _stable_index(fact, 'seen', 'axis_explicit', len(templates))
         template = templates[index]
         return (
             template.format(

@@ -73,62 +73,98 @@ axis_sentence_templates:
             short:
                 - "{pronoun_cap} completed {axis_value}. The treatment duration was brief, corresponding to a {axis_bin_term}."
                 - "Active treatment ended after {axis_value}. This brief treatment duration constituted a {axis_bin_term}."
+                - "The chart recorded {axis_value}; treatment duration was classified as {axis_bin_term}."
+                - "For the treatment duration axis, {axis_value} placed the course in the {axis_bin_term} category."
             standard:
                 - "{pronoun_cap} completed {axis_value}. The treatment duration matched the usual interval and represented a {axis_bin_term}."
                 - "Active treatment continued for {axis_value}. This treatment duration constituted a {axis_bin_term}."
+                - "Medication review showed {axis_value}; treatment duration was classified as {axis_bin_term}."
+                - "For the treatment duration axis, {axis_value} placed the course in the {axis_bin_term} category."
             prolonged:
                 - "{pronoun_cap} remained on active treatment for {axis_value}. This extended treatment duration represented a {axis_bin_term}."
                 - "The full regimen required {axis_value}. The treatment duration was therefore a {axis_bin_term}."
+                - "Medication review showed {axis_value}; treatment duration was classified as {axis_bin_term}."
+                - "For the treatment duration axis, {axis_value} placed the course in the {axis_bin_term} category."
         rehab_outcome:
             home_rehab:
                 - "At discharge, the recovery plan was {axis_value}. This rehabilitation outcome was consistent with {axis_bin_term}."
                 - "By discharge, {axis_value} had been arranged. The rehabilitation outcome was {axis_bin_term}."
+                - "The rehabilitation outcome was recorded as {axis_bin_term}, with the discharge plan specifying {axis_value}."
+                - "Functional discharge planning documented {axis_value}; this mapped to the {axis_bin_term} rehabilitation outcome."
             inpatient_rehab:
                 - "At discharge, ongoing functional needs led to {axis_value}. In practical terms, {pronoun} required {axis_bin_term}."
                 - "Because independent mobility remained unsafe, {axis_value} was arranged. This discharge plan involved {axis_bin_term}."
+                - "The rehabilitation outcome was recorded as {axis_bin_term}, with the discharge plan specifying {axis_value}."
+                - "Functional discharge planning documented {axis_value}; this mapped to the {axis_bin_term} rehabilitation outcome."
             persistent_deficit:
                 - "At discharge, remaining functional problems included {axis_value}. The rehabilitation outcome was a {axis_bin_term}."
                 - "Discharge assessment showed {axis_value}. This rehabilitation outcome reflected a {axis_bin_term}."
+                - "The rehabilitation outcome was recorded as {axis_bin_term}, with the discharge assessment specifying {axis_value}."
+                - "Functional discharge planning documented {axis_value}; this mapped to the {axis_bin_term} rehabilitation outcome."
         complication_burden:
             none_documented:
                 - "During the admission, {pronoun} had {axis_value}. Overall, there was {axis_bin_term}."
                 - "The hospital stay was free of a serious adverse event: {axis_value}. There was {axis_bin_term} during the admission."
+                - "Complication burden was documented as {axis_bin_term}; the course note stated {axis_value}."
+                - "For the complication burden axis, {axis_value} supported the {axis_bin_term} label."
             limited_complication:
                 - "During the admission, {pronoun} developed {axis_value}. This transient event resolved before discharge and represented {axis_bin_term}."
                 - "The in-hospital complication burden consisted of {axis_value}. This manageable event represented {axis_bin_term}."
+                - "Complication burden was documented as {axis_bin_term}; the course note stated {axis_value}."
+                - "For the complication burden axis, {axis_value} supported the {axis_bin_term} label."
             major_complication:
                 - "The admission was complicated by {axis_value}. This serious event resulted in {axis_bin_term}."
                 - "During the hospital stay, {pronoun} developed {axis_value}. The resulting in-hospital complication burden was {axis_bin_term}."
+                - "Complication burden was documented as {axis_bin_term}; the course note stated {axis_value}."
+                - "For the complication burden axis, {axis_value} supported the {axis_bin_term} label."
         acute_clinical_course:
             early_stabilization:
                 - "Early in the admission, {pronoun} showed {axis_value}. This prompt response was consistent with {axis_bin_term} during the acute clinical course."
                 - "{axis_value} occurred soon after management began. The acute clinical course therefore showed {axis_bin_term}."
+                - "The acute clinical course was labeled {axis_bin_term} after notes described {axis_value}."
+                - "Serial assessment recorded {axis_value}, placing the acute clinical course in the {axis_bin_term} bin."
             delayed_improvement:
                 - "Improvement was not immediate; {pronoun} had {axis_value}. This acute clinical course represented {axis_bin_term}."
                 - "The early response remained incomplete, with {axis_value}. The acute clinical course was characterized by {axis_bin_term}."
+                - "The acute clinical course was labeled {axis_bin_term} after notes described {axis_value}."
+                - "Serial assessment recorded {axis_value}, placing the acute clinical course in the {axis_bin_term} bin."
             refractory_or_worsening:
                 - "During the admission, {pronoun} experienced {axis_value}. This serial response pattern was consistent with {axis_bin_term} in the acute clinical course."
                 - "Serial assessment showed {axis_value}. The acute clinical course was therefore {axis_bin_term}."
+                - "The acute clinical course was labeled {axis_bin_term} after notes described {axis_value}."
+                - "Serial assessment recorded {axis_value}, placing the acute clinical course in the {axis_bin_term} bin."
         care_intensity:
             ward_level:
                 - "The highest hospital care setting was {axis_value}. This corresponded to {axis_bin_term}."
                 - "Care was delivered in {axis_value}. The recorded unit level was {axis_bin_term}."
+                - "Care intensity was classified as {axis_bin_term} because the chart listed {axis_value}."
+                - "The unit record showed {axis_value}, which mapped to the {axis_bin_term} care intensity bin."
             monitored_bed:
                 - "The highest hospital care setting was {axis_value}. This monitored-bed requirement represented {axis_bin_term}."
                 - "{pronoun_cap} was managed in {axis_value}. The recorded unit level was {axis_bin_term}."
+                - "Care intensity was classified as {axis_bin_term} because the chart listed {axis_value}."
+                - "The unit record showed {axis_value}, which mapped to the {axis_bin_term} care intensity bin."
             intensive_care:
                 - "The highest hospital care setting was {axis_value}. This corresponded to {axis_bin_term}."
                 - "{pronoun_cap} was managed in {axis_value}. The recorded unit level was {axis_bin_term}."
+                - "Care intensity was classified as {axis_bin_term} because the chart listed {axis_value}."
+                - "The unit record showed {axis_value}, which mapped to the {axis_bin_term} care intensity bin."
         diagnostic_evidence_type:
             bedside_laboratory_pattern:
                 - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
                 - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
+                - "Diagnostic evidence type was classified as {axis_bin_term} based on {axis_value}."
+                - "The workup cited {axis_value}, which mapped to the {axis_bin_term} diagnostic evidence type."
             structural_visual_evidence:
                 - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
                 - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
+                - "Diagnostic evidence type was classified as {axis_bin_term} based on {axis_value}."
+                - "The workup cited {axis_value}, which mapped to the {axis_bin_term} diagnostic evidence type."
             specimen_or_specialized_test:
                 - "The diagnostic evidence source was {axis_value}. This represented {axis_bin_term}."
                 - "Diagnosis was supported by {axis_value}. The evidence pattern was {axis_bin_term}."
+                - "Diagnostic evidence type was classified as {axis_bin_term} based on {axis_value}."
+                - "The workup cited {axis_value}, which mapped to the {axis_bin_term} diagnostic evidence type."
     
     semantic_hardened:
         treatment_duration:
