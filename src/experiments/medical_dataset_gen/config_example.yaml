@@ -120,7 +120,7 @@ query_geometry:
 
     # Number of query-local embedding maps to generate after evaluation.
     # Each selected query gets UMAP/PCA plots, query-cosine color maps, rank plots, and HDBSCAN plots.
-    n_queries: 6
+    n_queries: 9
 
     # Optional explicit query IDs. If empty, representative queries are chosen automatically
     # using query_selection.

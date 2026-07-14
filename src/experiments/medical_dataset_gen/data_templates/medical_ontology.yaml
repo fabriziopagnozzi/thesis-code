@@ -4084,13 +4084,8 @@ axis_pairs:
     - axes:
           - complication_burden
           - acute_clinical_course
-      allowed_primary_axes:
-          - acute_clinical_course
-      rationale: complication burden and acute clinical course can share the same latent admission-course severity signal, so complication burden is not permitted as the dominant retrieval axis for this pair.
-      condition_overrides:
-          - condition_id: multiple_sclerosis_relapse
-            allowed_primary_axes: []
-            rationale: in multiple sclerosis relapse, relapse response and steroid or plasma-exchange complications collapse too easily into a single uncomplicated-versus-complicated admission narrative.
+      allowed_primary_axes: []
+      rationale: complication burden and acute clinical course repeatedly collapse into the same uncomplicated-versus-complicated admission trajectory. Neither orientation produced stable four-facet retrieval geometry across embedding models, so the pair is suppressed in the main benchmark.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -4129,9 +4124,8 @@ axis_pairs:
     - axes:
           - acute_clinical_course
           - care_intensity
-      allowed_primary_axes:
-          - acute_clinical_course
-      rationale: acute-course-primary queries remain usable, but highest-care-setting-primary queries for this pair collapse too easily into the same stabilization-versus-worsening narrative.
+      allowed_primary_axes: []
+      rationale: acute clinical course and highest care setting repeatedly encode the same stabilization-versus-escalation trajectory. The remaining acute-course-primary orientation was unstable across embedding models, so the pair is suppressed in the main benchmark.
       profiles:
           - id: low_high
             cohort_a_bins:
@@ -4204,7 +4198,7 @@ axis_pairs:
                 - bedside_laboratory_pattern
           - id: high_low
             cohort_a_bins:
-                - limited_complication
+                - major_complication
                 - structural_visual_evidence
             cohort_b_bins:
                 - none_documented

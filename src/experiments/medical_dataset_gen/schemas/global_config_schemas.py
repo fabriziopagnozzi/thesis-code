@@ -313,10 +313,10 @@ class RetrievalCfg(BasePydanticCfgModel):
     candidate_pool_n: PositiveInt = 999_999_999
     k_values: list[PositiveInt] = Field(default_factory=lambda: [6, 10, 14])
     lambdas_mmr: LambdaGridCfg = Field(
-        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.99, num_values=99)
+        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.99, num_values=120)
     )
     lambdas_fac_loc: LambdaGridCfg = Field(
-        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.99, num_values=99)
+        default_factory=lambda: LambdaGridCfg(start=0.01, stop=0.99, num_values=120)
     )
     strategies: set[Literal['top_k', 'mmr', 'fac_loc']] = Field(
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
