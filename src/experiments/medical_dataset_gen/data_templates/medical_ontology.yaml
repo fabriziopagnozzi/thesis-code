@@ -3650,7 +3650,9 @@ clinical_axes:
     treatment_duration:
         label: active inpatient treatment interval
         allow_as_primary: false
-        query_focus: the length of active inpatient therapy and what that duration implies about the treatment course
+        query_focus:
+            list: documented days of active inpatient therapy and whether the regimen ended early, followed an expected interval, or required extended treatment
+            natural: the length of active inpatient therapy and what that duration implies about the treatment course
         exact_terms:
             - treatment duration
             - therapy duration
@@ -3687,7 +3689,9 @@ clinical_axes:
     rehab_outcome:
         label: functional outcome and discharge support
         allow_as_primary: true
-        query_focus: functional status at discharge and the level of rehabilitation support needed after hospitalization
+        query_focus:
+            list: discharge functional status, therapy destination, and support needs
+            natural: functional status at discharge and the level of rehabilitation support needed after hospitalization
         exact_terms:
             - rehabilitation outcome
             - rehab outcome
@@ -3722,7 +3726,9 @@ clinical_axes:
     complication_burden:
         label: in-hospital complication burden
         allow_as_primary: true
-        query_focus: how new inpatient problems affected the course of care and required changes in management
+        query_focus:
+            list: whether the admission had no major complication, a limited complication, or a major complication
+            natural: how new inpatient problems affected the course of care and required changes in management
         exact_terms:
             - complication burden
             - in-hospital complications
@@ -3756,7 +3762,9 @@ clinical_axes:
     acute_clinical_course:
         label: acute clinical course
         allow_as_primary: true
-        query_focus: the admission trajectory, including the pace of stabilization and any continued deterioration despite treatment
+        query_focus:
+            list: whether the patient had early stabilization, delayed improvement, or a refractory or worsening course
+            natural: the admission trajectory, including the pace of stabilization and any continued deterioration despite treatment
         exact_terms:
             - acute clinical course
             - clinical response trajectory
@@ -3789,7 +3797,9 @@ clinical_axes:
     care_intensity:
         label: highest care setting
         allow_as_primary: true
-        query_focus: the level of monitoring, nursing resources, and organ-support readiness required during hospitalization
+        query_focus:
+            list: whether the admission stayed on a routine ward, required a step-down or telemetry-capable monitored bed, or required an ICU bed with critical-care monitoring
+            natural: the level of monitoring, nursing resources, and organ-support readiness required during hospitalization
         exact_terms:
             - highest care setting
             - inpatient care setting
@@ -3824,7 +3834,9 @@ clinical_axes:
     diagnostic_evidence_type:
         label: dominant diagnostic evidence modality
         allow_as_primary: false
-        query_focus: which form of clinical evidence carried the diagnosis in the note
+        query_focus:
+            list: the dominant diagnostic evidence modality represented in the note, without assuming other diagnostic evidence was absent
+            natural: which form of clinical evidence carried the diagnosis in the note
         exact_terms:
             - diagnostic evidence source
             - diagnostic evidence type

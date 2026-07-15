@@ -1,11 +1,25 @@
 # Code - Primary
 
-## Rerun everything with less ontology-aware templates AND more explicit queries
+## Rerun everything with less ontology-aware templates and more explicit queries
+* With other approaches—changing the template, changing the query, and so on—MMR and coverage perform more or less equally, even on Balanced.
+  * This still needs to be tested more thoroughly.
+  * The main issue is that, when the query emphasizes all aspects equally, Top-K is encouraged to perform better, and so is MMR, because the effects of the individual facets “average out,” producing a vector that is approximately equidistant from all facets in the embedding space.
+
+- branch med_new_v2_approach
+- branch med_v2_new_queries: 
+    - List of supported results:
+        - old list-like *unbalanced* *_axis_focus  X  chunks: semantic_hardened
+        - old list-like *unbalanced* *_axis_focus  X  chunks: ontology_explicit
+        - old list-like   *balanced* *_axis_focus  X  chunks: semantic_hardened
+        - old list-like   *balanced* *_axis_focus  X  chunks: ontology_explicit
+        - new natural *unbalanced* *_axis_focus  X  chunks: semantic_hardened
+        - new natural *unbalanced* *_axis_focus  X  chunks: ontology_explicit
+        - new natural   *balanced* *_axis_focus  X  chunks: semantic_hardened
+        - new natural   *balanced* *_axis_focus  X  chunks: ontology_explicit
+
 
 ## Hyperparameter tuning may be overly favourable
-
 Selecting a separate λ for every strategy, benchmark instance, and budget provides an upper estimate of tuned performance.
-
 Include:
 - globally tuned λ;
 - one λ per embedding model;

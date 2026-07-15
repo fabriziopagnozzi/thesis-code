@@ -22,6 +22,8 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalAxis,
     ConditionKey,
     PlanCalibrationMode,
+    QueryFocusMode,
+    QueryStructure,
 )
 from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides
 from helpers.embedder import EmbeddingModelName
@@ -225,6 +227,8 @@ class GenerationCfg(BasePydanticCfgModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
     chunk_text_style: ChunkTextStyle = 'ontology_explicit'
+    focus_mode: QueryFocusMode = 'natural'
+    query_structure: QueryStructure = 'unbalanced'
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout'
     excluded_clinical_axes: list[ClinicalAxis] = Field(
         # default_factory=lambda: ['diagnostic_evidence_type']

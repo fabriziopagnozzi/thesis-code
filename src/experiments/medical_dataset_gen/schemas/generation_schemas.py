@@ -36,6 +36,10 @@ type CohortContrastFamily = Literal[
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
+type QueryFocusMode = Literal['list', 'natural']
+QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](get_args(QueryFocusMode.__value__))
+type QueryStructure = Literal['unbalanced', 'balanced']
+QUERY_STRUCTURE_LIST = list[QueryStructure](get_args(QueryStructure.__value__))
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
 CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_args(ChunkSurfaceGroup.__value__))
 type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']
@@ -339,14 +343,35 @@ class AxisPairProfile(BenchmarkPydanticModel):
     cohort_b_bins: tuple[str, str]
 
 
+class AxisQueryFocus(BenchmarkPydanticModel):
+    list: str
+    natural: str
+
+    def text_for(self, mode: QueryFocusMode) -> str:
+        if mode == 'list':
+            return self.list
+        return self.natural
+
+
 class ClinicalAxisOntology(BenchmarkPydanticModel):
     label: str
     allow_as_primary: bool
-    query_focus: str
+    query_focus: AxisQueryFocus
     exact_terms: list[str]
     synonym_terms: list[str]
     bins: list[str]
     bin_terms: dict[str, list[str]]
+
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize_legacy_query_focus(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        hydrated = dict(value)
+        query_focus = hydrated.get('query_focus')
+        if isinstance(query_focus, str):
+            hydrated['query_focus'] = {'list': query_focus, 'natural': query_focus}
+        return hydrated
 
     @model_validator(mode='after')
     def _validate_bin_terms(self) -> ClinicalAxisOntology:
@@ -1123,5 +1148,62 @@ class AnswerTemplateSpec(BenchmarkPydanticModel):
 
 
 class QueryTemplateData(BenchmarkPydanticModel):
-    query_templates: list[QueryTemplateSpec]
+    query_templates: dict[QueryStructure, dict[QueryFocusMode, list[QueryTemplateSpec]]]
     answer_template: AnswerTemplateSpec
+
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize_legacy_query_templates(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        hydrated = dict(value)
+        query_templates = hydrated.get('query_templates')
+        if isinstance(query_templates, list):
+            hydrated['query_templates'] = {
+                structure: {mode: query_templates for mode in QUERY_FOCUS_MODE_LIST}
+                for structure in QUERY_STRUCTURE_LIST
+            }
+        elif isinstance(query_templates, dict):
+            normalized: dict[str, object] = {}
+            changed = False
+            for structure, specs_by_mode in query_templates.items():
+                if isinstance(specs_by_mode, list):
+                    normalized[str(structure)] = {
+                        mode: specs_by_mode for mode in QUERY_FOCUS_MODE_LIST
+                    }
+                    changed = True
+                else:
+                    normalized[str(structure)] = specs_by_mode
+            if changed:
+                hydrated['query_templates'] = normalized
+        return hydrated
+
+    @model_validator(mode='after')
+    def _validate_query_template_structures(self) -> QueryTemplateData:
+        if set(self.query_templates) != set(QUERY_STRUCTURE_LIST):
+            raise ValueError(
+                f'query_templates must define exactly these structures: {QUERY_STRUCTURE_LIST}'
+            )
+        expected_ids: list[str] | None = None
+        for structure in QUERY_STRUCTURE_LIST:
+            specs_by_mode = self.query_templates[structure]
+            if set(specs_by_mode) != set(QUERY_FOCUS_MODE_LIST):
+                raise ValueError(
+                    f'query_templates.{structure} must define exactly these focus modes: '
+                    f'{QUERY_FOCUS_MODE_LIST}'
+                )
+            for focus_mode in QUERY_FOCUS_MODE_LIST:
+                specs = specs_by_mode[focus_mode]
+                ids = [spec.id for spec in specs]
+                if len(ids) != len(set(ids)):
+                    raise ValueError(
+                        f'duplicate query template ids for {structure}/{focus_mode}: {ids}'
+                    )
+                if expected_ids is None:
+                    expected_ids = ids
+                elif ids != expected_ids:
+                    raise ValueError(
+                        'query template structures and focus modes must define the same ids '
+                        'in the same order'
+                    )
+        return self

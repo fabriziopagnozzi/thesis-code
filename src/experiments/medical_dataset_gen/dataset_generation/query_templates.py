@@ -5,8 +5,11 @@ import re
 import yaml
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
+    ClinicalAxis,
     MedicalOntology,
     QueryPlan,
+    QueryFocusMode,
+    QueryStructure,
     QueryTemplateData,
     QueryTemplateSpec,
 )
@@ -32,8 +35,14 @@ def render_query_template(
     ontology: MedicalOntology,
     *,
     template_id: str | None = None,
+    focus_mode: QueryFocusMode = 'natural',
+    query_structure: QueryStructure = 'unbalanced',
 ) -> str:
-    template = query_template_spec(template_id or plan.template_id).template
+    template = query_template_spec(
+        template_id or plan.template_id,
+        query_structure=query_structure,
+        focus_mode=focus_mode,
+    ).template
     primary_axis = ontology.clinical_axes[plan.primary_axis]
     secondary_axis = ontology.clinical_axes[plan.secondary_axis]
 
@@ -44,10 +53,10 @@ def render_query_template(
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'primary_axis_label': primary_axis.label,
-        'primary_axis_focus': primary_axis.query_focus,
-        'secondary_axis_label': secondary_axis.label,
-        'secondary_axis_focus': secondary_axis.query_focus,
+        'primary_axis_label': axis_query_label(plan.primary_axis),
+        'primary_axis_focus': primary_axis.query_focus.text_for(focus_mode),
+        'secondary_axis_label': axis_query_label(plan.secondary_axis),
+        'secondary_axis_focus': secondary_axis.query_focus.text_for(focus_mode),
     }
 
     return squash_whitespaces(template.format(**context))
@@ -70,8 +79,8 @@ def render_answer_template(
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'primary_axis_label': ontology.clinical_axes[plan.primary_axis].label,
-        'secondary_axis_label': ontology.clinical_axes[plan.secondary_axis].label,
+        'primary_axis_label': axis_query_label(plan.primary_axis),
+        'secondary_axis_label': axis_query_label(plan.secondary_axis),
         'subgroup_a_primary': subgroup_a_primary,
         'subgroup_a_secondary': subgroup_a_secondary,
         'subgroup_b_primary': subgroup_b_primary,
@@ -80,15 +89,32 @@ def render_answer_template(
     return squash_whitespaces(template.format(**context))
 
 
-def query_template_ids() -> list[str]:
-    return [spec.id for spec in QUERY_TEMPLATE_DATA.query_templates]
+def query_template_ids(
+    query_structure: QueryStructure = 'unbalanced',
+    focus_mode: QueryFocusMode = 'natural',
+) -> list[str]:
+    return [
+        spec.id
+        for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]
+    ]
 
 
-def query_template_spec(template_id: str) -> QueryTemplateSpec:
-    for spec in QUERY_TEMPLATE_DATA.query_templates:
+def query_template_spec(
+    template_id: str,
+    *,
+    query_structure: QueryStructure = 'unbalanced',
+    focus_mode: QueryFocusMode = 'natural',
+) -> QueryTemplateSpec:
+    for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]:
         if spec.id == template_id:
             return spec
-    raise KeyError(f'unknown query template id: {template_id}')
+    raise KeyError(
+        f'unknown query template id for {query_structure}/{focus_mode}: {template_id}'
+    )
+
+
+def axis_query_label(axis: ClinicalAxis) -> str:
+    return axis.replace('_', ' ')
 
 
 def squash_whitespaces(text: str) -> str:

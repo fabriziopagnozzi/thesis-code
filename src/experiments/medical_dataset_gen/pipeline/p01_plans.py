@@ -271,7 +271,10 @@ def _materialize_plan(
     dominant_id = next(
         facet.facet_id for facet in facets if facet.cluster_role == 'dominant_primary_gold'
     )
-    template_ids = query_template_ids()
+    template_ids = query_template_ids(
+        cfg.generation.query_structure,
+        cfg.generation.focus_mode,
+    )
     template_id = template_ids[_stable_int(query_key, 'template') % len(template_ids)]
     logical_form = QueryLogicalForm(
         type=QUERY_TYPE,

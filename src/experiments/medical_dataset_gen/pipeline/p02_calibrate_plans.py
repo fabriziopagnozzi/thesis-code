@@ -62,7 +62,10 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
     updated: list[QueryPlan] = []
     calibration_rows: list[dict[str, object]] = []
     probe_n = int(cfg.generation.calibration_probe_chunks_per_facet)
-    template_ids = query_template_ids()
+    template_ids = query_template_ids(
+        cfg.generation.query_structure,
+        cfg.generation.focus_mode,
+    )
     max_facets_per_plan = max(len(plan.facets) for plan in plans)
     plans_per_batch = max(1, min(128, 4096 // max(1, probe_n * max_facets_per_plan)))
     try:
@@ -78,7 +81,13 @@ def run_calibrate_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths)
             ]
             query_vectors = embedder.embed_queries(
                 [
-                    render_query(plan, ontology, template_id=template_id)
+                    render_query(
+                        plan,
+                        ontology,
+                        template_id=template_id,
+                        focus_mode=cfg.generation.focus_mode,
+                        query_structure=cfg.generation.query_structure,
+                    )
                     for plan in batch
                     for template_id in template_ids
                 ],

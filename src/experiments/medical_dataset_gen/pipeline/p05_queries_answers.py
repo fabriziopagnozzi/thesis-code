@@ -11,6 +11,7 @@ from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
     MedicalDatasetGenDefaultPrompts,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
+    axis_query_label,
     render_answer_template,
     render_query_template,
 )
@@ -24,9 +25,11 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     DiagnosticEvidencePayload,
     GoldAnswerOutputRow,
     MedicalOntology,
+    QueryFocusMode,
     QueryOutputRow,
     QueryPlan,
     QueryPlanFacet,
+    QueryStructure,
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
@@ -139,7 +142,12 @@ def _finalize_query(
     if plan is None or not fact_rows:
         return
 
-    query_text = render_query(plan, ontology)
+    query_text = render_query(
+        plan,
+        ontology,
+        focus_mode=cfg.generation.focus_mode,
+        query_structure=cfg.generation.query_structure,
+    )
     query_text = maybe_paraphrase_query(
         query_text=query_text,
         plan=plan,
@@ -169,8 +177,16 @@ def render_query(
     ontology: MedicalOntology,
     *,
     template_id: str | None = None,
+    focus_mode: QueryFocusMode = 'natural',
+    query_structure: QueryStructure = 'unbalanced',
 ) -> str:
-    return render_query_template(plan, ontology, template_id=template_id)
+    return render_query_template(
+        plan,
+        ontology,
+        template_id=template_id,
+        focus_mode=focus_mode,
+        query_structure=query_structure,
+    )
 
 
 def maybe_paraphrase_query(
@@ -190,8 +206,8 @@ def maybe_paraphrase_query(
     required = [plan.condition_display, plan.subgroup_a_label, plan.subgroup_b_label]
     lower = paraphrase.lower()
     has_required_entities = all(label.lower() in lower for label in required)
-    primary_label = ontology.clinical_axes[plan.primary_axis].label.lower()
-    secondary_label = ontology.clinical_axes[plan.secondary_axis].label.lower()
+    primary_label = axis_query_label(plan.primary_axis).lower()
+    secondary_label = axis_query_label(plan.secondary_axis).lower()
     has_ordered_axes = (
         primary_label in lower
         and secondary_label in lower
