@@ -1,21 +1,21 @@
 query_templates:
   - id: primary_evidence_comparison
-    template: "For patients with {condition}, compare {subgroup_a} and {subgroup_b}. Use {primary_axis_label} as the main lens by summarizing {primary_axis_focus} for each cohort. Then add context from {secondary_axis_label}, focusing on {secondary_axis_focus}."
+    template: "For patients with {condition}, compare {subgroup_a} and {subgroup_b}. Use {primary_axis_label} as the main lens by summarizing {primary_axis_focus} for each cohort. Then add a brief contextual note on {secondary_axis_label}."
 
   - id: primary_endpoint_assessment
-    template: "In the {condition} records, compare {subgroup_a} versus {subgroup_b}. Lead with {primary_axis_label}, using the notes to characterize {primary_axis_focus} in each cohort. Include {secondary_axis_label} afterward as context about {secondary_axis_focus}."
+    template: "In the {condition} records, compare {subgroup_a} versus {subgroup_b}. Lead with {primary_axis_label}, using the notes to characterize {primary_axis_focus} in each cohort. Include {secondary_axis_label} afterward as brief context."
 
   - id: primary_clinical_contrast
-    template: "For a cohort summary of {condition}, contrast {subgroup_a} versus {subgroup_b} through {primary_axis_label}. Summarize {primary_axis_focus} first, and then briefly describe the related {secondary_axis_label} evidence about {secondary_axis_focus}."
+    template: "For a cohort summary of {condition}, contrast {subgroup_a} versus {subgroup_b} through {primary_axis_label}. Summarize {primary_axis_focus} first, and then briefly describe the related {secondary_axis_label} evidence."
 
   - id: chart_review_focus_then_context
-    template: "Review the {condition} cases for {subgroup_a} versus {subgroup_b}. Lead with {primary_axis_label} by extracting evidence about {primary_axis_focus}. Use {secondary_axis_label} as follow-up context on {secondary_axis_focus}."
+    template: "Review the {condition} cases for {subgroup_a} versus {subgroup_b}. Lead with {primary_axis_label} by extracting evidence about {primary_axis_focus}. Use {secondary_axis_label} as follow-up context."
 
   - id: discharge_summary_comparison
-    template: "Using the {condition} discharge summaries, compare {subgroup_a} and {subgroup_b}. Emphasize {primary_axis_label} with evidence about {primary_axis_focus} in both cohorts; after that, add the relevant {secondary_axis_label} evidence about {secondary_axis_focus}."
+    template: "Using the {condition} discharge summaries, compare {subgroup_a} and {subgroup_b}. Emphasize {primary_axis_label} with evidence about {primary_axis_focus} in both cohorts; after that, add the relevant {secondary_axis_label} evidence."
 
   - id: handoff_question
-    template: "I need a handoff-style comparison for patients with {condition}: how do {subgroup_a} and {subgroup_b} differ in {primary_axis_label}? For each cohort, focus on {primary_axis_focus}, then add a concise note on {secondary_axis_label} covering {secondary_axis_focus}."
+    template: "I need a handoff-style comparison for patients with {condition}: how do {subgroup_a} and {subgroup_b} differ in {primary_axis_label}? For each cohort, focus on {primary_axis_focus}, then add a concise note on {secondary_axis_label}."
 
 answer_template:
   template: "{primary_axis_label}: {subgroup_a}, {subgroup_a_primary}; {subgroup_b}, {subgroup_b_primary}. Context from {secondary_axis_label}: {subgroup_a}, {subgroup_a_secondary}; {subgroup_b}, {subgroup_b_secondary}."
