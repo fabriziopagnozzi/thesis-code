@@ -34,6 +34,7 @@ class CliArgs:
     output_dir: Path
     include_scrapped: bool
     experiments: tuple[str, ...]
+    experiment_regex: str | None
     max_table_rows: int
     tablefmt: str
     plots: bool

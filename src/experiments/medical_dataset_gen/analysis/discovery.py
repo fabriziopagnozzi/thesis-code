@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import cast
@@ -29,6 +30,7 @@ def discover_experiments(
     *,
     include_scrapped: bool,
     requested_experiments: Sequence[str],
+    experiment_regex: str | None = None,
     warnings: list[str],
 ) -> list[ExperimentRecord]:
     candidate_names = (
@@ -36,6 +38,9 @@ def discover_experiments(
         if requested_experiments
         else _artifact_experiment_names(results_dir)
     )
+    if experiment_regex is not None:
+        pattern = re.compile(experiment_regex)
+        candidate_names = [name for name in candidate_names if pattern.search(name)]
     records: list[ExperimentRecord] = []
     seen: set[str] = set()
     for name in candidate_names:

@@ -175,7 +175,7 @@ def main() -> None:
     for name, fn in stages_to_run:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
-        colorprint('gold', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
+        colorprint('bright_green', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
         # input_fingerprints = provenance.before_stage(name)
         fn(cfg, paths)
         # provenance.after_stage(name, input_fingerprints)

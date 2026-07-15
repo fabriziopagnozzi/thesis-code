@@ -1,6 +1,6 @@
 # Code - Primary
 
-## Rerun everything with less ontology-aware templates
+## Rerun everything with less ontology-aware templates AND more explicit queries
 
 ## Hyperparameter tuning may be overly favourable
 

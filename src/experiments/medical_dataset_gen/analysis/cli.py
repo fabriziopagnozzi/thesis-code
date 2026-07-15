@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
@@ -37,6 +38,11 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         nargs='*',
         default=(),
         help='Optional experiment names or prefixes. Parent names include completed child runs.',
+    )
+    parser.add_argument(
+        '--experiment-regex',
+        default=None,
+        help='Optional Python regex applied to resolved completed experiment names.',
     )
     parser.add_argument(
         '--max-table-rows',
@@ -81,6 +87,11 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Random seed for deterministic paired-inference bootstrap resampling.',
     )
     parsed = parser.parse_args(argv)
+    if parsed.experiment_regex is not None:
+        try:
+            re.compile(str(parsed.experiment_regex))
+        except re.error as exc:
+            parser.error(f'invalid --experiment-regex: {exc}')
     results_dir = parsed.results_dir.expanduser().resolve()
     output_dir = (
         parsed.output_dir.expanduser().resolve()
@@ -93,6 +104,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         output_dir=output_dir,
         include_scrapped=bool(parsed.include_scrapped),
         experiments=tuple(str(exp) for exp in parsed.experiments),
+        experiment_regex=str(parsed.experiment_regex) if parsed.experiment_regex is not None else None,
         max_table_rows=max(1, int(parsed.max_table_rows)),
         tablefmt=str(parsed.tablefmt),
         plots=not bool(parsed.no_plots),
