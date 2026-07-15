@@ -323,7 +323,7 @@ def _stable_int(*parts: object) -> int:
 
 def _split_for_profile(evidence_profile_id: str) -> DataSplit:
     bucket = _stable_int(evidence_profile_id, 'split') % 10
-    return 'test' if bucket < 3 else 'validation'
+    return 'test' if bucket < 5 else 'validation'
 
 
 if __name__ == '__main__':

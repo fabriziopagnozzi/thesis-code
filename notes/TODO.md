@@ -1,8 +1,6 @@
 # Code - Primary
 
-## Paired test
-
-## Template
+## Rerun everything with less ontology-aware templates
 
 ## Hyperparameter tuning may be overly favourable
 
