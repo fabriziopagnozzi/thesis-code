@@ -35,6 +35,7 @@ def render_query_template(
 ) -> str:
     template = query_template_spec(template_id or plan.template_id).template
     primary_axis = ontology.clinical_axes[plan.primary_axis]
+    secondary_axis = ontology.clinical_axes[plan.secondary_axis]
 
     context = {
         'condition': plan.condition_display,
@@ -45,7 +46,8 @@ def render_query_template(
         'subgroup_b_id': plan.subgroup_b_id,
         'primary_axis_label': primary_axis.label,
         'primary_axis_focus': primary_axis.query_focus,
-        'secondary_axis_label': ontology.clinical_axes[plan.secondary_axis].label,
+        'secondary_axis_label': secondary_axis.label,
+        'secondary_axis_focus': secondary_axis.query_focus,
     }
 
     return squash_whitespaces(template.format(**context))
