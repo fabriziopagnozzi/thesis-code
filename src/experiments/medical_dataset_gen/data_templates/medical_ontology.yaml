@@ -3651,7 +3651,7 @@ clinical_axes:
         label: active inpatient treatment interval
         allow_as_primary: false
         query_focus:
-            list: documented days of active inpatient therapy and whether the regimen ended early, followed an expected interval, or required extended treatment
+            list: the documented days of active inpatient therapy and whether the regimen ended early, followed an expected interval, or required extended treatment
             natural: the length of active inpatient therapy and what that duration implies about the treatment course
         exact_terms:
             - treatment duration
@@ -3801,6 +3801,7 @@ clinical_axes:
             list: whether the admission stayed on a routine ward, required a step-down or telemetry-capable monitored bed, or required an ICU bed with critical-care monitoring
             natural: the level of monitoring, nursing resources, and organ-support readiness required during hospitalization
         exact_terms:
+            - care intensity
             - highest care setting
             - inpatient care setting
             - hospital unit level
@@ -3835,7 +3836,7 @@ clinical_axes:
         label: dominant diagnostic evidence modality
         allow_as_primary: false
         query_focus:
-            list: the dominant diagnostic evidence modality represented in the note, without assuming other diagnostic evidence was absent
+            list: whether diagnosis was supported mainly by bedside or laboratory findings, imaging or visual evidence, or specimen-based or specialized testing
             natural: which form of clinical evidence carried the diagnosis in the note
         exact_terms:
             - diagnostic evidence source

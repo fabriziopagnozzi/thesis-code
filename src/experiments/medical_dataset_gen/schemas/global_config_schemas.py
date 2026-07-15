@@ -227,7 +227,7 @@ class GenerationCfg(BasePydanticCfgModel):
     query_limit: PositiveInt | None = None
     ontology_path: str | None = None
     chunk_text_style: ChunkTextStyle = 'ontology_explicit'
-    focus_mode: QueryFocusMode = 'natural'
+    focus_mode: QueryFocusMode = 'list'
     query_structure: QueryStructure = 'unbalanced'
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout'
     excluded_clinical_axes: list[ClinicalAxis] = Field(

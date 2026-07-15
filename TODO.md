@@ -1,21 +1,26 @@
 # Code - Primary
 
-## Rerun everything with less ontology-aware templates and more explicit queries
-* With other approaches—changing the template, changing the query, and so on—MMR and coverage perform more or less equally, even on Balanced.
-  * This still needs to be tested more thoroughly.
-  * The main issue is that, when the query emphasizes all aspects equally, Top-K is encouraged to perform better, and so is MMR, because the effects of the individual facets “average out,” producing a vector that is approximately equidistant from all facets in the embedding space.
+## Rerun everything 
 
-- branch med_new_v2_approach
-- branch med_v2_new_queries: 
-    - List of supported results:
-        - old list-like *unbalanced* *_axis_focus  X  chunks: semantic_hardened
-        - old list-like *unbalanced* *_axis_focus  X  chunks: ontology_explicit
-        - old list-like   *balanced* *_axis_focus  X  chunks: semantic_hardened
-        - old list-like   *balanced* *_axis_focus  X  chunks: ontology_explicit
-        - new natural *unbalanced* *_axis_focus  X  chunks: semantic_hardened
-        - new natural *unbalanced* *_axis_focus  X  chunks: ontology_explicit
-        - new natural   *balanced* *_axis_focus  X  chunks: semantic_hardened
-        - new natural   *balanced* *_axis_focus  X  chunks: ontology_explicit
+* the "<emb_model>" subexperiments are use GLOBAL CONFIG DEFAULTS
+    - generation.chunk_text_style: ontology_explicit
+    - generation.focus_mode: list
+    - generation.query_structure: unbalanced  
+
+    - we need to rerun them since some chunks were changed in chunk_templates.yaml to include explicitly the ontology axis label mentioned in the query, so we have a clean control --> the NEW results will overidde the ones I presented in the 2026/07/15 meeting!
+
+* the "unbiased_query_<emb_model>" subexperiments
+    - generation.chunk_text_style: ontology_explicit
+    - generation.focus_mode: natural
+    - generation.query_structure: balanced  
+
+    - we need to run them and then generate their own report
+
+* the "semantic_chunks_unbiased_query<emb_model>" subexperiments
+    - generation.chunk_text_style: semantic_hardened
+    - generation.focus_mode: natural
+    - generation.query_structure: balanced  
+
 
 
 ## Hyperparameter tuning may be overly favourable
