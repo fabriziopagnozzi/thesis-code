@@ -236,6 +236,10 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     comparison_rows=comparison_rows,
                     budget_rows=budget_rows,
                     lambda_safety_rows=lambda_safety_rows,
+                    metric_summary_rows=metric_summary_rows,
+                    metric_family_summary_rows=metric_family_summary_rows_data,
+                    paired_suite_rows=paired_suite_rows,
+                    embedding_summary_rows=embedding_summary_rows,
                 )
             )
             THESIS_STATISTICAL_TABLE_PATH.write_text(

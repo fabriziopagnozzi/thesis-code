@@ -4,10 +4,14 @@ import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from tabulate import tabulate
 
+from experiments.medical_dataset_gen.analysis.analysis_constants import (
+    DeltaMetricLabel,
+    practical_effect_threshold,
+)
 from experiments.medical_dataset_gen.analysis.report_config import REPORT_METRIC_LABELS
 
 THESIS_AGGREGATE_TABLES_PATH = Path(
@@ -116,6 +120,30 @@ _BUDGET_LABELS = {
     'medium_budget': 'Medium',
     'high_budget': 'High',
 }
+_BUDGET_RESULT_TOKENS = {
+    'all_k': 'All',
+    'low_budget': 'Low',
+    'medium_budget': 'Medium',
+    'high_budget': 'High',
+}
+_METRIC_RESULT_TOKENS = {
+    'FCP': 'Fcp',
+    'FacetCoverage': 'FacetCoverage',
+    'AllFacetCoverageRate': 'AllFacetCoverageRate',
+    'AllFacetCleanRate': 'AllFacetCleanRate',
+    'FacetWeightedRecall': 'FacetWeightedRecall',
+    'Precision': 'Precision',
+    'alpha_nDCG': 'AlphaNdcg',
+}
+_EMBEDDING_MODEL_RESULT_TOKENS = {
+    'BAAI/bge-m3': 'Bge',
+    'Qwen/Qwen3-Embedding-0.6B': 'QwenSmall',
+    'Qwen/Qwen3-Embedding-4B': 'QwenFourB',
+    'Qwen/Qwen3-Embedding-8B': 'QwenEightB',
+    'multi-qa-mpnet-base-cos-v1': 'MultiMpnet',
+    'jinaai/jina-embeddings-v5-text-small': 'Jina',
+    'abhinand/MedEmbed-large-v0.1': 'MedEmbed',
+}
 
 
 def render_thesis_aggregate_tables(
@@ -147,11 +175,20 @@ def render_thesis_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
+    metric_summary_rows: Sequence[Mapping[str, object]] = (),
+    metric_family_summary_rows: Sequence[Mapping[str, object]] = (),
+    paired_suite_rows: Sequence[Mapping[str, object]] = (),
+    embedding_summary_rows: Sequence[Mapping[str, object]] = (),
 ) -> str:
     """Render scalar result macros imported by the thesis text."""
     macros = {
         **_geometry_result_macros(geometry_rows),
         **_comparison_result_macros(comparison_rows, budget_rows),
+        **_metric_budget_result_macros(metric_summary_rows),
+        **_metric_family_result_macros(metric_family_summary_rows),
+        **_paired_suite_result_macros(paired_suite_rows),
+        **_embedding_model_result_macros(embedding_summary_rows),
+        **_embedding_low_budget_result_macros(comparison_rows, budget_rows),
         **_embedding_edge_case_result_macros(comparison_rows),
         **_lambda_safety_result_macros(lambda_safety_rows),
         **_alpha_ndcg_result_macros(comparison_rows, budget_rows),
@@ -235,6 +272,142 @@ def _comparison_result_macros(
         'ResultNegativeFacLocMmrRows': _integer(len(negative_rows)),
         'ResultNegativeFacLocMmrFamilySummary': _negative_family_summary(negative_family_counts),
     }
+
+
+def _metric_budget_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for row in rows:
+        metric_token = _metric_result_token(row.get('MetricLabel'))
+        budget_token = _budget_result_token(row.get('BudgetCategory'))
+        if metric_token is None or budget_token is None:
+            continue
+        prefix = f'Result{metric_token}{budget_token}'
+        macros.update(
+            {
+                f'{prefix}Rows': _integer(row.get('Rows')),
+                f'{prefix}FacLocMmrBetterRows': _integer(row.get('FacLocBetterRows')),
+                f'{prefix}FacLocMmrTiedRows': _integer(row.get('FacLocTiedRows')),
+                f'{prefix}FacLocMmrWorseRows': _integer(row.get('FacLocWorseRows')),
+                f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
+                f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
+                f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
+                f'{prefix}FacLocMmrMedianDelta': _signed(row.get('MedianDeltaFacLocMMR')),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
+                f'{prefix}MmrTopKMeanDelta': _signed(row.get('MeanDeltaMMRTopK')),
+            }
+        )
+    return macros
+
+
+def _metric_family_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for row in rows:
+        metric_token = _metric_result_token(row.get('MetricLabel'))
+        family_token = _label_token(_family_label(row.get('ExperimentFamilyLabel')))
+        if metric_token is None or not family_token:
+            continue
+        prefix = f'Result{metric_token}Family{family_token}'
+        macros.update(
+            {
+                f'{prefix}Rows': _integer(row.get('Rows')),
+                f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
+                f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
+                f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
+            }
+        )
+    return macros
+
+
+def _paired_suite_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for row in rows:
+        if row.get('MetricLabel') != 'FCP':
+            continue
+        budget_token = _budget_result_token(row.get('BudgetCategory'))
+        scope = str(row.get('Scope') or '')
+        scope_token = 'Core' if scope == 'Core suite' else _label_token(_family_label(scope))
+        if budget_token is None or not scope_token:
+            continue
+        prefix = f'ResultPaired{scope_token}{budget_token}Fcp'
+        macros.update(
+            {
+                f'{prefix}Distributions': _integer(row.get('Distributions')),
+                f'{prefix}Runs': _integer(row.get('Runs')),
+                f'{prefix}MeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+                f'{prefix}CiLow': _signed(row.get('CI95Low'), digits=3),
+                f'{prefix}CiHigh': _signed(row.get('CI95High'), digits=3),
+            }
+        )
+    return macros
+
+
+def _embedding_model_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for row in rows:
+        token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        if token is None:
+            continue
+        prefix = f'ResultEmbedding{token}'
+        macros.update(
+            {
+                f'{prefix}Runs': _integer(row.get('Runs')),
+                f'{prefix}GeometryPassMean': _fixed(
+                    _float(row.get('GeometryPassRate_mean')),
+                    digits=3,
+                ),
+                f'{prefix}GeometryPassMedian': _fixed(
+                    _float(row.get('GeometryPassRate_median')),
+                    digits=3,
+                ),
+                f'{prefix}FacLocFcpMean': _fixed(_float(row.get('FacLoc_FCP_mean')), digits=3),
+                f'{prefix}FacLocMmrFcpMeanDelta': _signed(row.get('Delta_FacLoc_MMR_FCP_mean')),
+                f'{prefix}FacLocTopKFcpMeanDelta': _signed(row.get('Delta_FacLoc_TopK_FCP_mean')),
+            }
+        )
+    return macros
+
+
+def _embedding_low_budget_result_macros(
+    comparison_rows: Sequence[Mapping[str, object]],
+    budget_rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    low_budget_keys = {
+        key
+        for row in budget_rows
+        if row.get('BudgetCategory') == 'low_budget'
+        and (key := _experiment_embedding_budget_key(row)) is not None
+    }
+    grouped_rows: dict[str, list[Mapping[str, object]]] = {}
+    for row in comparison_rows:
+        if _experiment_embedding_budget_key(row) not in low_budget_keys:
+            continue
+        token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        if token is None:
+            continue
+        grouped_rows.setdefault(token, []).append(row)
+
+    macros: dict[str, str] = {}
+    for model_token, rows in grouped_rows.items():
+        for metric, metric_token in _METRIC_RESULT_TOKENS.items():
+            deltas = _values(rows, f'Delta_FacLoc_MMR_{metric}')
+            threshold = practical_effect_threshold(cast(DeltaMetricLabel, metric))
+            prefix = f'ResultEmbedding{model_token}Low{metric_token}FacLocMmr'
+            macros.update(
+                {
+                    f'{prefix}Rows': _integer(len(deltas)),
+                    f'{prefix}BetterRows': _integer(sum(delta > threshold for delta in deltas)),
+                    f'{prefix}TiedRows': _integer(
+                        sum(abs(delta) <= threshold for delta in deltas)
+                    ),
+                    f'{prefix}WorseRows': _integer(sum(delta < -threshold for delta in deltas)),
+                    f'{prefix}MeanDelta': _signed(_mean(deltas)),
+                    f'{prefix}MedianDelta': _signed(_median(deltas)),
+                }
+            )
+    return macros
 
 
 def _embedding_edge_case_result_macros(
@@ -474,6 +647,30 @@ def _budget_label(value: object) -> str:
     return _BUDGET_LABELS.get(str(value or ''), str(value or 'Unknown'))
 
 
+def _budget_result_token(value: object) -> str | None:
+    return _BUDGET_RESULT_TOKENS.get(str(value or ''))
+
+
+def _metric_result_token(value: object) -> str | None:
+    return _METRIC_RESULT_TOKENS.get(str(value or ''))
+
+
+def _embedding_model_result_token(value: object) -> str | None:
+    return _EMBEDDING_MODEL_RESULT_TOKENS.get(str(value or ''))
+
+
+def _label_token(value: object) -> str:
+    alphanumeric_text = ''.join(ch if ch.isalnum() else ' ' for ch in str(value))
+    return ''.join(part for part in alphanumeric_text.title().split())
+
+
+def _experiment_embedding_budget_key(row: Mapping[str, object]) -> tuple[str, str, int] | None:
+    k_value = _float(row.get('k'))
+    if k_value is None:
+        return None
+    return (str(row.get('Experiment') or ''), str(row.get('EmbeddingModel') or ''), int(k_value))
+
+
 def _integer(value: object) -> str:
     return f'{int(value)}' if isinstance(value, int | float) else ''
 
@@ -482,6 +679,12 @@ def _percent(value: object) -> str:
     if not isinstance(value, int | float):
         return ''
     return f'{value * 100:.1f}'.rstrip('0').rstrip('.') + '%'
+
+
+def _tex_percent(value: object) -> str:
+    if not isinstance(value, int | float):
+        return ''
+    return f'{value * 100:.1f}'.rstrip('0').rstrip('.') + r'\%'
 
 
 def _delta(value: object) -> str:
@@ -512,8 +715,9 @@ def _fixed(value: float | None, *, digits: int) -> str:
     return f'{value:.{digits}f}' if value is not None else 'n/a'
 
 
-def _signed(value: float | None) -> str:
-    return f'{value:+.4f}' if value is not None else 'n/a'
+def _signed(value: object, *, digits: int = 4) -> str:
+    numeric = _float(value)
+    return f'{numeric:+.{digits}f}' if numeric is not None else 'n/a'
 
 
 def _outcome_count(rows: Sequence[Mapping[str, object]], outcome: str) -> int:

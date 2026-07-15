@@ -22,10 +22,7 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
-    AxisPairProfile,
     ClinicalAxis,
-    CohortContrastFamily,
-    ConditionKey,
     DataSplit,
     MedicalOntology,
     QueryLogicalForm,
@@ -88,20 +85,38 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                 if not primary_axes:
                     continue
                 for profile in profiles:
-                    spec = _make_plan_spec(
-                        cfg=cfg,
-                        condition_key=condition_key,
-                        condition_display=condition.display,
-                        contrast_id=contrast.id,
-                        contrast_family=contrast.family,
-                        contrast_dimension_id=contrast.dimension_id,
-                        cohort_a_id=cohort_a_id,
-                        cohort_a=cohort_a,
-                        cohort_b_id=cohort_b_id,
-                        cohort_b=cohort_b,
+                    evidence_profile_id = _stable_id(
+                        'epv2',
+                        cfg.dataset_schema_version,
+                        cfg.global_.seed,
+                        condition_key,
+                        contrast.id,
+                        contrast.family,
+                        contrast.dimension_id,
+                        cohort_a_id,
+                        cohort_b_id,
+                        axis_a,
+                        axis_b,
+                        profile.id,
+                        profile.cohort_a_bins,
+                        profile.cohort_b_bins,
+                    )
+                    spec = QueryPlanSpec(
+                        evidence_profile_id=evidence_profile_id,
+                        cohort_contrast_id=contrast.id,
+                        cohort_contrast_family=contrast.family,
+                        cohort_dimension_id=contrast.dimension_id,
                         axis_a=axis_a,
                         axis_b=axis_b,
-                        profile=profile,
+                        profile_id=profile.id,
+                        cohort_a_bins=profile.cohort_a_bins,
+                        cohort_b_bins=profile.cohort_b_bins,
+                        condition_key=condition_key,
+                        condition_display=condition.display,
+                        subgroup_a_id=cohort_a_id,
+                        subgroup_a=cohort_a,
+                        subgroup_b_id=cohort_b_id,
+                        subgroup_b=cohort_b,
                     )
                     specs.append(spec)
                     if len(primary_axes) == 2:
@@ -154,57 +169,6 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     write_parquet(paths, 'query_plans', df)
     print(f'[plans] {len(specs):,} evidence profiles -> {len(df):,} prioritized queries')
     return df
-
-
-def _make_plan_spec(
-    *,
-    cfg: ExperimentCfg,
-    condition_key: ConditionKey,
-    condition_display: str,
-    contrast_id: str,
-    contrast_family: CohortContrastFamily,
-    contrast_dimension_id: str,
-    cohort_a_id: str,
-    cohort_a: SubgroupOntology,
-    cohort_b_id: str,
-    cohort_b: SubgroupOntology,
-    axis_a: ClinicalAxis,
-    axis_b: ClinicalAxis,
-    profile: AxisPairProfile,
-) -> QueryPlanSpec:
-    evidence_profile_id = _stable_id(
-        'epv2',
-        cfg.dataset_schema_version,
-        cfg.global_.seed,
-        condition_key,
-        contrast_id,
-        contrast_family,
-        contrast_dimension_id,
-        cohort_a_id,
-        cohort_b_id,
-        axis_a,
-        axis_b,
-        profile.id,
-        profile.cohort_a_bins,
-        profile.cohort_b_bins,
-    )
-    return QueryPlanSpec(
-        evidence_profile_id=evidence_profile_id,
-        cohort_contrast_id=contrast_id,
-        cohort_contrast_family=contrast_family,
-        cohort_dimension_id=contrast_dimension_id,
-        axis_a=axis_a,
-        axis_b=axis_b,
-        profile_id=profile.id,
-        cohort_a_bins=profile.cohort_a_bins,
-        cohort_b_bins=profile.cohort_b_bins,
-        condition_key=condition_key,
-        condition_display=condition_display,
-        subgroup_a_id=cohort_a_id,
-        subgroup_a=cohort_a,
-        subgroup_b_id=cohort_b_id,
-        subgroup_b=cohort_b,
-    )
 
 
 def _materialize_plan(

@@ -38,9 +38,6 @@ def render_experiment_config_recap(records: Sequence[ExperimentRecord]) -> str:
             lines.append(f'    Pool: {_chunk_pool_recap(cfg)};')
             lines.append(f'    Background Outliers: {_background_outlier_recap(cfg)}')
             # lines.append(f'    Retrieval Budgets: {_budget_category_recap(cfg)}')
-        lines.append('    Embedding variants:')
-        for record in group:
-            lines.append(f'        {_child_config_recap(record)}')
         lines.append('')
     return '\n'.join(lines)
 
