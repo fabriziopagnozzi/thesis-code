@@ -45,6 +45,11 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Optional Python regex applied to resolved completed experiment names.',
     )
     parser.add_argument(
+        '--exclude-experiment-regex',
+        default=None,
+        help='Optional Python regex for resolved completed experiment names to exclude.',
+    )
+    parser.add_argument(
         '--max-table-rows',
         type=int,
         default=100,
@@ -92,6 +97,11 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             re.compile(str(parsed.experiment_regex))
         except re.error as exc:
             parser.error(f'invalid --experiment-regex: {exc}')
+    if parsed.exclude_experiment_regex is not None:
+        try:
+            re.compile(str(parsed.exclude_experiment_regex))
+        except re.error as exc:
+            parser.error(f'invalid --exclude-experiment-regex: {exc}')
     results_dir = parsed.results_dir.expanduser().resolve()
     output_dir = (
         parsed.output_dir.expanduser().resolve()
@@ -105,6 +115,11 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         include_scrapped=bool(parsed.include_scrapped),
         experiments=tuple(str(exp) for exp in parsed.experiments),
         experiment_regex=str(parsed.experiment_regex) if parsed.experiment_regex is not None else None,
+        exclude_experiment_regex=(
+            str(parsed.exclude_experiment_regex)
+            if parsed.exclude_experiment_regex is not None
+            else None
+        ),
         max_table_rows=max(1, int(parsed.max_table_rows)),
         tablefmt=str(parsed.tablefmt),
         plots=not bool(parsed.no_plots),

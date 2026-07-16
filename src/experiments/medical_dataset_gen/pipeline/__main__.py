@@ -73,7 +73,7 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
     ('eval_plots', run_eval_plots),
-    ('geom_plots', run_query_geom_plots),
+    # ('geom_plots', run_query_geom_plots),
 ]
 
 
@@ -168,7 +168,7 @@ def main() -> None:
     # if not args.no_log_tee:
     # setup_logging(paths, provenance.run_id)
 
-    colorprint('teal', f'\n[pipeline] running experiment: {paths.exp_name}')
+    colorprint('bright_blue', f'\n[pipeline] running experiment: {paths.exp_name}')
     # colorprint('bright_cyan', f'[pipeline] dir={paths.experiment_dir}')
     # print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
@@ -239,7 +239,8 @@ def _run_standalone_script_sequence(
         setup_logging(paths)
 
     colorprint(
-        'aqua', f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]})'
+        'bright_blue',
+        f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]})',
     )
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
 
@@ -259,7 +260,7 @@ def _run_standalone_script(*, run_spec: StandaloneRunSpec, exp: str) -> None:
         cfg, selected_steps = parse_evaluate_cli_args(script_argv)
         paths = paths_for(cfg)
         colorprint(
-            'teal',
+            'bright_blue',
             f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         run_evaluate(cfg, paths, selected_steps=selected_steps)
@@ -267,7 +268,7 @@ def _run_standalone_script(*, run_spec: StandaloneRunSpec, exp: str) -> None:
         cfg, selected_plots = parse_geom_plots_cli_args(script_argv)
         paths = paths_for(cfg)
         colorprint(
-            'teal',
+            'bright_blue',
             f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         run_query_geom_plots(cfg, paths, selected_plots=selected_plots)
@@ -275,7 +276,7 @@ def _run_standalone_script(*, run_spec: StandaloneRunSpec, exp: str) -> None:
         cfg, selected_plots = parse_plots_cli_args(script_argv)
         paths = paths_for(cfg)
         colorprint(
-            'teal',
+            'bright_blue',
             f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         run_eval_plots(cfg, paths, selected_plots=selected_plots)

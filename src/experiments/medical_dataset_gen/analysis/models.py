@@ -35,6 +35,7 @@ class CliArgs:
     include_scrapped: bool
     experiments: tuple[str, ...]
     experiment_regex: str | None
+    exclude_experiment_regex: str | None
     max_table_rows: int
     tablefmt: str
     plots: bool

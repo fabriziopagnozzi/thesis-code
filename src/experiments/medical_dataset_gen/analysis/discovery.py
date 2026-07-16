@@ -31,6 +31,7 @@ def discover_experiments(
     include_scrapped: bool,
     requested_experiments: Sequence[str],
     experiment_regex: str | None = None,
+    exclude_experiment_regex: str | None = None,
     warnings: list[str],
 ) -> list[ExperimentRecord]:
     candidate_names = (
@@ -41,6 +42,11 @@ def discover_experiments(
     if experiment_regex is not None:
         pattern = re.compile(experiment_regex)
         candidate_names = [name for name in candidate_names if pattern.search(name)]
+    if exclude_experiment_regex is not None:
+        exclude_pattern = re.compile(exclude_experiment_regex)
+        candidate_names = [
+            name for name in candidate_names if not exclude_pattern.search(name)
+        ]
     records: list[ExperimentRecord] = []
     seen: set[str] = set()
     for name in candidate_names:

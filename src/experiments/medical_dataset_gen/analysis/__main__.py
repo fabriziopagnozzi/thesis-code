@@ -76,6 +76,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             include_scrapped=args.include_scrapped,
             requested_experiments=args.experiments,
             experiment_regex=args.experiment_regex,
+            exclude_experiment_regex=args.exclude_experiment_regex,
             warnings=warnings,
         )
         plot_and_recap_records = records
@@ -319,6 +320,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'include_scrapped': args.include_scrapped,
                     'requested_experiments': list(args.experiments),
                     'experiment_regex': args.experiment_regex,
+                    'exclude_experiment_regex': args.exclude_experiment_regex,
                     'experiments_discovered': len(records),
                     'warnings_count': len(warnings),
                     'figures': [str(path.relative_to(args.output_dir)) for path in figures],
