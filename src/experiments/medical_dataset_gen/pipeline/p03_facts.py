@@ -138,7 +138,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
 NOTE_STYLE_IDS = available_note_styles()
 
 
-def _facts_frame(facts: list[ClinicalFact | dict[str, object]]) -> pl.DataFrame:
+def _facts_frame(facts: list[ClinicalFact]) -> pl.DataFrame:
     return pl.from_dicts(
         [
             fact.model_dump(mode='python') if isinstance(fact, ClinicalFact) else fact

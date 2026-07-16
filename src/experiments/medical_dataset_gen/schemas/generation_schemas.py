@@ -36,10 +36,13 @@ type CohortContrastFamily = Literal[
 type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
+
 type QueryFocusMode = Literal['list', 'natural']
 QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](get_args(QueryFocusMode.__value__))
+
 type QueryStructure = Literal['unbalanced', 'balanced']
 QUERY_STRUCTURE_LIST = list[QueryStructure](get_args(QueryStructure.__value__))
+
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
 CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_args(ChunkSurfaceGroup.__value__))
 type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']

@@ -1,8 +1,16 @@
 # Code - Primary
 
 ## Rerun everything 
+EMBEDDING_MODELS=(bge_m3 qwen3_06B multi_mpnet medembed_L)
 
-* the "<emb_model>" subexperiments are use GLOBAL CONFIG DEFAULTS
+for model in "${EMBEDDING_MODELS[@]}"; do
+  find -L src/experiments/medical_dataset_gen/_results \
+    -mindepth 2 -maxdepth 2 -type d \
+    -name "$model" \ # ! -path "*/MIS*" ! -path "*/NIC*" \
+    -execdir printf 'mv -- %q %q\n' "$model" "biased_q_list_f_simple_c_${model}" \;
+done;
+
+* the "<emb_model>" subexperiments are use GLOBAL CONFIG DEFAULTS <!-- TODO: rename with the command above -->
     - generation.chunk_text_style: ontology_explicit
     - generation.focus_mode: list
     - generation.query_structure: unbalanced  
@@ -29,40 +37,11 @@
 # Writing - Primary
 
 ## Claims
-    - Given the differences between smaller and bigger models, we can conclude that this ontology produces different classes of queries in terms of difficulty: some are by design "harder" than others and require better models to capture their nuances.
-        - even with stronger models, there is a small percentage of queries that show unseparable facet geometry.
-            - this may be due to the semantical clinical aspects overlapping in the embedding space for particular combinations of Primary Condition / Subgroup / Clinical Axis which are not currently considered by the ontology
-            - it may be due to poor wording in the rendered chunks
+* Given the differences between smaller and bigger models, we can conclude that this ontology produces different classes of queries in terms of difficulty: some are by design "harder" than others and require better models to capture their nuances.
+    - even with stronger models, there is a small percentage of queries that show unseparable facet geometry.
+        - this may be due to the semantical clinical aspects overlapping in the embedding space for particular combinations of Primary Condition / Subgroup / Clinical Axis which are not currently considered by the ontology
+        - it may be due to poor wording in the rendered chunks
 
-
-## DONE
-
-### Introduction and pipeline presentation
-* first, frame the benchmark properties (structure of queries, chunks, facets) -->
-* then outline the main pipeline steps:
-    - the general settings used (k & lambda values...)
-    - medical ontology structure
-        - very briefly: conditions, subgroups, clinical axes
-    - deterministic template rendering
-        - query types and constrasts: Primary Condition + Subgroup_1 vs. Subgroup_2 + Clinical_Axis_1 & Clinical_Axis_2
-        - once we fix the query structure, we talk more deeply about the ontology and the reasons why it was designed like that:
-            - allowlists for each condition to limit the combinatorial explosion and produce only meaningful queries as far as the clinical soundness is concerned
-            - allowed cohort contrasts to compare in the query
-            - allowed clinical axis pairs to include in the query
-    - embedding
-    - filtering based on the properties emerging from the embedding space
-        - based on the highest k value set for retrieval, we enforce max. 2 facets retrieved out of 4.
-    - evaluating, along with metrics and diagnostics definition and the rationale behind them
-
-* also talk about AllFacetCleanRate@k
-    - sometimes coverage shows a higher percentage of queries with perfect coverage (FacetCoverage@k == 100%) and very high precision (Precision@k >= 80%)
-    - [results]: interpret the plots and check whether MMR can do better.
-
-* MMR diversifies with balanced lambda values while FacLoc shows improvements only with low enough values (= high FacLoc weight)
-    - due to mathematical properties of their scoring functions
-    - show the greedy step update formulas and discuss 
-
-### Claims
 
 * the embedding model choice has an impact
     - smaller models, fewer dimensions (multi-qa-mpnet-base-cos-v1):
@@ -76,9 +55,8 @@
         - the evaluation results seem to NOT change too much whether we include or exclude the queries that do NOT pass the geometry_filter we impose
         - this may be due to the fact that the poorly-performing queries under low retrieval budgets are typically <= ~4%
 
-    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions (and potentially different number of queries)
-    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions and ALL of queries considered
-    - [results]: check if the diagnostics of smaller models change over the diagnostics of bigger models    
+    - [results]: see if the metrics/diagnostics change among distinct models for the same data distributions
+    - [results]: check if the diagnostics of smaller models change over the diagnostics of bigger models
 
 ---------
 
