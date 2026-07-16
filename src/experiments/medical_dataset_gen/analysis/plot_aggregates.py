@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import statistics
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -10,9 +11,11 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     EXPERIMENT_FAMILIES,
     EXPERIMENT_FAMILY_COLORS,
     EXPERIMENT_FAMILY_LABELS,
+    DeltaMetricLabel,
     ExperimentFamilyId,
+    practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.analysis.helpers import float_or_none
+from experiments.medical_dataset_gen.analysis.helpers import float_or_none, short_model_label
 from experiments.medical_dataset_gen.analysis.models import (
     BudgetCategory,
     DeltaMetricPlotSpec,
@@ -28,7 +31,17 @@ from experiments.medical_dataset_gen.analysis.report_config import (
     BUDGET_CATEGORY_LABELS,
     REPORT_METRIC_LABEL_SET,
     REPORT_METRIC_LABELS,
+    REPORT_METRIC_SPECS,
 )
+
+
+@dataclass(frozen=True)
+class DeltaHeatmapSpec:
+    title: str
+    value_field: str
+    pct_field: str
+    cmap: str
+    colorbar_label: str
 
 
 def plot_metric_budget_outcomes(
@@ -113,7 +126,7 @@ def plot_metric_budget_outcomes(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def plot_metric_family_delta_heatmap(
+def plot_metric_family_delta_heatmap_low_budget(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
@@ -124,6 +137,7 @@ def plot_metric_family_delta_heatmap(
         row
         for row in rows
         if float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
+        and row.get('BudgetCategory') == 'low_budget'
         and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
         and _is_core_aggregate_family_row(row)
     ]
@@ -135,57 +149,140 @@ def plot_metric_family_delta_heatmap(
         key=_metric_plot_order,
     )
     families = _ordered_families_for_summary_rows(plot_rows)
-    matrix = _summary_matrix(
+    specs = _delta_heatmap_specs(metric_suffix='')
+    matrices, values = _delta_heatmap_matrices(
         rows=plot_rows,
         row_keys=metric_labels,
         column_keys=families,
         row_field='MetricLabel',
         column_field='ExperimentFamilyLabel',
-        value_field='MeanDeltaFacLocMMR',
+        specs=specs,
     )
-    values = [value for row in matrix for value in row if value is not None]
     if not values:
         return []
 
-    fig, ax = plt.subplots(figsize=(10.5, 5.6))  # type: ignore[attr-defined]
+    fig, axes_obj = plt.subplots(ncols=3, figsize=(15.0, 5.8), sharey=True)  # type: ignore[attr-defined]
+    axes = cast(Sequence[Any], axes_obj)
     try:
-        image = ax.imshow(
-            _matrix_with_nan(matrix),
-            cmap='RdBu',
-            norm=_symmetric_delta_norm(values),
-            aspect='auto',
+        _draw_delta_heatmap_row(
+            fig=fig,
+            axes=axes,
+            rows=plot_rows,
+            row_keys=metric_labels,
+            column_keys=families,
+            row_field='MetricLabel',
+            column_field='ExperimentFamilyLabel',
+            row_tick_labels=[
+                _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
+            ],
+            column_tick_labels=families,
+            specs=specs,
+            matrices=matrices,
+            values=values,
+            show_y_tick_labels=True,
         )
-        ax.set_title('Mean FacLoc - MMR delta by metric and experiment family')
-        ax.set_xticks(range(len(families)))
-        ax.set_xticklabels(families, rotation=35, ha='right')
-        ax.set_yticks(range(len(metric_labels)))
-        ax.set_yticklabels(
-            [_metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels]
+        fig.suptitle('Low-budget metric deltas by experiment family', y=0.98)
+        fig.text(
+            0.5,
+            0.02,
+            'Cell format: top line = mean delta. Bottom line = row share where the first '
+            'strategy beats the second; FacLoc - MMR uses the metric-specific practical '
+            'effect threshold, top-k comparisons use > 0.',
+            ha='center',
+            va='bottom',
+            fontsize=8,
+            color='#303030',
         )
-        for y_index, metric_label in enumerate(metric_labels):
-            for x_index, family in enumerate(families):
-                row = _find_summary_row(
-                    plot_rows,
-                    MetricLabel=metric_label,
-                    ExperimentFamilyLabel=family,
-                )
-                value = matrix[y_index][x_index]
-                pct = float_or_none(row.get('FacLocBetterPct')) if row is not None else None
-                if value is None:
-                    continue
-                ax.text(
-                    x_index,
-                    y_index,
-                    f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
-                    ha='center',
-                    va='center',
-                    fontsize=7,
-                    color=_heatmap_text_color(value, values),
-                )
-        cbar = fig.colorbar(image, ax=ax)
-        cbar.set_label('Mean FacLoc - MMR delta')
-        fig.tight_layout()
-        path = output_dir / f'aggregate_metric_family_delta_heatmap.{plot_format}'
+        fig.tight_layout(rect=(0, 0.08, 1, 0.93))
+        path = output_dir / f'metric_family_delta_heatmap_low_budget.{plot_format}'
+        fig.savefig(path, dpi=180)
+        return [path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def plot_metric_family_delta_heatmap_by_embedding_model(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    plot_rows = [
+        row
+        for row in _metric_family_budget_rows_by_embedding(rows)
+        if row.get('BudgetCategory') == 'low_budget'
+        and float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
+        and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
+        and _is_core_aggregate_family_row(row)
+    ]
+    if not plot_rows:
+        return []
+
+    models = _ordered_embedding_models(plot_rows)
+    metric_labels = _ordered_unique(
+        [str(row.get('MetricLabel')) for row in plot_rows],
+        key=_metric_plot_order,
+    )
+    families = _ordered_families_for_summary_rows(plot_rows)
+    specs = _delta_heatmap_specs(metric_suffix='')
+    matrices_by_model: list[list[list[list[float | None]]]] = []
+    all_values: list[float] = []
+    for model in models:
+        model_rows = [row for row in plot_rows if row.get('EmbeddingModel') == model]
+        matrices, values = _delta_heatmap_matrices(
+            rows=model_rows,
+            row_keys=metric_labels,
+            column_keys=families,
+            row_field='MetricLabel',
+            column_field='ExperimentFamilyLabel',
+            specs=specs,
+        )
+        matrices_by_model.append(matrices)
+        all_values.extend(values)
+    if not all_values:
+        return []
+
+    fig_height = _embedding_heatmap_fig_height(
+        model_count=len(models),
+        matrix_row_count=len(metric_labels),
+    )
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
+        nrows=len(models),
+        ncols=3,
+        figsize=(15.0, fig_height),
+        squeeze=False,
+        sharex=True,
+        sharey=True,
+    )
+    axes_grid = cast(Sequence[Sequence[Any]], axes_obj)
+    try:
+        for row_index, (model, matrices) in enumerate(zip(models, matrices_by_model, strict=True)):
+            axes = axes_grid[row_index]
+            model_rows = [row for row in plot_rows if row.get('EmbeddingModel') == model]
+            _draw_delta_heatmap_row(
+                fig=fig,
+                axes=axes,
+                rows=model_rows,
+                row_keys=metric_labels,
+                column_keys=families,
+                row_field='MetricLabel',
+                column_field='ExperimentFamilyLabel',
+                row_tick_labels=[
+                    _metric_title_from_rows(plot_rows, metric_label)
+                    for metric_label in metric_labels
+                ],
+                column_tick_labels=families,
+                specs=specs,
+                matrices=matrices,
+                values=all_values,
+                show_y_tick_labels=True,
+                show_titles=row_index == 0,
+            )
+            axes[0].set_ylabel(short_model_label(model), fontsize=9)
+        fig.suptitle('Low-budget metric deltas by experiment family and embedding model', y=0.985)
+        fig.tight_layout(rect=(0, 0.03, 1, 0.96))
+        path = output_dir / f'metric_family_delta_heatmap_by_emb_model.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
     finally:
@@ -213,84 +310,43 @@ def plot_fcp_family_budget_heatmaps(
     budget_label_by_category = {
         category: BUDGET_CATEGORY_LABELS[category] for category in BUDGET_CATEGORIES
     }
-    matrices = [
-        (
-            'Mean FacLoc - MMR FCP',
-            'MeanDeltaFacLocMMR',
-            'FacLocBetterPct',
-        ),
-        (
-            'Mean FacLoc - top-k FCP',
-            'MeanDeltaFacLocTopK',
-            'FacLocTopKBetterPct',
-        ),
-    ]
-    all_values: list[float] = []
-    matrix_values: list[list[list[float | None]]] = []
-    for _title, value_field, _pct_field in matrices:
-        matrix = _summary_matrix(
+    specs = _delta_heatmap_specs(metric_suffix=' FCP')
+    matrix_values, values = _delta_heatmap_matrices(
+        rows=plot_rows,
+        row_keys=families,
+        column_keys=[budget_label_by_category[category] for category in BUDGET_CATEGORIES],
+        row_field='ExperimentFamilyLabel',
+        column_field='BudgetCategoryLabel',
+        specs=specs,
+    )
+    if not values:
+        return []
+
+    fig, axes_obj = plt.subplots(ncols=3, figsize=(15.0, 6.2), sharey=True)  # type: ignore[attr-defined]
+    axes = cast(Sequence[Any], axes_obj)
+    try:
+        _draw_delta_heatmap_row(
+            fig=fig,
+            axes=axes,
             rows=plot_rows,
             row_keys=families,
             column_keys=[budget_label_by_category[category] for category in BUDGET_CATEGORIES],
             row_field='ExperimentFamilyLabel',
             column_field='BudgetCategoryLabel',
-            value_field=value_field,
+            row_tick_labels=families,
+            column_tick_labels=budget_labels,
+            specs=specs,
+            matrices=matrix_values,
+            values=values,
+            show_y_tick_labels=True,
         )
-        matrix_values.append(matrix)
-        all_values.extend(value for row in matrix for value in row if value is not None)
-    if not all_values:
-        return []
-
-    fig, axes_obj = plt.subplots(ncols=2, figsize=(11.5, 6.2), sharey=True)  # type: ignore[attr-defined]
-    axes = cast(Sequence[Any], axes_obj)
-    try:
-        for ax, (title, value_field, pct_field), matrix in zip(
-            axes,
-            matrices,
-            matrix_values,
-            strict=True,
-        ):
-            image = ax.imshow(
-                _matrix_with_nan(matrix),
-                cmap='RdBu',
-                norm=_symmetric_delta_norm(all_values),
-                aspect='auto',
-            )
-            ax.set_title(title)
-            ax.set_xticks(range(len(budget_labels)))
-            ax.set_xticklabels(budget_labels)
-            ax.set_yticks(range(len(families)))
-            ax.set_yticklabels(families)
-            for y_index, family in enumerate(families):
-                for x_index, category in enumerate(BUDGET_CATEGORIES):
-                    budget_label = budget_label_by_category[category]
-                    row = _find_summary_row(
-                        plot_rows,
-                        ExperimentFamilyLabel=family,
-                        BudgetCategoryLabel=budget_label,
-                    )
-                    value = float_or_none(row.get(value_field)) if row is not None else None
-                    pct = float_or_none(row.get(pct_field)) if row is not None else None
-                    if value is None:
-                        continue
-                    ax.text(
-                        x_index,
-                        y_index,
-                        f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
-                        ha='center',
-                        va='center',
-                        fontsize=7,
-                        color=_heatmap_text_color(value, all_values),
-                    )
-            cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
-            cbar.set_label('Mean FCP delta')
         fig.suptitle('FCP aggregation by experiment family and retrieval budget', y=0.98)
         fig.text(
             0.5,
             0.02,
             'Cell format: top line = mean FCP delta. Bottom line = FacLoc win rate '
             'within that family-budget group: left panel uses FacLoc - MMR FCP > 0.05; '
-            'right panel uses FacLoc - top-k FCP > 0.',
+            'top-k comparison panels use > 0.',
             ha='center',
             va='bottom',
             fontsize=8,
@@ -298,6 +354,94 @@ def plot_fcp_family_budget_heatmaps(
         )
         fig.tight_layout(rect=(0, 0.07, 1, 0.95))
         path = output_dir / f'fcp_family_budget_delta_heatmaps.{plot_format}'
+        fig.savefig(path, dpi=180)
+        return [path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def plot_fcp_family_budget_heatmaps_by_embedding_model(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    plot_rows = [
+        row
+        for row in _metric_family_budget_rows_by_embedding(rows)
+        if row.get('MetricLabel') == 'FCP'
+        and str(row.get('BudgetCategory') or '') in BUDGET_CATEGORIES
+        and _is_core_aggregate_family_row(row)
+    ]
+    if not plot_rows:
+        return []
+
+    models = _ordered_embedding_models(plot_rows)
+    families = _ordered_families_for_summary_rows(plot_rows)
+    budget_labels = [BUDGET_CATEGORY_LABELS[category] for category in BUDGET_CATEGORIES]
+    budget_label_by_category = {
+        category: BUDGET_CATEGORY_LABELS[category] for category in BUDGET_CATEGORIES
+    }
+    specs = _delta_heatmap_specs(metric_suffix=' FCP')
+    matrices_by_model: list[list[list[list[float | None]]]] = []
+    all_values: list[float] = []
+    column_keys = [budget_label_by_category[category] for category in BUDGET_CATEGORIES]
+    for model in models:
+        model_rows = [row for row in plot_rows if row.get('EmbeddingModel') == model]
+        matrices, values = _delta_heatmap_matrices(
+            rows=model_rows,
+            row_keys=families,
+            column_keys=column_keys,
+            row_field='ExperimentFamilyLabel',
+            column_field='BudgetCategoryLabel',
+            specs=specs,
+        )
+        matrices_by_model.append(matrices)
+        all_values.extend(values)
+    if not all_values:
+        return []
+
+    fig_height = _embedding_heatmap_fig_height(
+        model_count=len(models),
+        matrix_row_count=len(families),
+    )
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
+        nrows=len(models),
+        ncols=3,
+        figsize=(15.0, fig_height),
+        squeeze=False,
+        sharex=True,
+        sharey=True,
+    )
+    axes_grid = cast(Sequence[Sequence[Any]], axes_obj)
+    try:
+        for row_index, (model, matrices) in enumerate(zip(models, matrices_by_model, strict=True)):
+            axes = axes_grid[row_index]
+            model_rows = [row for row in plot_rows if row.get('EmbeddingModel') == model]
+            _draw_delta_heatmap_row(
+                fig=fig,
+                axes=axes,
+                rows=model_rows,
+                row_keys=families,
+                column_keys=column_keys,
+                row_field='ExperimentFamilyLabel',
+                column_field='BudgetCategoryLabel',
+                row_tick_labels=families,
+                column_tick_labels=budget_labels,
+                specs=specs,
+                matrices=matrices,
+                values=all_values,
+                show_y_tick_labels=True,
+                show_titles=row_index == 0,
+            )
+            axes[0].set_ylabel(short_model_label(model), fontsize=9)
+        fig.suptitle(
+            'FCP aggregation by experiment family, retrieval budget, and embedding model',
+            y=0.985,
+        )
+        fig.tight_layout(rect=(0, 0.03, 1, 0.96))
+        path = output_dir / f'fcp_family_budget_delta_heatmaps_by_emb_model.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
     finally:
@@ -374,6 +518,232 @@ def plot_budget_delta_columns(
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _delta_heatmap_specs(*, metric_suffix: str) -> tuple[DeltaHeatmapSpec, ...]:
+    return (
+        DeltaHeatmapSpec(
+            title=f'Mean FacLoc - MMR{metric_suffix}',
+            value_field='MeanDeltaFacLocMMR',
+            pct_field='FacLocBetterPct',
+            cmap='RdBu',
+            colorbar_label='Mean FacLoc - MMR delta',
+        ),
+        DeltaHeatmapSpec(
+            title=f'Mean FacLoc - top-k{metric_suffix}',
+            value_field='MeanDeltaFacLocTopK',
+            pct_field='FacLocTopKBetterPct',
+            cmap='RdYlGn',
+            colorbar_label='Mean FacLoc - top-k delta',
+        ),
+        DeltaHeatmapSpec(
+            title=f'Mean MMR - top-k{metric_suffix}',
+            value_field='MeanDeltaMMRTopK',
+            pct_field='MMRTopKBetterPct',
+            cmap='RdYlGn',
+            colorbar_label='Mean MMR - top-k delta',
+        ),
+    )
+
+
+def _delta_heatmap_matrices(
+    *,
+    rows: Sequence[Mapping[str, object]],
+    row_keys: Sequence[str],
+    column_keys: Sequence[str],
+    row_field: str,
+    column_field: str,
+    specs: Sequence[DeltaHeatmapSpec],
+) -> tuple[list[list[list[float | None]]], list[float]]:
+    matrices: list[list[list[float | None]]] = []
+    values: list[float] = []
+    for spec in specs:
+        matrix = _summary_matrix(
+            rows=rows,
+            row_keys=row_keys,
+            column_keys=column_keys,
+            row_field=row_field,
+            column_field=column_field,
+            value_field=spec.value_field,
+        )
+        matrices.append(matrix)
+        values.extend(value for row in matrix for value in row if value is not None)
+    return matrices, values
+
+
+def _draw_delta_heatmap_row(
+    *,
+    fig: Any,
+    axes: Sequence[Any],
+    rows: Sequence[Mapping[str, object]],
+    row_keys: Sequence[str],
+    column_keys: Sequence[str],
+    row_field: str,
+    column_field: str,
+    row_tick_labels: Sequence[str],
+    column_tick_labels: Sequence[str],
+    specs: Sequence[DeltaHeatmapSpec],
+    matrices: Sequence[Sequence[Sequence[float | None]]],
+    values: Sequence[float],
+    show_y_tick_labels: bool,
+    show_titles: bool = True,
+) -> None:
+    for ax, spec, matrix in zip(axes, specs, matrices, strict=True):
+        image = ax.imshow(
+            _matrix_with_nan(matrix),
+            cmap=spec.cmap,
+            norm=_symmetric_delta_norm(values),
+            aspect='auto',
+        )
+        if show_titles:
+            ax.set_title(spec.title)
+        ax.set_xticks(range(len(column_tick_labels)))
+        ax.set_xticklabels(column_tick_labels, rotation=35, ha='right')
+        ax.set_yticks(range(len(row_tick_labels)))
+        ax.set_yticklabels(row_tick_labels if show_y_tick_labels else [''] * len(row_tick_labels))
+        for y_index, row_key in enumerate(row_keys):
+            for x_index, column_key in enumerate(column_keys):
+                source_row = _find_summary_row(
+                    rows,
+                    **{row_field: row_key, column_field: column_key},
+                )
+                value = matrix[y_index][x_index]
+                pct = (
+                    float_or_none(source_row.get(spec.pct_field))
+                    if source_row is not None
+                    else None
+                )
+                if value is None:
+                    continue
+                ax.text(
+                    x_index,
+                    y_index,
+                    f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
+                    ha='center',
+                    va='center',
+                    fontsize=7,
+                    color=_heatmap_text_color(value, values),
+                )
+        cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label(spec.colorbar_label)
+
+
+def _metric_family_budget_rows_by_embedding(
+    rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    summary_rows: list[dict[str, object]] = []
+    metric_order = {spec.metric_label: index for index, spec in enumerate(REPORT_METRIC_SPECS)}
+    budget_order = {category: index for index, category in enumerate(BUDGET_CATEGORIES)}
+    for spec in REPORT_METRIC_SPECS:
+        grouped: dict[tuple[str, str, BudgetCategory, str], list[Mapping[str, object]]] = {}
+        for row in rows:
+            embedding_model = str(row.get('EmbeddingModel') or '')
+            family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
+            category_value = str(row.get('BudgetCategory') or '')
+            if not embedding_model or category_value not in BUDGET_CATEGORIES:
+                continue
+            category = cast(BudgetCategory, category_value)
+            budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
+            grouped.setdefault((embedding_model, family, category, budget_label), []).append(row)
+
+        for (embedding_model, family, category, budget_label), group in grouped.items():
+            out = _metric_family_budget_row_by_embedding(
+                metric=spec.metric_label,
+                metric_title=spec.title_label,
+                rows=group,
+                embedding_model=embedding_model,
+                family=family,
+                budget_category=category,
+                budget_label=budget_label,
+            )
+            out['_MetricSort'] = metric_order[spec.metric_label]
+            out['_BudgetSort'] = budget_order[category]
+            summary_rows.append(out)
+
+    summary_rows.sort(
+        key=lambda row: (
+            str(row.get('EmbeddingModel') or ''),
+            cast(int, row['_MetricSort']),
+            cast(int, row['_BudgetSort']),
+            str(row.get('ExperimentFamilyLabel') or ''),
+        )
+    )
+    for row in summary_rows:
+        row.pop('_MetricSort', None)
+        row.pop('_BudgetSort', None)
+    return summary_rows
+
+
+def _metric_family_budget_row_by_embedding(
+    *,
+    metric: DeltaMetricLabel,
+    metric_title: str,
+    rows: Sequence[Mapping[str, object]],
+    embedding_model: str,
+    family: str,
+    budget_category: BudgetCategory,
+    budget_label: str,
+) -> dict[str, object]:
+    delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
+    delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
+    delta_mt_col = f'Delta_MMR_TopK_{metric}'
+    complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
+    deltas_fm = _numeric_values(complete_rows, delta_fm_col)
+    deltas_ft = _numeric_values(complete_rows, delta_ft_col)
+    deltas_mt = _numeric_values(complete_rows, delta_mt_col)
+    threshold = practical_effect_threshold(metric)
+    row_count = len(complete_rows)
+    facloc_better = sum(delta > threshold for delta in deltas_fm)
+    facloc_tied = sum(abs(delta) <= threshold for delta in deltas_fm)
+    facloc_worse = sum(delta < -threshold for delta in deltas_fm)
+    facloc_topk_better = sum(delta > 0.0 for delta in deltas_ft)
+    mmr_topk_better = sum(delta > 0.0 for delta in deltas_mt)
+    return {
+        'EmbeddingModel': embedding_model,
+        'Metric': metric_title,
+        'MetricLabel': metric,
+        'ExperimentFamilyLabel': family,
+        'BudgetCategory': budget_category,
+        'BudgetCategoryLabel': budget_label,
+        'Rows': row_count,
+        'FacLocBetterRows': facloc_better,
+        'FacLocTiedRows': facloc_tied,
+        'FacLocWorseRows': facloc_worse,
+        'FacLocTopKBetterRows': facloc_topk_better,
+        'MMRTopKBetterRows': mmr_topk_better,
+        'FacLocBetterPct': _fraction_or_none(facloc_better, row_count),
+        'FacLocTiedPct': _fraction_or_none(facloc_tied, row_count),
+        'FacLocWorsePct': _fraction_or_none(facloc_worse, row_count),
+        'FacLocTopKBetterPct': _fraction_or_none(facloc_topk_better, row_count),
+        'MMRTopKBetterPct': _fraction_or_none(mmr_topk_better, row_count),
+        'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
+        'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
+        'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
+    }
+
+
+def _numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[float]:
+    return [
+        value for value in (float_or_none(row.get(column)) for row in rows) if value is not None
+    ]
+
+
+def _fraction_or_none(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def _ordered_embedding_models(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    return sorted(
+        {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
+    )
+
+
+def _embedding_heatmap_fig_height(*, model_count: int, matrix_row_count: int) -> float:
+    # Scale by both dimensions so faceted heatmaps keep readable cell height.
+    row_block_height = 0.52 * max(matrix_row_count, 1) + 0.85
+    return max(5.2, model_count * row_block_height + 0.9)
 
 
 def _metric_plot_order(metric_label: str) -> int:

@@ -21,6 +21,13 @@ from experiments.medical_dataset_gen.analysis.helpers import (
 )
 from experiments.medical_dataset_gen.analysis.models import PlotFormat
 
+GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
+    ('Dominant primary gold', 'DominantPrimaryGoldCountMean', '#0B5D6E'),
+    ('Other primary gold', 'OtherPrimaryGoldCountMean', '#287C8E'),
+    ('Secondary gold', 'SecondaryGoldCountMean', '#58A6B1'),
+    ('Niche gold', 'NicheGoldCountMean', '#9AD0D3'),
+)
+
 
 def annotate_horizontal_values(*, ax: Any, values: Sequence[float]) -> None:
     if not values:
@@ -65,11 +72,13 @@ def _family_grouped_rows(
             for value in (float_or_none(row.get(value_column)) for row in group)
             if value is not None
         ]
-        family_order.append((
-            statistics.fmean(values) if values else float('-inf'),
-            EXPERIMENT_FAMILY_LABELS[family_id],
-            family_id,
-        ))
+        family_order.append(
+            (
+                statistics.fmean(values) if values else float('-inf'),
+                EXPERIMENT_FAMILY_LABELS[family_id],
+                family_id,
+            )
+        )
 
     ordered_rows: list[Mapping[str, object]] = []
     for _mean_value, _label, family_id in sorted(
@@ -258,11 +267,7 @@ def _geometry_pass_rate_rows(
     rows: Sequence[Mapping[str, object]],
 ) -> list[Mapping[str, object]]:
     return _family_grouped_rows(
-        [
-            row
-            for row in rows
-            if float_or_none(row.get('GeometryPassRate')) is not None
-        ],
+        [row for row in rows if float_or_none(row.get('GeometryPassRate')) is not None],
         'GeometryPassRate',
     )
 
@@ -405,12 +410,14 @@ def _binned_lambda_delta_stats(
         if not values:
             continue
         sorted_values = sorted(values)
-        out.append({
-            'x': (index + 0.5) / n_bins,
-            'mean': statistics.fmean(values),
-            'q25': quantile(sorted_values, 0.25),
-            'q75': quantile(sorted_values, 0.75),
-        })
+        out.append(
+            {
+                'x': (index + 0.5) / n_bins,
+                'mean': statistics.fmean(values),
+                'q25': quantile(sorted_values, 0.25),
+                'q75': quantile(sorted_values, 0.75),
+            }
+        )
     return out
 
 
@@ -483,9 +490,24 @@ def plot_dataset_composition(
     fig_height = max(5.0, 0.28 * len(labels) + 1.6)
     fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
-        ax.barh(positions, gold, label='Gold', color='#287C8E')
-        ax.barh(positions, near, left=gold, label='Near-miss distractors', color='#C47A3A')
-        bottoms = [g + n for g, n in zip(gold, near, strict=True)]
+        granular_gold = _gold_role_share_series(plot_rows)
+        if granular_gold is None:
+            displayed_gold = gold
+            ax.barh(positions, gold, label='Gold', color='#287C8E')
+        else:
+            left = [0.0 for _row in plot_rows]
+            for label, _column, color, values in granular_gold:
+                ax.barh(positions, values, left=left, label=label, color=color)
+                left = [old + value for old, value in zip(left, values, strict=True)]
+            displayed_gold = left
+        ax.barh(
+            positions,
+            near,
+            left=displayed_gold,
+            label='Near-miss distractors',
+            color='#C47A3A',
+        )
+        bottoms = [g + n for g, n in zip(displayed_gold, near, strict=True)]
         ax.barh(
             positions,
             background,
@@ -501,11 +523,33 @@ def plot_dataset_composition(
         ax.set_xlim(0, 1)
         ax.grid(axis='x', alpha=0.25)
         _color_tick_labels_by_family(ax=ax, rows=plot_rows)
-        ax.legend()
+        ax.legend(
+            loc='lower center',
+            bbox_to_anchor=(0.5, 1.01),
+            ncol=3,
+            frameon=False,
+            fontsize=8,
+        )
         _add_family_legend(fig=fig, rows=plot_rows)
-        fig.tight_layout(rect=(0, 0.03, 1, 1))
+        fig.tight_layout(rect=(0, 0.06, 1, 0.90))
         path = output_dir / f'dataset_composition_stacked.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _gold_role_share_series(
+    rows: Sequence[Mapping[str, object]],
+) -> list[tuple[str, str, str, list[float]]] | None:
+    series: list[tuple[str, str, str, list[float]]] = []
+    for label, column, color in GOLD_ROLE_STACKS:
+        values: list[float] = []
+        for row in rows:
+            pool_size = float_or_none(row.get('PoolSizeMean'))
+            count = float_or_none(row.get(column))
+            if pool_size is None or pool_size <= 0.0 or count is None:
+                return None
+            values.append(count / pool_size)
+        series.append((label, column, color, values))
+    return series

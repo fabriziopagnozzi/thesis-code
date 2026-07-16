@@ -7,8 +7,10 @@ from experiments.medical_dataset_gen.analysis.models import PlotFormat
 from experiments.medical_dataset_gen.analysis.plot_aggregates import (
     plot_budget_delta_columns,
     plot_fcp_family_budget_heatmaps,
+    plot_fcp_family_budget_heatmaps_by_embedding_model,
     plot_metric_budget_outcomes,
-    plot_metric_family_delta_heatmap,
+    plot_metric_family_delta_heatmap_by_embedding_model,
+    plot_metric_family_delta_heatmap_low_budget,
 )
 from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     plot_dataset_composition,
@@ -73,6 +75,8 @@ def write_figures(
         f'*_{LEGACY_LOW_BUDGET_TOKEN}_deltas_by_experiment.{plot_format}'
     ):
         obsolete_path.unlink(missing_ok=True)
+    for obsolete_stem in ('aggregate_metric_family_delta_heatmap',):
+        (aggregate_dir / f'{obsolete_stem}.{plot_format}').unlink(missing_ok=True)
     paths: list[Path] = []
 
     paths.extend(
@@ -84,9 +88,17 @@ def write_figures(
         )
     )
     paths.extend(
-        plot_metric_family_delta_heatmap(
+        plot_metric_family_delta_heatmap_low_budget(
             plt=plt,
-            rows=metric_family_summary_rows,
+            rows=metric_family_budget_summary_rows,
+            output_dir=aggregate_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_metric_family_delta_heatmap_by_embedding_model(
+            plt=plt,
+            rows=budget_rows,
             output_dir=aggregate_dir,
             plot_format=plot_format,
         )
@@ -95,6 +107,14 @@ def write_figures(
         plot_fcp_family_budget_heatmaps(
             plt=plt,
             rows=metric_family_budget_summary_rows,
+            output_dir=aggregate_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_fcp_family_budget_heatmaps_by_embedding_model(
+            plt=plt,
+            rows=budget_rows,
             output_dir=aggregate_dir,
             plot_format=plot_format,
         )

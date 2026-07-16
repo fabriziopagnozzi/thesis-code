@@ -1,15 +1,6 @@
 # Code - Primary
 
 ## Rerun everything 
-EMBEDDING_MODELS=(bge_m3 qwen3_06B multi_mpnet medembed_L)
-
-for model in "${EMBEDDING_MODELS[@]}"; do
-  find -L src/experiments/medical_dataset_gen/_results \
-    -mindepth 2 -maxdepth 2 -type d \
-    -name "$model" \ # ! -path "*/MIS*" ! -path "*/NIC*" \
-    -execdir printf 'mv -- %q %q\n' "$model" "biased_q_list_f_simple_c_${model}" \;
-done;
-
 * the "<emb_model>" subexperiments are use GLOBAL CONFIG DEFAULTS <!-- TODO: rename with the command above -->
     - generation.chunk_text_style: ontology_explicit
     - generation.focus_mode: list
