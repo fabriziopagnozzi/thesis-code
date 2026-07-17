@@ -52,7 +52,7 @@ def render_report(
         '',
         'The low-budget row for each experiment is the smallest `k` with all three strategies '
         'available, which keeps the summary demanding while preserving the full per-k output in '
-        '`comparison_by_k.csv` and `strategy_by_k.csv`.',
+        '`data/comparison_by_k.csv` and `data/strategy_by_k.csv`.',
         'Budget-category summaries are also written for `low_budget`, `medium_budget`, and '
         '`high_budget`, using the lowest, median-index, and highest available `k` per experiment.',
         'A parent/child configuration recap for appendix use is written to '

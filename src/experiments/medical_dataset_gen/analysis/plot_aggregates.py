@@ -29,6 +29,7 @@ from experiments.medical_dataset_gen.analysis.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
+    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
     REPORT_METRIC_LABEL_SET,
     REPORT_METRIC_LABELS,
     REPORT_METRIC_SPECS,
@@ -283,6 +284,106 @@ def plot_metric_family_delta_heatmap_by_embedding_model(
         fig.suptitle('Low-budget metric deltas by experiment family and embedding model', y=0.985)
         fig.tight_layout(rect=(0, 0.03, 1, 0.96))
         path = output_dir / f'metric_family_delta_heatmap_by_emb_model.{plot_format}'
+        fig.savefig(path, dpi=180)
+        return [path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def plot_metric_family_delta_heatmap_low_budget_best_embedding_model(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    summary_rows = [
+        row
+        for row in _metric_family_budget_rows_by_embedding(rows)
+        if row.get('BudgetCategory') == 'low_budget'
+        and float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
+        and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
+        and _is_core_aggregate_family_row(row)
+    ]
+    if not summary_rows:
+        return []
+
+    candidate_models = set(_ordered_embedding_models(summary_rows))
+    selection_rows = [
+        row
+        for row in summary_rows
+        if row.get('EmbeddingModel') in candidate_models
+        and row.get('MetricLabel') == 'FCP'
+        and row.get('ExperimentFamilyLabel') == EXPERIMENT_FAMILY_LABELS['balanced_clean']
+    ]
+    if not selection_rows:
+        return []
+
+    best_row = max(
+        selection_rows,
+        key=lambda row: _float_sort_key(row.get('MeanDeltaFacLocMMR')),
+    )
+    best_model = str(best_row.get('EmbeddingModel') or '')
+    plot_rows = [row for row in summary_rows if row.get('EmbeddingModel') == best_model]
+    if not plot_rows:
+        return []
+
+    metric_labels = _ordered_unique(
+        [str(row.get('MetricLabel')) for row in plot_rows],
+        key=_metric_plot_order,
+    )
+    families = _ordered_families_for_summary_rows(plot_rows)
+    specs = _delta_heatmap_specs(metric_suffix='')
+    matrices, values = _delta_heatmap_matrices(
+        rows=plot_rows,
+        row_keys=metric_labels,
+        column_keys=families,
+        row_field='MetricLabel',
+        column_field='ExperimentFamilyLabel',
+        specs=specs,
+    )
+    if not values:
+        return []
+
+    fig, axes_obj = plt.subplots(ncols=3, figsize=(15.0, 5.8), sharey=True)  # type: ignore[attr-defined]
+    axes = cast(Sequence[Any], axes_obj)
+    try:
+        _draw_delta_heatmap_row(
+            fig=fig,
+            axes=axes,
+            rows=plot_rows,
+            row_keys=metric_labels,
+            column_keys=families,
+            row_field='MetricLabel',
+            column_field='ExperimentFamilyLabel',
+            row_tick_labels=[
+                _metric_title_from_rows(plot_rows, metric_label) for metric_label in metric_labels
+            ],
+            column_tick_labels=families,
+            specs=specs,
+            matrices=matrices,
+            values=values,
+            show_y_tick_labels=True,
+        )
+        fig.suptitle(
+            'Low-budget metric deltas by experiment family '
+            f'for {short_model_label(best_model)}',
+            y=0.98,
+        )
+        fig.text(
+            0.5,
+            0.02,
+            'Embedding model selected by the Balanced clean / FCP cell. Cell format: top line '
+            '= mean delta. Bottom line = row share where the first strategy beats the second; '
+            'FacLoc - MMR uses the metric-specific practical effect threshold, top-k '
+            'comparisons use > 0.',
+            ha='center',
+            va='bottom',
+            fontsize=8,
+            color='#303030',
+        )
+        fig.tight_layout(rect=(0, 0.08, 1, 0.93))
+        path = output_dir / f'metric_family_delta_heatmap_low_budget_best_emb_model.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
     finally:
@@ -728,6 +829,10 @@ def _numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[f
     ]
 
 
+def _float_sort_key(value: object) -> float:
+    return float_value if (float_value := float_or_none(value)) is not None else -math.inf
+
+
 def _fraction_or_none(numerator: int, denominator: int) -> float | None:
     if denominator <= 0:
         return None
@@ -735,9 +840,10 @@ def _fraction_or_none(numerator: int, denominator: int) -> float | None:
 
 
 def _ordered_embedding_models(rows: Sequence[Mapping[str, object]]) -> list[str]:
-    return sorted(
-        {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
-    )
+    available = {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
+    if EMBEDDING_MODEL_FACETED_PLOT_MODELS:
+        return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
+    return sorted(available)
 
 
 def _embedding_heatmap_fig_height(*, model_count: int, matrix_row_count: int) -> float:

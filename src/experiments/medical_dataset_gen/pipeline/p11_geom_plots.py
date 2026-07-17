@@ -64,7 +64,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
-from experiments.medical_dataset_gen.utils.logging import setup_logging
+from experiments.medical_dataset_gen.utils.logging_utils import setup_logging
 
 _PARENT_QUERY_COLUMNS = ['query_id']
 _PARENT_GEOMETRY_COLUMNS = [

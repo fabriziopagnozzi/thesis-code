@@ -481,7 +481,7 @@ def _calibration_row_without_embeddings(plan: QueryPlan) -> dict[str, object]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging import (
+    from experiments.medical_dataset_gen.utils.logging_utils import (
         setup_logging,
     )
 

@@ -11,6 +11,7 @@ from experiments.medical_dataset_gen.analysis.plot_aggregates import (
     plot_metric_budget_outcomes,
     plot_metric_family_delta_heatmap_by_embedding_model,
     plot_metric_family_delta_heatmap_low_budget,
+    plot_metric_family_delta_heatmap_low_budget_best_embedding_model,
 )
 from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     plot_dataset_composition,
@@ -97,6 +98,14 @@ def write_figures(
     )
     paths.extend(
         plot_metric_family_delta_heatmap_by_embedding_model(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=aggregate_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_metric_family_delta_heatmap_low_budget_best_embedding_model(
             plt=plt,
             rows=budget_rows,
             output_dir=aggregate_dir,

@@ -145,6 +145,7 @@ def _recap_experiment_label(exp_name: str) -> str:
 
 
 def write_csv(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
         path.write_text('')
         return

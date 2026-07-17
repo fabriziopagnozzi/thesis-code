@@ -315,7 +315,7 @@ def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging import (
+    from experiments.medical_dataset_gen.utils.logging_utils import (
         setup_logging,
     )
 

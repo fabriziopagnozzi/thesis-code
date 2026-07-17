@@ -63,7 +63,7 @@ from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet_if_exists_else_empty_df,
     write_parquet,
 )
-from experiments.medical_dataset_gen.utils.logging import setup_logging
+from experiments.medical_dataset_gen.utils.logging_utils import setup_logging
 
 type EvaluationStep = Literal[
     'evaluation_results',

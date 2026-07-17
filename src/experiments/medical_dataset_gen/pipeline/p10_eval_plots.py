@@ -26,7 +26,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
-from experiments.medical_dataset_gen.utils.logging import setup_logging
+from experiments.medical_dataset_gen.utils.logging_utils import setup_logging
 
 _VALIDATION_GRID_PLOT_NAMES: set[EvalPlotFileName] = {
     'metrics_k_curves_for_lambda',

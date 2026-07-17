@@ -70,6 +70,10 @@ def run_report(args: CliArgs) -> ReportOutputs:
     MedicalDatasetGenPaths.results_dir = args.results_dir
     try:
         args.output_dir.mkdir(parents=True, exist_ok=True)
+        data_dir = args.output_dir / 'data'
+        shutil.rmtree(data_dir, ignore_errors=True)
+        shutil.rmtree(args.output_dir / '_figures', ignore_errors=True)
+        _remove_obsolete_flat_data_files(args.output_dir)
         warnings: list[str] = []
         records = discover_experiments(
             args.results_dir,
@@ -146,7 +150,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         paired_profile_effects = write_paired_effect_datasets(
             records=records,
             strategy_rows=strategy_rows,
-            output_dir=args.output_dir,
+            output_dir=data_dir,
             warnings=warnings,
         )
         paired_cell_rows = cell_effect_summary_rows(
@@ -173,57 +177,56 @@ def run_report(args: CliArgs) -> ReportOutputs:
         (args.output_dir / f'{LEGACY_LOW_BUDGET_TOKEN}_strategy_summary.csv').unlink(
             missing_ok=True
         )
-        shutil.rmtree(args.output_dir / 'data', ignore_errors=True)
-        write_csv(args.output_dir / 'experiment_manifest.csv', manifest_rows)
-        write_csv(args.output_dir / 'dataset_distribution.csv', dataset_rows)
-        write_csv(args.output_dir / 'geometry_filter_summary.csv', geometry_rows)
-        write_csv(args.output_dir / 'strategy_by_k.csv', strategy_rows)
-        write_csv(args.output_dir / 'comparison_by_k.csv', comparison_rows)
+        write_csv(data_dir / 'experiment_manifest.csv', manifest_rows)
+        write_csv(data_dir / 'dataset_distribution.csv', dataset_rows)
+        write_csv(data_dir / 'geometry_filter_summary.csv', geometry_rows)
+        write_csv(data_dir / 'strategy_by_k.csv', strategy_rows)
+        write_csv(data_dir / 'comparison_by_k.csv', comparison_rows)
         write_csv(
-            args.output_dir / 'geometry_population_strategy_by_k.csv',
+            data_dir / 'geometry_population_strategy_by_k.csv',
             geometry_population_strategy_rows_data,
         )
         write_csv(
-            args.output_dir / 'geometry_population_comparison_by_k.csv',
+            data_dir / 'geometry_population_comparison_by_k.csv',
             geometry_population_comparison_rows,
         )
-        write_csv(args.output_dir / 'global_lambda_strategy_by_k.csv', global_lambda_strategy_rows_data)
-        write_csv(args.output_dir / 'global_lambda_comparison_by_k.csv', global_lambda_comparison_rows)
+        write_csv(data_dir / 'global_lambda_strategy_by_k.csv', global_lambda_strategy_rows_data)
+        write_csv(data_dir / 'global_lambda_comparison_by_k.csv', global_lambda_comparison_rows)
         write_csv(
-            args.output_dir / 'global_lambda_metric_aggregate_summary.csv',
+            data_dir / 'global_lambda_metric_aggregate_summary.csv',
             global_lambda_metric_summary_rows,
         )
-        write_csv(args.output_dir / 'lodo_lambda_strategy_by_k.csv', lodo_lambda_strategy_rows_data)
-        write_csv(args.output_dir / 'lodo_lambda_comparison_by_k.csv', lodo_lambda_comparison_rows)
+        write_csv(data_dir / 'lodo_lambda_strategy_by_k.csv', lodo_lambda_strategy_rows_data)
+        write_csv(data_dir / 'lodo_lambda_comparison_by_k.csv', lodo_lambda_comparison_rows)
         write_csv(
-            args.output_dir / 'lodo_lambda_metric_aggregate_summary.csv',
+            data_dir / 'lodo_lambda_metric_aggregate_summary.csv',
             lodo_lambda_metric_summary_rows,
         )
         write_csv(
-            args.output_dir / 'synthetic_artifact_diagnostics.csv',
+            data_dir / 'synthetic_artifact_diagnostics.csv',
             synthetic_artifact_diagnostic_rows_data,
         )
-        write_csv(args.output_dir / 'experiment_family_summary.csv', family_summary_rows)
+        write_csv(data_dir / 'experiment_family_summary.csv', family_summary_rows)
         write_csv(
-            args.output_dir / 'experiment_family_budget_summary.csv',
+            data_dir / 'experiment_family_budget_summary.csv',
             family_budget_summary_rows,
         )
-        write_csv(args.output_dir / 'metric_family_summary.csv', metric_family_summary_rows_data)
+        write_csv(data_dir / 'metric_family_summary.csv', metric_family_summary_rows_data)
         write_csv(
-            args.output_dir / 'metric_family_budget_summary.csv',
+            data_dir / 'metric_family_budget_summary.csv',
             metric_family_budget_summary_rows_data,
         )
-        write_csv(args.output_dir / 'metric_aggregate_summary.csv', metric_summary_rows)
-        write_csv(args.output_dir / 'budget_strategy_summary.csv', budget_rows)
-        write_csv(args.output_dir / 'low_budget_strategy_summary.csv', low_budget_rows)
-        write_csv(args.output_dir / 'lambda_stability.csv', lambda_rows)
-        write_csv(args.output_dir / 'lambda_grid_fcp_delta.csv', lambda_grid_delta_rows)
-        write_csv(args.output_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
-        write_csv(args.output_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
-        write_csv(args.output_dir / 'embedding_model_summary.csv', embedding_summary_rows)
-        write_csv(args.output_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
-        write_csv(args.output_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
-        write_csv(args.output_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
+        write_csv(data_dir / 'metric_aggregate_summary.csv', metric_summary_rows)
+        write_csv(data_dir / 'budget_strategy_summary.csv', budget_rows)
+        write_csv(data_dir / 'low_budget_strategy_summary.csv', low_budget_rows)
+        write_csv(data_dir / 'lambda_stability.csv', lambda_rows)
+        write_csv(data_dir / 'lambda_grid_fcp_delta.csv', lambda_grid_delta_rows)
+        write_csv(data_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
+        write_csv(data_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
+        write_csv(data_dir / 'embedding_model_summary.csv', embedding_summary_rows)
+        write_csv(data_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
+        write_csv(data_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
+        write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
         if _should_write_thesis_outputs(args):
             (THESIS_AGGREGATE_TABLES_PATH).write_text(
                 render_thesis_aggregate_tables(
@@ -251,7 +254,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         figures: list[Path] = []
         if args.plots:
             figures = write_figures(
-                output_dir=args.output_dir / '_figures',
+                output_dir=args.output_dir / 'figures',
                 plot_format=args.plot_format,
                 max_rows=args.max_table_rows,
                 budget_rows=budget_rows,
@@ -363,6 +366,18 @@ def _dedupe_warnings(warnings: list[str]) -> list[str]:
         seen.add(warning)
         deduped.append(warning)
     return deduped
+
+
+def _remove_obsolete_flat_data_files(output_dir: Path) -> None:
+    for report_file in REPORT_FILES:
+        path = Path(report_file)
+        if len(path.parts) != 2 or path.parts[0] != 'data':
+            continue
+        obsolete_path = output_dir / path.name
+        if path.suffix == '.csv':
+            obsolete_path.unlink(missing_ok=True)
+        elif report_file.endswith('/'):
+            shutil.rmtree(obsolete_path, ignore_errors=True)
 
 
 def _should_write_thesis_outputs(args: CliArgs) -> bool:

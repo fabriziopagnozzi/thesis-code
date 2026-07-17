@@ -62,7 +62,7 @@ def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
 
 
 if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging import (
+    from experiments.medical_dataset_gen.utils.logging_utils import (
         setup_logging,
     )
 

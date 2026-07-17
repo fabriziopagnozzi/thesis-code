@@ -14,6 +14,10 @@ AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset({
     'Embedding comparison',
     'Unknown',
 })
+EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = (
+    'BAAI/bge-m3',
+    'Qwen/Qwen3-Embedding-0.6B',
+)
 LEGACY_LOW_BUDGET_TOKEN = ''.join(('head', 'line'))
 
 # This tuple is the source of truth for report-facing comparison metrics. Add,
