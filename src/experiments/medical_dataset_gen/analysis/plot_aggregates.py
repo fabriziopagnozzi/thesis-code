@@ -29,6 +29,8 @@ from experiments.medical_dataset_gen.analysis.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
+    DELTA_HEATMAP_ABS_SCALE_BY_VALUE_FIELD,
+    DELTA_HEATMAP_DEFAULT_ABS_SCALE,
     EMBEDDING_MODEL_FACETED_PLOT_MODELS,
     REPORT_METRIC_LABEL_SET,
     REPORT_METRIC_LABELS,
@@ -693,7 +695,7 @@ def _draw_delta_heatmap_row(
         image = ax.imshow(
             _matrix_with_nan(matrix),
             cmap=spec.cmap,
-            norm=_symmetric_delta_norm(values),
+            norm=_symmetric_delta_norm(spec.value_field),
             aspect='auto',
         )
         if show_titles:
@@ -723,9 +725,9 @@ def _draw_delta_heatmap_row(
                     ha='center',
                     va='center',
                     fontsize=7,
-                    color=_heatmap_text_color(value, values),
+                    color=_heatmap_text_color(value, spec.value_field),
                 )
-        cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+        cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, extend='both')
         cbar.set_label(spec.colorbar_label)
 
 
@@ -1024,20 +1026,23 @@ def _matrix_with_nan(matrix: Sequence[Sequence[float | None]]) -> list[list[floa
     return [[value if value is not None else math.nan for value in row] for row in matrix]
 
 
-def _symmetric_delta_norm(values: Sequence[float]) -> Any:
-    from matplotlib.colors import Normalize, TwoSlopeNorm
+def _symmetric_delta_norm(value_field: str) -> Any:
+    from matplotlib.colors import TwoSlopeNorm
 
-    max_abs = max((abs(value) for value in values), default=0.0)
-    if max_abs <= 0:
-        return Normalize(vmin=-1.0, vmax=1.0)
+    max_abs = _heatmap_abs_scale(value_field)
     return TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs)
 
 
-def _heatmap_text_color(value: float, values: Sequence[float]) -> str:
-    max_abs = max((abs(item) for item in values), default=0.0)
-    if max_abs <= 0:
-        return '#202020'
+def _heatmap_text_color(value: float, value_field: str) -> str:
+    max_abs = _heatmap_abs_scale(value_field)
     return '#FFFFFF' if abs(value) / max_abs >= 0.58 else '#202020'
+
+
+def _heatmap_abs_scale(value_field: str) -> float:
+    return DELTA_HEATMAP_ABS_SCALE_BY_VALUE_FIELD.get(
+        value_field,
+        DELTA_HEATMAP_DEFAULT_ABS_SCALE,
+    )
 
 
 def _metric_title_from_rows(rows: Sequence[Mapping[str, object]], metric_label: str) -> str:

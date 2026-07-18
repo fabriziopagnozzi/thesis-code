@@ -1,7 +1,5 @@
 # Code - Primary
 
-[pipeline] running experiment: NIC_M02_dense_secondary/biased_q_list_f_hardened_c_bge_m3
-
 ---------
 
 # Writing - Primary

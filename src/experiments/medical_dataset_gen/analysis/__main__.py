@@ -37,6 +37,7 @@ from experiments.medical_dataset_gen.analysis.rows import (
 from experiments.medical_dataset_gen.analysis.statistical import (
     THESIS_STATISTICAL_TABLE_PATH,
     cell_effect_summary_rows,
+    configuration_suite_effect_summary_rows,
     leave_one_out_sensitivity_rows,
     render_statistical_latex_table,
     suite_effect_summary_rows,
@@ -165,14 +166,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
             bootstrap_replicates=args.bootstrap_replicates,
             bootstrap_seed=args.bootstrap_seed,
         )
-        # Diagnostic: temporarily disabled to isolate cross-configuration overhead.
-        # paired_config_suite_rows = configuration_suite_effect_summary_rows(
-        #     profile_effects=paired_profile_effects,
-        #     budget_rows=budget_rows,
-        #     bootstrap_replicates=args.bootstrap_replicates,
-        #     bootstrap_seed=args.bootstrap_seed,
-        # )
-        paired_config_suite_rows: list[dict[str, object]] = []
+        paired_config_suite_rows = configuration_suite_effect_summary_rows(
+            profile_effects=paired_profile_effects,
+            budget_rows=budget_rows,
+            bootstrap_replicates=args.bootstrap_replicates,
+            bootstrap_seed=args.bootstrap_seed,
+        )
         paired_sensitivity_rows = leave_one_out_sensitivity_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,

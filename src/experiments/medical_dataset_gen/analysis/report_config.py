@@ -20,6 +20,17 @@ EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = (
 )
 LEGACY_LOW_BUDGET_TOKEN = ''.join(('head', 'line'))
 
+# Fixed color ranges for aggregate heatmaps. The ranges are shared across
+# reports so the same color intensity has the same interpretation when comparing
+# different wording triples or experiment-family slices. Values outside the
+# configured range are saturated; the numeric cell labels remain authoritative.
+DELTA_HEATMAP_ABS_SCALE_BY_VALUE_FIELD: dict[str, float] = {
+    'MeanDeltaFacLocMMR': 0.5,
+    'MeanDeltaFacLocTopK': 1.0,
+    'MeanDeltaMMRTopK': 1.0,
+}
+DELTA_HEATMAP_DEFAULT_ABS_SCALE = 1.0
+
 # This tuple is the source of truth for report-facing comparison metrics. Add,
 # remove, or reorder metrics here to affect markdown, CSV aggregate summaries,
 # LaTeX tables, and aggregate/per-metric plots together.
