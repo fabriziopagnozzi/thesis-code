@@ -23,15 +23,30 @@ from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
+    EmbeddingArtifactName,
     MedicalDatasetGenPaths,
     load_config_from_cli,
     paths_for,
+)
+
+EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
+    'chunk_vectors',
+    'chunk_ids',
+    'query_vectors',
+    'query_ids',
 )
 
 
 def run_embed(
     cfg: ExperimentCfg, paths: MedicalDatasetGenPaths
 ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
+    if embedding_artifact_overrides_ready(paths):
+        print('[embed] skipping; embedding artifacts are provided by result_dir_overrides')
+        return (
+            np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r'),
+            np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r'),
+        )
+
     chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
 
     with open(paths.embeddings_paths('metadata'), 'w') as f:
@@ -42,6 +57,13 @@ def run_embed(
         f'{paths.embeddings_paths("chunk_vectors"), paths.embeddings_paths("query_vectors")}'
     )
     return chunk_vectors, query_vectors
+
+
+def embedding_artifact_overrides_ready(paths: MedicalDatasetGenPaths) -> bool:
+    return all(
+        artifact in paths.result_dir_overrides and paths.embeddings_paths(artifact).exists()
+        for artifact in EMBEDDING_ARRAY_ARTIFACTS
+    )
 
 
 def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths):

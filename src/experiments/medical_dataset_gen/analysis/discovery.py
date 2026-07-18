@@ -22,6 +22,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config,
     load_raw_experiment_config,
+    paths_for,
 )
 
 
@@ -133,10 +134,7 @@ def load_experiment_record(
                 f'{name}: config could not be loaded, using local artifacts only ({exc})'
             )
 
-    paths = MedicalDatasetGenPaths(
-        name,
-        result_dir_overrides=cfg.global_.result_dir_overrides if cfg is not None else None,
-    )
+    paths = paths_for(cfg) if cfg is not None else MedicalDatasetGenPaths(name)
     parts = Path(name).parts
     is_subexperiment = len(parts) == 2
     distribution_id = parts[0]

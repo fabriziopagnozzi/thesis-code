@@ -8,12 +8,9 @@ generation:
     chunk_text_style: semantic_hardened # "semantic_hardened" removes axis/bin label statements from chunks; "ontology_explicit" keeps the older controlled sanity-check tier.
     focus_mode: natural # "natural" uses middle-level clinical evidence requests; "list" restores the older list-like axis focus wording.
     query_structure: unbalanced # "unbalanced" keeps secondary-axis wording light; "balanced" includes the secondary-axis focus text too.
-    chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families. Calibration probes always use seen.
+    chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families.
     excluded_clinical_axes: [] # Example to drop even secondary diagnostic evidence from query/chunk generation: [diagnostic_evidence_type].
     axis_pair_policy_overrides: [] # Optional config-layer pair gating applied after ontology policies, keyed by unordered axis pair.
-
-    calibration_mode: embedding_calibrated # Use "rotating" for deterministic smoke runs without embeddings.
-    calibration_probe_chunks_per_facet: 8 # Per-facet probes used to select query emphasis, audit semantic separability, and choose the 24-chunk primary cohort.
 
     chunk_pools:
         dominant_primary:

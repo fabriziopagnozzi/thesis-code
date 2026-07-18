@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Sequence
 from random import Random
-from typing import Any, cast
+from typing import cast
 
 import polars as pl
 import pyarrow.parquet as pq
@@ -57,11 +58,6 @@ _FACTS_WRITE_BATCH_ROWS = 131_072
 
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    if (
-        cfg.generation.calibration_mode == 'embedding_calibrated'
-        and not paths.table_path('query_plan_calibration').exists()
-    ):
-        raise FileNotFoundError('run calibrate_plans before facts in embedding-calibrated mode')
     ontology = load_ontology(cfg)
     plans = read_parquet(paths, 'query_plans')
     path = paths.table_path('clinical_facts')
@@ -686,7 +682,7 @@ def _axis_payload(
             treatment=rng.choice(treatment_course.surface_forms),
             treatment_course_id=treatment_course_id,
         )
-    values: tuple[Any, Any] | list[str] = axis_values.bins[value_bin]
+    values = cast(Sequence[str], axis_values.bins[value_bin])
     if axis == 'rehab_outcome':
         return RehabOutcomePayload(
             axis=axis,

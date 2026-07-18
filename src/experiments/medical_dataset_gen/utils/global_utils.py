@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 type SyntheticMedicalDatasetTableName = Literal[
     'query_plans',
-    'query_plan_calibration',
     'clinical_facts',
     'chunk_documents',
     'chunk_memberships',
@@ -37,6 +36,21 @@ type SyntheticMedicalDatasetTableName = Literal[
     'query_geometry_stats',
 ]
 SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTableName.__value__))
+
+type SharedGenerationTableName = Literal[
+    'query_plans',
+    'clinical_facts',
+    'chunk_documents',
+    'chunk_memberships',
+    'generation_rejects',
+    'queries',
+    'gold_answers',
+    'qrels',
+]
+SHARED_GENERATION_TABLES = tuple[SharedGenerationTableName, ...](
+    get_args(SharedGenerationTableName.__value__)
+)
+SHARED_GENERATION_TABLE_NAMES = set[str](SHARED_GENERATION_TABLES)
 
 type EmbeddingArtifactName = Literal[
     'chunk_vectors', 'query_vectors', 'chunk_ids', 'query_ids', 'metadata'
@@ -58,6 +72,7 @@ class MedicalDatasetGenPaths:
         self,
         exp_name: str,
         result_dir_overrides: ResultDirOverrides | None = None,
+        shared_generation_dir: Path | str | None = None,
     ):
         self.exp_name = exp_name
         self.experiment_dir = self.results_dir / exp_name
@@ -77,6 +92,9 @@ class MedicalDatasetGenPaths:
         self.parent_config_path = self.parent_experiment_dir / '_config.yaml'
         self.subconfig_path = self.experiment_dir / '_subconfig.yaml'
         self.result_dir_overrides = dict(result_dir_overrides or {})
+        self.shared_generation_dir = (
+            Path(shared_generation_dir) if shared_generation_dir is not None else None
+        )
 
     def ensure_dirs(self) -> None:
         for path in [self.results_dir, self.experiment_dir, self.logs_dir, self.figures_dir]:
@@ -87,9 +105,12 @@ class MedicalDatasetGenPaths:
         table: SyntheticMedicalDatasetTableName,
         ext: Literal['parquet', 'json', 'jsonl', 'csv'] = 'parquet',
     ) -> Path:
+        if table in SHARED_GENERATION_TABLE_NAMES and self.shared_generation_dir is not None:
+            return self.shared_generation_dir / f'{table}.{ext}'
+
         override = self.result_dir_overrides.get(table)
         if override is None:
-            return self.experiment_dir / f'{table}.{ext}'
+            return self.local_table_path(table, ext=ext)
 
         override_path = Path(override)
         if override_path.suffix:
@@ -100,6 +121,16 @@ class MedicalDatasetGenPaths:
         if override_path.is_absolute():
             return override_path / f'{table}.{ext}'
         return self.results_dir / override_path / f'{table}.{ext}'
+
+    def local_table_path(
+        self,
+        table: SyntheticMedicalDatasetTableName,
+        ext: Literal['parquet', 'json', 'jsonl', 'csv'] = 'parquet',
+    ) -> Path:
+        return self.experiment_dir / f'{table}.{ext}'
+
+    def uses_shared_generation(self) -> bool:
+        return self.shared_generation_dir is not None
 
     def embeddings_paths(self, name: EmbeddingArtifactName) -> Path:
         override = self.result_dir_overrides.get(name)
@@ -211,9 +242,35 @@ def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
     paths = MedicalDatasetGenPaths(
         cfg.global_.output_experiment,
         result_dir_overrides=cfg.global_.result_dir_overrides,
+        shared_generation_dir=shared_generation_dir_for_config(cfg),
     )
     paths.ensure_dirs()
     return paths
+
+
+def shared_generation_dir_for_config(cfg: ExperimentCfg) -> Path | None:
+    if not cfg.global_.use_shared:
+        return None
+
+    exp_path = Path(cfg.global_.output_experiment)
+    if len(exp_path.parts) != 2:
+        return None
+
+    parent_name = exp_path.parts[0]
+    return (
+        MedicalDatasetGenPaths.results_dir
+        / parent_name
+        / '_shared'
+        / shared_generation_mode_key(cfg)
+    )
+
+
+def shared_generation_mode_key(cfg: ExperimentCfg) -> str:
+    query_surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
+    chunk_mode = (
+        'simple' if cfg.generation.chunk_text_style == 'ontology_explicit' else 'hardened'
+    )
+    return f'{query_surface}_q_{cfg.generation.focus_mode}_f_{chunk_mode}_c'
 
 
 def unreachable_code(err: str) -> NoReturn:

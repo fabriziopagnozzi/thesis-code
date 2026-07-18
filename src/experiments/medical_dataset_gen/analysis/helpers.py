@@ -6,7 +6,7 @@ import re
 import statistics
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import polars as pl
 from tabulate import tabulate
@@ -23,9 +23,27 @@ from experiments.medical_dataset_gen.utils.exp_naming import (
     is_compact_embedding_child_token,
 )
 
+type QueryModeToken = Literal['biased', 'unbiased']
+type ChunkTextModeToken = Literal['simple', 'hardened']
+
+_CHILD_MODE_RE = re.compile(
+    r'^(?P<query_mode>biased|unbiased)_q_'
+    r'(?P<focus_mode>list|natural)_f_'
+    r'(?P<chunk_text_mode>simple|hardened)_c(?:_.+)?$'
+)
+_QUERY_MODE_BY_STRUCTURE: dict[str, QueryModeToken] = {
+    'unbalanced': 'biased',
+    'balanced': 'unbiased',
+}
+_CHUNK_TEXT_MODE_BY_STYLE: dict[str, ChunkTextModeToken] = {
+    'ontology_explicit': 'simple',
+    'semantic_hardened': 'hardened',
+}
+
 
 def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
     metadata = embedding_metadata(record)
+    config = wording_config_metadata(record)
     return {
         'Experiment': record.name,
         'ShortExperiment': short_experiment_id(record.name),
@@ -39,7 +57,75 @@ def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
         'EmbeddingDimension': metadata.get('dimension'),
         'OnlyPassGeometry': record.only_pass_geometry,
         'QueryScope': query_scope_label(record.only_pass_geometry),
+        **config,
     }
+
+
+def wording_config_metadata(record: ExperimentRecord) -> dict[str, object]:
+    """Return stable report labels for the query/chunk wording triplet."""
+    parsed = _parse_child_mode_tokens(record.run_label)
+    query_structure = (
+        str(record.cfg.generation.query_structure)
+        if record.cfg is not None
+        else None
+    )
+    chunk_text_style = (
+        str(record.cfg.generation.chunk_text_style)
+        if record.cfg is not None
+        else None
+    )
+    focus_mode = (
+        str(record.cfg.generation.focus_mode)
+        if record.cfg is not None
+        else None
+    )
+    query_mode = (
+        parsed.get('QueryMode')
+        or _QUERY_MODE_BY_STRUCTURE.get(str(query_structure or ''))
+        or 'unknown'
+    )
+    chunk_text_mode = (
+        parsed.get('ChunkTextMode')
+        or _CHUNK_TEXT_MODE_BY_STYLE.get(str(chunk_text_style or ''))
+        or 'unknown'
+    )
+    focus_mode = parsed.get('FocusMode') or focus_mode or 'unknown'
+    config_id = f'{query_mode}_q_{focus_mode}_f_{chunk_text_mode}_c'
+    return {
+        'QueryMode': query_mode,
+        'FocusMode': focus_mode,
+        'ChunkTextMode': chunk_text_mode,
+        'QueryStructure': query_structure,
+        'ChunkTextStyle': chunk_text_style,
+        'WordingConfig': config_id,
+        'WordingConfigLabel': _wording_config_label(
+            query_mode=str(query_mode),
+            focus_mode=str(focus_mode),
+            chunk_text_mode=str(chunk_text_mode),
+        ),
+    }
+
+
+def _parse_child_mode_tokens(run_label: str) -> dict[str, str]:
+    match = _CHILD_MODE_RE.match(run_label)
+    if match is None:
+        return {}
+    return {
+        'QueryMode': match.group('query_mode'),
+        'FocusMode': match.group('focus_mode'),
+        'ChunkTextMode': match.group('chunk_text_mode'),
+    }
+
+
+def _wording_config_label(
+    *,
+    query_mode: str,
+    focus_mode: str,
+    chunk_text_mode: str,
+) -> str:
+    if 'unknown' in {query_mode, focus_mode, chunk_text_mode}:
+        return 'unknown'
+    return f'{query_mode} / {focus_mode} / {chunk_text_mode}'
 
 
 def embedding_metadata(record: ExperimentRecord) -> dict[str, object]:

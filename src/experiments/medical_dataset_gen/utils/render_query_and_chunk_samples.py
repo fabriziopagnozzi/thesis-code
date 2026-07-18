@@ -37,6 +37,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config,
+    paths_for,
 )
 
 type JsonObject = dict[str, object]
@@ -66,10 +67,7 @@ def main() -> None:
         MedicalDatasetGenPaths.results_dir = args.results_dir
 
     cfg = load_config(args.exp)
-    paths = MedicalDatasetGenPaths(
-        cfg.global_.output_experiment,
-        result_dir_overrides=cfg.global_.result_dir_overrides,
-    )
+    paths = paths_for(cfg)
     ontology = load_ontology(cfg)
     plan = _select_plan(
         _load_plans(paths.table_path('query_plans')),

@@ -23,7 +23,11 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     StrategyName,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.analysis.helpers import float_or_none, int_or_none
+from experiments.medical_dataset_gen.analysis.helpers import (
+    float_or_none,
+    int_or_none,
+    wording_config_metadata,
+)
 from experiments.medical_dataset_gen.analysis.models import BudgetCategory, ExperimentRecord
 from experiments.medical_dataset_gen.analysis.report_config import BUDGET_CATEGORIES
 
@@ -104,6 +108,13 @@ def write_paired_effect_datasets(
                     'ExperimentFamily',
                     'ExperimentFamilyLabel',
                     'RunLabel',
+                    'QueryMode',
+                    'FocusMode',
+                    'ChunkTextMode',
+                    'QueryStructure',
+                    'ChunkTextStyle',
+                    'WordingConfig',
+                    'WordingConfigLabel',
                     'EmbeddingModel',
                     'QueryScope',
                     'k',
@@ -232,6 +243,95 @@ def suite_effect_summary_rows(
                     bootstrap_seed=bootstrap_seed + 100 + budget_index * 10 + family_index,
                 )
             )
+    return rows
+
+
+def configuration_suite_effect_summary_rows(
+    *,
+    profile_effects: pl.DataFrame,
+    budget_rows: Sequence[Mapping[str, object]],
+    bootstrap_replicates: int,
+    bootstrap_seed: int,
+) -> list[dict[str, object]]:
+    """Profile-bootstrap FCP summaries grouped by wording configuration.
+
+    Rows are intentionally equal-family weighted, matching the core suite
+    summary. Configuration-level rows pool the two core embedding models;
+    configuration-by-model rows expose embedding sensitivity without letting
+    sparsely populated auxiliary models affect the comparison.
+    """
+    if profile_effects.is_empty() or 'WordingConfig' not in profile_effects.columns:
+        return []
+    budget_by_cell = _budget_by_cell(budget_rows)
+    fcp = profile_effects.filter(
+        (pl.col('MetricLabel') == 'FCP') & pl.col('EmbeddingModel').is_in(CORE_EMBEDDING_MODELS)
+    )
+    if fcp.is_empty():
+        return []
+    fcp = _with_budget_category(fcp, budget_by_cell)
+    rows: list[dict[str, object]] = []
+    for budget_index, budget in enumerate(BUDGET_CATEGORIES):
+        budget_frame = fcp.filter(pl.col('BudgetCategory') == budget)
+        for config_index, (config_key, config_frame) in enumerate(
+            budget_frame.group_by('WordingConfig', maintain_order=True)
+        ):
+            config = str(config_key[0] if isinstance(config_key, tuple) else config_key)
+            if not config:
+                continue
+            core_frame = _fully_crossed_core_frame(config_frame)
+            if core_frame.is_empty():
+                continue
+            rows.append(
+                _configuration_summary_row(
+                    frame=core_frame,
+                    budget=budget,
+                    scope='Configuration',
+                    embedding_model='core embeddings',
+                    bootstrap_replicates=bootstrap_replicates,
+                    bootstrap_seed=bootstrap_seed + 1_000 + budget_index * 100 + config_index,
+                )
+            )
+            for model_index, model in enumerate(CORE_EMBEDDING_MODELS):
+                model_frame = config_frame.filter(pl.col('EmbeddingModel') == model)
+                if model_frame.is_empty():
+                    continue
+                rows.append(
+                    _configuration_summary_row(
+                        frame=model_frame,
+                        budget=budget,
+                        scope='Configuration x embedding',
+                        embedding_model=model,
+                        bootstrap_replicates=bootstrap_replicates,
+                        bootstrap_seed=(
+                            bootstrap_seed
+                            + 2_000
+                            + budget_index * 200
+                            + config_index * 10
+                            + model_index
+                        ),
+                    )
+                )
+            for family_index, (family_key, family_frame) in enumerate(
+                core_frame.group_by('ExperimentFamilyLabel', maintain_order=True)
+            ):
+                family = str(family_key[0] if isinstance(family_key, tuple) else family_key)
+                rows.append(
+                    _configuration_summary_row(
+                        frame=family_frame,
+                        budget=budget,
+                        scope='Configuration x family',
+                        embedding_model='core embeddings',
+                        bootstrap_replicates=bootstrap_replicates,
+                        bootstrap_seed=(
+                            bootstrap_seed
+                            + 3_000
+                            + budget_index * 500
+                            + config_index * 20
+                            + family_index
+                        ),
+                        family_label=family,
+                    )
+                )
     return rows
 
 
@@ -419,6 +519,7 @@ def _paired_query_effects_for_record(
         'RunLabel': record.run_label,
         'EmbeddingModel': record.embedding_model,
         'QueryScope': 'all-query',
+        **wording_config_metadata(record),
     }
     frames: list[pl.DataFrame] = []
     for spec in PAIRED_METRIC_SPECS:
@@ -470,16 +571,16 @@ def _with_budget_category(
 
 
 def _fully_crossed_core_frame(frame: pl.DataFrame) -> pl.DataFrame:
-    core_frame = frame.filter(pl.col('RunLabel').is_in(CORE_RUN_LABELS))
-    required_runs = set(CORE_RUN_LABELS)
+    core_frame = frame.filter(pl.col('EmbeddingModel').is_in(CORE_EMBEDDING_MODELS))
+    required_models = set(CORE_EMBEDDING_MODELS)
     valid_distributions = [
         str(distribution)
         for distribution, models in (
             core_frame.group_by('Distribution')
-            .agg(pl.col('RunLabel').unique().alias('RunLabels'))
+            .agg(pl.col('EmbeddingModel').unique().alias('EmbeddingModels'))
             .iter_rows(named=False)
         )
-        if set(cast(list[str], models)) == required_runs
+        if set(cast(list[str], models)) == required_models
     ]
     return core_frame.filter(pl.col('Distribution').is_in(valid_distributions))
 
@@ -521,6 +622,36 @@ def _suite_summary_row(
             threshold=threshold,
         ),
     }
+
+
+def _configuration_summary_row(
+    *,
+    frame: pl.DataFrame,
+    budget: BudgetCategory,
+    scope: str,
+    embedding_model: str,
+    bootstrap_replicates: int,
+    bootstrap_seed: int,
+    family_label: str | None = None,
+) -> dict[str, object]:
+    row = _suite_summary_row(
+        frame=frame,
+        budget=budget,
+        scope=scope,
+        bootstrap_replicates=bootstrap_replicates,
+        bootstrap_seed=bootstrap_seed,
+    )
+    first = frame.row(0, named=True)
+    row.update({
+        'WordingConfig': first.get('WordingConfig'),
+        'WordingConfigLabel': first.get('WordingConfigLabel'),
+        'QueryMode': first.get('QueryMode'),
+        'FocusMode': first.get('FocusMode'),
+        'ChunkTextMode': first.get('ChunkTextMode'),
+        'EmbeddingModel': embedding_model,
+        'ExperimentFamilyLabel': family_label,
+    })
+    return row
 
 
 def _sensitivity_row(

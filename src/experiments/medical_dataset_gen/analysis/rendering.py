@@ -38,6 +38,7 @@ def render_report(
     lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
+    paired_config_suite_rows: Sequence[Mapping[str, object]],
     figures: Sequence[Path],
 ) -> str:
     lines: list[str] = [
@@ -321,6 +322,28 @@ def render_report(
                 'FacLoc_FCP_mean',
                 'Delta_FacLoc_MMR_FCP_mean',
                 'PassFilterRuns',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        section_with_table(
+            'Low-Budget Wording Configuration Paired FCP',
+            [
+                row
+                for row in paired_config_suite_rows
+                if row.get('BudgetCategory') == 'low_budget'
+                and row.get('Scope') == 'Configuration'
+            ],
+            columns=[
+                'WordingConfigLabel',
+                'Distributions',
+                'Runs',
+                'MeanDeltaFacLocMMR',
+                'CI95Low',
+                'CI95High',
+                'PracticalConclusion',
             ],
             tablefmt=args.tablefmt,
             max_rows=args.max_table_rows,

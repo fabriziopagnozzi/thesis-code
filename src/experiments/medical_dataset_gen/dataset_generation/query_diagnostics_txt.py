@@ -20,7 +20,11 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     ExperimentCfg,
 )
-from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths, load_config
+from experiments.medical_dataset_gen.utils.global_utils import (
+    MedicalDatasetGenPaths,
+    load_config,
+    paths_for,
+)
 
 _QUERY_COLUMNS = [
     'query_id',
@@ -73,26 +77,6 @@ _PLAN_COLUMNS = [
     'distractor_chunks',
     'facets_json',
     'logical_form_json',
-]
-_CALIBRATION_COLUMNS = [
-    'query_id',
-    'evidence_profile_id',
-    'primary_axis',
-    'secondary_axis',
-    'previous_template_id',
-    'selected_template_id',
-    'previous_dominant_primary_facet_id',
-    'dominant_primary_facet_id',
-    'dominant_primary_subgroup_id',
-    'probe_chunks_per_facet',
-    'selected_mean_query_sim',
-    'selected_probe_margin',
-    'primary_axis_probe_margin',
-    'primary_cohort_mean_gap',
-    'secondary_mean_query_sim',
-    'calibration_warning',
-    'facet_stats_json',
-    'template_stats_json',
 ]
 _ANSWER_COLUMNS = [
     'query_id',
@@ -221,9 +205,6 @@ def build_text_diagnostics(
         raise ValueError(f'none of the requested query ids exist in {paths.table_path("queries")}')
 
     query_plans = _collect_query_table(paths, 'query_plans', present_query_ids, _PLAN_COLUMNS)
-    calibration = _collect_query_table(
-        paths, 'query_plan_calibration', present_query_ids, _CALIBRATION_COLUMNS
-    )
     gold_answers = _collect_query_table(paths, 'gold_answers', present_query_ids, _ANSWER_COLUMNS)
     geometry = _collect_query_table(paths, 'geometry_stats', present_query_ids)
     plot_stats = _collect_query_table(paths, 'query_geometry_stats', present_query_ids)
@@ -269,7 +250,6 @@ def build_text_diagnostics(
         missing_query_ids=missing_query_ids,
         queries_by_id=_rows_by_key(queries, 'query_id'),
         plans_by_id=_rows_by_key(query_plans, 'query_id'),
-        calibration_by_id=_rows_by_key(calibration, 'query_id'),
         answers_by_id=_rows_by_key(gold_answers, 'query_id'),
         geometry_by_id=_rows_by_key(geometry, 'query_id'),
         plot_stats_by_id=_rows_by_key(plot_stats, 'query_id'),
@@ -315,7 +295,6 @@ class _RenderContext:
         missing_query_ids: list[str],
         queries_by_id: dict[str, dict[str, Any]],
         plans_by_id: dict[str, dict[str, Any]],
-        calibration_by_id: dict[str, dict[str, Any]],
         answers_by_id: dict[str, dict[str, Any]],
         geometry_by_id: dict[str, dict[str, Any]],
         plot_stats_by_id: dict[str, dict[str, Any]],
@@ -344,7 +323,6 @@ class _RenderContext:
         self.missing_query_ids = missing_query_ids
         self.queries_by_id = queries_by_id
         self.plans_by_id = plans_by_id
-        self.calibration_by_id = calibration_by_id
         self.answers_by_id = answers_by_id
         self.geometry_by_id = geometry_by_id
         self.plot_stats_by_id = plot_stats_by_id
@@ -383,7 +361,6 @@ def _render_diagnostics(
             ('pool_scope', ctx.cfg.retrieval.pool_scope),
             ('candidate_pool_n_used', ctx.pool_n),
             ('embedding_model', ctx.cfg.embeddings.model_name),
-            ('generation.calibration_mode', ctx.cfg.generation.calibration_mode),
             ('geometry.stress_horizon_k', _configured_stress_horizon(ctx.cfg)),
             (
                 'geometry.max_retrieved_facet_fraction',
@@ -520,67 +497,6 @@ def _render_query(
         ],
         ['facet_id', 'role', 'cluster_id', 'subgroup', 'axis', 'value_bin', 'target_gold_chunks'],
     )
-
-    calibration = ctx.calibration_by_id.get(query_id)
-    if calibration:
-        _h2(lines, 'Query-emphasis Calibration')
-        _kv(
-            lines,
-            [
-                ('primary_axis', calibration.get('primary_axis')),
-                ('secondary_axis', calibration.get('secondary_axis')),
-                ('previous_template_id', calibration.get('previous_template_id')),
-                ('selected_template_id', calibration.get('selected_template_id')),
-                (
-                    'previous_dominant_primary_facet_id',
-                    calibration.get('previous_dominant_primary_facet_id'),
-                ),
-                (
-                    'dominant_primary_facet_id',
-                    calibration.get('dominant_primary_facet_id'),
-                ),
-                (
-                    'dominant_primary_subgroup_id',
-                    calibration.get('dominant_primary_subgroup_id'),
-                ),
-                ('probe_chunks_per_facet', calibration.get('probe_chunks_per_facet')),
-                ('selected_mean_query_sim', calibration.get('selected_mean_query_sim')),
-                ('selected_probe_margin', calibration.get('selected_probe_margin')),
-                ('primary_axis_probe_margin', calibration.get('primary_axis_probe_margin')),
-                ('primary_cohort_mean_gap', calibration.get('primary_cohort_mean_gap')),
-                ('secondary_mean_query_sim', calibration.get('secondary_mean_query_sim')),
-                ('calibration_warning', calibration.get('calibration_warning')),
-            ],
-        )
-        if ctx.detail == 'full':
-            facet_stats = _json_loads(calibration.get('facet_stats_json'), [])
-            if facet_stats:
-                _table(
-                    lines,
-                    facet_stats,
-                    [
-                        'facet_id',
-                        'subgroup_id',
-                        'axis',
-                        'value_bin',
-                        'mean_query_sim',
-                        'p25_query_sim',
-                        'p75_query_sim',
-                        'probe_margin_p25_gt_best_complement_p75',
-                    ],
-                )
-            template_stats = _json_loads(calibration.get('template_stats_json'), [])
-            if template_stats:
-                _table(
-                    lines,
-                    template_stats,
-                    [
-                        'template_id',
-                        'primary_axis_probe_margin',
-                        'primary_cohort_mean_gap',
-                        'secondary_mean_query_sim',
-                    ],
-                )
 
     logical_form = _json_loads(plan.get('logical_form_json') or query.get('logical_form_json'), {})
     if logical_form and ctx.detail == 'full':
@@ -1930,10 +1846,7 @@ def _parse_args() -> argparse.Namespace:
 if __name__ == '__main__':
     args = _parse_args()
     cfg = load_config(args.exp)
-    paths = MedicalDatasetGenPaths(
-        cfg.global_.output_experiment,
-        result_dir_overrides=cfg.global_.result_dir_overrides,
-    )
+    paths = paths_for(cfg)
 
     requested_query_ids = _requested_query_ids(args, paths)
     if not requested_query_ids:

@@ -21,7 +21,6 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ChunkTextStyle,
     ClinicalAxis,
     ConditionKey,
-    PlanCalibrationMode,
     QueryFocusMode,
     QueryStructure,
 )
@@ -37,6 +36,7 @@ class GlobalCfg(BasePydanticCfgModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
     output_experiment: str = 'v2'
+    use_shared: bool = True
     result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
 
@@ -235,8 +235,6 @@ class GenerationCfg(BasePydanticCfgModel):
         default_factory=list
     )
 
-    calibration_mode: PlanCalibrationMode = 'rotating'
-    calibration_probe_chunks_per_facet: PositiveInt = 8
     axis_pair_policy_overrides: list[AxisPairPolicyOverrideCfg] = Field(default_factory=list)
 
     chunk_pools: ChunkPoolsCfg

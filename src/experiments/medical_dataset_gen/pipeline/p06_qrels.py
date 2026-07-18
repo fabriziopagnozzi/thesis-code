@@ -23,6 +23,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     _ = cfg
     qrels_path = paths.table_path('qrels')
+    qrels_path.parent.mkdir(parents=True, exist_ok=True)
     (
         pl
         .scan_parquet(paths.table_path('chunk_memberships'))

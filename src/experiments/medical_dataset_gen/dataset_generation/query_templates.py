@@ -7,8 +7,8 @@ import yaml
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalAxis,
     MedicalOntology,
-    QueryPlan,
     QueryFocusMode,
+    QueryPlan,
     QueryStructure,
     QueryTemplateData,
     QueryTemplateSpec,

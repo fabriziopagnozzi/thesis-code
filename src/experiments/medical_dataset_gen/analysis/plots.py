@@ -13,6 +13,14 @@ from experiments.medical_dataset_gen.analysis.plot_aggregates import (
     plot_metric_family_delta_heatmap_low_budget,
     plot_metric_family_delta_heatmap_low_budget_best_embedding_model,
 )
+from experiments.medical_dataset_gen.analysis.plot_config_differences import (
+    plot_config_fcp_budget_delta_heatmaps,
+    plot_config_fcp_family_budget_delta_heatmaps,
+    plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model,
+    plot_config_metric_delta_heatmap_low_budget,
+    plot_config_metric_family_delta_heatmap_low_budget,
+    plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model,
+)
 from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     plot_dataset_composition,
     plot_geometry_pass_rate,
@@ -21,7 +29,11 @@ from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     plot_lambda_stability,
     plot_near_optimal_width,
 )
-from experiments.medical_dataset_gen.analysis.plot_statistical import plot_paired_fcp_forest
+from experiments.medical_dataset_gen.analysis.plot_statistical import (
+    plot_paired_fcp_config_embedding_forest,
+    plot_paired_fcp_config_forest,
+    plot_paired_fcp_forest,
+)
 from experiments.medical_dataset_gen.analysis.report_config import (
     BUDGET_CATEGORIES,
     LEGACY_LOW_BUDGET_TOKEN,
@@ -46,6 +58,7 @@ def write_figures(
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
     paired_cell_rows: Sequence[Mapping[str, object]],
     paired_suite_rows: Sequence[Mapping[str, object]],
+    paired_config_suite_rows: Sequence[Mapping[str, object]],
     warnings: list[str],
 ) -> list[Path]:
     try:
@@ -60,8 +73,10 @@ def write_figures(
     output_dir.mkdir(parents=True, exist_ok=True)
     metrics_dir = output_dir / 'metrics'
     aggregate_dir = output_dir / 'aggregates'
+    cross_config_dir = aggregate_dir / 'cross_config'
     metrics_dir.mkdir(parents=True, exist_ok=True)
     aggregate_dir.mkdir(parents=True, exist_ok=True)
+    cross_config_dir.mkdir(parents=True, exist_ok=True)
     for obsolete_stem in (
         'fcp_delta_by_experiment',
         'facloc_vs_topk_delta_by_experiment',
@@ -134,6 +149,70 @@ def write_figures(
             cell_rows=paired_cell_rows,
             suite_rows=paired_suite_rows,
             output_dir=aggregate_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_config_fcp_budget_delta_heatmaps(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_config_metric_delta_heatmap_low_budget(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_config_fcp_family_budget_delta_heatmaps(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_config_metric_family_delta_heatmap_low_budget(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model(
+            plt=plt,
+            rows=budget_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_paired_fcp_config_forest(
+            plt=plt,
+            rows=paired_config_suite_rows,
+            output_dir=cross_config_dir,
+            plot_format=plot_format,
+        )
+    )
+    paths.extend(
+        plot_paired_fcp_config_embedding_forest(
+            plt=plt,
+            rows=paired_config_suite_rows,
+            output_dir=cross_config_dir,
             plot_format=plot_format,
         )
     )

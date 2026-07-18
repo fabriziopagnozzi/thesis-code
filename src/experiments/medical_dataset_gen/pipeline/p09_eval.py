@@ -77,7 +77,6 @@ _PARENT_GEOMETRY_COLUMNS = [
     'query_id',
     'passes_filter',
     'pool_scope',
-    'calibration_warning',
     'n_topk_retrieved_facets',
 ]
 _SELECTION_SPLIT = 'validation'
@@ -109,7 +108,6 @@ def run_evaluate(
         geometry_dimensions = geometry.select(
             'query_id',
             pl.col('passes_filter').fill_null(False).alias('passes_geometry_filter'),
-            'calibration_warning',
             'n_topk_retrieved_facets',
         )
         query_ids_to_evaluate = _get_query_ids_to_evaluate(
@@ -186,7 +184,6 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         'secondary_axis',
         'template_id',
         'passes_geometry_filter',
-        'calibration_warning',
         'n_topk_retrieved_facets',
     ]
     slice_columns = [column for column in slice_columns if column in results.columns]

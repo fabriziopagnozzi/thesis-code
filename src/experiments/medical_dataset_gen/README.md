@@ -45,16 +45,15 @@ uv run python -m experiments.medical_dataset_gen.pipeline \
 The current pipeline stages are:
 
 1. `plans`
-2. `calibrate_plans`
-3. `facts`
-4. `chunks`
-5. `queries_answers`
-6. `qrels`
-7. `embed`
-8. `filter_queries`
-9. `eval`
-10. `geom_plots`
-11. `eval_plots`
+2. `facts`
+3. `chunks`
+4. `queries_answers`
+5. `qrels`
+6. `embed`
+7. `filter_queries`
+8. `eval`
+9. `geom_plots`
+10. `eval_plots`
 
 ## Package Layout
 
@@ -71,7 +70,6 @@ The current pipeline stages are:
 Key outputs written by the pipeline:
 
 - `query_plans.parquet`
-- `query_plan_calibration.parquet`
 - `clinical_facts.parquet`
 - `chunk_documents.parquet`
 - `chunk_memberships.parquet`

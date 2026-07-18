@@ -165,6 +165,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
             bootstrap_replicates=args.bootstrap_replicates,
             bootstrap_seed=args.bootstrap_seed,
         )
+        # Diagnostic: temporarily disabled to isolate cross-configuration overhead.
+        # paired_config_suite_rows = configuration_suite_effect_summary_rows(
+        #     profile_effects=paired_profile_effects,
+        #     budget_rows=budget_rows,
+        #     bootstrap_replicates=args.bootstrap_replicates,
+        #     bootstrap_seed=args.bootstrap_seed,
+        # )
+        paired_config_suite_rows: list[dict[str, object]] = []
         paired_sensitivity_rows = leave_one_out_sensitivity_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,
@@ -226,6 +234,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'embedding_model_summary.csv', embedding_summary_rows)
         write_csv(data_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
         write_csv(data_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
+        write_csv(data_dir / 'paired_config_suite_effect_summary.csv', paired_config_suite_rows)
         write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
         if _should_write_thesis_outputs(args):
             (THESIS_AGGREGATE_TABLES_PATH).write_text(
@@ -269,6 +278,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
                 paired_cell_rows=paired_cell_rows,
                 paired_suite_rows=paired_suite_rows,
+                paired_config_suite_rows=paired_config_suite_rows,
                 warnings=warnings,
             )
 
@@ -288,6 +298,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             lambda_rows=lambda_rows,
             lambda_safety_rows=lambda_safety_rows,
             embedding_summary_rows=embedding_summary_rows,
+            paired_config_suite_rows=paired_config_suite_rows,
             figures=figures,
         )
         (args.output_dir / 'txt_report.md').write_text(report_text)

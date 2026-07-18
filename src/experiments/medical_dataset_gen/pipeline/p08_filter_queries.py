@@ -70,19 +70,6 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     chunk_memberships = read_parquet(paths, 'chunk_memberships')
     queries = read_parquet(paths, 'queries')
     qrels = read_parquet(paths, 'qrels')
-    calibration_path = paths.table_path('query_plan_calibration')
-    calibration_warning_by_query = (
-        {
-            str(query_id): bool(warning)
-            for query_id, warning in zip(
-                pl.read_parquet(calibration_path)['query_id'].to_list(),
-                pl.read_parquet(calibration_path)['calibration_warning'].to_list(),
-                strict=True,
-            )
-        }
-        if calibration_path.exists()
-        else {}
-    )
     chunk_vectors, query_vectors, chunk_ids, query_ids = load_embedding_arrays(paths)
     chunk_vectors = _materialize_embedding_vectors(chunk_vectors)
     query_vectors = _materialize_embedding_vectors(query_vectors)
@@ -211,7 +198,6 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
                 'cohort_contrast_family': query.cohort_contrast_family,
                 'cohort_dimension_id': query.cohort_dimension_id,
                 'template_id': query.template_id,
-                'calibration_warning': calibration_warning_by_query.get(qid, False),
                 'pool_scope': cfg.retrieval.pool_scope,
                 'pool_size': len(topn_global),
                 'stress_horizon_basis': cfg.geometry_filter.stress_horizon_basis,
@@ -265,7 +251,6 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             'primary_axis',
             'secondary_axis',
             'template_id',
-            'calibration_warning',
             'n_topk_retrieved_facets',
         )
         .agg(

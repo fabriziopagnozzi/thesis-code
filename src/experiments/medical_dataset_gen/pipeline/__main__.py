@@ -15,6 +15,7 @@ from experiments.medical_dataset_gen.schemas.global_config_schemas import (
 from experiments.medical_dataset_gen.utils.exp_naming import child_experiment_names
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
+    SharedGenerationTableName,
     load_config,
     paths_for,
 )
@@ -24,12 +25,11 @@ from experiments.medical_dataset_gen.utils.logging_utils import colorprint, setu
 from helpers.ollama_client import stop_model
 
 from .p01_plans import run_make_query_plans
-from .p02_calibrate_plans import run_calibrate_query_plans
 from .p03_facts import run_make_facts
 from .p04_chunks import run_make_chunks
 from .p05_queries_answers import run_make_queries_answers
 from .p06_qrels import run_make_qrels
-from .p07_embed import run_embed
+from .p07_embed import embedding_artifact_overrides_ready, run_embed
 from .p08_filter_queries import run_filter_queries
 from .p09_eval import parse_evaluate_cli_args, run_evaluate
 from .p10_eval_plots import parse_plots_cli_args, run_eval_plots
@@ -37,7 +37,6 @@ from .p11_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
 
 type PipelineStage = Literal[
     'plans',
-    'calibrate_plans',
     'facts',
     'chunks',
     'queries_answers',
@@ -64,7 +63,6 @@ class StandaloneRunSpec:
 
 STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('plans', run_make_query_plans),
-    ('calibrate_plans', run_calibrate_query_plans),
     ('facts', run_make_facts),
     ('chunks', run_make_chunks),
     ('queries_answers', run_make_queries_answers),
@@ -75,6 +73,14 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('eval_plots', run_eval_plots),
     # ('geom_plots', run_query_geom_plots),
 ]
+
+SHARED_STAGE_OUTPUTS: dict[PipelineStage, tuple[SharedGenerationTableName, ...]] = {
+    'plans': ('query_plans',),
+    'facts': ('clinical_facts',),
+    'chunks': ('chunk_documents', 'chunk_memberships', 'generation_rejects'),
+    'queries_answers': ('queries', 'gold_answers'),
+    'qrels': ('qrels',),
+}
 
 
 def main() -> None:
@@ -161,7 +167,9 @@ def main() -> None:
 
     excluded_stages = {stage for excluded_group in args.exclude or [] for stage in excluded_group}
     selected_stage_set = set(selected_stages) - excluded_stages
-    stages_to_run = [(name, fn) for name, fn in STAGES_TO_FNS_SORTED if name in selected_stage_set]
+    stages_to_run: list[tuple[PipelineStage, PipelineStageFn]] = [
+        (name, fn) for name, fn in STAGES_TO_FNS_SORTED if name in selected_stage_set
+    ]
     selected_stages = [name for name, _ in stages_to_run]
 
     # provenance = PipelineProvenance(cfg=cfg, paths=paths, stages=selected_stages)
@@ -173,6 +181,10 @@ def main() -> None:
     # print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
     for name, fn in stages_to_run:
+        if _should_skip_shared_stage(paths, name):
+            continue
+        if name == 'embed' and _should_skip_overridden_embed_stage(paths):
+            continue
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
         colorprint('bright_green', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
@@ -197,6 +209,33 @@ def _validate_run_mode_args(
             + ' '.join(unknown_args)
             + '. Put standalone script arguments inside the quoted --run value.'
         )
+
+
+def _should_skip_shared_stage(paths: MedicalDatasetGenPaths, stage: PipelineStage) -> bool:
+    if not paths.uses_shared_generation():
+        return False
+
+    outputs = SHARED_STAGE_OUTPUTS.get(stage)
+    if outputs is None:
+        return False
+
+    missing = [table for table in outputs if not paths.table_path(table).exists()]
+    if missing:
+        return False
+
+    print(
+        f'[pipeline] skipping shared stage {stage}; existing outputs in '
+        f'{paths.table_path(outputs[0]).parent}'
+    )
+    return True
+
+
+def _should_skip_overridden_embed_stage(paths: MedicalDatasetGenPaths) -> bool:
+    if not embedding_artifact_overrides_ready(paths):
+        return False
+
+    print('[pipeline] skipping embed; embedding artifacts are provided by result_dir_overrides')
+    return True
 
 
 def _parse_run_specs(

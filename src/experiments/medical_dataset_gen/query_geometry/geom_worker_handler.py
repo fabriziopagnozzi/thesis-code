@@ -29,6 +29,7 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SyntheticMedicalDatasetTableName,
+    paths_for,
 )
 
 type MMapEmbeddingIdArray = NDArray[Any]
@@ -124,7 +125,10 @@ def init_query_geometry_worker(
     selected_plot_names: Container[GeomPlotName] | None,
 ) -> None:
     os.environ.setdefault('MPLBACKEND', 'Agg')
-    paths = MedicalDatasetGenPaths(exp_name, result_dir_overrides=cfg.global_.result_dir_overrides)
+    if cfg.global_.output_experiment != exp_name:
+        cfg = cfg.model_copy(deep=True)
+        cfg.global_.output_experiment = exp_name
+    paths = paths_for(cfg)
 
     chunk_documents = load_selected_parquet_columns(paths, 'chunk_documents', _CHUNK_COLUMNS)
     chunk_memberships = load_selected_parquet_columns(

@@ -31,8 +31,7 @@
 
 # STAGE_INPUTS: dict[str, tuple[str, ...]] = {
 #     'plans': (),
-#     'calibrate_plans': ('query_plans.parquet',),
-#     'facts': ('query_plans.parquet', 'query_plan_calibration.parquet'),
+#     'facts': ('query_plans.parquet',),
 #     'chunks': ('clinical_facts.parquet',),
 #     'queries_answers': ('query_plans.parquet', 'clinical_facts.parquet'),
 #     'qrels': ('chunk_memberships.parquet',),
@@ -42,7 +41,6 @@
 #         'chunk_memberships.parquet',
 #         'queries.parquet',
 #         'qrels.parquet',
-#         'query_plan_calibration.parquet',
 #         'embeddings_chunk_vectors.npy',
 #         'embeddings_query_vectors.npy',
 #         'embeddings_chunk_ids.npy',
@@ -83,7 +81,6 @@
 
 # STAGE_OUTPUTS: dict[str, tuple[str, ...]] = {
 #     'plans': ('query_plans.parquet',),
-#     'calibrate_plans': ('query_plans.parquet', 'query_plan_calibration.parquet'),
 #     'facts': ('clinical_facts.parquet',),
 #     'chunks': (
 #         'chunk_documents.parquet',
@@ -178,11 +175,6 @@
 #                 for input_path, fingerprint in input_fingerprints.items()
 #                 if Path(input_path).resolve() != path.resolve()
 #             }
-#             if stage == 'calibrate_plans' and path.name == 'query_plan_calibration.parquet':
-#                 plans_path = self.paths.experiment_dir / 'query_plans.parquet'
-#                 lineage = {
-#                     str(plans_path.resolve()): output_fingerprints[str(plans_path.resolve())]
-#                 }
 #             entry: ArtifactEntry = {
 #                 'stage': stage,
 #                 'fingerprint': _fingerprint(path),

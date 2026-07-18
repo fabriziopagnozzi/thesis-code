@@ -23,6 +23,7 @@ from experiments.medical_dataset_gen.schemas.global_config_schemas import Experi
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SyntheticMedicalDatasetTableName,
+    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import json_loads
 
@@ -76,7 +77,10 @@ def get_evaluation_worker_state() -> EvaluationWorkerState | None:
 
 
 def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
-    paths = MedicalDatasetGenPaths(exp_name, result_dir_overrides=cfg.global_.result_dir_overrides)
+    if cfg.global_.output_experiment != exp_name:
+        cfg = cfg.model_copy(deep=True)
+        cfg.global_.output_experiment = exp_name
+    paths = paths_for(cfg)
 
     compute_answer_rouge = cfg.retrieval.compute_answer_rouge
     chunk_columns = _CHUNK_COLUMNS_WITH_ROUGE if compute_answer_rouge else _CHUNK_COLUMNS_NO_ROUGE

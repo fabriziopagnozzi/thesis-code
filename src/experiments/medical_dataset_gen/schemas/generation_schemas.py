@@ -33,7 +33,6 @@ type CohortContrastFamily = Literal[
     'distinct_comorbidity',
 ]
 
-type PlanCalibrationMode = Literal['rotating', 'embedding_calibrated']
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
 CHUNK_TEXT_STYLE_LIST = list[ChunkTextStyle](get_args(ChunkTextStyle.__value__))
