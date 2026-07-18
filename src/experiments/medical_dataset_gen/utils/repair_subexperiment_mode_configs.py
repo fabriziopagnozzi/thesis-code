@@ -185,7 +185,9 @@ def _iter_subconfig_paths(*, parents: set[str] | None) -> Iterable[Path]:
             yield from sorted(parent_dir.glob('*/_subconfig.yaml'))
         return
 
-    for parent_dir in sorted(path for path in MedicalDatasetGenPaths.results_dir.iterdir() if path.is_dir()):
+    for parent_dir in sorted(
+        path for path in MedicalDatasetGenPaths.results_dir.iterdir() if path.is_dir()
+    ):
         yield from sorted(parent_dir.glob('*/_subconfig.yaml'))
 
 

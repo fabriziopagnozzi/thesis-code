@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
+import re
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, TypedDict, cast
 
 import numpy as np
 from ruamel.yaml import YAML
@@ -15,7 +17,6 @@ from ruamel.yaml import YAML
 from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
     chunk_embedding_signature,
 )
-from experiments.medical_dataset_gen.embedding_db.identity import query_embedding_signature
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.exp_naming import resolve_experiment_name
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -24,10 +25,28 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     YamlMapping,
     load_config,
 )
+from helpers.embedder import MODEL_PROFILES
 
 type CompactScope = Literal['all', 'chunk', 'query']
 type ArtifactGroupKind = Literal['chunk', 'query']
 type QuerySurfaceGroup = Literal['biased', 'unbiased']
+type QueryFocusToken = Literal['list', 'natural']
+type ChunkModeToken = Literal['simple', 'hardened']
+
+QUERY_EMBEDDING_SIGNATURE_VERSION = 1
+MODEL_TOKEN_PREFERENCE = {
+    'bge_m3': 0,
+    'qwen3_06': 1,
+    'qwen3_06B': 2,
+    'multi_mpnet': 3,
+    'medembed_L': 4,
+}
+_CHILD_NAME_RE = re.compile(
+    r'^(?P<query_surface>biased|unbiased)_q_'
+    r'(?P<focus_mode>list|natural)_f_'
+    r'(?P<chunk_mode>simple|hardened)_c_'
+    r'(?P<model_token>.+)$'
+)
 
 CHUNK_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = ('chunk_vectors', 'chunk_ids')
 QUERY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = ('query_vectors', 'query_ids')
@@ -38,6 +57,23 @@ ARTIFACT_FILENAMES: dict[EmbeddingArtifactName, str] = {
     'query_ids': 'embeddings_query_ids.npy',
     'metadata': 'embeddings_metadata.json',
 }
+
+
+class QueryEmbeddingSignaturePayload(TypedDict):
+    signature_version: int
+    model_name: str
+    profile_mode: str
+    query_prompt: str | None
+    query_prompt_name: str | None
+    normalize: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ChildNameParts:
+    query_surface: QuerySurfaceGroup
+    focus_mode: QueryFocusToken
+    chunk_mode: ChunkModeToken
+    model_token: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +131,17 @@ def main() -> None:
         print('[compact] verifying byte-identical artifact files before rewiring/deletion')
         plans = _filter_byte_identical_plans(plans)
 
-    _print_plan(plans, apply=bool(args.apply), no_delete=bool(args.no_delete))
+    if args.canonical_report is not None:
+        report_path = Path(str(args.canonical_report))
+        _write_canonical_report(plans, report_path)
+        print(f'[compact] canonical report -> {report_path}')
+
+    _print_plan(
+        plans,
+        apply=bool(args.apply),
+        no_delete=bool(args.no_delete),
+        summary_only=bool(args.summary_only),
+    )
     if not args.apply:
         print('[compact] dry run only. Re-run with --apply to update subconfigs and delete files.')
         return
@@ -106,9 +152,7 @@ def main() -> None:
         include_llm=bool(args.include_llm),
     )
     changed_subconfigs = repaired_subconfigs | _apply_overrides(plans)
-    deleted_files, deleted_bytes = (
-        (0, 0) if args.no_delete else _delete_duplicate_files(plans)
-    )
+    deleted_files, deleted_bytes = (0, 0) if args.no_delete else _delete_duplicate_files(plans)
     print(
         '[compact] applied: '
         f'updated_subconfigs={len(changed_subconfigs):,}, '
@@ -169,7 +213,10 @@ def _plans_for_kind(
         ]
         if not canonical_candidates:
             continue
-        canonical = canonical_candidates[0]
+        canonical = min(
+            canonical_candidates,
+            key=lambda child: _canonical_sort_key(child, kind=kind),
+        )
         duplicates = tuple(
             child
             for child in compatible
@@ -206,8 +253,34 @@ def _group_key(
         _query_surface_group(child),
         cfg.generation.focus_mode,
         cfg.generation.query_structure,
-        query_embedding_signature(cfg),
+        _query_embedding_signature(cfg),
     )
+
+
+def _query_embedding_signature(cfg: ExperimentCfg) -> str:
+    return _hash_json(_query_embedding_signature_payload(cfg))
+
+
+def _query_embedding_signature_payload(cfg: ExperimentCfg) -> QueryEmbeddingSignaturePayload:
+    profile = MODEL_PROFILES[cfg.embeddings.model_name]
+    return {
+        'signature_version': QUERY_EMBEDDING_SIGNATURE_VERSION,
+        'model_name': cfg.embeddings.model_name,
+        'profile_mode': profile.mode,
+        'query_prompt': (
+            cfg.embeddings.query_prompt
+            if cfg.embeddings.query_prompt is not None
+            else profile.query_prompt
+        ),
+        'query_prompt_name': profile.query_prompt_name
+        if cfg.embeddings.query_prompt is None
+        else None,
+        'normalize': cfg.embeddings.normalize,
+    }
+
+
+def _hash_json(value: object) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
 def _shape_key(info: NpyFileInfo) -> tuple[str | None, tuple[int, ...] | None]:
@@ -215,11 +288,66 @@ def _shape_key(info: NpyFileInfo) -> tuple[str | None, tuple[int, ...] | None]:
 
 
 def _query_surface_group(child: ChildEmbeddingArtifacts) -> QuerySurfaceGroup | str:
+    parts = _child_name_parts(child.child_name)
+    if parts is not None:
+        return parts.query_surface
     if child.child_name.startswith('biased_q_'):
         return 'biased'
     if child.child_name.startswith('unbiased_q_'):
         return 'unbiased'
     return f'child:{child.child_name}'
+
+
+def _canonical_sort_key(
+    child: ChildEmbeddingArtifacts,
+    *,
+    kind: ArtifactGroupKind,
+) -> tuple[int, int, int, int, str]:
+    parts = _child_name_parts(child.child_name)
+    if parts is None:
+        return (1, 1, 1, 999, child.exp_name)
+
+    if kind == 'chunk':
+        expected_chunk_mode = (
+            'simple' if child.cfg.generation.chunk_text_style == 'ontology_explicit' else 'hardened'
+        )
+        return (
+            0,
+            0 if parts.query_surface == 'biased' else 1,
+            _focus_preference(parts.focus_mode),
+            0 if parts.chunk_mode == expected_chunk_mode else 1,
+            f'{_model_token_preference(parts.model_token):03d}:{child.exp_name}',
+        )
+
+    # Query embeddings do not depend on chunk text style. Prefer the simple
+    # chunk-mode subexperiment as the query-vector source for each query surface/focus.
+    return (
+        0,
+        0 if parts.chunk_mode == 'simple' else 1,
+        _model_token_preference(parts.model_token),
+        0,
+        child.exp_name,
+    )
+
+
+def _child_name_parts(child_name: str) -> ChildNameParts | None:
+    match = _CHILD_NAME_RE.fullmatch(child_name)
+    if match is None:
+        return None
+    return ChildNameParts(
+        query_surface=cast(QuerySurfaceGroup, match.group('query_surface')),
+        focus_mode=cast(QueryFocusToken, match.group('focus_mode')),
+        chunk_mode=cast(ChunkModeToken, match.group('chunk_mode')),
+        model_token=match.group('model_token'),
+    )
+
+
+def _focus_preference(focus_mode: QueryFocusToken) -> int:
+    return 0 if focus_mode == 'list' else 1
+
+
+def _model_token_preference(model_token: str) -> int:
+    return MODEL_TOKEN_PREFERENCE.get(model_token, 100)
 
 
 def _files_compatible_with_canonical(
@@ -244,12 +372,9 @@ def _has_all_local_files(
 
 
 def _skip_llm_chunks(cfg: ExperimentCfg, *, include_llm: bool) -> bool:
-    return (
-        not include_llm
-        and (
-            cfg.generation.llm_config.use_llm_chunk_generation
-            or cfg.generation.llm_config.use_llm_chunk_rewriting
-        )
+    return not include_llm and (
+        cfg.generation.llm_config.use_llm_chunk_generation
+        or cfg.generation.llm_config.use_llm_chunk_rewriting
     )
 
 
@@ -436,7 +561,9 @@ def _iter_subconfig_paths(*, parents: set[str] | None) -> Iterable[Path]:
             yield from sorted(parent_dir.glob('*/_subconfig.yaml'))
         return
 
-    for parent_dir in sorted(path for path in MedicalDatasetGenPaths.results_dir.iterdir() if path.is_dir()):
+    for parent_dir in sorted(
+        path for path in MedicalDatasetGenPaths.results_dir.iterdir() if path.is_dir()
+    ):
         yield from sorted(parent_dir.glob('*/_subconfig.yaml'))
 
 
@@ -472,6 +599,7 @@ def _print_plan(
     *,
     apply: bool,
     no_delete: bool,
+    summary_only: bool,
 ) -> None:
     total_bytes = sum(plan.deletable_bytes for plan in plans)
     mode = 'apply' if apply else 'dry-run'
@@ -480,6 +608,8 @@ def _print_plan(
         f'[compact] mode={mode}, action={delete_note}, '
         f'groups={len(plans):,}, potential_free={_format_bytes(total_bytes)}'
     )
+    if summary_only:
+        return
     for plan in plans:
         print(
             f'[{plan.kind}] canonical={plan.canonical.exp_name} '
@@ -490,10 +620,29 @@ def _print_plan(
             print(f'  -> {duplicate.exp_name}')
 
 
+def _write_canonical_report(plans: list[ArtifactGroupPlan], report_path: Path) -> None:
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        'kind\tcanonical\tduplicates\tdeletable_bytes\tkey',
+        *[
+            (
+                f'{plan.kind}\t{plan.canonical.exp_name}\t{len(plan.duplicates)}\t'
+                f'{plan.deletable_bytes}\t{_plan_key_label(plan)}'
+            )
+            for plan in plans
+        ],
+    ]
+    tmp_path = report_path.with_name(f'.{report_path.name}.{os.getpid()}.tmp')
+    tmp_path.write_text('\n'.join(lines) + '\n')
+    os.replace(tmp_path, report_path)
+
+
 def _plan_key_label(plan: ArtifactGroupPlan) -> str:
     if plan.kind == 'chunk':
         parent, chunk_text_style, signature = plan.key
-        return f'parent={parent}, chunk_text_style={chunk_text_style}, signature={str(signature)[:8]}'
+        return (
+            f'parent={parent}, chunk_text_style={chunk_text_style}, signature={str(signature)[:8]}'
+        )
     parent, query_surface_group, focus_mode, query_structure, signature = plan.key
     return (
         f'parent={parent}, query_surface={query_surface_group}, focus_mode={focus_mode}, '
@@ -605,6 +754,15 @@ def _parse_args() -> argparse.Namespace:
             'With --apply, skip byte-identity checks and trust the effective config grouping. '
             'By default, --apply verifies byte identity before rewiring/deleting.'
         ),
+    )
+    parser.add_argument(
+        '--summary-only',
+        action='store_true',
+        help='Print only the aggregate plan line instead of every canonical/duplicate group.',
+    )
+    parser.add_argument(
+        '--canonical-report',
+        help='Write a tab-separated canonical group report to this path.',
     )
     return parser.parse_args()
 
