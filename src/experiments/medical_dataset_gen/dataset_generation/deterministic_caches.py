@@ -17,6 +17,7 @@ from helpers.embedder import MODEL_PROFILES
 
 # Bump when the persisted chunk embedding cache schema or key semantics change.
 CHUNK_EMBEDDING_CACHE_VERSION = 1
+QUERY_EMBEDDING_SIGNATURE_VERSION = 1
 # Two hash characters keep each cache shard near 1/256 of a signature cache.
 CACHE_BUCKET_HEX_CHARS = 2
 
@@ -27,6 +28,15 @@ class EmbeddingSignaturePayload(TypedDict):
     profile_mode: str
     document_prompt: str | None
     document_prompt_name: str | None
+    normalize: bool
+
+
+class QueryEmbeddingSignaturePayload(TypedDict):
+    signature_version: int
+    model_name: str
+    profile_mode: str
+    query_prompt: str | None
+    query_prompt_name: str | None
     normalize: bool
 
 
@@ -61,6 +71,28 @@ def chunk_embedding_signature_payload(cfg: ExperimentCfg) -> EmbeddingSignatureP
 
 def chunk_embedding_signature(cfg: ExperimentCfg) -> str:
     return _hash_json(chunk_embedding_signature_payload(cfg))
+
+
+def query_embedding_signature_payload(cfg: ExperimentCfg) -> QueryEmbeddingSignaturePayload:
+    profile = MODEL_PROFILES[cfg.embeddings.model_name]
+    return {
+        'signature_version': QUERY_EMBEDDING_SIGNATURE_VERSION,
+        'model_name': cfg.embeddings.model_name,
+        'profile_mode': profile.mode,
+        'query_prompt': (
+            cfg.embeddings.query_prompt
+            if cfg.embeddings.query_prompt is not None
+            else profile.query_prompt
+        ),
+        'query_prompt_name': profile.query_prompt_name
+        if cfg.embeddings.query_prompt is None
+        else None,
+        'normalize': cfg.embeddings.normalize,
+    }
+
+
+def query_embedding_signature(cfg: ExperimentCfg) -> str:
+    return _hash_json(query_embedding_signature_payload(cfg))
 
 
 def chunk_embedding_cache_key(

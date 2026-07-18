@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import os
 import re
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict, cast
+from typing import Literal, cast
 
 import numpy as np
 from ruamel.yaml import YAML
 
 from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
     chunk_embedding_signature,
+    query_embedding_signature,
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.exp_naming import resolve_experiment_name
@@ -25,7 +25,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     YamlMapping,
     load_config,
 )
-from helpers.embedder import MODEL_PROFILES
 
 type CompactScope = Literal['all', 'chunk', 'query']
 type ArtifactGroupKind = Literal['chunk', 'query']
@@ -33,7 +32,6 @@ type QuerySurfaceGroup = Literal['biased', 'unbiased']
 type QueryFocusToken = Literal['list', 'natural']
 type ChunkModeToken = Literal['simple', 'hardened']
 
-QUERY_EMBEDDING_SIGNATURE_VERSION = 1
 MODEL_TOKEN_PREFERENCE = {
     'bge_m3': 0,
     'qwen3_06': 1,
@@ -57,15 +55,6 @@ ARTIFACT_FILENAMES: dict[EmbeddingArtifactName, str] = {
     'query_ids': 'embeddings_query_ids.npy',
     'metadata': 'embeddings_metadata.json',
 }
-
-
-class QueryEmbeddingSignaturePayload(TypedDict):
-    signature_version: int
-    model_name: str
-    profile_mode: str
-    query_prompt: str | None
-    query_prompt_name: str | None
-    normalize: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,34 +242,8 @@ def _group_key(
         _query_surface_group(child),
         cfg.generation.focus_mode,
         cfg.generation.query_structure,
-        _query_embedding_signature(cfg),
+        query_embedding_signature(cfg),
     )
-
-
-def _query_embedding_signature(cfg: ExperimentCfg) -> str:
-    return _hash_json(_query_embedding_signature_payload(cfg))
-
-
-def _query_embedding_signature_payload(cfg: ExperimentCfg) -> QueryEmbeddingSignaturePayload:
-    profile = MODEL_PROFILES[cfg.embeddings.model_name]
-    return {
-        'signature_version': QUERY_EMBEDDING_SIGNATURE_VERSION,
-        'model_name': cfg.embeddings.model_name,
-        'profile_mode': profile.mode,
-        'query_prompt': (
-            cfg.embeddings.query_prompt
-            if cfg.embeddings.query_prompt is not None
-            else profile.query_prompt
-        ),
-        'query_prompt_name': profile.query_prompt_name
-        if cfg.embeddings.query_prompt is None
-        else None,
-        'normalize': cfg.embeddings.normalize,
-    }
-
-
-def _hash_json(value: object) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
 def _shape_key(info: NpyFileInfo) -> tuple[str | None, tuple[int, ...] | None]:

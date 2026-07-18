@@ -83,13 +83,12 @@ Key outputs written by the pipeline:
 - `query_geometry_points.parquet`
 - `query_geometry_stats.parquet`
 
-The embedding stage also writes:
+The embedding stage also writes resolved chunk/query vector arrays, chunk/query ID arrays, and embedding metadata. For subexperiments with `global.use_shared: true`, these live under the parent `_embeddings/` directory instead of each child result folder. Existing local/canonical arrays can be moved into that layout with:
 
-- `embeddings_chunk_vectors.npy`
-- `embeddings_query_vectors.npy`
-- `embeddings_chunk_ids.npy`
-- `embeddings_query_ids.npy`
-- `embeddings_metadata.json`
+```bash
+uv run -m experiments.medical_dataset_gen.utils.migrate_shared_embedding_artifacts --summary-only
+uv run -m experiments.medical_dataset_gen.utils.migrate_shared_embedding_artifacts --apply --strip-embedding-overrides
+```
 
 ## Retrieval Pool
 

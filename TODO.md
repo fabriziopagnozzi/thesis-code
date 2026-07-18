@@ -1,5 +1,7 @@
 # Code - Primary
 
+## verifica che tutte le migrazioni siano giuste rirunnando una run vecchia e controllando i grafici
+
 ---------
 
 # Writing - Primary

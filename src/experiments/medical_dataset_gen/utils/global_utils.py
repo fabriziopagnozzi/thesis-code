@@ -55,8 +55,16 @@ SHARED_GENERATION_TABLE_NAMES = set[str](SHARED_GENERATION_TABLES)
 type EmbeddingArtifactName = Literal[
     'chunk_vectors', 'query_vectors', 'chunk_ids', 'query_ids', 'metadata'
 ]
+EMBEDDING_ARTIFACT_FILENAMES: dict[EmbeddingArtifactName, str] = {
+    'chunk_vectors': 'embeddings_chunk_vectors.npy',
+    'query_vectors': 'embeddings_query_vectors.npy',
+    'chunk_ids': 'embeddings_chunk_ids.npy',
+    'query_ids': 'embeddings_query_ids.npy',
+    'metadata': 'embeddings_metadata.json',
+}
 
 type ResultDirOverrides = dict[SyntheticMedicalDatasetTableName | EmbeddingArtifactName, str]
+type SharedEmbeddingArtifactPaths = dict[EmbeddingArtifactName, Path]
 
 type YamlMapping = dict[str, object]
 
@@ -73,6 +81,7 @@ class MedicalDatasetGenPaths:
         exp_name: str,
         result_dir_overrides: ResultDirOverrides | None = None,
         shared_generation_dir: Path | str | None = None,
+        shared_embedding_artifact_paths: SharedEmbeddingArtifactPaths | None = None,
     ):
         self.exp_name = exp_name
         self.experiment_dir = self.results_dir / exp_name
@@ -95,6 +104,7 @@ class MedicalDatasetGenPaths:
         self.shared_generation_dir = (
             Path(shared_generation_dir) if shared_generation_dir is not None else None
         )
+        self.shared_embedding_artifact_paths = dict(shared_embedding_artifact_paths or {})
 
     def ensure_dirs(self) -> None:
         for path in [self.results_dir, self.experiment_dir, self.logs_dir, self.figures_dir]:
@@ -133,8 +143,12 @@ class MedicalDatasetGenPaths:
         return self.shared_generation_dir is not None
 
     def embeddings_paths(self, name: EmbeddingArtifactName) -> Path:
+        shared_path = self.shared_embedding_artifact_paths.get(name)
+        if shared_path is not None:
+            return shared_path
+
         override = self.result_dir_overrides.get(name)
-        artifact_disk_old_name = f'embeddings_{name}.{"json" if name == "metadata" else "npy"}'  # for compatibility with old exps
+        artifact_disk_old_name = EMBEDDING_ARTIFACT_FILENAMES[name]
 
         if override is None:
             return self.experiment_dir / artifact_disk_old_name
@@ -243,6 +257,7 @@ def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
         cfg.global_.output_experiment,
         result_dir_overrides=cfg.global_.result_dir_overrides,
         shared_generation_dir=shared_generation_dir_for_config(cfg),
+        shared_embedding_artifact_paths=shared_embedding_artifact_paths_for_config(cfg),
     )
     paths.ensure_dirs()
     return paths
@@ -265,12 +280,68 @@ def shared_generation_dir_for_config(cfg: ExperimentCfg) -> Path | None:
     )
 
 
+def shared_embeddings_dir_for_config(cfg: ExperimentCfg) -> Path | None:
+    if not cfg.global_.use_shared:
+        return None
+
+    exp_path = Path(cfg.global_.output_experiment)
+    if len(exp_path.parts) != 2:
+        return None
+
+    return MedicalDatasetGenPaths.results_dir / exp_path.parts[0] / '_embeddings'
+
+
+def shared_embedding_artifact_paths_for_config(
+    cfg: ExperimentCfg,
+) -> SharedEmbeddingArtifactPaths | None:
+    embeddings_dir = shared_embeddings_dir_for_config(cfg)
+    if embeddings_dir is None:
+        return None
+
+    from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
+        chunk_embedding_signature,
+        query_embedding_signature,
+    )
+
+    chunk_key = chunk_document_mode_key(cfg)
+    query_key = query_document_mode_key(cfg)
+    document_signature = chunk_embedding_signature(cfg)
+    query_signature = query_embedding_signature(cfg)
+    return {
+        'chunk_ids': embeddings_dir / 'chunks' / chunk_key / 'embedding_chunk_ids.npy',
+        'query_ids': embeddings_dir / 'queries' / query_key / 'embedding_query_ids.npy',
+        'chunk_vectors': embeddings_dir
+        / 'chunks'
+        / chunk_key
+        / document_signature
+        / 'embedding_chunk_vectors.npy',
+        'query_vectors': embeddings_dir
+        / 'queries'
+        / query_key
+        / query_signature
+        / 'embedding_query_vectors.npy',
+        'metadata': embeddings_dir
+        / 'metadata'
+        / f'{document_signature}__{query_signature}'
+        / f'{chunk_key}__{query_key}'
+        / 'embedding_metadata.json',
+    }
+
+
 def shared_generation_mode_key(cfg: ExperimentCfg) -> str:
-    query_surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
+    return f'{query_document_mode_key(cfg)}_{chunk_document_mode_key(cfg)}'
+
+
+def chunk_document_mode_key(cfg: ExperimentCfg) -> str:
     chunk_mode = (
         'simple' if cfg.generation.chunk_text_style == 'ontology_explicit' else 'hardened'
     )
-    return f'{query_surface}_q_{cfg.generation.focus_mode}_f_{chunk_mode}_c'
+    return f'{chunk_mode}_c'
+
+
+def query_document_mode_key(cfg: ExperimentCfg) -> str:
+    query_surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
+    return f'{query_surface}_q_{cfg.generation.focus_mode}_f'
 
 
 def unreachable_code(err: str) -> NoReturn:

@@ -40,8 +40,8 @@ EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
 def run_embed(
     cfg: ExperimentCfg, paths: MedicalDatasetGenPaths
 ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
-    if embedding_artifact_overrides_ready(paths):
-        print('[embed] skipping; embedding artifacts are provided by result_dir_overrides')
+    if embedding_artifacts_ready(paths):
+        print('[embed] skipping; embedding artifacts already exist')
         return (
             np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r'),
             np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r'),
@@ -49,6 +49,7 @@ def run_embed(
 
     chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
 
+    paths.embeddings_paths('metadata').parent.mkdir(parents=True, exist_ok=True)
     with open(paths.embeddings_paths('metadata'), 'w') as f:
         json.dump(meta, f, indent=2)
 
@@ -59,9 +60,9 @@ def run_embed(
     return chunk_vectors, query_vectors
 
 
-def embedding_artifact_overrides_ready(paths: MedicalDatasetGenPaths) -> bool:
+def embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
     return all(
-        artifact in paths.result_dir_overrides and paths.embeddings_paths(artifact).exists()
+        paths.embeddings_paths(artifact).exists()
         for artifact in EMBEDDING_ARRAY_ARTIFACTS
     )
 
@@ -91,6 +92,9 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
     )
     try:
         dim = embedder.dim
+        for artifact in EMBEDDING_ARRAY_ARTIFACTS:
+            paths.embeddings_paths(artifact).parent.mkdir(parents=True, exist_ok=True)
+
         chunk_vectors = np.lib.format.open_memmap(
             paths.embeddings_paths('chunk_vectors'),
             mode='w+',

@@ -29,7 +29,7 @@ from .p03_facts import run_make_facts
 from .p04_chunks import run_make_chunks
 from .p05_queries_answers import run_make_queries_answers
 from .p06_qrels import run_make_qrels
-from .p07_embed import embedding_artifact_overrides_ready, run_embed
+from .p07_embed import embedding_artifacts_ready, run_embed
 from .p08_filter_queries import run_filter_queries
 from .p09_eval import parse_evaluate_cli_args, run_evaluate
 from .p10_eval_plots import parse_plots_cli_args, run_eval_plots
@@ -183,7 +183,7 @@ def main() -> None:
     for name, fn in stages_to_run:
         if _should_skip_shared_stage(paths, name):
             continue
-        if name == 'embed' and _should_skip_overridden_embed_stage(paths):
+        if name == 'embed' and _should_skip_existing_embed_stage(paths):
             continue
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
@@ -230,11 +230,11 @@ def _should_skip_shared_stage(paths: MedicalDatasetGenPaths, stage: PipelineStag
     return True
 
 
-def _should_skip_overridden_embed_stage(paths: MedicalDatasetGenPaths) -> bool:
-    if not embedding_artifact_overrides_ready(paths):
+def _should_skip_existing_embed_stage(paths: MedicalDatasetGenPaths) -> bool:
+    if not embedding_artifacts_ready(paths):
         return False
 
-    print('[pipeline] skipping embed; embedding artifacts are provided by result_dir_overrides')
+    print('[pipeline] skipping embed; embedding artifacts already exist')
     return True
 
 
