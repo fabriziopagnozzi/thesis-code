@@ -1,7 +1,7 @@
 """Static configuration for experiment-comparison aggregation and figures."""
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import DeltaMetricLabel
-from experiments.medical_dataset_gen.analysis.models import BudgetCategory, DeltaMetricPlotSpec
+from experiments.medical_dataset_gen.reports.analysis_constants import DeltaMetricLabel
+from experiments.medical_dataset_gen.reports.models import BudgetCategory, DeltaMetricPlotSpec
 
 BUDGET_CATEGORIES: tuple[BudgetCategory, ...] = ('low_budget', 'medium_budget', 'high_budget')
 BUDGET_CATEGORY_LABELS: dict[BudgetCategory, str] = {

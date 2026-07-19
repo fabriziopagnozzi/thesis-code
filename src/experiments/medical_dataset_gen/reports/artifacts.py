@@ -5,8 +5,8 @@ from pathlib import Path
 
 import polars as pl
 
-from experiments.medical_dataset_gen.analysis.helpers import short_token
-from experiments.medical_dataset_gen.analysis.models import ExperimentRecord
+from experiments.medical_dataset_gen.reports.helpers import short_token
+from experiments.medical_dataset_gen.reports.models import ExperimentRecord
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     BackgroundDistractorSpec,
     ExperimentCfg,

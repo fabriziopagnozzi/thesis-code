@@ -16,24 +16,24 @@ from sklearn.model_selection import train_test_split
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import make_pipeline
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.evaluation.lambda_selection import (
+    LAMBDA_SELECTION_MAXIMIZING_METRIC,
+    select_best_lambda_row,
+)
+from experiments.medical_dataset_gen.pipeline.p09_eval import stats_aggregated_results_df
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     DIVERSIFYING_STRATEGIES,
     EVALUATION_METRICS,
     StrategyName,
 )
-from experiments.medical_dataset_gen.analysis.helpers import (
+from experiments.medical_dataset_gen.reports.helpers import (
     base_experiment_row,
     float_or_none,
     int_or_none,
     json_scalar,
     lambda_norm,
 )
-from experiments.medical_dataset_gen.analysis.models import ExperimentRecord
-from experiments.medical_dataset_gen.evaluation.lambda_selection import (
-    LAMBDA_SELECTION_MAXIMIZING_METRIC,
-    select_best_lambda_row,
-)
-from experiments.medical_dataset_gen.pipeline.p09_eval import stats_aggregated_results_df
+from experiments.medical_dataset_gen.reports.models import ExperimentRecord
 from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
 
 type LambdaTransferPolicy = Literal['global', 'leave_one_distribution_out']
@@ -294,7 +294,8 @@ def _lambda_grid_signature(
         lambdas = tuple(
             sorted({
                 round(float(value), 6)
-                for value in stats.filter(pl.col(_STRATEGY) == strategy)[_LAMBDA]
+                for value in stats
+                .filter(pl.col(_STRATEGY) == strategy)[_LAMBDA]
                 .drop_nulls()
                 .to_list()
             })
@@ -356,12 +357,11 @@ def _select_weighted_lambda_choice(
 
     combined = pl.concat(frames)
     grouped = (
-        combined.group_by(_LAMBDA)
+        combined
+        .group_by(_LAMBDA)
         .agg(
             (
-                (
-                    pl.col(LAMBDA_SELECTION_MAXIMIZING_METRIC) * pl.col(_N_QUERIES)
-                ).sum()
+                (pl.col(LAMBDA_SELECTION_MAXIMIZING_METRIC) * pl.col(_N_QUERIES)).sum()
                 / pl.col(_N_QUERIES).sum()
             ).alias('weighted_metric'),
             pl.col(_N_QUERIES).sum().alias('training_queries'),
@@ -378,9 +378,7 @@ def _select_weighted_lambda_choice(
         else 'lower_lambda'
     )
     descending = [True, tie_break == 'higher_lambda']
-    selected = grouped.sort(['weighted_metric', _LAMBDA], descending=descending).row(
-        0, named=True
-    )
+    selected = grouped.sort(['weighted_metric', _LAMBDA], descending=descending).row(0, named=True)
     return _LambdaChoice(
         lam=float(selected[_LAMBDA]),
         selection_metric_value=float(selected['weighted_metric']),
@@ -542,7 +540,8 @@ def _load_population_results(results_path: Path, *, geometry_path: Path) -> pl.D
     if pass_column == 'passes_geometry_filter':
         return results.with_columns(pl.col(pass_column).fill_null(False)).collect()
     return (
-        results.rename({pass_column: 'passes_geometry_filter'})
+        results
+        .rename({pass_column: 'passes_geometry_filter'})
         .with_columns(pl.col('passes_geometry_filter').fill_null(False))
         .collect()
     )
@@ -587,9 +586,7 @@ def _population_selected_strategy_rows(
     rows: list[dict[str, object]] = []
     k_values = sorted(int(k) for k in report_grid_stats[_K].drop_nulls().unique().to_list())
     for k in k_values:
-        topk = report_grid_stats.filter((pl.col(_STRATEGY) == 'top_k') & (pl.col(_K) == k)).head(
-            1
-        )
+        topk = report_grid_stats.filter((pl.col(_STRATEGY) == 'top_k') & (pl.col(_K) == k)).head(1)
         if not topk.is_empty():
             rows.append(
                 _population_row_from_stats(
@@ -701,19 +698,17 @@ def _representative_distribution_records(
 
 
 def _duplicate_text_stats(chunks: pl.DataFrame) -> dict[str, object]:
-    normalized = (
-        chunks.select(
-            pl.col('chunk_id'),
-            pl.col('text')
-            .fill_null('')
-            .str.to_lowercase()
-            .str.replace_all(r'\s+', ' ')
-            .str.strip_chars()
-            .alias('normalized_text'),
-            pl.col('text').fill_null('').str.split(by=' ').list.len().alias('word_count'),
-        )
-        .filter(pl.col('normalized_text') != '')
-    )
+    normalized = chunks.select(
+        pl.col('chunk_id'),
+        pl
+        .col('text')
+        .fill_null('')
+        .str.to_lowercase()
+        .str.replace_all(r'\s+', ' ')
+        .str.strip_chars()
+        .alias('normalized_text'),
+        pl.col('text').fill_null('').str.split(by=' ').list.len().alias('word_count'),
+    ).filter(pl.col('normalized_text') != '')
     n_chunks = normalized.height
     n_unique_texts = normalized['normalized_text'].n_unique() if n_chunks else 0
     duplicate_chunks = n_chunks - n_unique_texts
@@ -743,7 +738,8 @@ def _lexical_jaccard_stats(*, chunks: pl.DataFrame, qrels: pl.DataFrame) -> dict
     needed_chunk_ids = set(str(value) for value in sampled_gold['chunk_id'].drop_nulls().to_list())
     docs_by_id = {
         str(chunk_id): _word_set(str(text or ''))
-        for chunk_id, text in chunks.filter(pl.col('chunk_id').is_in(needed_chunk_ids))
+        for chunk_id, text in chunks
+        .filter(pl.col('chunk_id').is_in(needed_chunk_ids))
         .select('chunk_id', 'text')
         .iter_rows(named=False)
     }
@@ -796,7 +792,8 @@ def _empty_jaccard_stats() -> dict[str, object]:
 
 def _lexical_classifier_stats(*, chunks: pl.DataFrame, qrels: pl.DataFrame) -> dict[str, object]:
     gold_labels = (
-        qrels.filter(pl.col('is_gold').fill_null(False))
+        qrels
+        .filter(pl.col('is_gold').fill_null(False))
         .select('chunk_id', 'axis', 'cluster_role')
         .drop_nulls(subset=['chunk_id', 'axis', 'cluster_role'])
         .unique(subset=['chunk_id'])

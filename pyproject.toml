@@ -48,7 +48,7 @@ dev = [
 [tool.taskipy.tasks]
 # -- Synthetic Medical Dataset Generation ----------------------------------------------------------------------------
 pipeline = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline"
-report = "./memlimit.sh python -m src.experiments.medical_dataset_gen.analysis"
+report = "./memlimit.sh python -m src.experiments.medical_dataset_gen.reports"
 query_diagnose = "./memlimit.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
 add_subexp = './memlimit.sh python -m src.experiments.medical_dataset_gen.utils.add_subexperiments'
 

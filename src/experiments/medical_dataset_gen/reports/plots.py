@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from experiments.medical_dataset_gen.analysis.models import PlotFormat
-from experiments.medical_dataset_gen.analysis.plot_aggregates import (
+from experiments.medical_dataset_gen.reports.models import PlotFormat
+from experiments.medical_dataset_gen.reports.plot_aggregates import (
     plot_budget_delta_columns,
     plot_fcp_family_budget_heatmaps,
     plot_fcp_family_budget_heatmaps_by_embedding_model,
@@ -13,7 +13,7 @@ from experiments.medical_dataset_gen.analysis.plot_aggregates import (
     plot_metric_family_delta_heatmap_low_budget,
     plot_metric_family_delta_heatmap_low_budget_best_embedding_model,
 )
-from experiments.medical_dataset_gen.analysis.plot_config_differences import (
+from experiments.medical_dataset_gen.reports.plot_config_differences import (
     plot_config_fcp_budget_delta_heatmaps,
     plot_config_fcp_family_budget_delta_heatmaps,
     plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model,
@@ -21,7 +21,7 @@ from experiments.medical_dataset_gen.analysis.plot_config_differences import (
     plot_config_metric_family_delta_heatmap_low_budget,
     plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model,
 )
-from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
+from experiments.medical_dataset_gen.reports.plot_diagnostics import (
     plot_dataset_composition,
     plot_geometry_pass_rate,
     plot_lambda_delta_curve,
@@ -29,12 +29,12 @@ from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
     plot_lambda_stability,
     plot_near_optimal_width,
 )
-from experiments.medical_dataset_gen.analysis.plot_statistical import (
+from experiments.medical_dataset_gen.reports.plot_statistical import (
     plot_paired_fcp_config_embedding_forest,
     plot_paired_fcp_config_forest,
     plot_paired_fcp_forest,
 )
-from experiments.medical_dataset_gen.analysis.report_config import (
+from experiments.medical_dataset_gen.reports.report_config import (
     BUDGET_CATEGORIES,
     LEGACY_LOW_BUDGET_TOKEN,
     REPORT_METRIC_SPECS,

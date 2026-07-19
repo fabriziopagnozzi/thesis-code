@@ -5,21 +5,21 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.evaluation.lambda_selection import (
+    LAMBDA_SELECTION_MAXIMIZING_METRIC,
+)
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     REPORT_FILES,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.analysis.helpers import (
+from experiments.medical_dataset_gen.reports.helpers import (
     bullets,
     float_or_none,
     numeric_values,
     section_with_table,
     sorted_rows,
 )
-from experiments.medical_dataset_gen.analysis.models import CliArgs, ExperimentRecord
-from experiments.medical_dataset_gen.evaluation.lambda_selection import (
-    LAMBDA_SELECTION_MAXIMIZING_METRIC,
-)
+from experiments.medical_dataset_gen.reports.models import CliArgs, ExperimentRecord
 
 
 def render_report(
@@ -333,8 +333,7 @@ def render_report(
             [
                 row
                 for row in paired_config_suite_rows
-                if row.get('BudgetCategory') == 'low_budget'
-                and row.get('Scope') == 'Configuration'
+                if row.get('BudgetCategory') == 'low_budget' and row.get('Scope') == 'Configuration'
             ],
             columns=[
                 'WordingConfigLabel',

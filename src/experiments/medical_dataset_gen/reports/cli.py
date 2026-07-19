@@ -6,8 +6,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import TABLEFMT_OPTS
-from experiments.medical_dataset_gen.analysis.models import CliArgs, PlotFormat
+from experiments.medical_dataset_gen.reports.analysis_constants import TABLEFMT_OPTS
+from experiments.medical_dataset_gen.reports.models import CliArgs, PlotFormat
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 
@@ -114,7 +114,9 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         output_dir=output_dir,
         include_scrapped=bool(parsed.include_scrapped),
         experiments=tuple(str(exp) for exp in parsed.experiments),
-        experiment_regex=str(parsed.experiment_regex) if parsed.experiment_regex is not None else None,
+        experiment_regex=str(parsed.experiment_regex)
+        if parsed.experiment_regex is not None
+        else None,
         exclude_experiment_regex=(
             str(parsed.exclude_experiment_regex)
             if parsed.exclude_experiment_regex is not None

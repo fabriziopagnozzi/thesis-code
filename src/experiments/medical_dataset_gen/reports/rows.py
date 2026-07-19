@@ -7,14 +7,18 @@ from typing import cast
 
 import polars as pl
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.evaluation.lambda_selection import (
+    LAMBDA_SELECTION_MAXIMIZING_METRIC,
+    select_best_lambda_rows,
+)
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     DIVERSIFYING_STRATEGIES,
     EVALUATION_METRICS,
     HELDOUT_SELECTION_COLUMNS,
     ROLE_COUNT_COLUMNS,
     StrategyName,
 )
-from experiments.medical_dataset_gen.analysis.helpers import (
+from experiments.medical_dataset_gen.reports.helpers import (
     base_experiment_row,
     distribution_category,
     embedding_metadata,
@@ -32,11 +36,7 @@ from experiments.medical_dataset_gen.analysis.helpers import (
     short_token,
     title_token,
 )
-from experiments.medical_dataset_gen.analysis.models import ExperimentRecord
-from experiments.medical_dataset_gen.evaluation.lambda_selection import (
-    LAMBDA_SELECTION_MAXIMIZING_METRIC,
-    select_best_lambda_rows,
-)
+from experiments.medical_dataset_gen.reports.models import ExperimentRecord
 from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
 
 

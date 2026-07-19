@@ -5,27 +5,30 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import REPORT_FILES
-from experiments.medical_dataset_gen.analysis.artifacts import (
+from experiments.medical_dataset_gen.evaluation.lambda_selection import (
+    LAMBDA_SELECTION_MAXIMIZING_METRIC,
+)
+from experiments.medical_dataset_gen.reports.analysis_constants import REPORT_FILES
+from experiments.medical_dataset_gen.reports.artifacts import (
     render_experiment_config_recap,
     write_csv,
 )
-from experiments.medical_dataset_gen.analysis.cli import parse_args
-from experiments.medical_dataset_gen.analysis.discovery import discover_experiments
-from experiments.medical_dataset_gen.analysis.latex_tables import (
+from experiments.medical_dataset_gen.reports.cli import parse_args
+from experiments.medical_dataset_gen.reports.discovery import discover_experiments
+from experiments.medical_dataset_gen.reports.latex_tables import (
     THESIS_AGGREGATE_TABLES_PATH,
     THESIS_RESULT_MACROS_PATH,
     render_thesis_aggregate_tables,
     render_thesis_result_macros,
 )
-from experiments.medical_dataset_gen.analysis.models import CliArgs, ReportOutputs
-from experiments.medical_dataset_gen.analysis.plots import write_figures
-from experiments.medical_dataset_gen.analysis.rendering import (
+from experiments.medical_dataset_gen.reports.models import CliArgs, ReportOutputs
+from experiments.medical_dataset_gen.reports.plots import write_figures
+from experiments.medical_dataset_gen.reports.rendering import (
     render_interesting_findings,
     render_report,
 )
-from experiments.medical_dataset_gen.analysis.report_config import LEGACY_LOW_BUDGET_TOKEN
-from experiments.medical_dataset_gen.analysis.rows import (
+from experiments.medical_dataset_gen.reports.report_config import LEGACY_LOW_BUDGET_TOKEN
+from experiments.medical_dataset_gen.reports.rows import (
     dataset_distribution_row,
     experiment_manifest_row,
     geometry_filter_row,
@@ -34,7 +37,7 @@ from experiments.medical_dataset_gen.analysis.rows import (
     near_optimal_lambda_rows,
     selected_strategy_rows,
 )
-from experiments.medical_dataset_gen.analysis.statistical import (
+from experiments.medical_dataset_gen.reports.statistical import (
     THESIS_STATISTICAL_TABLE_PATH,
     cell_effect_summary_rows,
     configuration_suite_effect_summary_rows,
@@ -43,7 +46,7 @@ from experiments.medical_dataset_gen.analysis.statistical import (
     suite_effect_summary_rows,
     write_paired_effect_datasets,
 )
-from experiments.medical_dataset_gen.analysis.summaries import (
+from experiments.medical_dataset_gen.reports.summaries import (
     budget_category_rows_from_comparisons,
     comparison_by_k_rows,
     embedding_model_summary_rows,
@@ -54,14 +57,11 @@ from experiments.medical_dataset_gen.analysis.summaries import (
     metric_family_budget_summary_rows,
     metric_family_summary_rows,
 )
-from experiments.medical_dataset_gen.analysis.validity import (
+from experiments.medical_dataset_gen.reports.validity import (
     geometry_population_strategy_rows,
     global_lambda_strategy_rows,
     lodo_lambda_strategy_rows,
     synthetic_artifact_diagnostic_rows,
-)
-from experiments.medical_dataset_gen.evaluation.lambda_selection import (
-    LAMBDA_SELECTION_MAXIMIZING_METRIC,
 )
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 

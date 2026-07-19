@@ -7,12 +7,12 @@ from typing import cast
 
 import yaml
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     EXPERIMENT_FAMILIES,
     EXPERIMENT_FAMILY_LABELS,
     ExperimentFamilyId,
 )
-from experiments.medical_dataset_gen.analysis.models import ExperimentRecord
+from experiments.medical_dataset_gen.reports.models import ExperimentRecord
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.exp_naming import (
     child_experiment_names,
@@ -45,9 +45,7 @@ def discover_experiments(
         candidate_names = [name for name in candidate_names if pattern.search(name)]
     if exclude_experiment_regex is not None:
         exclude_pattern = re.compile(exclude_experiment_regex)
-        candidate_names = [
-            name for name in candidate_names if not exclude_pattern.search(name)
-        ]
+        candidate_names = [name for name in candidate_names if not exclude_pattern.search(name)]
     records: list[ExperimentRecord] = []
     seen: set[str] = set()
     for name in candidate_names:

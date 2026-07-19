@@ -11,14 +11,14 @@ from typing import Literal, cast
 import polars as pl
 from tabulate import tabulate
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     DEFAULT_TABLE_COL_WIDTH,
     INTEGER_TABLE_COLUMNS,
     TABLE_COL_WIDTHS,
     TABLE_HEADERS,
     StrategyName,
 )
-from experiments.medical_dataset_gen.analysis.models import ExperimentRecord, ScalarItem
+from experiments.medical_dataset_gen.reports.models import ExperimentRecord, ScalarItem
 from experiments.medical_dataset_gen.utils.exp_naming import (
     is_compact_embedding_child_token,
 )
@@ -64,21 +64,11 @@ def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
 def wording_config_metadata(record: ExperimentRecord) -> dict[str, object]:
     """Return stable report labels for the query/chunk wording triplet."""
     parsed = _parse_child_mode_tokens(record.run_label)
-    query_structure = (
-        str(record.cfg.generation.query_structure)
-        if record.cfg is not None
-        else None
-    )
+    query_structure = str(record.cfg.generation.query_structure) if record.cfg is not None else None
     chunk_text_style = (
-        str(record.cfg.generation.chunk_text_style)
-        if record.cfg is not None
-        else None
+        str(record.cfg.generation.chunk_text_style) if record.cfg is not None else None
     )
-    focus_mode = (
-        str(record.cfg.generation.focus_mode)
-        if record.cfg is not None
-        else None
-    )
+    focus_mode = str(record.cfg.generation.focus_mode) if record.cfg is not None else None
     query_mode = (
         parsed.get('QueryMode')
         or _QUERY_MODE_BY_STRUCTURE.get(str(query_structure or ''))

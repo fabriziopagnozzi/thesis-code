@@ -9,13 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     DeltaMetricLabel,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.analysis.helpers import float_or_none, short_model_label
-from experiments.medical_dataset_gen.analysis.models import BudgetCategory, PlotFormat
-from experiments.medical_dataset_gen.analysis.report_config import (
+from experiments.medical_dataset_gen.reports.helpers import float_or_none, short_model_label
+from experiments.medical_dataset_gen.reports.models import BudgetCategory, PlotFormat
+from experiments.medical_dataset_gen.reports.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
@@ -222,7 +222,8 @@ def plot_config_metric_family_delta_heatmap_low_budget(
             'Rows are grouped by wording configuration, then metric. '
             'Top line = mean delta; bottom line = win rate for the comparison.'
         ),
-        output_path=output_dir / f'cross_config_metric_family_delta_heatmap_low_budget.{plot_format}',
+        output_path=output_dir
+        / f'cross_config_metric_family_delta_heatmap_low_budget.{plot_format}',
         figsize=(15.0, max(9.5, 0.28 * len(axis.row_keys) + 2.4)),
         row_group_boundaries=_row_group_boundaries(summary_rows, axis.row_keys, 'WordingConfig'),
     )
@@ -607,7 +608,10 @@ def _find_summary_row(
     second_value: str,
 ) -> Mapping[str, object] | None:
     for row in rows:
-        if str(row.get(first_field) or '') == first_value and str(row.get(second_field) or '') == second_value:
+        if (
+            str(row.get(first_field) or '') == first_value
+            and str(row.get(second_field) or '') == second_value
+        ):
             return row
     return None
 
@@ -783,10 +787,4 @@ def _heatmap_abs_scale(value_field: str) -> float:
 
 
 def _filename_token(value: str) -> str:
-    return (
-        short_model_label(value)
-        .lower()
-        .replace('/', '_')
-        .replace('-', '_')
-        .replace('.', '_')
-    )
+    return short_model_label(value).lower().replace('/', '_').replace('-', '_').replace('.', '_')

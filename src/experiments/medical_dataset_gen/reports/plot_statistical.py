@@ -7,9 +7,9 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from experiments.medical_dataset_gen.analysis.helpers import float_or_none, short_experiment_id
-from experiments.medical_dataset_gen.analysis.models import PlotFormat
-from experiments.medical_dataset_gen.analysis.statistical import CORE_EMBEDDING_MODELS
+from experiments.medical_dataset_gen.reports.helpers import float_or_none, short_experiment_id
+from experiments.medical_dataset_gen.reports.models import PlotFormat
+from experiments.medical_dataset_gen.reports.statistical import CORE_EMBEDDING_MODELS
 
 
 def plot_paired_fcp_forest(
@@ -53,9 +53,10 @@ def plot_paired_fcp_forest(
         ax.errorbar(
             means,
             positions,
-            xerr=[[mean - low for mean, low in zip(means, lows, strict=True)], [
-                high - mean for mean, high in zip(means, highs, strict=True)
-            ]],
+            xerr=[
+                [mean - low for mean, low in zip(means, lows, strict=True)],
+                [high - mean for mean, high in zip(means, highs, strict=True)],
+            ],
             fmt='o',
             color='#287C8E',
             ecolor='#6B7280',
@@ -129,7 +130,10 @@ def plot_paired_fcp_config_forest(
     return _plot_forest(
         plt=plt,
         rows=plot_rows,
-        labels=[str(row.get('WordingConfigLabel') or row.get('WordingConfig') or '') for row in plot_rows],
+        labels=[
+            str(row.get('WordingConfigLabel') or row.get('WordingConfig') or '')
+            for row in plot_rows
+        ],
         title='Low-budget paired FCP effects by wording configuration',
         xlabel='Held-out FacLoc - MMR FCP effect (95% profile-bootstrap CI)',
         output_path=output_dir / f'paired_fcp_low_budget_forest_by_config.{plot_format}',
@@ -169,8 +173,7 @@ def plot_paired_fcp_config_embedding_forest(
         labels=labels,
         title='Low-budget paired FCP effects by wording configuration and embedding model',
         xlabel='Held-out FacLoc - MMR FCP effect (95% profile-bootstrap CI)',
-        output_path=output_dir
-        / f'paired_fcp_low_budget_forest_by_config_emb_model.{plot_format}',
+        output_path=output_dir / f'paired_fcp_low_budget_forest_by_config_emb_model.{plot_format}',
         plot_format=plot_format,
     )
 
@@ -247,8 +250,7 @@ def _add_model_legend(ax: Any, rows: Sequence[Mapping[str, object]]) -> None:
     if len(models) <= 1:
         return
     handles = [
-        Patch(facecolor=_model_color(model), label=model.rsplit('/', 1)[-1])
-        for model in models
+        Patch(facecolor=_model_color(model), label=model.rsplit('/', 1)[-1]) for model in models
     ]
     ax.legend(
         handles=handles,

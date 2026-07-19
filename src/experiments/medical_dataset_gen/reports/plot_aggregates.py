@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     EXPERIMENT_FAMILIES,
     EXPERIMENT_FAMILY_COLORS,
     EXPERIMENT_FAMILY_LABELS,
@@ -15,17 +15,17 @@ from experiments.medical_dataset_gen.analysis.analysis_constants import (
     ExperimentFamilyId,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.analysis.helpers import float_or_none, short_model_label
-from experiments.medical_dataset_gen.analysis.models import (
+from experiments.medical_dataset_gen.reports.helpers import float_or_none, short_model_label
+from experiments.medical_dataset_gen.reports.models import (
     BudgetCategory,
     DeltaMetricPlotSpec,
     PlotFormat,
 )
-from experiments.medical_dataset_gen.analysis.plot_diagnostics import (
+from experiments.medical_dataset_gen.reports.plot_diagnostics import (
     annotate_horizontal_values,
     family_color_for_row,
 )
-from experiments.medical_dataset_gen.analysis.report_config import (
+from experiments.medical_dataset_gen.reports.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
@@ -368,8 +368,7 @@ def plot_metric_family_delta_heatmap_low_budget_best_embedding_model(
             show_y_tick_labels=True,
         )
         fig.suptitle(
-            'Low-budget metric deltas by experiment family '
-            f'for {short_model_label(best_model)}',
+            f'Low-budget metric deltas by experiment family for {short_model_label(best_model)}',
             y=0.98,
         )
         fig.text(

@@ -5,13 +5,13 @@ import statistics
 from collections.abc import Mapping, Sequence
 from typing import cast
 
-from experiments.medical_dataset_gen.analysis.analysis_constants import (
+from experiments.medical_dataset_gen.reports.analysis_constants import (
     DIVERSIFYING_STRATEGIES,
     STRATEGIES,
     DeltaMetricLabel,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.analysis.helpers import (
+from experiments.medical_dataset_gen.reports.helpers import (
     boundary_rate,
     delta_outcome,
     float_or_none,
@@ -23,8 +23,8 @@ from experiments.medical_dataset_gen.analysis.helpers import (
     subtract,
     winner_for_metric,
 )
-from experiments.medical_dataset_gen.analysis.models import BudgetCategory
-from experiments.medical_dataset_gen.analysis.report_config import (
+from experiments.medical_dataset_gen.reports.models import BudgetCategory
+from experiments.medical_dataset_gen.reports.report_config import (
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
     REPORT_METRIC_LABELS,
@@ -395,9 +395,7 @@ def _metric_group_summary_row(
         out,
         rows=len(complete_rows),
         facloc_better=sum(delta > practical_effect_threshold(metric) for delta in deltas_fm),
-        facloc_tied=sum(
-            abs(delta) <= practical_effect_threshold(metric) for delta in deltas_fm
-        ),
+        facloc_tied=sum(abs(delta) <= practical_effect_threshold(metric) for delta in deltas_fm),
         facloc_worse=sum(delta < -practical_effect_threshold(metric) for delta in deltas_fm),
         facloc_topk_better=sum(delta > 0.0 for delta in deltas_ft),
         mmr_topk_better=sum(delta > 0.0 for delta in deltas_mt),
@@ -613,21 +611,19 @@ def embedding_model_summary_rows(
     for experiment, manifest in manifest_by_exp.items():
         geometry = geometry_by_exp.get(experiment, {})
         low_budget = low_budget_by_exp.get(experiment, {})
-        run_rows.append(
-            {
-                'EmbeddingModel': manifest.get('EmbeddingModel'),
-                'EmbeddingDimension': manifest.get('EmbeddingDimension'),
-                'GeometryPassRate': geometry.get('GeometryPassRate'),
-                'GeometryQueries': geometry.get('GeometryQueries'),
-                'GeometryPassQueries': geometry.get('GeometryPassQueries'),
-                'TopK_FCP': low_budget.get('TopK_FCP'),
-                'MMR_FCP': low_budget.get('MMR_FCP'),
-                'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
-                'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
-                'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
-                'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
-            }
-        )
+        run_rows.append({
+            'EmbeddingModel': manifest.get('EmbeddingModel'),
+            'EmbeddingDimension': manifest.get('EmbeddingDimension'),
+            'GeometryPassRate': geometry.get('GeometryPassRate'),
+            'GeometryQueries': geometry.get('GeometryQueries'),
+            'GeometryPassQueries': geometry.get('GeometryPassQueries'),
+            'TopK_FCP': low_budget.get('TopK_FCP'),
+            'MMR_FCP': low_budget.get('MMR_FCP'),
+            'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
+            'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
+            'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
+            'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
+        })
 
     grouped: dict[str, list[Mapping[str, object]]] = {}
     for row in run_rows:
