@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+
+import polars as pl
 
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
@@ -67,15 +70,24 @@ from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGen
 
 
 def run_report(args: CliArgs) -> ReportOutputs:
+    if args.plots_from_report is not None:
+        return refresh_report_plots(args)
+
     old_results_dir = MedicalDatasetGenPaths.results_dir
     MedicalDatasetGenPaths.results_dir = args.results_dir
     try:
+        _progress(f'preparing output directory: {args.output_dir}')
         args.output_dir.mkdir(parents=True, exist_ok=True)
         data_dir = args.output_dir / 'data'
         shutil.rmtree(data_dir, ignore_errors=True)
         shutil.rmtree(args.output_dir / '_figures', ignore_errors=True)
+        if not args.cross_query_chunk_modes:
+            shutil.rmtree(
+                args.output_dir / 'figures' / 'aggregates' / 'cross_config', ignore_errors=True
+            )
         _remove_obsolete_flat_data_files(args.output_dir)
         warnings: list[str] = []
+        _progress(f'discovering completed experiments under: {args.results_dir}')
         records = discover_experiments(
             args.results_dir,
             include_scrapped=args.include_scrapped,
@@ -84,12 +96,15 @@ def run_report(args: CliArgs) -> ReportOutputs:
             exclude_experiment_regex=args.exclude_experiment_regex,
             warnings=warnings,
         )
+        _progress(f'discovered {len(records)} completed experiments')
         plot_and_recap_records = records
 
+        _progress('loading manifest, dataset, and geometry rows')
         manifest_rows = [experiment_manifest_row(record) for record in records]
         dataset_rows = [dataset_distribution_row(record, warnings=warnings) for record in records]
         geometry_rows = [geometry_filter_row(record, warnings=warnings) for record in records]
 
+        _progress('loading selected strategy rows and near-optimal lambda summaries')
         strategy_rows: list[dict[str, object]] = []
         near_optimal_rows: list[dict[str, object]] = []
         for record in records:
@@ -102,9 +117,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 )
             )
 
+        _progress('computing lambda-grid and main comparison summaries')
         lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
         lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
         comparison_rows = comparison_by_k_rows(strategy_rows)
+        _progress('computing geometry-population validity summaries')
         geometry_population_strategy_rows_data = geometry_population_strategy_rows(
             plot_and_recap_records,
             warnings=warnings,
@@ -112,6 +129,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         geometry_population_comparison_rows = comparison_by_k_rows(
             geometry_population_strategy_rows_data
         )
+        _progress('computing global-lambda validity summaries')
         global_lambda_strategy_rows_data = global_lambda_strategy_rows(records, warnings=warnings)
         global_lambda_comparison_rows = comparison_by_k_rows(global_lambda_strategy_rows_data)
         global_lambda_budget_rows = budget_category_rows_from_comparisons(
@@ -121,6 +139,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             comparison_rows=global_lambda_comparison_rows,
             budget_rows=global_lambda_budget_rows,
         )
+        _progress('computing leave-one-distribution-out lambda validity summaries')
         lodo_lambda_strategy_rows_data = lodo_lambda_strategy_rows(records, warnings=warnings)
         lodo_lambda_comparison_rows = comparison_by_k_rows(lodo_lambda_strategy_rows_data)
         lodo_lambda_budget_rows = budget_category_rows_from_comparisons(lodo_lambda_comparison_rows)
@@ -128,10 +147,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
             comparison_rows=lodo_lambda_comparison_rows,
             budget_rows=lodo_lambda_budget_rows,
         )
+        _progress('computing synthetic-artifact diagnostics')
         synthetic_artifact_diagnostic_rows_data = synthetic_artifact_diagnostic_rows(
             records,
             warnings=warnings,
         )
+        _progress('computing aggregate family, budget, metric, and embedding summaries')
         family_summary_rows = experiment_family_summary_rows(comparison_rows)
         budget_rows = budget_category_rows_from_comparisons(comparison_rows)
         family_budget_summary_rows = experiment_family_budget_summary_rows(budget_rows)
@@ -148,30 +169,42 @@ def run_report(args: CliArgs) -> ReportOutputs:
             geometry_rows=geometry_rows,
             low_budget_rows=low_budget_rows,
         )
+        _progress('writing paired query/profile effect datasets')
         paired_profile_effects = write_paired_effect_datasets(
             records=records,
             strategy_rows=strategy_rows,
             output_dir=data_dir,
             warnings=warnings,
         )
+        _progress('computing paired cell bootstrap summaries')
         paired_cell_rows = cell_effect_summary_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,
             bootstrap_replicates=args.bootstrap_replicates,
             bootstrap_seed=args.bootstrap_seed,
         )
+        _progress('computing paired suite bootstrap summaries')
         paired_suite_rows = suite_effect_summary_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,
             bootstrap_replicates=args.bootstrap_replicates,
             bootstrap_seed=args.bootstrap_seed,
         )
-        paired_config_suite_rows = configuration_suite_effect_summary_rows(
-            profile_effects=paired_profile_effects,
-            budget_rows=budget_rows,
-            bootstrap_replicates=args.bootstrap_replicates,
-            bootstrap_seed=args.bootstrap_seed,
+        wording_configurations = _wording_configurations_for_rows(budget_rows)
+        cross_triplet_analysis_enabled = (
+            args.cross_query_chunk_modes and len(wording_configurations) > 1
         )
+        if args.cross_query_chunk_modes:
+            _progress('computing paired cross-triplet bootstrap summaries')
+            paired_config_suite_rows = configuration_suite_effect_summary_rows(
+                profile_effects=paired_profile_effects,
+                budget_rows=budget_rows,
+                bootstrap_replicates=args.bootstrap_replicates,
+                bootstrap_seed=args.bootstrap_seed,
+            )
+        else:
+            _progress('skipping cross-triplet summaries; pass --cross-query-chunk-modes to enable')
+            paired_config_suite_rows = []
         paired_sensitivity_rows = leave_one_out_sensitivity_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,
@@ -181,6 +214,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         # matplotlib builds the report figures.
         del paired_profile_effects
 
+        _progress('writing CSV report artifacts')
         (args.output_dir / f'{LEGACY_LOW_BUDGET_TOKEN}_strategy_summary.csv').unlink(
             missing_ok=True
         )
@@ -236,6 +270,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'paired_config_suite_effect_summary.csv', paired_config_suite_rows)
         write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
         if _should_write_thesis_outputs(args):
+            _progress('writing thesis LaTeX tables and macros')
             (THESIS_AGGREGATE_TABLES_PATH).write_text(
                 render_thesis_aggregate_tables(
                     metric_summary_rows=metric_summary_rows,
@@ -261,6 +296,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
 
         figures: list[Path] = []
         if args.plots:
+            _progress('rendering report figures')
             figures = write_figures(
                 output_dir=args.output_dir / 'figures',
                 plot_format=args.plot_format,
@@ -278,9 +314,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 paired_cell_rows=paired_cell_rows,
                 paired_suite_rows=paired_suite_rows,
                 paired_config_suite_rows=paired_config_suite_rows,
+                cross_query_chunk_modes=args.cross_query_chunk_modes,
                 warnings=warnings,
             )
+            _progress(f'rendered {len(figures)} figures')
+        else:
+            _progress('skipping figure rendering because --no-plots is set')
 
+        _progress('rendering markdown reports and manifest')
         warnings = _dedupe_warnings(warnings)
         report_text = render_report(
             args=args,
@@ -335,6 +376,10 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'experiment_regex': args.experiment_regex,
                     'exclude_experiment_regex': args.exclude_experiment_regex,
                     'experiments_discovered': len(records),
+                    'cross_query_chunk_modes': args.cross_query_chunk_modes,
+                    'wording_configurations': wording_configurations,
+                    'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
+                    'cross_triplet_figures_enabled': args.plots and cross_triplet_analysis_enabled,
                     'warnings_count': len(warnings),
                     'figures': [str(path.relative_to(args.output_dir)) for path in figures],
                     'files': list(REPORT_FILES),
@@ -356,6 +401,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             )
             + '\n'
         )
+        _progress('report generation complete')
         return ReportOutputs(
             output_dir=args.output_dir,
             experiments_discovered=len(records),
@@ -365,6 +411,71 @@ def run_report(args: CliArgs) -> ReportOutputs:
         )
     finally:
         MedicalDatasetGenPaths.results_dir = old_results_dir
+
+
+def refresh_report_plots(args: CliArgs) -> ReportOutputs:
+    report_dir = args.plots_from_report or args.output_dir
+    data_dir = report_dir / 'data'
+    if not data_dir.is_dir():
+        raise FileNotFoundError(f'report data directory not found: {data_dir}')
+
+    warnings: list[str] = []
+    _progress(f'loading existing report CSV artifacts from: {data_dir}')
+    manifest_rows = _read_report_csv_rows(data_dir, 'experiment_manifest.csv')
+    budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
+    plot_inputs = {
+        'geometry_rows': _read_report_csv_rows(data_dir, 'geometry_filter_summary.csv'),
+        'lambda_rows': _read_report_csv_rows(data_dir, 'lambda_stability.csv'),
+        'lambda_grid_delta_rows': _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv'),
+        'lambda_safety_rows': _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv'),
+        'near_optimal_rows': _read_report_csv_rows(data_dir, 'near_optimal_lambda_width.csv'),
+        'dataset_rows': _read_report_csv_rows(data_dir, 'dataset_distribution.csv'),
+        'metric_summary_rows': _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv'),
+        'metric_family_summary_rows': _read_report_csv_rows(data_dir, 'metric_family_summary.csv'),
+        'metric_family_budget_summary_rows': _read_report_csv_rows(
+            data_dir, 'metric_family_budget_summary.csv'
+        ),
+        'paired_cell_rows': _read_report_csv_rows(data_dir, 'paired_cell_effect_summary.csv'),
+        'paired_suite_rows': _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv'),
+        'paired_config_suite_rows': _read_report_csv_rows(
+            data_dir, 'paired_config_suite_effect_summary.csv'
+        ),
+    }
+    _progress('rendering report figures from existing CSV artifacts')
+    figures = write_figures(
+        output_dir=report_dir / 'figures',
+        plot_format=args.plot_format,
+        max_rows=args.max_table_rows,
+        budget_rows=budget_rows,
+        cross_query_chunk_modes=args.cross_query_chunk_modes,
+        warnings=warnings,
+        **plot_inputs,
+    )
+    _progress(f'rendered {len(figures)} figures')
+    wording_configurations = _wording_configurations_for_rows(budget_rows)
+    cross_triplet_analysis_enabled = (
+        args.cross_query_chunk_modes and len(wording_configurations) > 1
+    )
+    _update_plot_refresh_manifest(
+        report_dir=report_dir,
+        args=args,
+        figures=figures,
+        warnings=warnings,
+        experiments_discovered=len(manifest_rows),
+        wording_configurations=wording_configurations,
+        cross_triplet_analysis_enabled=cross_triplet_analysis_enabled,
+    )
+    if warnings:
+        _progress(f'plot refresh finished with {len(warnings)} warnings')
+    else:
+        _progress('plot refresh complete')
+    return ReportOutputs(
+        output_dir=report_dir,
+        experiments_discovered=len(manifest_rows),
+        experiments_loaded=len(manifest_rows),
+        warnings_count=len(warnings),
+        figures_count=len(figures),
+    )
 
 
 def _dedupe_warnings(warnings: list[str]) -> list[str]:
@@ -378,6 +489,64 @@ def _dedupe_warnings(warnings: list[str]) -> list[str]:
     return deduped
 
 
+def _progress(message: str) -> None:
+    print(f'[reports] {message}', flush=True)
+
+
+def _read_report_csv_rows(
+    data_dir: Path,
+    filename: str,
+    *,
+    required: bool = False,
+) -> list[dict[str, object]]:
+    path = data_dir / filename
+    if not path.is_file():
+        if required:
+            raise FileNotFoundError(f'required report CSV not found: {path}')
+        return []
+    if path.stat().st_size == 0:
+        return []
+    return [dict(row) for row in pl.read_csv(path, infer_schema_length=None).to_dicts()]
+
+
+def _update_plot_refresh_manifest(
+    *,
+    report_dir: Path,
+    args: CliArgs,
+    figures: Sequence[Path],
+    warnings: Sequence[str],
+    experiments_discovered: int,
+    wording_configurations: Sequence[Mapping[str, str]],
+    cross_triplet_analysis_enabled: bool,
+) -> None:
+    manifest_path = report_dir / 'manifest.json'
+    if manifest_path.is_file():
+        try:
+            manifest: object = json.loads(manifest_path.read_text())
+        except json.JSONDecodeError:
+            manifest = {}
+    else:
+        manifest = {}
+    if not isinstance(manifest, dict):
+        manifest = {}
+    manifest.update(
+        {
+            'plots_refreshed_at_utc': datetime.now(UTC).isoformat(),
+            'plot_refresh_only': True,
+            'plot_format': args.plot_format,
+            'cross_query_chunk_modes': args.cross_query_chunk_modes,
+            'wording_configurations': list(wording_configurations),
+            'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
+            'cross_triplet_figures_enabled': args.cross_query_chunk_modes
+            and cross_triplet_analysis_enabled,
+            'warnings_count': len(warnings),
+            'experiments_discovered': experiments_discovered,
+            'figures': [str(path.relative_to(report_dir)) for path in figures],
+        }
+    )
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+
+
 def _remove_obsolete_flat_data_files(output_dir: Path) -> None:
     for report_file in REPORT_FILES:
         path = Path(report_file)
@@ -388,6 +557,21 @@ def _remove_obsolete_flat_data_files(output_dir: Path) -> None:
             obsolete_path.unlink(missing_ok=True)
         elif report_file.endswith('/'):
             shutil.rmtree(obsolete_path, ignore_errors=True)
+
+
+def _wording_configurations_for_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, str]]:
+    labels_by_config: dict[str, str] = {}
+    for row in rows:
+        config = str(row.get('WordingConfig') or '')
+        if not config:
+            continue
+        labels_by_config.setdefault(config, str(row.get('WordingConfigLabel') or config))
+    return [
+        {'config': config, 'label': label}
+        for config, label in sorted(labels_by_config.items(), key=lambda item: item[0])
+    ]
 
 
 def _should_write_thesis_outputs(args: CliArgs) -> bool:

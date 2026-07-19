@@ -29,14 +29,14 @@ from experiments.medical_dataset_gen.reports.helpers import (
     wording_config_metadata,
 )
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, ExperimentRecord
-from experiments.medical_dataset_gen.reports.report_config import BUDGET_CATEGORIES
+from experiments.medical_dataset_gen.reports.report_config import (
+    BUDGET_CATEGORIES,
+    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
+)
 
 type CellKey = tuple[str, int]
 
-CORE_EMBEDDING_MODELS: tuple[str, str] = (
-    'BAAI/bge-m3',
-    'Qwen/Qwen3-Embedding-0.6B',
-)
+CORE_EMBEDDING_MODELS: tuple[str, ...] = EMBEDDING_MODEL_FACETED_PLOT_MODELS
 CORE_RUN_LABELS: tuple[str, str] = ('bge_m3', 'qwen3_06')
 THESIS_STATISTICAL_TABLE_PATH = Path(
     '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/paired_statistical_tables.tex'
@@ -102,8 +102,7 @@ def write_paired_effect_datasets(
         )
         if not frame.is_empty():
             profile_effects = (
-                frame
-                .group_by(
+                frame.group_by(
                     'Experiment',
                     'Distribution',
                     'ExperimentFamily',
@@ -144,8 +143,7 @@ def write_paired_effect_datasets(
     if not partitions_written:
         return pl.DataFrame()
     return (
-        pl
-        .scan_parquet(profile_dir / '*.parquet')
+        pl.scan_parquet(profile_dir / '*.parquet')
         .filter(pl.col('MetricLabel') == 'FCP')
         .collect(engine='streaming')
     )
@@ -179,22 +177,24 @@ def cell_effect_summary_rows(
             threshold=practical_effect_threshold('FCP'),
         )
         first = group.row(0, named=True)
-        rows.append({
-            'Experiment': str(experiment),
-            'Distribution': first['Distribution'],
-            'ExperimentFamily': first['ExperimentFamily'],
-            'ExperimentFamilyLabel': first['ExperimentFamilyLabel'],
-            'EmbeddingModel': first['EmbeddingModel'],
-            'QueryScope': first['QueryScope'],
-            'k': int(k),
-            'BudgetCategory': budget,
-            'MetricLabel': 'FCP',
-            'MetricName': 'FacetCoveragePurity@k',
-            'Profiles': len(values),
-            'QueryOrientations': int(group['QueryOrientations'].sum()),
-            'PracticalThreshold': practical_effect_threshold('FCP'),
-            **estimate,
-        })
+        rows.append(
+            {
+                'Experiment': str(experiment),
+                'Distribution': first['Distribution'],
+                'ExperimentFamily': first['ExperimentFamily'],
+                'ExperimentFamilyLabel': first['ExperimentFamilyLabel'],
+                'EmbeddingModel': first['EmbeddingModel'],
+                'QueryScope': first['QueryScope'],
+                'k': int(k),
+                'BudgetCategory': budget,
+                'MetricLabel': 'FCP',
+                'MetricName': 'FacetCoveragePurity@k',
+                'Profiles': len(values),
+                'QueryOrientations': int(group['QueryOrientations'].sum()),
+                'PracticalThreshold': practical_effect_threshold('FCP'),
+                **estimate,
+            }
+        )
     return rows
 
 
@@ -474,8 +474,7 @@ def _paired_query_effects_for_record(
     if not selection_masks:
         return pl.DataFrame()
     selected = (
-        pl
-        .scan_parquet(path)
+        pl.scan_parquet(path)
         .select(sorted(required_columns))
         .filter(pl.col('split') == 'test')
         .filter(pl.any_horizontal(selection_masks))
@@ -577,8 +576,7 @@ def _fully_crossed_core_frame(frame: pl.DataFrame) -> pl.DataFrame:
     valid_distributions = [
         str(distribution)
         for distribution, models in (
-            core_frame
-            .group_by('Distribution')
+            core_frame.group_by('Distribution')
             .agg(pl.col('EmbeddingModel').unique().alias('EmbeddingModels'))
             .iter_rows(named=False)
         )
@@ -644,15 +642,17 @@ def _configuration_summary_row(
         bootstrap_seed=bootstrap_seed,
     )
     first = frame.row(0, named=True)
-    row.update({
-        'WordingConfig': first.get('WordingConfig'),
-        'WordingConfigLabel': first.get('WordingConfigLabel'),
-        'QueryMode': first.get('QueryMode'),
-        'FocusMode': first.get('FocusMode'),
-        'ChunkTextMode': first.get('ChunkTextMode'),
-        'EmbeddingModel': embedding_model,
-        'ExperimentFamilyLabel': family_label,
-    })
+    row.update(
+        {
+            'WordingConfig': first.get('WordingConfig'),
+            'WordingConfigLabel': first.get('WordingConfigLabel'),
+            'QueryMode': first.get('QueryMode'),
+            'FocusMode': first.get('FocusMode'),
+            'ChunkTextMode': first.get('ChunkTextMode'),
+            'EmbeddingModel': embedding_model,
+            'ExperimentFamilyLabel': family_label,
+        }
+    )
     return row
 
 
@@ -708,9 +708,9 @@ def _synchronized_suite_bootstrap(
     seed: int,
 ) -> tuple[float, float, float, float, float]:
     estimate = _equal_family_weighted_mean(cell_values)
-    all_profiles = sorted({
-        profile for profiles, _values in cell_values.values() for profile in profiles
-    })
+    all_profiles = sorted(
+        {profile for profiles, _values in cell_values.values() for profile in profiles}
+    )
     if len(all_profiles) < 2:
         return estimate, float('nan'), float('nan'), float('nan'), float('nan')
     profile_to_idx = {profile: index for index, profile in enumerate(all_profiles)}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -15,9 +16,12 @@ from experiments.medical_dataset_gen.reports.plot_aggregates import (
 )
 from experiments.medical_dataset_gen.reports.plot_config_differences import (
     plot_config_fcp_budget_delta_heatmaps,
+    plot_config_fcp_budget_delta_heatmaps_by_distribution,
     plot_config_fcp_family_budget_delta_heatmaps,
     plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model,
     plot_config_metric_delta_heatmap_low_budget,
+    plot_config_metric_delta_heatmap_low_budget_by_distribution,
+    plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model,
     plot_config_metric_family_delta_heatmap_low_budget,
     plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model,
 )
@@ -59,6 +63,7 @@ def write_figures(
     paired_cell_rows: Sequence[Mapping[str, object]],
     paired_suite_rows: Sequence[Mapping[str, object]],
     paired_config_suite_rows: Sequence[Mapping[str, object]],
+    cross_query_chunk_modes: bool,
     warnings: list[str],
 ) -> list[Path]:
     try:
@@ -76,7 +81,9 @@ def write_figures(
     cross_config_dir = aggregate_dir / 'cross_config'
     metrics_dir.mkdir(parents=True, exist_ok=True)
     aggregate_dir.mkdir(parents=True, exist_ok=True)
-    cross_config_dir.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(cross_config_dir, ignore_errors=True)
+    if cross_query_chunk_modes:
+        cross_config_dir.mkdir(parents=True, exist_ok=True)
     for obsolete_stem in (
         'fcp_delta_by_experiment',
         'facloc_vs_topk_delta_by_experiment',
@@ -152,70 +159,95 @@ def write_figures(
             plot_format=plot_format,
         )
     )
-    paths.extend(
-        plot_config_fcp_budget_delta_heatmaps(
-            plt=plt,
-            rows=budget_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+    if cross_query_chunk_modes:
+        paths.extend(
+            plot_config_fcp_budget_delta_heatmaps(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_config_metric_delta_heatmap_low_budget(
-            plt=plt,
-            rows=budget_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_metric_delta_heatmap_low_budget(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_config_fcp_family_budget_delta_heatmaps(
-            plt=plt,
-            rows=budget_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_metric_delta_heatmap_low_budget_by_distribution(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model(
-            plt=plt,
-            rows=budget_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_config_metric_family_delta_heatmap_low_budget(
-            plt=plt,
-            rows=budget_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_fcp_budget_delta_heatmaps_by_distribution(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model(
-            plt=plt,
-            rows=budget_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_fcp_family_budget_delta_heatmaps(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_paired_fcp_config_forest(
-            plt=plt,
-            rows=paired_config_suite_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
-    paths.extend(
-        plot_paired_fcp_config_embedding_forest(
-            plt=plt,
-            rows=paired_config_suite_rows,
-            output_dir=cross_config_dir,
-            plot_format=plot_format,
+        paths.extend(
+            plot_config_metric_family_delta_heatmap_low_budget(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
         )
-    )
+        paths.extend(
+            plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
+        )
+        paths.extend(
+            plot_paired_fcp_config_forest(
+                plt=plt,
+                rows=paired_config_suite_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
+        )
+        paths.extend(
+            plot_paired_fcp_config_embedding_forest(
+                plt=plt,
+                rows=paired_config_suite_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
+        )
 
     for category in BUDGET_CATEGORIES:
         category_rows = [row for row in budget_rows if row.get('BudgetCategory') == category]

@@ -257,9 +257,11 @@ def plot_metric_family_delta_heatmap_by_embedding_model(
         squeeze=False,
         sharex=True,
         sharey=True,
+        gridspec_kw={'hspace': 0.86},
     )
     axes_grid = cast(Sequence[Sequence[Any]], axes_obj)
     try:
+        row_title_axes: list[tuple[Sequence[Any], str]] = []
         for row_index, (model, matrices) in enumerate(zip(models, matrices_by_model, strict=True)):
             axes = axes_grid[row_index]
             model_rows = [row for row in plot_rows if row.get('EmbeddingModel') == model]
@@ -282,11 +284,20 @@ def plot_metric_family_delta_heatmap_by_embedding_model(
                 show_y_tick_labels=True,
                 show_titles=row_index == 0,
             )
-            axes[0].set_ylabel(short_model_label(model), fontsize=9)
-        fig.suptitle('Low-budget metric deltas by experiment family and embedding model', y=0.985)
-        fig.tight_layout(rect=(0, 0.03, 1, 0.96))
+            row_title_axes.append((axes, short_model_label(model)))
+        fig.suptitle('Low-budget metric deltas by experiment family and embedding model', y=1.04)
+        fig.subplots_adjust(
+            left=0.08,
+            right=0.98,
+            bottom=0.22,
+            top=0.82,
+            hspace=0.86,
+            wspace=0.38,
+        )
+        for axes, row_title in row_title_axes:
+            _add_embedding_heatmap_row_title(fig=fig, axes=axes, title=row_title)
         path = output_dir / f'metric_family_delta_heatmap_by_emb_model.{plot_format}'
-        fig.savefig(path, dpi=180)
+        fig.savefig(path, dpi=180, bbox_inches='tight')
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
@@ -515,9 +526,11 @@ def plot_fcp_family_budget_heatmaps_by_embedding_model(
         squeeze=False,
         sharex=True,
         sharey=True,
+        gridspec_kw={'hspace': 0.86},
     )
     axes_grid = cast(Sequence[Sequence[Any]], axes_obj)
     try:
+        row_title_axes: list[tuple[Sequence[Any], str]] = []
         for row_index, (model, matrices) in enumerate(zip(models, matrices_by_model, strict=True)):
             axes = axes_grid[row_index]
             model_rows = [row for row in plot_rows if row.get('EmbeddingModel') == model]
@@ -537,14 +550,23 @@ def plot_fcp_family_budget_heatmaps_by_embedding_model(
                 show_y_tick_labels=True,
                 show_titles=row_index == 0,
             )
-            axes[0].set_ylabel(short_model_label(model), fontsize=9)
+            row_title_axes.append((axes, short_model_label(model)))
         fig.suptitle(
             'FCP aggregation by experiment family, retrieval budget, and embedding model',
-            y=0.985,
+            y=1.04,
         )
-        fig.tight_layout(rect=(0, 0.03, 1, 0.96))
+        fig.subplots_adjust(
+            left=0.08,
+            right=0.98,
+            bottom=0.22,
+            top=0.82,
+            hspace=0.86,
+            wspace=0.38,
+        )
+        for axes, row_title in row_title_axes:
+            _add_embedding_heatmap_row_title(fig=fig, axes=axes, title=row_title)
         path = output_dir / f'fcp_family_budget_delta_heatmaps_by_emb_model.{plot_format}'
-        fig.savefig(path, dpi=180)
+        fig.savefig(path, dpi=180, bbox_inches='tight')
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
@@ -730,6 +752,22 @@ def _draw_delta_heatmap_row(
         cbar.set_label(spec.colorbar_label)
 
 
+def _add_embedding_heatmap_row_title(*, fig: Any, axes: Sequence[Any], title: str) -> None:
+    positions = [ax.get_position() for ax in axes]
+    left = min(position.x0 for position in positions)
+    right = max(position.x1 for position in positions)
+    top = max(position.y1 for position in positions)
+    fig.text(
+        (left + right) / 2,
+        top + 0.045,
+        title,
+        ha='center',
+        va='bottom',
+        fontsize=9.5,
+        fontweight='bold',
+    )
+
+
 def _metric_family_budget_rows_by_embedding(
     rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
@@ -842,9 +880,7 @@ def _fraction_or_none(numerator: int, denominator: int) -> float | None:
 
 def _ordered_embedding_models(rows: Sequence[Mapping[str, object]]) -> list[str]:
     available = {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
-    if EMBEDDING_MODEL_FACETED_PLOT_MODELS:
-        return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
-    return sorted(available)
+    return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
 
 
 def _embedding_heatmap_fig_height(*, model_count: int, matrix_row_count: int) -> float:

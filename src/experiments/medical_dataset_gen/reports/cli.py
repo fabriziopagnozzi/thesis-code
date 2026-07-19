@@ -29,6 +29,12 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Directory where report files are written. Defaults to <results-dir>/_reports/experiment_comparison.',
     )
     parser.add_argument(
+        '--plots-from-report',
+        type=Path,
+        default=None,
+        help='Refresh figures in an existing report directory from its data/*.csv artifacts.',
+    )
+    parser.add_argument(
         '--include-scrapped',
         action='store_true',
         help='Include experiments under 00_scrapped.',
@@ -80,6 +86,14 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='A lambda is near-optimal when FCP is within this absolute margin of the best FCP.',
     )
     parser.add_argument(
+        '--cross-query-chunk-modes',
+        action='store_true',
+        help=(
+            'Enable cross-wording-configuration analyses across query_mode, focus_mode, '
+            'and chunk_text_mode triples. This is intended for full all-mode reports.'
+        ),
+    )
+    parser.add_argument(
         '--bootstrap-replicates',
         type=int,
         default=1000,
@@ -92,6 +106,10 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Random seed for deterministic paired-inference bootstrap resampling.',
     )
     parsed = parser.parse_args(argv)
+    if parsed.plots_from_report is not None and parsed.output_dir is not None:
+        parser.error('--output-dir cannot be combined with --plots-from-report')
+    if parsed.plots_from_report is not None and parsed.no_plots:
+        parser.error('--no-plots cannot be combined with --plots-from-report')
     if parsed.experiment_regex is not None:
         try:
             re.compile(str(parsed.experiment_regex))
@@ -103,10 +121,19 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         except re.error as exc:
             parser.error(f'invalid --exclude-experiment-regex: {exc}')
     results_dir = parsed.results_dir.expanduser().resolve()
+    plots_from_report = (
+        parsed.plots_from_report.expanduser().resolve()
+        if parsed.plots_from_report is not None
+        else None
+    )
     output_dir = (
-        parsed.output_dir.expanduser().resolve()
-        if parsed.output_dir is not None
-        else results_dir / '_reports' / 'experiment_comparison'
+        plots_from_report
+        if plots_from_report is not None
+        else (
+            parsed.output_dir.expanduser().resolve()
+            if parsed.output_dir is not None
+            else results_dir / '_reports' / 'experiment_comparison'
+        )
     )
 
     return CliArgs(
@@ -127,6 +154,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         plots=not bool(parsed.no_plots),
         plot_format=cast(PlotFormat, parsed.plot_format),
         near_optimal_epsilon=max(0.0, float(parsed.near_optimal_epsilon)),
+        cross_query_chunk_modes=bool(parsed.cross_query_chunk_modes),
+        plots_from_report=plots_from_report,
         bootstrap_replicates=max(100, int(parsed.bootstrap_replicates)),
         bootstrap_seed=int(parsed.bootstrap_seed),
     )

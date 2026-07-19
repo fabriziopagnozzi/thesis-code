@@ -41,6 +41,8 @@ class CliArgs:
     plots: bool
     plot_format: PlotFormat
     near_optimal_epsilon: float
+    cross_query_chunk_modes: bool = False
+    plots_from_report: Path | None = None
     bootstrap_replicates: int = 1000
     bootstrap_seed: int = 20260712
 

@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any, cast
 
 from experiments.medical_dataset_gen.reports.analysis_constants import (
+    EXPERIMENT_FAMILIES,
+    EXPERIMENT_FAMILY_LABELS,
     DeltaMetricLabel,
     practical_effect_threshold,
 )
@@ -47,6 +49,13 @@ class SummaryAxisSpec:
     column_field: str
 
 
+@dataclass(frozen=True)
+class HeatmapPanelRow:
+    label: str
+    rows: Sequence[Mapping[str, object]]
+    axis: SummaryAxisSpec
+
+
 def plot_config_fcp_budget_delta_heatmaps(
     *,
     plt: object,
@@ -63,7 +72,9 @@ def plot_config_fcp_budget_delta_heatmaps(
     axis = SummaryAxisSpec(
         row_keys=tuple(configs),
         column_keys=tuple(budget_labels),
-        row_tick_labels=tuple(_config_label_for_key(summary_rows, config) for config in configs),
+        row_tick_labels=tuple(
+            _compact_config_label_for_key(summary_rows, config) for config in configs
+        ),
         column_tick_labels=tuple(budget_labels),
         row_field='WordingConfig',
         column_field='BudgetCategoryLabel',
@@ -79,6 +90,59 @@ def plot_config_fcp_budget_delta_heatmaps(
         ),
         output_path=output_dir / f'cross_config_fcp_budget_delta_heatmaps.{plot_format}',
         figsize=(15.0, max(4.8, 0.46 * len(configs) + 2.2)),
+    )
+
+
+def plot_config_fcp_budget_delta_heatmaps_by_distribution(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    """FCP wording-configuration budget view faceted by experiment family."""
+    summary_rows = _metric_config_family_budget_rows(rows, metric_filter='FCP')
+    if not _has_multiple_configs(summary_rows):
+        return []
+    configs = _ordered_configs(summary_rows)
+    budget_labels = _budget_labels()
+    panel_rows: list[HeatmapPanelRow] = []
+    for family in _ordered_distribution_family_labels(summary_rows):
+        family_rows = [row for row in summary_rows if row.get('ExperimentFamilyLabel') == family]
+        if not _has_multiple_configs(family_rows):
+            continue
+        panel_rows.append(
+            HeatmapPanelRow(
+                label=family,
+                rows=family_rows,
+                axis=SummaryAxisSpec(
+                    row_keys=tuple(configs),
+                    column_keys=tuple(budget_labels),
+                    row_tick_labels=tuple(
+                        _compact_config_label_for_key(summary_rows, config) for config in configs
+                    ),
+                    column_tick_labels=tuple(budget_labels),
+                    row_field='WordingConfig',
+                    column_field='BudgetCategoryLabel',
+                ),
+            )
+        )
+    if not panel_rows:
+        return []
+    return _plot_delta_heatmap_panel_grid(
+        plt=plt,
+        panel_rows=panel_rows,
+        title='FCP deltas by wording configuration and retrieval budget within each family',
+        footnote=(
+            'Each row filters to one experiment family. Cell format: top line = mean FCP delta; '
+            'bottom line = win rate for the comparison.'
+        ),
+        output_path=output_dir
+        / f'cross_config_fcp_budget_delta_heatmaps_by_distribution.{plot_format}',
+        figsize=(
+            16.5,
+            _panel_grid_fig_height(panel_rows, min_cell_height=0.48, min_height=13.0),
+        ),
     )
 
 
@@ -106,7 +170,9 @@ def plot_config_metric_delta_heatmap_low_budget(
         row_tick_labels=tuple(
             _metric_title_from_rows(summary_rows, metric) for metric in metric_labels
         ),
-        column_tick_labels=tuple(_config_label_for_key(summary_rows, config) for config in configs),
+        column_tick_labels=tuple(
+            _config_label_for_key(summary_rows, config) for config in configs
+        ),
         row_field='MetricLabel',
         column_field='WordingConfig',
     )
@@ -124,6 +190,143 @@ def plot_config_metric_delta_heatmap_low_budget(
     )
 
 
+def plot_config_metric_delta_heatmap_low_budget_by_distribution(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    """Low-budget metric wording-configuration view faceted by experiment family."""
+    summary_rows = [
+        row
+        for row in _metric_config_family_budget_rows(rows)
+        if row.get('BudgetCategory') == 'low_budget'
+        and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
+    ]
+    if not _has_multiple_configs(summary_rows):
+        return []
+    metric_labels = _ordered_metric_labels(summary_rows)
+    configs = _ordered_configs(summary_rows)
+    panel_rows: list[HeatmapPanelRow] = []
+    for family in _ordered_distribution_family_labels(summary_rows):
+        family_rows = [row for row in summary_rows if row.get('ExperimentFamilyLabel') == family]
+        if not _has_multiple_configs(family_rows):
+            continue
+        panel_rows.append(
+            HeatmapPanelRow(
+                label=family,
+                rows=family_rows,
+                axis=SummaryAxisSpec(
+                    row_keys=tuple(metric_labels),
+                    column_keys=tuple(configs),
+                    row_tick_labels=tuple(
+                        _metric_title_from_rows(summary_rows, metric) for metric in metric_labels
+                    ),
+                    column_tick_labels=tuple(
+                        _config_label_for_key(summary_rows, config) for config in configs
+                    ),
+                    row_field='MetricLabel',
+                    column_field='WordingConfig',
+                ),
+            )
+        )
+    if not panel_rows:
+        return []
+    return _plot_delta_heatmap_panel_grid(
+        plt=plt,
+        panel_rows=panel_rows,
+        title='Low-budget metric deltas by wording configuration within each family',
+        footnote=(
+            'Each row filters to one experiment family. Cell format: top line = mean delta; '
+            'bottom line = win rate for the comparison.'
+        ),
+        output_path=output_dir
+        / f'cross_config_metric_delta_heatmap_low_budget_by_distribution.{plot_format}',
+        figsize=(
+            16.5,
+            _panel_grid_fig_height(panel_rows, min_cell_height=0.40, min_height=12.0),
+        ),
+    )
+
+
+def plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    """Low-budget metric wording-configuration view faceted by family and embedding model."""
+    summary_rows = [
+        row
+        for row in _metric_config_family_budget_rows_by_embedding(rows)
+        if row.get('BudgetCategory') == 'low_budget'
+        and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
+    ]
+    if not _has_multiple_configs(summary_rows):
+        return []
+    metric_labels = _ordered_metric_labels(summary_rows)
+    configs = _ordered_configs(summary_rows)
+    paths: list[Path] = []
+    for family in _ordered_distribution_family_labels(summary_rows):
+        family_rows = [row for row in summary_rows if row.get('ExperimentFamilyLabel') == family]
+        if not _has_multiple_configs(family_rows):
+            continue
+        panel_rows: list[HeatmapPanelRow] = []
+        for model in _ordered_embedding_models(family_rows):
+            model_rows = [row for row in family_rows if row.get('EmbeddingModel') == model]
+            if not _has_multiple_configs(model_rows):
+                continue
+            panel_rows.append(
+                HeatmapPanelRow(
+                    label=short_model_label(model),
+                    rows=model_rows,
+                    axis=SummaryAxisSpec(
+                        row_keys=tuple(metric_labels),
+                        column_keys=tuple(configs),
+                        row_tick_labels=tuple(
+                            _metric_title_from_rows(summary_rows, metric)
+                            for metric in metric_labels
+                        ),
+                        column_tick_labels=tuple(
+                            _config_label_for_key(summary_rows, config)
+                            for config in configs
+                        ),
+                        row_field='MetricLabel',
+                        column_field='WordingConfig',
+                    ),
+                )
+            )
+        if not panel_rows:
+            continue
+        paths.extend(
+            _plot_delta_heatmap_panel_grid(
+                plt=plt,
+                panel_rows=panel_rows,
+                title=(
+                    'Low-budget metric deltas by wording configuration in '
+                    f'{family}, by embedding model'
+                ),
+                footnote=(
+                    'Each row filters to one embedding model within the experiment family. '
+                    'Cell format: top line = mean delta; bottom line = win rate for the '
+                    'comparison.'
+                ),
+                output_path=output_dir
+                / (
+                    'cross_config_metric_delta_heatmap_low_budget_'
+                    f'{_label_filename_token(family)}_by_emb_model.{plot_format}'
+                ),
+                figsize=(
+                    16.5,
+                    _panel_grid_fig_height(panel_rows, min_cell_height=0.42, min_height=8.0),
+                ),
+            )
+        )
+    return paths
+
+
 def plot_config_fcp_family_budget_delta_heatmaps(
     *,
     plt: object,
@@ -135,19 +338,20 @@ def plot_config_fcp_family_budget_delta_heatmaps(
     summary_rows = _metric_config_family_budget_rows(rows, metric_filter='FCP')
     if not _has_multiple_configs(summary_rows):
         return []
-    axis = _config_family_budget_axis(summary_rows)
-    return _plot_delta_heatmap_panels(
+    panel_rows = _configuration_family_budget_panel_rows(summary_rows)
+    return _plot_delta_heatmap_panel_grid(
         plt=plt,
-        rows=summary_rows,
-        axis=axis,
+        panel_rows=panel_rows,
         title='FCP deltas by wording configuration, experiment family, and retrieval budget',
         footnote=(
-            'Rows are grouped by wording configuration, then experiment family. '
+            'Each row is one wording configuration. '
             'Top line = mean FCP delta; bottom line = win rate for the comparison.'
         ),
         output_path=output_dir / f'cross_config_fcp_family_budget_delta_heatmaps.{plot_format}',
-        figsize=(15.0, max(8.0, 0.31 * len(axis.row_keys) + 2.4)),
-        row_group_boundaries=_row_group_boundaries(summary_rows, axis.row_keys, 'WordingConfig'),
+        figsize=(
+            16.5,
+            _panel_grid_fig_height(panel_rows, min_cell_height=0.46, min_height=12.0),
+        ),
     )
 
 
@@ -164,18 +368,17 @@ def plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model(
         summary_rows = _metric_config_family_budget_rows(model_rows, metric_filter='FCP')
         if not _has_multiple_configs(summary_rows):
             continue
-        axis = _config_family_budget_axis(summary_rows)
+        panel_rows = _configuration_family_budget_panel_rows(summary_rows)
         paths.extend(
-            _plot_delta_heatmap_panels(
+            _plot_delta_heatmap_panel_grid(
                 plt=plt,
-                rows=summary_rows,
-                axis=axis,
+                panel_rows=panel_rows,
                 title=(
                     'FCP deltas by wording configuration, experiment family, '
                     f'and retrieval budget for {short_model_label(model)}'
                 ),
                 footnote=(
-                    'Rows are grouped by wording configuration, then experiment family. '
+                    'Each row is one wording configuration. '
                     'Top line = mean FCP delta; bottom line = win rate for the comparison.'
                 ),
                 output_path=(
@@ -185,11 +388,9 @@ def plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model(
                         f'{_filename_token(model)}.{plot_format}'
                     )
                 ),
-                figsize=(15.0, max(8.0, 0.31 * len(axis.row_keys) + 2.4)),
-                row_group_boundaries=_row_group_boundaries(
-                    summary_rows,
-                    axis.row_keys,
-                    'WordingConfig',
+                figsize=(
+                    16.5,
+                    _panel_grid_fig_height(panel_rows, min_cell_height=0.46, min_height=12.0),
                 ),
             )
         )
@@ -212,20 +413,21 @@ def plot_config_metric_family_delta_heatmap_low_budget(
     ]
     if not _has_multiple_configs(summary_rows):
         return []
-    axis = _config_metric_family_axis(summary_rows)
-    return _plot_delta_heatmap_panels(
+    panel_rows = _configuration_metric_family_panel_rows(summary_rows)
+    return _plot_delta_heatmap_panel_grid(
         plt=plt,
-        rows=summary_rows,
-        axis=axis,
+        panel_rows=panel_rows,
         title='Low-budget metric deltas by wording configuration and experiment family',
         footnote=(
-            'Rows are grouped by wording configuration, then metric. '
+            'Each row is one wording configuration. '
             'Top line = mean delta; bottom line = win rate for the comparison.'
         ),
         output_path=output_dir
         / f'cross_config_metric_family_delta_heatmap_low_budget.{plot_format}',
-        figsize=(15.0, max(9.5, 0.28 * len(axis.row_keys) + 2.4)),
-        row_group_boundaries=_row_group_boundaries(summary_rows, axis.row_keys, 'WordingConfig'),
+        figsize=(
+            16.5,
+            _panel_grid_fig_height(panel_rows, min_cell_height=0.44, min_height=13.0),
+        ),
     )
 
 
@@ -247,18 +449,17 @@ def plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model(
         ]
         if not _has_multiple_configs(summary_rows):
             continue
-        axis = _config_metric_family_axis(summary_rows)
+        panel_rows = _configuration_metric_family_panel_rows(summary_rows)
         paths.extend(
-            _plot_delta_heatmap_panels(
+            _plot_delta_heatmap_panel_grid(
                 plt=plt,
-                rows=summary_rows,
-                axis=axis,
+                panel_rows=panel_rows,
                 title=(
                     'Low-budget metric deltas by wording configuration and '
                     f'experiment family for {short_model_label(model)}'
                 ),
                 footnote=(
-                    'Rows are grouped by wording configuration, then metric. '
+                    'Each row is one wording configuration. '
                     'Top line = mean delta; bottom line = win rate for the comparison.'
                 ),
                 output_path=(
@@ -268,11 +469,9 @@ def plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model(
                         f'{_filename_token(model)}.{plot_format}'
                     )
                 ),
-                figsize=(15.0, max(9.5, 0.28 * len(axis.row_keys) + 2.4)),
-                row_group_boundaries=_row_group_boundaries(
-                    summary_rows,
-                    axis.row_keys,
-                    'WordingConfig',
+                figsize=(
+                    16.5,
+                    _panel_grid_fig_height(panel_rows, min_cell_height=0.44, min_height=13.0),
                 ),
             )
         )
@@ -288,7 +487,6 @@ def _plot_delta_heatmap_panels(
     footnote: str,
     output_path: Path,
     figsize: tuple[float, float],
-    row_group_boundaries: Sequence[int] = (),
 ) -> list[Path]:
     specs = _delta_panel_specs()
     matrices, values = _delta_matrices(
@@ -303,55 +501,224 @@ def _plot_delta_heatmap_panels(
     axes = cast(Sequence[Any], axes_obj)
     try:
         for ax, spec, matrix in zip(axes, specs, matrices, strict=True):
-            image = ax.imshow(
-                _matrix_with_nan(matrix),
-                cmap=spec.cmap,
-                norm=_symmetric_delta_norm(spec.value_field),
-                aspect='auto',
+            image = _draw_delta_heatmap_axis(
+                fig=fig,
+                ax=ax,
+                rows=rows,
+                axis=axis,
+                spec=spec,
+                matrix=matrix,
+                show_title=True,
+                show_x_tick_labels=True,
+                show_y_tick_labels=True,
             )
-            ax.set_title(spec.title)
-            ax.set_xticks(range(len(axis.column_tick_labels)))
-            ax.set_xticklabels(axis.column_tick_labels, rotation=35, ha='right')
-            ax.set_yticks(range(len(axis.row_tick_labels)))
-            ax.set_yticklabels(axis.row_tick_labels, fontsize=7)
-            for boundary in row_group_boundaries:
-                ax.axhline(boundary - 0.5, color='#111827', linewidth=0.8, alpha=0.55)
-            for y_index, row_key in enumerate(axis.row_keys):
-                for x_index, column_key in enumerate(axis.column_keys):
-                    source_row = _find_summary_row(
-                        rows,
-                        axis.row_field,
-                        row_key,
-                        axis.column_field,
-                        column_key,
-                    )
-                    value = matrix[y_index][x_index]
-                    if value is None:
-                        continue
-                    pct = (
-                        float_or_none(source_row.get(spec.pct_field))
-                        if source_row is not None
-                        else None
-                    )
-                    ax.text(
-                        x_index,
-                        y_index,
-                        f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
-                        ha='center',
-                        va='center',
-                        fontsize=6.5,
-                        color=_heatmap_text_color(value, spec.value_field),
-                    )
             cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, extend='both')
             cbar.set_label(spec.colorbar_label)
         fig.suptitle(title, y=0.985)
         fig.text(0.5, 0.018, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
         fig.tight_layout(rect=(0, 0.055, 1, 0.955))
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(output_path, dpi=180)
+        fig.savefig(output_path, dpi=180, bbox_inches='tight')
         return [output_path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _plot_delta_heatmap_panel_grid(
+    *,
+    plt: object,
+    panel_rows: Sequence[HeatmapPanelRow],
+    title: str,
+    footnote: str,
+    output_path: Path,
+    figsize: tuple[float, float],
+) -> list[Path]:
+    specs = _delta_panel_specs()
+    active_panel_rows: list[HeatmapPanelRow] = []
+    panel_matrices: list[tuple[list[list[list[float | None]]], list[float]]] = []
+    all_values: list[float] = []
+    for panel_row in panel_rows:
+        matrices, values = _delta_matrices(rows=panel_row.rows, axis=panel_row.axis, specs=specs)
+        if not values:
+            continue
+        active_panel_rows.append(panel_row)
+        panel_matrices.append((matrices, values))
+        all_values.extend(values)
+    if not all_values:
+        return []
+
+    nrows = len(panel_matrices)
+    fig, axes_obj = plt.subplots(
+        nrows=nrows,
+        ncols=3,
+        figsize=figsize,
+        sharex='col',
+        squeeze=False,
+        gridspec_kw={'wspace': 0.38},
+    )  # type: ignore[attr-defined]
+    axes = cast(Sequence[Sequence[Any]], axes_obj)
+    try:
+        for row_index, (panel_row, (matrices, _values)) in enumerate(
+            zip(active_panel_rows, panel_matrices, strict=True)
+        ):
+            for column_index, (spec, matrix) in enumerate(zip(specs, matrices, strict=True)):
+                image = _draw_delta_heatmap_axis(
+                    fig=fig,
+                    ax=axes[row_index][column_index],
+                    rows=panel_row.rows,
+                    axis=panel_row.axis,
+                    spec=spec,
+                    matrix=matrix,
+                    show_title=False,
+                    show_x_tick_labels=row_index == nrows - 1,
+                    show_y_tick_labels=column_index == 0,
+                )
+                cbar = fig.colorbar(
+                    image, ax=axes[row_index][column_index], fraction=0.046, pad=0.04, extend='both'
+                )
+                cbar.set_label(spec.colorbar_label, fontsize=7)
+                cbar.ax.tick_params(labelsize=7)
+        fig.subplots_adjust(
+            left=0.10,
+            right=0.985,
+            bottom=_panel_grid_bottom_margin(active_panel_rows),
+            top=0.88,
+            hspace=_panel_grid_hspace(nrows),
+        )
+        _add_panel_column_titles(fig=fig, axes=axes[0], specs=specs)
+        for row_index, panel_row in enumerate(active_panel_rows):
+            _add_panel_row_title(fig=fig, axes=axes[row_index], title=panel_row.label)
+        fig.suptitle(title, y=0.995)
+        fig.text(0.5, 0.016, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=180, bbox_inches='tight')
+        return [output_path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _panel_grid_fig_height(
+    panel_rows: Sequence[HeatmapPanelRow],
+    *,
+    min_cell_height: float,
+    min_height: float,
+) -> float:
+    title_gap_height = 0.50
+    body_height = sum(
+        max(1, len(panel_row.axis.row_keys)) * min_cell_height + title_gap_height
+        for panel_row in panel_rows
+    )
+    return max(min_height, body_height + 1.4)
+
+
+def _panel_grid_hspace(nrows: int) -> float:
+    if nrows <= 1:
+        return 0.0
+    if nrows == 2:
+        return 0.20
+    if nrows <= 4:
+        return 0.40
+    if nrows <= 6:
+        return 0.54
+    return 0.65
+
+
+def _panel_grid_bottom_margin(panel_rows: Sequence[HeatmapPanelRow]) -> float:
+    if panel_rows and any(' / ' in label for label in panel_rows[-1].axis.column_tick_labels):
+        return 0.20
+    return 0.12
+
+
+def _add_panel_row_title(*, fig: Any, axes: Sequence[Any], title: str) -> None:
+    positions = [ax.get_position() for ax in axes]
+    left = min(position.x0 for position in positions)
+    right = max(position.x1 for position in positions)
+    top = max(position.y1 for position in positions)
+    fig.text(
+        (left + right) / 2,
+        top + 0.018,
+        title,
+        ha='center',
+        va='bottom',
+        fontsize=9.5,
+        fontweight='bold',
+    )
+
+
+def _add_panel_column_titles(
+    *,
+    fig: Any,
+    axes: Sequence[Any],
+    specs: Sequence[DeltaPanelSpec],
+) -> None:
+    top = max(ax.get_position().y1 for ax in axes)
+    for ax, spec in zip(axes, specs, strict=True):
+        position = ax.get_position()
+        fig.text(
+            (position.x0 + position.x1) / 2,
+            top + 0.055,
+            spec.title,
+            ha='center',
+            va='bottom',
+            fontsize=10,
+        )
+
+
+def _draw_delta_heatmap_axis(
+    *,
+    fig: Any,
+    ax: Any,
+    rows: Sequence[Mapping[str, object]],
+    axis: SummaryAxisSpec,
+    spec: DeltaPanelSpec,
+    matrix: Sequence[Sequence[float | None]],
+    show_title: bool,
+    show_x_tick_labels: bool,
+    show_y_tick_labels: bool,
+) -> Any:
+    _ = fig
+    image = ax.imshow(
+        _matrix_with_nan(matrix),
+        cmap=spec.cmap,
+        norm=_symmetric_delta_norm(spec.value_field),
+        aspect='auto',
+    )
+    if show_title:
+        ax.set_title(spec.title)
+    ax.set_xticks(range(len(axis.column_tick_labels)))
+    ax.set_xticklabels(
+        axis.column_tick_labels if show_x_tick_labels else [''] * len(axis.column_tick_labels),
+        rotation=_tick_label_rotation(axis.column_tick_labels),
+        ha=_tick_label_alignment(axis.column_tick_labels),
+    )
+    ax.set_yticks(range(len(axis.row_tick_labels)))
+    ax.set_yticklabels(
+        axis.row_tick_labels if show_y_tick_labels else [''] * len(axis.row_tick_labels),
+        fontsize=7,
+    )
+    for y_index, row_key in enumerate(axis.row_keys):
+        for x_index, column_key in enumerate(axis.column_keys):
+            source_row = _find_summary_row(
+                rows,
+                axis.row_field,
+                row_key,
+                axis.column_field,
+                column_key,
+            )
+            value = matrix[y_index][x_index]
+            if value is None:
+                continue
+            pct = float_or_none(source_row.get(spec.pct_field)) if source_row is not None else None
+            ax.text(
+                x_index,
+                y_index,
+                f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
+                ha='center',
+                va='center',
+                fontsize=6.5,
+                color=_heatmap_text_color(value, spec.value_field),
+            )
+    return image
 
 
 def _metric_config_budget_rows(
@@ -444,6 +811,62 @@ def _metric_config_family_budget_rows(
     return summary_rows
 
 
+def _metric_config_family_budget_rows_by_embedding(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    metric_filter: DeltaMetricLabel | None = None,
+) -> list[dict[str, object]]:
+    summary_rows: list[dict[str, object]] = []
+    for spec in REPORT_METRIC_SPECS:
+        if metric_filter is not None and spec.metric_label != metric_filter:
+            continue
+        grouped: dict[tuple[str, str, str, BudgetCategory, str], list[Mapping[str, object]]] = {}
+        for row in rows:
+            embedding_model = str(row.get('EmbeddingModel') or '')
+            config = str(row.get('WordingConfig') or '')
+            family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
+            category_value = str(row.get('BudgetCategory') or '')
+            if (
+                not embedding_model
+                or not config
+                or category_value not in BUDGET_CATEGORIES
+                or family in AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS
+            ):
+                continue
+            category = cast(BudgetCategory, category_value)
+            budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
+            grouped.setdefault(
+                (embedding_model, config, family, category, budget_label), []
+            ).append(row)
+        for (embedding_model, config, family, category, budget_label), group in grouped.items():
+            first = group[0]
+            summary_rows.append(
+                _metric_summary_row(
+                    metric=spec.metric_label,
+                    metric_title=spec.title_label,
+                    rows=group,
+                    extra={
+                        'EmbeddingModel': embedding_model,
+                        'WordingConfig': config,
+                        'WordingConfigLabel': first.get('WordingConfigLabel'),
+                        'QueryMode': first.get('QueryMode'),
+                        'FocusMode': first.get('FocusMode'),
+                        'ChunkTextMode': first.get('ChunkTextMode'),
+                        'ExperimentFamilyLabel': family,
+                        'BudgetCategory': category,
+                        'BudgetCategoryLabel': budget_label,
+                    },
+                )
+            )
+    summary_rows.sort(
+        key=lambda row: (
+            str(row.get('EmbeddingModel') or ''),
+            _config_family_budget_sort_key(row),
+        )
+    )
+    return summary_rows
+
+
 def _metric_summary_row(
     *,
     metric: DeltaMetricLabel,
@@ -481,55 +904,52 @@ def _metric_summary_row(
     }
 
 
-def _config_family_budget_axis(rows: Sequence[Mapping[str, object]]) -> SummaryAxisSpec:
+def _configuration_family_budget_panel_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[HeatmapPanelRow]:
     configs = _ordered_configs(rows)
-    families = _ordered_families(rows)
-    row_keys = tuple(
-        _composite_key(config, family)
+    families = _ordered_distribution_family_labels(rows)
+    budget_labels = tuple(_budget_labels())
+    return [
+        HeatmapPanelRow(
+            label=_config_label_for_key(rows, config),
+            rows=[row for row in rows if row.get('WordingConfig') == config],
+            axis=SummaryAxisSpec(
+                row_keys=tuple(families),
+                column_keys=budget_labels,
+                row_tick_labels=tuple(families),
+                column_tick_labels=budget_labels,
+                row_field='ExperimentFamilyLabel',
+                column_field='BudgetCategoryLabel',
+            ),
+        )
         for config in configs
-        for family in families
-        if _has_summary_row(rows, 'WordingConfig', config, 'ExperimentFamilyLabel', family)
-    )
-    labels = tuple(
-        f'{_config_label_for_key(rows, config)} | {family}'
-        for config in configs
-        for family in families
-        if _composite_key(config, family) in row_keys
-    )
-    return SummaryAxisSpec(
-        row_keys=row_keys,
-        column_keys=tuple(_budget_labels()),
-        row_tick_labels=labels,
-        column_tick_labels=tuple(_budget_labels()),
-        row_field='ConfigFamilyKey',
-        column_field='BudgetCategoryLabel',
-    )
+    ]
 
 
-def _config_metric_family_axis(rows: Sequence[Mapping[str, object]]) -> SummaryAxisSpec:
+def _configuration_metric_family_panel_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[HeatmapPanelRow]:
     configs = _ordered_configs(rows)
     metrics = _ordered_metric_labels(rows)
-    families = _ordered_families(rows)
-    row_keys = tuple(
-        _composite_key(config, metric)
+    families = _ordered_distribution_family_labels(rows)
+    return [
+        HeatmapPanelRow(
+            label=_config_label_for_key(rows, config),
+            rows=[row for row in rows if row.get('WordingConfig') == config],
+            axis=SummaryAxisSpec(
+                row_keys=tuple(metrics),
+                column_keys=tuple(families),
+                row_tick_labels=tuple(
+                    _metric_title_from_rows(rows, metric) for metric in metrics
+                ),
+                column_tick_labels=tuple(families),
+                row_field='MetricLabel',
+                column_field='ExperimentFamilyLabel',
+            ),
+        )
         for config in configs
-        for metric in metrics
-        if _has_summary_row(rows, 'WordingConfig', config, 'MetricLabel', metric)
-    )
-    labels = tuple(
-        f'{_config_label_for_key(rows, config)} | {_metric_title_from_rows(rows, metric)}'
-        for config in configs
-        for metric in metrics
-        if _composite_key(config, metric) in row_keys
-    )
-    return SummaryAxisSpec(
-        row_keys=row_keys,
-        column_keys=tuple(families),
-        row_tick_labels=labels,
-        column_tick_labels=tuple(families),
-        row_field='ConfigMetricKey',
-        column_field='ExperimentFamilyLabel',
-    )
+    ]
 
 
 def _delta_panel_specs() -> tuple[DeltaPanelSpec, ...]:
@@ -656,32 +1076,7 @@ def _ordered_metric_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
 
 def _ordered_embedding_models(rows: Sequence[Mapping[str, object]]) -> list[str]:
     available = {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
-    if EMBEDDING_MODEL_FACETED_PLOT_MODELS:
-        return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
-    return sorted(available)
-
-
-def _row_group_boundaries(
-    rows: Sequence[Mapping[str, object]],
-    row_keys: Sequence[str],
-    group_field: str,
-) -> list[int]:
-    if not row_keys:
-        return []
-    groups = {
-        key: str(row.get(group_field) or '')
-        for key in row_keys
-        for row in rows
-        if key in {str(row.get('ConfigFamilyKey') or ''), str(row.get('ConfigMetricKey') or '')}
-    }
-    boundaries: list[int] = []
-    previous = groups.get(row_keys[0], '')
-    for index, key in enumerate(row_keys[1:], start=1):
-        current = groups.get(key, '')
-        if current != previous:
-            boundaries.append(index)
-            previous = current
-    return boundaries
+    return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
 
 
 def _budget_labels() -> list[str]:
@@ -700,6 +1095,41 @@ def _config_label_for_key(rows: Sequence[Mapping[str, object]], config: str) -> 
         if row.get('WordingConfig') == config and row.get('WordingConfigLabel'):
             return str(row['WordingConfigLabel'])
     return config
+
+
+def _compact_config_label_for_key(rows: Sequence[Mapping[str, object]], config: str) -> str:
+    return _config_label_for_key(rows, config).replace(' / ', '\n')
+
+
+def _tick_label_rotation(labels: Sequence[str]) -> int:
+    _ = labels
+    return 35
+
+
+def _tick_label_alignment(labels: Sequence[str]) -> str:
+    _ = labels
+    return 'right'
+
+
+def _ordered_distribution_family_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    present = {
+        str(row.get('ExperimentFamilyLabel') or '')
+        for row in rows
+        if row.get('ExperimentFamilyLabel')
+    }
+    excluded_labels = {
+        *AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
+        EXPERIMENT_FAMILY_LABELS['budget_sweep'],
+        EXPERIMENT_FAMILY_LABELS['embedding_comparison'],
+        EXPERIMENT_FAMILY_LABELS['unknown'],
+    }
+    ordered = [
+        EXPERIMENT_FAMILY_LABELS[family_id]
+        for family_id in EXPERIMENT_FAMILIES
+        if EXPERIMENT_FAMILY_LABELS[family_id] in present
+        and EXPERIMENT_FAMILY_LABELS[family_id] not in excluded_labels
+    ]
+    return ordered or _ordered_families(rows)
 
 
 def _config_sort_key(config: str) -> tuple[int, int, int, str]:
@@ -788,3 +1218,7 @@ def _heatmap_abs_scale(value_field: str) -> float:
 
 def _filename_token(value: str) -> str:
     return short_model_label(value).lower().replace('/', '_').replace('-', '_').replace('.', '_')
+
+
+def _label_filename_token(value: str) -> str:
+    return '_'.join(value.lower().replace('/', '_').replace('-', '_').replace('.', '_').split())

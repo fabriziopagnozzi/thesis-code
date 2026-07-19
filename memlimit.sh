@@ -22,7 +22,7 @@ systemd-run --user \
   --wait \
   --pipe \
   --same-dir \
-  --setenv="EVALUATION_WORKERS=${EVALUATION_WORKERS:-24}" \
+  --setenv="EVALUATION_WORKERS=${EVALUATION_WORKERS:-25}" \
   --setenv="QUERY_GEOMETRY_WORKERS=${QUERY_GEOMETRY_WORKERS:-9}" \
   --setenv=HF_TOKEN \
   --property=Type=exec \

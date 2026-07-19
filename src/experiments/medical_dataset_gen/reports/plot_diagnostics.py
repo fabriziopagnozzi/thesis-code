@@ -20,6 +20,9 @@ from experiments.medical_dataset_gen.reports.helpers import (
     strategy_label,
 )
 from experiments.medical_dataset_gen.reports.models import PlotFormat
+from experiments.medical_dataset_gen.reports.report_config import (
+    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
+)
 
 GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
     ('Dominant primary gold', 'DominantPrimaryGoldCountMean', '#0B5D6E'),
@@ -72,11 +75,13 @@ def _family_grouped_rows(
             for value in (float_or_none(row.get(value_column)) for row in group)
             if value is not None
         ]
-        family_order.append((
-            statistics.fmean(values) if values else float('-inf'),
-            EXPERIMENT_FAMILY_LABELS[family_id],
-            family_id,
-        ))
+        family_order.append(
+            (
+                statistics.fmean(values) if values else float('-inf'),
+                EXPERIMENT_FAMILY_LABELS[family_id],
+                family_id,
+            )
+        )
 
     ordered_rows: list[Mapping[str, object]] = []
     for _mean_value, _label, family_id in sorted(
@@ -265,7 +270,12 @@ def _geometry_pass_rate_rows(
     rows: Sequence[Mapping[str, object]],
 ) -> list[Mapping[str, object]]:
     return _family_grouped_rows(
-        [row for row in rows if float_or_none(row.get('GeometryPassRate')) is not None],
+        [
+            row
+            for row in rows
+            if float_or_none(row.get('GeometryPassRate')) is not None
+            and row.get('EmbeddingModel') in EMBEDDING_MODEL_FACETED_PLOT_MODELS
+        ],
         'GeometryPassRate',
     )
 
@@ -408,12 +418,14 @@ def _binned_lambda_delta_stats(
         if not values:
             continue
         sorted_values = sorted(values)
-        out.append({
-            'x': (index + 0.5) / n_bins,
-            'mean': statistics.fmean(values),
-            'q25': quantile(sorted_values, 0.25),
-            'q75': quantile(sorted_values, 0.75),
-        })
+        out.append(
+            {
+                'x': (index + 0.5) / n_bins,
+                'mean': statistics.fmean(values),
+                'q25': quantile(sorted_values, 0.25),
+                'q75': quantile(sorted_values, 0.75),
+            }
+        )
     return out
 
 
