@@ -9,7 +9,7 @@
 ## Claims
 * Given the differences between smaller and bigger models, we can conclude that this ontology produces different classes of queries in terms of difficulty: some are by design "harder" than others and require better models to capture their nuances.
     - even with stronger models, there is a small percentage of queries that show unseparable facet geometry.
-        - this may be due to the semantical clinical aspects overlapping in the embedding space for particular combinations of Primary Condition / Subgroup / Clinical Axis which are not currently considered by the ontology
+        - this may be due to the semantic clinical aspects overlapping in the embedding space for particular combinations of Primary Condition / Subgroup / Clinical Axis which are not currently considered by the ontology
         - it may be due to poor wording in the rendered chunks
 
 
