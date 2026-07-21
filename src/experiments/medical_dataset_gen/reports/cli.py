@@ -29,7 +29,9 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Directory where report files are written. Defaults to <results-dir>/_reports/experiment_comparison.',
     )
     parser.add_argument(
+        '--refresh-output-artifacts',
         '--plots-from-report',
+        dest='refresh_output_artifacts',
         type=Path,
         default=None,
         help='Refresh figures in an existing report directory from its data/*.csv artifacts.',
@@ -106,10 +108,10 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Random seed for deterministic paired-inference bootstrap resampling.',
     )
     parsed = parser.parse_args(argv)
-    if parsed.plots_from_report is not None and parsed.output_dir is not None:
-        parser.error('--output-dir cannot be combined with --plots-from-report')
-    if parsed.plots_from_report is not None and parsed.no_plots:
-        parser.error('--no-plots cannot be combined with --plots-from-report')
+    if parsed.refresh_output_artifacts is not None and parsed.output_dir is not None:
+        parser.error('--output-dir cannot be combined with --refresh-output-artifacts')
+    if parsed.refresh_output_artifacts is not None and parsed.no_plots:
+        parser.error('--no-plots cannot be combined with --refresh-output-artifacts')
     if parsed.experiment_regex is not None:
         try:
             re.compile(str(parsed.experiment_regex))
@@ -122,8 +124,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             parser.error(f'invalid --exclude-experiment-regex: {exc}')
     results_dir = parsed.results_dir.expanduser().resolve()
     plots_from_report = (
-        parsed.plots_from_report.expanduser().resolve()
-        if parsed.plots_from_report is not None
+        parsed.refresh_output_artifacts.expanduser().resolve()
+        if parsed.refresh_output_artifacts is not None
         else None
     )
     output_dir = (

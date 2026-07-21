@@ -85,7 +85,7 @@ def plot_config_fcp_budget_delta_heatmaps(
         axis=axis,
         title='FCP deltas by wording configuration and retrieval budget',
         footnote=(
-            'Each cell aggregates all matching experiment families and embedding models. '
+            'Each cell aggregates all matching experiment families and both core embedding models. '
             'Top line = mean FCP delta; bottom line = win rate for the comparison.'
         ),
         output_path=output_dir / f'cross_config_fcp_budget_delta_heatmaps.{plot_format}',
@@ -170,9 +170,7 @@ def plot_config_metric_delta_heatmap_low_budget(
         row_tick_labels=tuple(
             _metric_title_from_rows(summary_rows, metric) for metric in metric_labels
         ),
-        column_tick_labels=tuple(
-            _config_label_for_key(summary_rows, config) for config in configs
-        ),
+        column_tick_labels=tuple(_config_label_for_key(summary_rows, config) for config in configs),
         row_field='MetricLabel',
         column_field='WordingConfig',
     )
@@ -182,7 +180,7 @@ def plot_config_metric_delta_heatmap_low_budget(
         axis=axis,
         title='Low-budget metric deltas by wording configuration',
         footnote=(
-            'Each cell aggregates all matching experiment families and embedding models. '
+            'Each cell aggregates all matching experiment families and both core embedding models. '
             'Top line = mean delta; bottom line = win rate for the comparison.'
         ),
         output_path=output_dir / f'cross_config_metric_delta_heatmap_low_budget.{plot_format}',
@@ -250,6 +248,67 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution(
     )
 
 
+def plot_config_metric_delta_heatmap_low_budget_by_embedding_model(
+    *,
+    plt: object,
+    rows: Sequence[Mapping[str, object]],
+    output_dir: Path,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    """Low-budget metric wording-configuration view faceted by embedding model."""
+    summary_rows = [
+        row
+        for row in _metric_config_budget_rows_by_embedding(rows)
+        if row.get('BudgetCategory') == 'low_budget'
+        and str(row.get('MetricLabel') or '') in REPORT_METRIC_LABEL_SET
+    ]
+    if not _has_multiple_configs(summary_rows):
+        return []
+    metric_labels = _ordered_metric_labels(summary_rows)
+    configs = _ordered_configs(summary_rows)
+    panel_rows: list[HeatmapPanelRow] = []
+    for model in _ordered_embedding_models(summary_rows):
+        model_rows = [row for row in summary_rows if row.get('EmbeddingModel') == model]
+        if not _has_multiple_configs(model_rows):
+            continue
+        panel_rows.append(
+            HeatmapPanelRow(
+                label=short_model_label(model),
+                rows=model_rows,
+                axis=SummaryAxisSpec(
+                    row_keys=tuple(metric_labels),
+                    column_keys=tuple(configs),
+                    row_tick_labels=tuple(
+                        _metric_title_from_rows(summary_rows, metric) for metric in metric_labels
+                    ),
+                    column_tick_labels=tuple(
+                        _config_label_for_key(summary_rows, config) for config in configs
+                    ),
+                    row_field='MetricLabel',
+                    column_field='WordingConfig',
+                ),
+            )
+        )
+    if not panel_rows:
+        return []
+    return _plot_delta_heatmap_panel_grid(
+        plt=plt,
+        panel_rows=panel_rows,
+        title='Low-budget metric deltas by wording configuration and embedding model',
+        footnote=(
+            'Each row filters to one core embedding model and aggregates all matching '
+            'experiment families. Cell format: top line = mean delta; bottom line = win rate '
+            'for the comparison.'
+        ),
+        output_path=output_dir
+        / f'cross_config_metric_delta_heatmap_low_budget_by_emb_model.{plot_format}',
+        figsize=(
+            16.5,
+            _panel_grid_fig_height(panel_rows, min_cell_height=0.42, min_height=8.0),
+        ),
+    )
+
+
 def plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model(
     *,
     plt: object,
@@ -290,8 +349,7 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model(
                             for metric in metric_labels
                         ),
                         column_tick_labels=tuple(
-                            _config_label_for_key(summary_rows, config)
-                            for config in configs
+                            _config_label_for_key(summary_rows, config) for config in configs
                         ),
                         row_field='MetricLabel',
                         column_field='WordingConfig',
@@ -548,14 +606,14 @@ def _plot_delta_heatmap_panel_grid(
         return []
 
     nrows = len(panel_matrices)
-    fig, axes_obj = plt.subplots(
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
         nrows=nrows,
         ncols=3,
         figsize=figsize,
         sharex='col',
         squeeze=False,
         gridspec_kw={'wspace': 0.38},
-    )  # type: ignore[attr-defined]
+    )
     axes = cast(Sequence[Sequence[Any]], axes_obj)
     try:
         for row_index, (panel_row, (matrices, _values)) in enumerate(
@@ -734,7 +792,11 @@ def _metric_config_budget_rows(
         for row in rows:
             config = str(row.get('WordingConfig') or '')
             category_value = str(row.get('BudgetCategory') or '')
-            if not config or category_value not in BUDGET_CATEGORIES:
+            if (
+                not _is_core_embedding_row(row)
+                or not config
+                or category_value not in BUDGET_CATEGORIES
+            ):
                 continue
             category = cast(BudgetCategory, category_value)
             budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
@@ -761,6 +823,58 @@ def _metric_config_budget_rows(
     return summary_rows
 
 
+def _metric_config_budget_rows_by_embedding(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    metric_filter: DeltaMetricLabel | None = None,
+) -> list[dict[str, object]]:
+    summary_rows: list[dict[str, object]] = []
+    for spec in REPORT_METRIC_SPECS:
+        if metric_filter is not None and spec.metric_label != metric_filter:
+            continue
+        grouped: dict[tuple[str, str, BudgetCategory, str], list[Mapping[str, object]]] = {}
+        for row in rows:
+            embedding_model = str(row.get('EmbeddingModel') or '')
+            config = str(row.get('WordingConfig') or '')
+            category_value = str(row.get('BudgetCategory') or '')
+            if (
+                not _is_core_embedding_row(row)
+                or not embedding_model
+                or not config
+                or category_value not in BUDGET_CATEGORIES
+            ):
+                continue
+            category = cast(BudgetCategory, category_value)
+            budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
+            grouped.setdefault((embedding_model, config, category, budget_label), []).append(row)
+        for (embedding_model, config, category, budget_label), group in grouped.items():
+            first = group[0]
+            summary_rows.append(
+                _metric_summary_row(
+                    metric=spec.metric_label,
+                    metric_title=spec.title_label,
+                    rows=group,
+                    extra={
+                        'EmbeddingModel': embedding_model,
+                        'WordingConfig': config,
+                        'WordingConfigLabel': first.get('WordingConfigLabel'),
+                        'QueryMode': first.get('QueryMode'),
+                        'FocusMode': first.get('FocusMode'),
+                        'ChunkTextMode': first.get('ChunkTextMode'),
+                        'BudgetCategory': category,
+                        'BudgetCategoryLabel': budget_label,
+                    },
+                )
+            )
+    summary_rows.sort(
+        key=lambda row: (
+            str(row.get('EmbeddingModel') or ''),
+            _config_budget_sort_key(row),
+        )
+    )
+    return summary_rows
+
+
 def _metric_config_family_budget_rows(
     rows: Sequence[Mapping[str, object]],
     *,
@@ -776,7 +890,8 @@ def _metric_config_family_budget_rows(
             family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
             category_value = str(row.get('BudgetCategory') or '')
             if (
-                not config
+                not _is_core_embedding_row(row)
+                or not config
                 or category_value not in BUDGET_CATEGORIES
                 or family in AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS
             ):
@@ -827,7 +942,8 @@ def _metric_config_family_budget_rows_by_embedding(
             family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
             category_value = str(row.get('BudgetCategory') or '')
             if (
-                not embedding_model
+                not _is_core_embedding_row(row)
+                or not embedding_model
                 or not config
                 or category_value not in BUDGET_CATEGORIES
                 or family in AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS
@@ -940,9 +1056,7 @@ def _configuration_metric_family_panel_rows(
             axis=SummaryAxisSpec(
                 row_keys=tuple(metrics),
                 column_keys=tuple(families),
-                row_tick_labels=tuple(
-                    _metric_title_from_rows(rows, metric) for metric in metrics
-                ),
+                row_tick_labels=tuple(_metric_title_from_rows(rows, metric) for metric in metrics),
                 column_tick_labels=tuple(families),
                 row_field='MetricLabel',
                 column_field='ExperimentFamilyLabel',
@@ -1191,6 +1305,10 @@ def _fraction_or_none(numerator: int, denominator: int) -> float | None:
 
 def _has_multiple_configs(rows: Sequence[Mapping[str, object]]) -> bool:
     return len({row.get('WordingConfig') for row in rows if row.get('WordingConfig')}) > 1
+
+
+def _is_core_embedding_row(row: Mapping[str, object]) -> bool:
+    return row.get('EmbeddingModel') in EMBEDDING_MODEL_FACETED_PLOT_MODELS
 
 
 def _matrix_with_nan(matrix: Sequence[Sequence[float | None]]) -> list[list[float]]:

@@ -22,6 +22,7 @@ from experiments.medical_dataset_gen.reports.plot_config_differences import (
     plot_config_metric_delta_heatmap_low_budget,
     plot_config_metric_delta_heatmap_low_budget_by_distribution,
     plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model,
+    plot_config_metric_delta_heatmap_low_budget_by_embedding_model,
     plot_config_metric_family_delta_heatmap_low_budget,
     plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model,
 )
@@ -178,6 +179,14 @@ def write_figures(
         )
         paths.extend(
             plot_config_metric_delta_heatmap_low_budget_by_distribution(
+                plt=plt,
+                rows=budget_rows,
+                output_dir=cross_config_dir,
+                plot_format=plot_format,
+            )
+        )
+        paths.extend(
+            plot_config_metric_delta_heatmap_low_budget_by_embedding_model(
                 plt=plt,
                 rows=budget_rows,
                 output_dir=cross_config_dir,

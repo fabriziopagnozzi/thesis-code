@@ -17,14 +17,17 @@ from experiments.medical_dataset_gen.reports.artifacts import (
     write_csv,
 )
 from experiments.medical_dataset_gen.reports.cli import parse_args
-from experiments.medical_dataset_gen.reports.discovery import discover_experiments
+from experiments.medical_dataset_gen.reports.discovery import (
+    discover_experiments,
+    load_experiment_record,
+)
 from experiments.medical_dataset_gen.reports.latex_tables import (
     THESIS_AGGREGATE_TABLES_PATH,
     THESIS_RESULT_MACROS_PATH,
     render_thesis_aggregate_tables,
     render_thesis_result_macros,
 )
-from experiments.medical_dataset_gen.reports.models import CliArgs, ReportOutputs
+from experiments.medical_dataset_gen.reports.models import CliArgs, ExperimentRecord, ReportOutputs
 from experiments.medical_dataset_gen.reports.plots import write_figures
 from experiments.medical_dataset_gen.reports.rendering import (
     render_interesting_findings,
@@ -271,27 +274,17 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
         if _should_write_thesis_outputs(args):
             _progress('writing thesis LaTeX tables and macros')
-            (THESIS_AGGREGATE_TABLES_PATH).write_text(
-                render_thesis_aggregate_tables(
-                    metric_summary_rows=metric_summary_rows,
-                    metric_family_summary_rows=metric_family_summary_rows_data,
-                    metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-                )
-            )
-            (THESIS_RESULT_MACROS_PATH).write_text(
-                render_thesis_result_macros(
-                    geometry_rows=geometry_rows,
-                    comparison_rows=comparison_rows,
-                    budget_rows=budget_rows,
-                    lambda_safety_rows=lambda_safety_rows,
-                    metric_summary_rows=metric_summary_rows,
-                    metric_family_summary_rows=metric_family_summary_rows_data,
-                    paired_suite_rows=paired_suite_rows,
-                    embedding_summary_rows=embedding_summary_rows,
-                )
-            )
-            THESIS_STATISTICAL_TABLE_PATH.write_text(
-                render_statistical_latex_table(paired_suite_rows)
+            _write_thesis_outputs_from_rows(
+                geometry_rows=geometry_rows,
+                comparison_rows=comparison_rows,
+                budget_rows=budget_rows,
+                lambda_safety_rows=lambda_safety_rows,
+                metric_summary_rows=metric_summary_rows,
+                metric_family_summary_rows=metric_family_summary_rows_data,
+                metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+                paired_suite_rows=paired_suite_rows,
+                embedding_summary_rows=embedding_summary_rows,
+                require_complete_wording_grid=False,
             )
 
         figures: list[Path] = []
@@ -325,7 +318,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         warnings = _dedupe_warnings(warnings)
         report_text = render_report(
             args=args,
-            records=records,
+            experiment_count=len(records),
             dataset_rows=dataset_rows,
             geometry_rows=geometry_rows,
             comparison_rows=comparison_rows,
@@ -422,40 +415,119 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     warnings: list[str] = []
     _progress(f'loading existing report CSV artifacts from: {data_dir}')
     manifest_rows = _read_report_csv_rows(data_dir, 'experiment_manifest.csv')
+    dataset_rows = _read_report_csv_rows(data_dir, 'dataset_distribution.csv')
+    geometry_rows = _read_report_csv_rows(data_dir, 'geometry_filter_summary.csv')
+    comparison_rows = _read_report_csv_rows(data_dir, 'comparison_by_k.csv')
+    family_summary_rows = _read_report_csv_rows(data_dir, 'experiment_family_summary.csv')
+    family_budget_summary_rows = _read_report_csv_rows(
+        data_dir, 'experiment_family_budget_summary.csv'
+    )
+    metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
+    metric_family_budget_summary_rows_data = _read_report_csv_rows(
+        data_dir, 'metric_family_budget_summary.csv'
+    )
+    metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
     budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
-    plot_inputs = {
-        'geometry_rows': _read_report_csv_rows(data_dir, 'geometry_filter_summary.csv'),
-        'lambda_rows': _read_report_csv_rows(data_dir, 'lambda_stability.csv'),
-        'lambda_grid_delta_rows': _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv'),
-        'lambda_safety_rows': _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv'),
-        'near_optimal_rows': _read_report_csv_rows(data_dir, 'near_optimal_lambda_width.csv'),
-        'dataset_rows': _read_report_csv_rows(data_dir, 'dataset_distribution.csv'),
-        'metric_summary_rows': _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv'),
-        'metric_family_summary_rows': _read_report_csv_rows(data_dir, 'metric_family_summary.csv'),
-        'metric_family_budget_summary_rows': _read_report_csv_rows(
-            data_dir, 'metric_family_budget_summary.csv'
-        ),
-        'paired_cell_rows': _read_report_csv_rows(data_dir, 'paired_cell_effect_summary.csv'),
-        'paired_suite_rows': _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv'),
-        'paired_config_suite_rows': _read_report_csv_rows(
-            data_dir, 'paired_config_suite_effect_summary.csv'
-        ),
-    }
+    low_budget_rows = _read_report_csv_rows(data_dir, 'low_budget_strategy_summary.csv')
+    lambda_rows = _read_report_csv_rows(data_dir, 'lambda_stability.csv')
+    lambda_grid_delta_rows = _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv')
+    lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
+    near_optimal_rows = _read_report_csv_rows(data_dir, 'near_optimal_lambda_width.csv')
+    embedding_summary_rows = _read_report_csv_rows(data_dir, 'embedding_model_summary.csv')
+    paired_cell_rows = _read_report_csv_rows(data_dir, 'paired_cell_effect_summary.csv')
+    paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
+    paired_config_suite_rows = _read_report_csv_rows(
+        data_dir, 'paired_config_suite_effect_summary.csv'
+    )
     _progress('rendering report figures from existing CSV artifacts')
     figures = write_figures(
         output_dir=report_dir / 'figures',
         plot_format=args.plot_format,
         max_rows=args.max_table_rows,
         budget_rows=budget_rows,
+        geometry_rows=geometry_rows,
+        lambda_rows=lambda_rows,
+        lambda_grid_delta_rows=lambda_grid_delta_rows,
+        lambda_safety_rows=lambda_safety_rows,
+        near_optimal_rows=near_optimal_rows,
+        dataset_rows=dataset_rows,
+        metric_summary_rows=metric_summary_rows,
+        metric_family_summary_rows=metric_family_summary_rows_data,
+        metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+        paired_cell_rows=paired_cell_rows,
+        paired_suite_rows=paired_suite_rows,
+        paired_config_suite_rows=paired_config_suite_rows,
         cross_query_chunk_modes=args.cross_query_chunk_modes,
         warnings=warnings,
-        **plot_inputs,
     )
     _progress(f'rendered {len(figures)} figures')
     wording_configurations = _wording_configurations_for_rows(budget_rows)
     cross_triplet_analysis_enabled = (
         args.cross_query_chunk_modes and len(wording_configurations) > 1
     )
+    _progress('refreshing markdown reports from existing CSV artifacts')
+    (report_dir / 'txt_report.md').write_text(
+        render_report(
+            args=args,
+            experiment_count=len(manifest_rows),
+            dataset_rows=dataset_rows,
+            geometry_rows=geometry_rows,
+            comparison_rows=comparison_rows,
+            family_summary_rows=family_summary_rows,
+            family_budget_summary_rows=family_budget_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows_data,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+            metric_summary_rows=metric_summary_rows,
+            low_budget_rows=low_budget_rows,
+            lambda_rows=lambda_rows,
+            lambda_safety_rows=lambda_safety_rows,
+            embedding_summary_rows=embedding_summary_rows,
+            paired_config_suite_rows=paired_config_suite_rows,
+            figures=figures,
+        )
+    )
+    (report_dir / 'txt_report_highlights.md').write_text(
+        render_interesting_findings(
+            comparison_rows=comparison_rows,
+            low_budget_rows=low_budget_rows,
+            family_summary_rows=family_summary_rows,
+            family_budget_summary_rows=family_budget_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows_data,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+            metric_summary_rows=metric_summary_rows,
+            geometry_rows=geometry_rows,
+            lambda_rows=lambda_rows,
+            lambda_safety_rows=lambda_safety_rows,
+            embedding_summary_rows=embedding_summary_rows,
+            tablefmt=args.tablefmt,
+            max_table_rows=args.max_table_rows,
+        )
+    )
+    recap_records = _load_refresh_recap_records(
+        report_dir=report_dir,
+        fallback_results_dir=args.results_dir,
+        manifest_rows=manifest_rows,
+        warnings=warnings,
+    )
+    if recap_records:
+        _progress('refreshing experiment configuration recap from saved configurations')
+        (report_dir / 'txt_experiments_config_recap.md').write_text(
+            render_experiment_config_recap(recap_records)
+        )
+    if _should_write_thesis_outputs(args):
+        _progress('refreshing thesis LaTeX tables and macros from existing CSV artifacts')
+        _write_thesis_outputs_from_rows(
+            geometry_rows=geometry_rows,
+            comparison_rows=comparison_rows,
+            budget_rows=budget_rows,
+            lambda_safety_rows=lambda_safety_rows,
+            metric_summary_rows=metric_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows_data,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+            paired_suite_rows=paired_suite_rows,
+            embedding_summary_rows=embedding_summary_rows,
+            require_complete_wording_grid=args.cross_query_chunk_modes,
+        )
     _update_plot_refresh_manifest(
         report_dir=report_dir,
         args=args,
@@ -507,6 +579,46 @@ def _read_report_csv_rows(
     if path.stat().st_size == 0:
         return []
     return [dict(row) for row in pl.read_csv(path, infer_schema_length=None).to_dicts()]
+
+
+def _load_refresh_recap_records(
+    *,
+    report_dir: Path,
+    fallback_results_dir: Path,
+    manifest_rows: Sequence[Mapping[str, object]],
+    warnings: list[str],
+) -> list[ExperimentRecord]:
+    results_dir = _saved_report_results_dir(report_dir) or fallback_results_dir
+    if not results_dir.is_dir():
+        return []
+    experiment_names = [
+        str(row.get('Experiment') or '') for row in manifest_rows if row.get('Experiment')
+    ]
+    old_results_dir = MedicalDatasetGenPaths.results_dir
+    MedicalDatasetGenPaths.results_dir = results_dir
+    try:
+        return [
+            load_experiment_record(results_dir, name, warnings=warnings)
+            for name in experiment_names
+        ]
+    finally:
+        MedicalDatasetGenPaths.results_dir = old_results_dir
+
+
+def _saved_report_results_dir(report_dir: Path) -> Path | None:
+    manifest_path = report_dir / 'manifest.json'
+    if not manifest_path.is_file():
+        return None
+    try:
+        manifest: object = json.loads(manifest_path.read_text())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(manifest, dict):
+        return None
+    raw_results_dir = manifest.get('results_dir')
+    return (
+        Path(raw_results_dir).expanduser().resolve() if isinstance(raw_results_dir, str) else None
+    )
 
 
 def _update_plot_refresh_manifest(
@@ -577,6 +689,42 @@ def _wording_configurations_for_rows(
 def _should_write_thesis_outputs(args: CliArgs) -> bool:
     default_output_dir = args.results_dir / '_reports' / 'experiment_comparison'
     return args.output_dir.resolve() == default_output_dir.resolve()
+
+
+def _write_thesis_outputs_from_rows(
+    *,
+    geometry_rows: Sequence[Mapping[str, object]],
+    comparison_rows: Sequence[Mapping[str, object]],
+    budget_rows: Sequence[Mapping[str, object]],
+    lambda_safety_rows: Sequence[Mapping[str, object]],
+    metric_summary_rows: Sequence[Mapping[str, object]],
+    metric_family_summary_rows: Sequence[Mapping[str, object]],
+    metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
+    paired_suite_rows: Sequence[Mapping[str, object]],
+    embedding_summary_rows: Sequence[Mapping[str, object]],
+    require_complete_wording_grid: bool,
+) -> None:
+    THESIS_AGGREGATE_TABLES_PATH.write_text(
+        render_thesis_aggregate_tables(
+            metric_summary_rows=metric_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows,
+        )
+    )
+    THESIS_RESULT_MACROS_PATH.write_text(
+        render_thesis_result_macros(
+            geometry_rows=geometry_rows,
+            comparison_rows=comparison_rows,
+            budget_rows=budget_rows,
+            lambda_safety_rows=lambda_safety_rows,
+            metric_summary_rows=metric_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows,
+            paired_suite_rows=paired_suite_rows,
+            embedding_summary_rows=embedding_summary_rows,
+            require_complete_wording_grid=require_complete_wording_grid,
+        )
+    )
+    THESIS_STATISTICAL_TABLE_PATH.write_text(render_statistical_latex_table(paired_suite_rows))
 
 
 def main() -> None:

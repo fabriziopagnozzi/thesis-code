@@ -19,13 +19,13 @@ from experiments.medical_dataset_gen.reports.helpers import (
     section_with_table,
     sorted_rows,
 )
-from experiments.medical_dataset_gen.reports.models import CliArgs, ExperimentRecord
+from experiments.medical_dataset_gen.reports.models import CliArgs
 
 
 def render_report(
     *,
     args: CliArgs,
-    records: Sequence[ExperimentRecord],
+    experiment_count: int,
     dataset_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
     comparison_rows: Sequence[Mapping[str, object]],
@@ -63,7 +63,7 @@ def render_report(
         '',
         f'- Results dir: `{args.results_dir}`',
         f'- Output dir: `{args.output_dir}`',
-        f'- Experiments discovered: `{len(records)}`',
+        f'- Experiments discovered: `{experiment_count}`',
         f'- Scrapped experiments included: `{args.include_scrapped}`',
         f'- Near-optimal lambda epsilon: `{args.near_optimal_epsilon}`',
         '',
@@ -348,18 +348,22 @@ def render_report(
             max_rows=args.max_table_rows,
         )
     )
-    lines.extend([
-        '## Output Files',
-        '',
-        *bullets(f'`{file_name}`' for file_name in REPORT_FILES),
-    ])
+    lines.extend(
+        [
+            '## Output Files',
+            '',
+            *bullets(f'`{file_name}`' for file_name in REPORT_FILES),
+        ]
+    )
     if figures:
-        lines.extend([
-            '',
-            '## Figures',
-            '',
-            *bullets(f'`{path.relative_to(args.output_dir)}`' for path in figures),
-        ])
+        lines.extend(
+            [
+                '',
+                '## Figures',
+                '',
+                *bullets(f'`{path.relative_to(args.output_dir)}`' for path in figures),
+            ]
+        )
     return '\n'.join(lines) + '\n'
 
 
