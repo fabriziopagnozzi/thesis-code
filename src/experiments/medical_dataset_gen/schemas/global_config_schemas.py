@@ -324,7 +324,7 @@ class RetrievalCfg(BasePydanticCfgModel):
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
     )
     mmr_window: int | None = None
-    compute_answer_rouge: bool = True
+    compute_answer_rouge: bool = False
 
     def lambda_values_for_strategy(
         self,
@@ -390,7 +390,7 @@ class EvaluationCfg(BasePydanticCfgModel):
 
 
 class QueryGeometryCfg(BasePydanticCfgModel):
-    n_queries: PositiveInt = 6
+    n_queries: PositiveInt = 9
     query_ids: list[str] = Field(default_factory=list)
     query_selection: Literal['mixed', 'best'] = 'mixed'
     candidate_pool_n: PositiveInt | None = None
