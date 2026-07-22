@@ -36,6 +36,7 @@ from experiments.medical_dataset_gen.evaluation.metrics_answer import (
     prepare_answer_rouge_scorer,
 )
 from experiments.medical_dataset_gen.evaluation.metrics_retrieval import compute_retrieval_metrics
+from experiments.medical_dataset_gen.evaluation.reranker import DENSE_RERANKER_STRATEGY
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     assert_pool_scope_match,
     build_query_to_facet_gold_map,
@@ -52,7 +53,6 @@ from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     EvaluationMode,
     ExperimentCfg,
 )
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config_from_cli,
@@ -123,7 +123,9 @@ def run_evaluate(
                 cfg,
                 paths,
                 query_ids_to_evaluate,
-            )
+            ),
+            infer_schema_length=None,
+            schema_overrides={'reranker_model_name': pl.String},
         )
         if not eval_results_df.is_empty():
             eval_results_df = eval_results_df.join(
@@ -213,8 +215,7 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         if source_col in results.columns
     )
     return (
-        results
-        .group_by(*slice_columns, 'strategy', 'lam', 'k')
+        results.group_by(*slice_columns, 'strategy', 'lam', 'k')
         .agg(agg_exprs)
         .sort(*slice_columns, 'k', 'strategy', 'lam')
     )
@@ -273,6 +274,7 @@ def _evaluate_queries(
     if not query_ids:
         return []
 
+    _validate_reranker_evaluation_cfg(cfg)
     worker_count = get_evaluation_worker_count(cfg, len(query_ids))
     chunksize = get_evaluation_chunksize(len(query_ids), worker_count)
 
@@ -366,27 +368,21 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
         )
 
     eval_result_rows: list[EvaluationResultRow] = []
-    for strategy in cfg.retrieval.strategies:
-        lam_values = cfg.retrieval.lambda_values_for_strategy(strategy)
 
-        for lam in lam_values:
-            if strategy == 'top_k':
-                selected_indices_list_max_k = topk_full
-            else:
-                selected_indices_list_max_k = select_indices(
-                    strategy=strategy,
-                    sim_to_query=sim_to_query,
-                    sim_matrix=sim_matrix,
-                    k=max_k,
-                    lam=lam,
-                    mmr_window=cfg.retrieval.mmr_window,
-                )
+    def append_rows_for_selection(
+        *,
+        strategy: str,
+        lam: float | None,
+        selected_indices_list_max_k: np.ndarray,
+    ) -> None:
+        for k in valid_k_values:
+            selected_local = selected_indices_list_max_k[:k]
+            if len(selected_local) < k:
+                continue
+            selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
 
-            for k in valid_k_values:
-                selected_local = selected_indices_list_max_k[:k]
-                selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
-
-                eval_result_rows.append({
+            eval_result_rows.append(
+                {
                     'query_id': qid,
                     'evidence_profile_id': query.evidence_profile_id,
                     'pool_id': query.pool_id,
@@ -403,6 +399,11 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                     'strategy': strategy,
                     'k': k,
                     'lam': lam,
+                    'reranker_model_name': (
+                        cfg.evaluation.reranker.model_name
+                        if strategy == DENSE_RERANKER_STRATEGY
+                        else None
+                    ),
                     'pool_scope': cfg.retrieval.pool_scope,
                     'pool_size': len(candidate_chunk_ids),
                     **compute_retrieval_metrics(
@@ -426,14 +427,70 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                         selected_local,
                         sim_to_query,
                         sim_matrix,
-                        topk_local_indices=topk_full[:k] if strategy != 'top_k' else None,
+                        topk_local_indices=(topk_full[:k] if strategy != 'top_k' else None),
                     ),
-                })
+                }
+            )
+
+    for strategy in cfg.retrieval.strategies:
+        lam_values = cfg.retrieval.lambda_values_for_strategy(strategy)
+
+        for lam in lam_values:
+            if strategy == 'top_k':
+                selected_indices_list_max_k = topk_full
+            else:
+                selected_indices_list_max_k = select_indices(
+                    strategy=strategy,
+                    sim_to_query=sim_to_query,
+                    sim_matrix=sim_matrix,
+                    k=max_k,
+                    lam=lam,
+                    mmr_window=cfg.retrieval.mmr_window,
+                )
+
+            append_rows_for_selection(
+                strategy=strategy,
+                lam=lam,
+                selected_indices_list_max_k=selected_indices_list_max_k,
+            )
             # end for k in valid_k_values
         # end for lam in lam_values
     # end for strategy in strategies
 
+    if cfg.evaluation.use_reranker:
+        reranker = worker_state['reranker']
+        if reranker is None:
+            raise RuntimeError('evaluation.use_reranker is true, but no reranker was initialized')
+
+        reranker_pool_n = min(
+            len(candidate_chunk_ids),
+            int(cfg.evaluation.reranker.candidate_pool_n or len(candidate_chunk_ids)),
+        )
+        selected_indices_list_max_k = reranker.rank_indices(
+            query_text=query.query_text,
+            candidate_chunk_ids=candidate_chunk_ids[:reranker_pool_n],
+            chunk_by_id=maps['chunk_by_id'],
+            top_k=max_k,
+        )
+        append_rows_for_selection(
+            strategy=DENSE_RERANKER_STRATEGY,
+            lam=None,
+            selected_indices_list_max_k=selected_indices_list_max_k,
+        )
+
     return eval_result_rows
+
+
+def _validate_reranker_evaluation_cfg(cfg: ExperimentCfg) -> None:
+    if not cfg.evaluation.use_reranker or cfg.evaluation.reranker.candidate_pool_n is None:
+        return
+
+    max_k = max(int(k) for k in cfg.retrieval.k_values)
+    if cfg.evaluation.reranker.candidate_pool_n < max_k:
+        raise ValueError(
+            'evaluation.reranker.candidate_pool_n must be at least the largest retrieval k '
+            f'({max_k}) when evaluation.use_reranker is true'
+        )
 
 
 def _get_query_ids_to_evaluate(
@@ -533,12 +590,7 @@ def stats_aggregated_results_df(results: pl.DataFrame) -> pl.DataFrame:
 def _all_facet_coverage_expr(results: pl.DataFrame) -> pl.Expr:
     if 'all_facet_coverage' in results.columns:
         return pl.col('all_facet_coverage').mean().alias('AllFacetCoverageRate@k')
-    return (
-        (pl.col('facet_coverage') == 1.0)
-        .cast(pl.Float64)
-        .mean()
-        .alias('AllFacetCoverageRate@k')
-    )
+    return (pl.col('facet_coverage') == 1.0).cast(pl.Float64).mean().alias('AllFacetCoverageRate@k')
 
 
 def stats_for_evaluation_mode(
@@ -585,28 +637,37 @@ def _heldout_report_stats(
         if not topk_row.is_empty():
             rows.append(_annotate_heldout_row(topk_row.head(1), selected_on_metric_value=None))
 
-        for strategy in sorted(cfg.retrieval.strategies - set[RetrievalStrategy]({'top_k'})):
-            selected = select_best_lambda_row(
-                selection_stats,
-                strategy=strategy,
-                k=k,
-                cfg=cfg.evaluation.lambda_selection,
-            )
-            if selected is None:
-                continue
-            selected_lam = selected.get('lam', None)
-            if selected_lam is None:
-                continue
+        for strategy in _heldout_non_topk_strategies(cfg, report_grid_stats):
+            if _has_lambda_grid(selection_stats, strategy, k):
+                selected = select_best_lambda_row(
+                    selection_stats,
+                    strategy=strategy,
+                    k=k,
+                    cfg=cfg.evaluation.lambda_selection,
+                )
+                if selected is None:
+                    continue
+                selected_lam = selected.get('lam', None)
+                if selected_lam is None:
+                    continue
 
-            report_row = report_grid_stats.filter(
-                (pl.col('strategy') == strategy)
-                & (pl.col('k') == k)
-                & (pl.col('lam') == selected_lam)
-            )
+                report_row = report_grid_stats.filter(
+                    (pl.col('strategy') == strategy)
+                    & (pl.col('k') == k)
+                    & (pl.col('lam') == selected_lam)
+                )
+                selected_metric_value = selected.get(LAMBDA_SELECTION_MAXIMIZING_METRIC)
+            else:
+                report_row = report_grid_stats.filter(
+                    (pl.col('strategy') == strategy)
+                    & (pl.col('k') == k)
+                    & (pl.col('lam').is_null())
+                )
+                selected_metric_value = None
+
             if report_row.is_empty():
                 continue
 
-            selected_metric_value = selected.get(LAMBDA_SELECTION_MAXIMIZING_METRIC)
             rows.append(
                 _annotate_heldout_row(
                     report_row.head(1), selected_on_metric_value=selected_metric_value
@@ -614,6 +675,34 @@ def _heldout_report_stats(
             )
 
     return pl.concat(rows).sort('k', 'strategy', 'lam') if rows else pl.DataFrame()
+
+
+def _heldout_non_topk_strategies(cfg: ExperimentCfg, report_grid_stats: pl.DataFrame) -> list[str]:
+    configured = {str(strategy) for strategy in cfg.retrieval.strategies if strategy != 'top_k'}
+    if cfg.evaluation.use_reranker:
+        configured.add(DENSE_RERANKER_STRATEGY)
+
+    present = set(str(strategy) for strategy in report_grid_stats['strategy'].unique().to_list())
+    return sorted(configured & present, key=_evaluation_strategy_sort_key)
+
+
+def _evaluation_strategy_sort_key(strategy: str) -> tuple[int, str]:
+    preferred_order = {
+        'top_k': 0,
+        'fac_loc': 1,
+        'mmr': 2,
+        DENSE_RERANKER_STRATEGY: 3,
+    }
+    return preferred_order.get(strategy, len(preferred_order)), strategy
+
+
+def _has_lambda_grid(stats_df: pl.DataFrame, strategy: str, k: int) -> bool:
+    return (
+        stats_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
+        .select(pl.col('lam').drop_nulls().len())
+        .item()
+        != 0
+    )
 
 
 def _annotate_heldout_row(

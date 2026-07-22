@@ -124,11 +124,13 @@ EVAL_PLOT_STRATEGY_STYLES: dict[EvalPlotTheme, dict[str, dict[str, str]]] = {
         'top_k': {'color': '#E5E7EB', 'ls': '--', 'label': 'top-k'},
         'mmr': {'color': '#60A5FA', 'ls': '-', 'label': 'MMR'},
         'fac_loc': {'color': '#F87171', 'ls': '-', 'label': 'FacLoc'},
+        'reranker': {'color': '#34D399', 'ls': '-.', 'label': 'Qwen3 reranker'},
     },
     'light': {
         'top_k': {'color': '#333333', 'ls': '--', 'label': 'top-k'},
         'mmr': {'color': '#1F77B4', 'ls': '-', 'label': 'MMR'},
         'fac_loc': {'color': '#D62728', 'ls': '-', 'label': 'FacLoc'},
+        'reranker': {'color': '#2CA02C', 'ls': '-.', 'label': 'Qwen3 reranker'},
     },
 }
 

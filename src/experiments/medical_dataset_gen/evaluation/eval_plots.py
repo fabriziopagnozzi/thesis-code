@@ -49,10 +49,10 @@ def plot_metrics_at_best_lambda_for_k(
     result_lookup: EvaluationResultLookup | None = None,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
-    """Metric-vs-k lines.
+    """Metric-vs-k lines using each strategy's representative setting.
 
-    Top-k is shown as the baseline. Diversity methods show only the selected
-    lambda* path for each k, with the exact lambda annotated at each marker.
+    Top-k and no-lambda methods are shown directly. Lambda-tuned methods show
+    only the selected lambda* path for each k, with the exact lambda annotated.
     """
     _set_active_plot_theme(plot_theme)
     result_lookup = result_lookup or EvaluationResultLookup(results_df)
@@ -81,17 +81,15 @@ def plot_metrics_at_best_lambda_for_k(
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
                 continue
 
-            best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
+            best_df = _representative_strategy_rows(stats_df, strategy, k_values, lambda_selection)
             if best_df.height == 0:
                 continue
             xs = best_df['k'].to_list()
             ys = [float(v) for v in best_df[stats_col].to_list()]
-            lams = [float(v) for v in best_df['lam'].to_list()]
+            lams = _row_lambda_values(best_df)
             k_to_lam = dict(zip(xs, lams, strict=True))
             ci = [
-                    ci_half_width(
-                        result_lookup.query_values(strategy, k, k_to_lam.get(k), result_col)
-                    )
+                ci_half_width(result_lookup.query_values(strategy, k, k_to_lam.get(k), result_col))
                 for k in xs
             ]
             ax.plot(
@@ -135,12 +133,15 @@ def plot_metrics_at_best_lambda_for_k(
 
     _figure_legend(fig, axes.flatten())
     fig.suptitle(
-        'Strategy comparison - lambda* path per strategy with exact lambda labels at each k',
+        'Strategy comparison - representative setting per strategy',
         fontsize=12,
     )
     _figure_note(
         fig,
-        f'{lambda_selection_policy_note(lambda_selection)}; see metrics_k_curves_for_lambda.png for the full sweep',
+        (
+            f'Lambda methods: {lambda_selection_policy_note(lambda_selection)}. '
+            'No-lambda methods are shown without lambda labels; see metrics_k_curves_for_lambda.png for the full sweep.'
+        ),
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(out_dir / 'metrics_at_best_lambda_for_k.png', dpi=140, bbox_inches='tight')
@@ -198,7 +199,7 @@ def _plot_lambda_sensitivity(
     """Shared lambda-sensitivity renderer for fixed metric groups."""
     import matplotlib.pyplot as plt
 
-    diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
+    diversity_strategies = _ordered_lambda_strategies(stats_df)
     if not diversity_strategies:
         return
 
@@ -516,18 +517,20 @@ def plot_metrics_heatmap_k_lambda_grid_html(
         visibility = [False] * total_traces
         base_idx = metric_idx * 3
         visibility[base_idx : base_idx + 3] = [True, True, True]
-        button_defs.append({
-            'label': title,
-            'method': 'update',
-            'args': [
-                {'visible': visibility},
-                {
-                    'title': (
-                        f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
-                    )
-                },
-            ],
-        })
+        button_defs.append(
+            {
+                'label': title,
+                'method': 'update',
+                'args': [
+                    {'visible': visibility},
+                    {
+                        'title': (
+                            f'Strategy comparison heatmap - {_panel_title(title, higher_is_better)}'
+                        )
+                    },
+                ],
+            }
+        )
 
     fig.update_layout(
         title=(
@@ -590,7 +593,7 @@ def plot_metrics_distributions(
     lambda_selection: LambdaSelectionCfg,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
-    """Violin plots at the top-k best k and each strategy's configured lambda*."""
+    """Violin plots at the top-k best k and each strategy's representative setting."""
     _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
@@ -650,7 +653,7 @@ def plot_metrics_distributions(
         )
         ax.set_xticks(range(len(strategies)))
         ax.set_xticklabels(labels, fontsize=9, rotation=15)
-        ax.set_title(f'{title} (k={best_k}, configured lambda*)', fontsize=10)
+        ax.set_title(f'{title} (k={best_k}, representative setting)', fontsize=10)
         ax.set_ylabel(title, fontsize=9)
         ax.grid(axis='y', alpha=0.3)
     for ax in axes.flatten()[len(metric_cols) :]:
@@ -679,7 +682,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     import matplotlib.pyplot as plt
     import numpy as np
 
-    diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
+    diversity_strategies = _ordered_lambda_strategies(stats_df)
     if not diversity_strategies:
         return
 
@@ -799,7 +802,7 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
     result_lookup: EvaluationResultLookup | None = None,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
-    """Paired delta bars using lambda* per strategy and k, with per-bar lambda labels."""
+    """Paired delta bars using each strategy's representative setting."""
     _set_active_plot_theme(plot_theme)
     result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
@@ -829,10 +832,10 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
             for k in k_values:
                 ref_row = topk_df.filter(pl.col('k') == k)
                 ref_val = float(ref_row[stats_col][0]) if ref_row.height > 0 else 0.0
-                best_row = _best_lam_rows(stats_df, strategy, [k], lambda_selection)
+                best_row = _representative_strategy_rows(stats_df, strategy, [k], lambda_selection)
                 if best_row.height > 0:
                     strat_val = float(best_row[stats_col][0])
-                    lam = float(best_row['lam'][0])
+                    lam = _row_lambda_values(best_row)[0]
                 else:
                     strat_val = ref_val
                     lam = None
@@ -877,7 +880,7 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
         ax.set_visible(False)
 
     fig.suptitle(
-        'Gain over top-k - configured lambda* within strategy x k, paired 95% CI',
+        'Gain over top-k - representative setting per strategy, paired 95% CI',
         fontsize=12,
     )
     fig.tight_layout(rect=(0, 0.08, 1, 1))
@@ -893,7 +896,7 @@ def plot_profiles_metrics_by_k_at_best_lambda(
     lambda_selection: LambdaSelectionCfg,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
-    """Control-only evaluation metrics using each strategy's configured lambda*."""
+    """Control-only evaluation metrics using each strategy's representative setting."""
     _set_active_plot_theme(plot_theme)
     _plot_best_lambda_metric_group(
         stats_df,
@@ -901,7 +904,7 @@ def plot_profiles_metrics_by_k_at_best_lambda(
         plot_name='profiles_metrics_by_k_at_best_lambda',
         row_title='Evaluation control',
         metric_names=PLOTTED_MAIN_METRIC_NAMES,
-        figure_title='Configured lambda* evaluation control metrics by k',
+        figure_title='Representative-setting evaluation control metrics by k',
         output_filename='profiles_metrics_by_k_at_best_lambda.png',
         lambda_selection=lambda_selection,
     )
@@ -913,7 +916,7 @@ def plot_profiles_diagnostics_by_k_at_best_lambda(
     lambda_selection: LambdaSelectionCfg,
     plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
-    """Control-only diagnostic metrics using each strategy's configured lambda*."""
+    """Control-only diagnostic metrics using each strategy's representative setting."""
     _set_active_plot_theme(plot_theme)
     _plot_best_lambda_metric_group(
         stats_df,
@@ -921,7 +924,7 @@ def plot_profiles_diagnostics_by_k_at_best_lambda(
         out_dir=out_dir,
         plot_name='profiles_diagnostics_by_k_at_best_lambda',
         row_title='Diagnostic control',
-        figure_title='Configured lambda* diagnostic control metrics by k',
+        figure_title='Representative-setting diagnostic control metrics by k',
         output_filename='profiles_diagnostics_by_k_at_best_lambda.png',
         lambda_selection=lambda_selection,
     )
@@ -969,9 +972,14 @@ def _plot_best_lambda_metric_group(
         footer_height=layout.footer_height,
     )
 
+    extra_direct_strategies = [
+        strategy
+        for strategy in _ordered_strategies(stats_df)
+        if strategy not in {'top_k', 'fac_loc', 'mmr'}
+        and not _strategy_has_lambda_grid(stats_df, strategy)
+    ]
     styles = {
-        'mmr': get_style('mmr'),
-        'fac_loc': get_style('fac_loc'),
+        strategy: get_style(strategy) for strategy in ['mmr', 'fac_loc', *extra_direct_strategies]
     }
     control_facecolor = _theme_color('panel_highlight_facecolor')
     row_ylim = _lambda_agreeing_metrics_ylim(
@@ -979,6 +987,7 @@ def _plot_best_lambda_metric_group(
         control_pairs,
         [m.stats_col for m in metrics],
         include_topk=True,
+        extra_direct_strategies=extra_direct_strategies,
     )
 
     for row_idx, k in enumerate(k_values):
@@ -1031,6 +1040,22 @@ def _plot_best_lambda_metric_group(
             ms=4.5,
             label='FacLoc',
         )
+        for strategy in extra_direct_strategies:
+            extra_row = _strategy_k_lambda_row(stats_df, strategy=strategy, k=k, lam=None)
+            if extra_row is None:
+                continue
+            extra_values = [float(extra_row[metric.stats_col]) for metric in metrics]  # type:ignore
+            style = styles[strategy]
+            ax.plot(
+                x_positions,
+                extra_values,
+                color=style['color'],
+                lw=2.0,
+                ls=style['ls'],
+                marker='o',
+                ms=4.5,
+                label=style['label'],
+            )
         ax.set_xticks(x_positions)
         ax.set_xticklabels(labels, rotation=35, ha='right', fontsize=8)
         ax.grid(axis='y', alpha=0.3)
@@ -1047,12 +1072,18 @@ def _plot_best_lambda_metric_group(
             metrics=metrics,
         )
         ax.set_ylabel(row_title, fontsize=9)
+        title_lines = [
+            f'k={k}',
+            f'FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
+            lambda_selection_short_label(lambda_selection),
+        ]
+        if extra_direct_strategies:
+            no_lambda_labels = ', '.join(
+                get_style(strategy)['label'] for strategy in extra_direct_strategies
+            )
+            title_lines.append(f'No λ: {no_lambda_labels}')
         ax.set_title(
-            '\n'.join([
-                f'k={k}',
-                f'FacLoc λ={fac_loc_lam:.2f} | MMR λ={mmr_lam:.2f}',
-                lambda_selection_short_label(lambda_selection),
-            ]),
+            '\n'.join(title_lines),
             fontsize=8.8,
         )
 
@@ -1062,7 +1093,7 @@ def _plot_best_lambda_metric_group(
             handles,
             labels,
             loc='lower center',
-            ncol=3,
+            ncol=min(len(labels), 5),
             fontsize=9,
             frameon=False,
             bbox_to_anchor=(0.5, 0.05),
@@ -1072,7 +1103,10 @@ def _plot_best_lambda_metric_group(
     fig.suptitle(figure_title, fontsize=12)
     _figure_note(
         fig,
-        f'Each row shows bare top-k for that k plus each strategy {lambda_selection_policy_note(lambda_selection)}.',
+        (
+            f'Each row shows bare top-k for that k. Lambda methods use '
+            f'{lambda_selection_policy_note(lambda_selection)}; no-lambda methods are shown directly.'
+        ),
     )
     fig.tight_layout(rect=(0.02, 0.12, 1, 0.95))
     fig.savefig(out_dir / output_filename, dpi=140, bbox_inches='tight')
@@ -1111,7 +1145,7 @@ def plot_diagnostics_at_best_lambda_for_k(
                 ys = [_cell_value(sub, k, None, col) for k in xs]
                 ax.plot(xs, ys, color=style['color'], ls=style['ls'], lw=2.0, label=style['label'])
                 continue
-            best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
+            best_df = _representative_strategy_rows(stats_df, strategy, k_values, lambda_selection)
             if best_df.height > 0:
                 ax.plot(
                     best_df['k'].to_list(),
@@ -1123,7 +1157,7 @@ def plot_diagnostics_at_best_lambda_for_k(
                 )
                 xs = best_df['k'].to_list()
                 ys = [float(v) for v in best_df[col].to_list()]
-                lams = [float(v) for v in best_df['lam'].to_list()]
+                lams = _row_lambda_values(best_df)
                 ax.scatter(
                     xs,
                     ys,
@@ -1154,7 +1188,7 @@ def plot_diagnostics_at_best_lambda_for_k(
 
     _figure_legend(fig, axes.flatten())
     fig.suptitle(
-        'Selection diagnostics - configured lambda* within strategy x k',
+        'Selection diagnostics - representative setting per strategy',
         fontsize=12,
     )
     fig.tight_layout(rect=(0, 0.05, 1, 1))
@@ -1201,17 +1235,15 @@ def plot_answer_metrics_at_best_lambda_for_k(
                 _plot_ci_line(ax, xs, ys, ci, style, lw=2.0, label=style['label'], zorder=3)
                 continue
 
-            best_df = _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
+            best_df = _representative_strategy_rows(stats_df, strategy, k_values, lambda_selection)
             if best_df.height == 0:
                 continue
             xs = best_df['k'].to_list()
             ys = [float(v) for v in best_df[stats_col].to_list()]
-            lams = [float(v) for v in best_df['lam'].to_list()]
+            lams = _row_lambda_values(best_df)
             k_to_lam = dict(zip(xs, lams, strict=True))
             ci = [
-                    ci_half_width(
-                        result_lookup.query_values(strategy, k, k_to_lam.get(k), result_col)
-                    )
+                ci_half_width(result_lookup.query_values(strategy, k, k_to_lam.get(k), result_col))
                 for k in xs
             ]
             ax.plot(
@@ -1265,12 +1297,12 @@ def plot_answer_metrics_at_best_lambda_for_k(
         )
         _style_legend(legend)
     fig.suptitle(
-        'Auxiliary answer-token ROUGE diagnostics - lambda* path per strategy',
+        'Auxiliary answer-token ROUGE diagnostics - representative setting per strategy',
         fontsize=12,
     )
     _figure_note(
         fig,
-        lambda_selection_policy_note(lambda_selection),
+        f'Lambda methods: {lambda_selection_policy_note(lambda_selection)}',
         y=0.065,
     )
     fig.tight_layout(rect=(0, 0.16, 1, 1))
@@ -1300,7 +1332,7 @@ def plot_answer_metrics_k_curves_for_lambda(
     if not metric_cols:
         return
 
-    diversity_strategies = [s for s in _ordered_strategies(stats_df) if s != 'top_k']
+    diversity_strategies = _ordered_lambda_strategies(stats_df)
     if not diversity_strategies:
         return
 
@@ -1442,25 +1474,27 @@ def _activate_plot_theme() -> None:
     if _ACTIVE_MATPLOTLIB_THEME == _ACTIVE_EVAL_PLOT_THEME:
         return
 
-    mpl.rcParams.update({
-        'figure.facecolor': _theme_color('figure_facecolor'),
-        'figure.edgecolor': _theme_color('figure_facecolor'),
-        'savefig.facecolor': _theme_color('figure_facecolor'),
-        'savefig.edgecolor': _theme_color('figure_facecolor'),
-        'axes.facecolor': _theme_color('axes_facecolor'),
-        'axes.edgecolor': _theme_color('spine_color'),
-        'axes.labelcolor': _theme_color('text_color'),
-        'axes.titlecolor': _theme_color('text_color'),
-        'text.color': _theme_color('text_color'),
-        'xtick.color': _theme_color('tick_color'),
-        'ytick.color': _theme_color('tick_color'),
-        'grid.color': _theme_color('grid_color'),
-        'grid.alpha': 0.28,
-        'legend.facecolor': _theme_color('figure_facecolor'),
-        'legend.edgecolor': _theme_color('spine_color'),
-        'legend.labelcolor': _theme_color('text_color'),
-        'patch.edgecolor': _theme_color('spine_color'),
-    })
+    mpl.rcParams.update(
+        {
+            'figure.facecolor': _theme_color('figure_facecolor'),
+            'figure.edgecolor': _theme_color('figure_facecolor'),
+            'savefig.facecolor': _theme_color('figure_facecolor'),
+            'savefig.edgecolor': _theme_color('figure_facecolor'),
+            'axes.facecolor': _theme_color('axes_facecolor'),
+            'axes.edgecolor': _theme_color('spine_color'),
+            'axes.labelcolor': _theme_color('text_color'),
+            'axes.titlecolor': _theme_color('text_color'),
+            'text.color': _theme_color('text_color'),
+            'xtick.color': _theme_color('tick_color'),
+            'ytick.color': _theme_color('tick_color'),
+            'grid.color': _theme_color('grid_color'),
+            'grid.alpha': 0.28,
+            'legend.facecolor': _theme_color('figure_facecolor'),
+            'legend.edgecolor': _theme_color('spine_color'),
+            'legend.labelcolor': _theme_color('text_color'),
+            'patch.edgecolor': _theme_color('spine_color'),
+        }
+    )
     _ACTIVE_MATPLOTLIB_THEME = _ACTIVE_EVAL_PLOT_THEME
 
 
@@ -1505,11 +1539,19 @@ def _k_colors(plt: Any, k_values: list[int]) -> dict[int, Any]:
 
 
 def _ordered_strategies(df: pl.DataFrame) -> list[str]:
-    preferred = ['top_k', 'fac_loc', 'mmr']
+    preferred = ['top_k', 'fac_loc', 'mmr', 'reranker']
     present = set(df['strategy'].unique().to_list())
     ordered = [s for s in preferred if s in present]
     ordered.extend(sorted(present - set(ordered)))
     return ordered
+
+
+def _ordered_lambda_strategies(df: pl.DataFrame) -> list[str]:
+    return [
+        strategy
+        for strategy in _ordered_strategies(df)
+        if strategy != 'top_k' and _strategy_has_lambda_grid(df, strategy)
+    ]
 
 
 def _available_metrics(
@@ -2218,7 +2260,7 @@ def _annotate_lambda_points(
     ax: Any,
     xs: list[int],
     ys: list[float],
-    lambda_values: list[float],
+    lambda_values: list[float | None],
     *,
     color: str,
     placement: str,
@@ -2229,6 +2271,8 @@ def _annotate_lambda_points(
     }
     dx, dy, va = offsets.get(placement, offsets['above'])
     for x, y, lam in zip(xs, ys, lambda_values, strict=True):
+        if lam is None:
+            continue
         ax.annotate(
             f'λ={lam:.2f}',
             xy=(x, y),
@@ -2370,6 +2414,35 @@ def _best_lam_rows(
     )
 
 
+def _representative_strategy_rows(
+    stats_df: pl.DataFrame,
+    strategy: str,
+    k_values: list[int],
+    lambda_selection: LambdaSelectionCfg,
+) -> pl.DataFrame:
+    if _strategy_has_lambda_grid(stats_df, strategy):
+        return _best_lam_rows(stats_df, strategy, k_values, lambda_selection)
+
+    rows: list[pl.DataFrame] = []
+    for k in k_values:
+        strategy_k = stats_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
+        if strategy_k.is_empty():
+            continue
+        null_lam = strategy_k.filter(pl.col('lam').is_null())
+        rows.append((null_lam if not null_lam.is_empty() else strategy_k).head(1))
+    return pl.concat(rows).sort('k') if rows else pl.DataFrame()
+
+
+def _strategy_has_lambda_grid(stats_df: pl.DataFrame, strategy: str) -> bool:
+    return bool(_lambda_values_for_strategy(stats_df, strategy))
+
+
+def _row_lambda_values(df: pl.DataFrame) -> list[float | None]:
+    if 'lam' not in df.columns:
+        return [None for _ in range(df.height)]
+    return [None if value is None else float(value) for value in df['lam'].to_list()]
+
+
 def _best_lambda_control_rows(
     stats_df: pl.DataFrame,
     k_values: list[int],
@@ -2392,11 +2465,13 @@ def _best_lambda_control_rows(
         if fac_loc_best is None or mmr_best is None:
             continue
         rows.append(
-            pl.DataFrame({
-                'k': [k],
-                'fac_loc_lam': [float(fac_loc_best['lam'])],  # type:ignore
-                'mmr_lam': [float(mmr_best['lam'])],  # type:ignore
-            })
+            pl.DataFrame(
+                {
+                    'k': [k],
+                    'fac_loc_lam': [float(fac_loc_best['lam'])],  # type:ignore
+                    'mmr_lam': [float(mmr_best['lam'])],  # type:ignore
+                }
+            )
         )
     return pl.concat(rows).sort('k') if rows else pl.DataFrame()
 
@@ -2406,11 +2481,11 @@ def _strategy_k_lambda_row(
     *,
     strategy: str,
     k: int,
-    lam: float,
+    lam: float | None,
 ) -> dict[str, object] | None:
-    sub = stats_df.filter(
-        (pl.col('strategy') == strategy) & (pl.col('k') == k) & (pl.col('lam') == lam)
-    )
+    mask = (pl.col('strategy') == strategy) & (pl.col('k') == k)
+    mask = mask & pl.col('lam').is_null() if lam is None else mask & (pl.col('lam') == lam)
+    sub = stats_df.filter(mask)
     return sub.row(0, named=True) if sub.height > 0 else None
 
 
@@ -2484,6 +2559,7 @@ def _lambda_agreeing_metrics_ylim(
     metric_cols: list[str],
     *,
     include_topk: bool = False,
+    extra_direct_strategies: Sequence[str] = (),
 ) -> tuple[float, float]:
     values: list[float] = []
     for row in best_pairs.iter_rows(named=True):
@@ -2501,6 +2577,20 @@ def _lambda_agreeing_metrics_ylim(
                 strategy=strategy,
                 k=int(row['k']),
                 lam=float(row[lam_key]),
+            )
+            if metric_row is None:
+                continue
+            for metric_col in metric_cols:
+                value = metric_row.get(metric_col)
+                if value is None:
+                    continue
+                values.append(float(value))  # type:ignore
+        for strategy in extra_direct_strategies:
+            metric_row = _strategy_k_lambda_row(
+                stats_df,
+                strategy=strategy,
+                k=int(row['k']),
+                lam=None,
             )
             if metric_row is None:
                 continue
@@ -2528,8 +2618,7 @@ def _best_topk_k(results_df: pl.DataFrame) -> int:
     if topk.height == 0:
         return int(results_df['k'].max())  # type: ignore[arg-type]
     ranked = (
-        topk
-        .group_by('k')
+        topk.group_by('k')
         .agg(
             pl.col('facet_coverage').median().alias('med_fc'),
         )
@@ -2548,17 +2637,14 @@ def _best_result_slice(
     strat_df = results_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
     if strategy == 'top_k' or strat_df.height == 0:
         return strat_df
-    best_row = select_best_lambda_row(
-        stats_df,
-        strategy=strategy,
-        k=k,
-        cfg=lambda_selection,
-    )
-    return (
-        strat_df.filter(pl.col('lam') == float(best_row['lam']))
-        if best_row is not None and 'lam' in best_row
-        else strat_df
-    )
+    best_row = _representative_strategy_rows(stats_df, strategy, [k], lambda_selection)
+    if best_row.is_empty():
+        return strat_df
+    lam = _row_lambda_values(best_row)[0]
+    if lam is None:
+        null_lam = strat_df.filter(pl.col('lam').is_null())
+        return null_lam if not null_lam.is_empty() else strat_df
+    return strat_df.filter(pl.col('lam') == lam)
 
 
 def _cell_value(df: pl.DataFrame, k: int, lam: float | None, col: str) -> float:

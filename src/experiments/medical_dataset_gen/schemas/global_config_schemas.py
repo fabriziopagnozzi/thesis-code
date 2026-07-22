@@ -381,9 +381,25 @@ type EvalPlotTheme = Literal['dark', 'light']
 type DatasetSchemaVersion = Literal[2, 3]
 
 
+class EvaluationRerankerCfg(BasePydanticCfgModel):
+    model_name: str = 'Qwen/Qwen3-Reranker-0.6B'
+    batch_size: PositiveInt = 16
+    device: str = 'cuda'
+    max_length: PositiveInt | None = None
+    candidate_pool_n: PositiveInt | None = None
+    prompt: str | None = (
+        'Given a clinical evidence query, retrieve passages that answer the requested '
+        'clinical aspects.'
+    )
+    show_progress_bar: bool = True
+    trust_remote_code: bool = False
+
+
 class EvaluationCfg(BasePydanticCfgModel):
     mode: EvaluationMode = 'testing'
     workers: PositiveInt | None = None
+    use_reranker: bool = False
+    reranker: EvaluationRerankerCfg = Field(default_factory=EvaluationRerankerCfg)
     all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     plot_theme: EvalPlotTheme = 'light'
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)

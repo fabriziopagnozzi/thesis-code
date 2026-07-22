@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,6 +18,9 @@ from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
     QrelRecord,
     QueryRecord,
 )
+
+if TYPE_CHECKING:
+    from experiments.medical_dataset_gen.evaluation.reranker import DenseReranker
 
 __all__ = [
     'AnswerReferenceTexts',
@@ -104,4 +107,5 @@ class EvaluationWorkerState(TypedDict):
     gold_by_query: dict[str, set[str]]
     qrels_by_query_chunk: dict[str, dict[str, LightweightQrelRecord]]
     answer_refs_by_query: dict[str, AnswerReferenceTexts]
+    reranker: DenseReranker | None
     k_values: list[int]

@@ -6,6 +6,7 @@ from typing import Any, cast
 import polars as pl
 from numpy.typing import NDArray
 
+from experiments.medical_dataset_gen.evaluation.reranker import DenseReranker
 from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     build_query_to_facet_gold_map,
     get_qrels_by_query_chunk,
@@ -44,7 +45,7 @@ _QUERY_COLUMNS = [
     'query_text',
 ]
 _CHUNK_COLUMNS_NO_ROUGE = ['chunk_id', 'admission_id']
-_CHUNK_COLUMNS_WITH_ROUGE = [*_CHUNK_COLUMNS_NO_ROUGE, 'text']
+_CHUNK_COLUMNS_WITH_TEXT = [*_CHUNK_COLUMNS_NO_ROUGE, 'text']
 _MEMBERSHIP_COLUMNS = ['query_id', 'chunk_id']
 _QREL_COLUMNS = [
     'query_id',
@@ -83,7 +84,8 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
     paths = paths_for(cfg)
 
     compute_answer_rouge = cfg.retrieval.compute_answer_rouge
-    chunk_columns = _CHUNK_COLUMNS_WITH_ROUGE if compute_answer_rouge else _CHUNK_COLUMNS_NO_ROUGE
+    requires_chunk_text = compute_answer_rouge or cfg.evaluation.use_reranker
+    chunk_columns = _CHUNK_COLUMNS_WITH_TEXT if requires_chunk_text else _CHUNK_COLUMNS_NO_ROUGE
     chunk_documents = load_selected_parquet_columns(
         paths,
         'chunk_documents',
@@ -114,6 +116,9 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
         if compute_answer_rouge
         else {}
     )
+    reranker = (
+        DenseReranker.from_config(cfg.evaluation.reranker) if cfg.evaluation.use_reranker else None
+    )
     query_id_to_gold_chunks = {
         qid: {chunk_id for ids in facet_map.values() for chunk_id in ids}
         for qid, facet_map in facet_gold.items()
@@ -129,12 +134,16 @@ def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
         'gold_by_query': query_id_to_gold_chunks,
         'qrels_by_query_chunk': get_qrels_by_query_chunk(qrels),
         'answer_refs_by_query': answer_refs_by_query,
+        'reranker': reranker,
         'k_values': sorted(set(int(k) for k in cfg.retrieval.k_values)),
     }
     set_evaluation_worker_state(worker_state)
 
 
 def get_evaluation_worker_count(cfg: ExperimentCfg, n_queries: int) -> int:
+    if cfg.evaluation.use_reranker:
+        return 1
+
     requested = cfg.evaluation.workers
 
     if requested is None:
