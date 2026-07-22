@@ -1,4 +1,4 @@
-"""Expand schema-v2 plans into deterministic, typed clinical facts."""
+"""Expand schema-v3 plans into deterministic, typed clinical facts."""
 
 from __future__ import annotations
 

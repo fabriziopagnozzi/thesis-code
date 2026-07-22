@@ -63,8 +63,8 @@ def build_migration_plan(
     tables: tuple[SharedGenerationTableName, ...],
     delete_local_duplicates: bool,
 ) -> MigrationPlan:
-    grouped: dict[tuple[Path, SharedGenerationTableName], list[LocalSharedArtifact]] = (
-        defaultdict(list)
+    grouped: dict[tuple[Path, SharedGenerationTableName], list[LocalSharedArtifact]] = defaultdict(
+        list
     )
     skipped_disabled = 0
 
@@ -207,7 +207,8 @@ def _format_bytes(value: int) -> str:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            'Move existing generation-stage parquet artifacts into per-parent _shared mode '
+            'Move existing generation-stage parquet artifacts into the per-parent '
+            'schema-versioned _shared_v<version> mode '
             'directories. The script never copies artifact payloads.'
         )
     )

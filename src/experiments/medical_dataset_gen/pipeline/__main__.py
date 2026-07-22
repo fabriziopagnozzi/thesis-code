@@ -19,8 +19,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     load_config,
     paths_for,
 )
-
-# from experiments.medical_dataset_gen.utils.provenance import PipelineProvenance
 from experiments.medical_dataset_gen.utils.logging_utils import colorprint, setup_logging
 from helpers.ollama_client import stop_model
 
@@ -70,7 +68,7 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('embed', run_embed),
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
-    ('eval_plots', run_eval_plots),
+    # ('eval_plots', run_eval_plots),
     # ('geom_plots', run_query_geom_plots),
 ]
 
@@ -172,13 +170,7 @@ def main() -> None:
     ]
     selected_stages = [name for name, _ in stages_to_run]
 
-    # provenance = PipelineProvenance(cfg=cfg, paths=paths, stages=selected_stages)
-    # if not args.no_log_tee:
-    # setup_logging(paths, provenance.run_id)
-
     colorprint('bright_blue', f'\n[pipeline] running experiment: {paths.exp_name}')
-    # colorprint('bright_cyan', f'[pipeline] dir={paths.experiment_dir}')
-    # print(f'[pipeline] run_id={provenance.run_id} running stages: {selected_stages}')
 
     for name, fn in stages_to_run:
         if _should_skip_shared_stage(paths, name):
@@ -188,10 +180,7 @@ def main() -> None:
         if name == 'embed' and args.release_llm:
             _release_ollama(cfg)
         colorprint('bright_green', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
-        # input_fingerprints = provenance.before_stage(name)
         fn(cfg, paths)
-        # provenance.after_stage(name, input_fingerprints)
-    # provenance.finish()
 
 
 def _validate_run_mode_args(

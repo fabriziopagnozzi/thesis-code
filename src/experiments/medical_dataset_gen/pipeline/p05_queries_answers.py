@@ -206,8 +206,8 @@ def maybe_paraphrase_query(
     required = [plan.condition_display, plan.subgroup_a_label, plan.subgroup_b_label]
     lower = paraphrase.lower()
     has_required_entities = all(label.lower() in lower for label in required)
-    primary_label = axis_query_label(plan.primary_axis).lower()
-    secondary_label = axis_query_label(plan.secondary_axis).lower()
+    primary_label = axis_query_label(plan.primary_axis, ontology).lower()
+    secondary_label = axis_query_label(plan.secondary_axis, ontology).lower()
     has_ordered_axes = (
         primary_label in lower
         and secondary_label in lower

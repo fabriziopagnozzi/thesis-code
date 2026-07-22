@@ -358,6 +358,9 @@ class AxisQueryFocus(BenchmarkPydanticModel):
 
 class ClinicalAxisOntology(BenchmarkPydanticModel):
     label: str
+    # This is deliberately independent from the human-readable ontology label.
+    # Query templates use it as the stable benchmark-facing axis wording.
+    query_label: str
     allow_as_primary: bool
     query_focus: AxisQueryFocus
     exact_terms: list[str]
@@ -380,6 +383,10 @@ class ClinicalAxisOntology(BenchmarkPydanticModel):
     def _validate_bin_terms(self) -> ClinicalAxisOntology:
         if set(self.bin_terms) != set(self.bins):
             raise ValueError('bin_terms must define every declared clinical-axis bin')
+        if not self.query_label.strip():
+            raise ValueError('clinical-axis query_label must not be empty')
+        if any(not terms for terms in self.bin_terms.values()):
+            raise ValueError('clinical-axis bin_terms must not contain empty term lists')
         return self
 
 
@@ -1043,14 +1050,26 @@ class CohortEvidenceTemplates(BenchmarkPydanticModel):
     comorbidity_reference: SurfaceTemplateBucket
 
 
-class SemanticAxisBinTemplates(BenchmarkPydanticModel):
+class PairedAxisSentenceTemplates(BenchmarkPydanticModel):
+    """Shared clinical evidence wording with an explicit ontology suffix.
+
+    The base template is used by both experimental conditions. Only the
+    explicit suffix changes, so the intervention cannot also alter note order
+    or the clinical evidence surface.
+    """
+
     seen: dict[AxisTemplateFamily, list[TemplateSpec]]
     heldout: dict[AxisTemplateFamily, list[TemplateSpec]]
+    ontology_explicit_suffix: str
 
     @model_validator(mode='after')
-    def _validate_surface_counts(self) -> SemanticAxisBinTemplates:
+    def _validate_surface_counts(self) -> PairedAxisSentenceTemplates:
         self._validate_group('seen', self.seen, SEEN_AXIS_TEMPLATE_FAMILIES)
         self._validate_group('heldout', self.heldout, HELDOUT_AXIS_TEMPLATE_FAMILIES)
+        if '{axis_query_label}' not in self.ontology_explicit_suffix:
+            raise ValueError('ontology-explicit suffix must include {axis_query_label}')
+        if '{axis_bin_term}' not in self.ontology_explicit_suffix:
+            raise ValueError('ontology-explicit suffix must include {axis_bin_term}')
         return self
 
     @staticmethod
@@ -1063,7 +1082,7 @@ class SemanticAxisBinTemplates(BenchmarkPydanticModel):
         actual = set(templates)
         if actual != expected:
             raise ValueError(
-                f'semantic_hardened {surface_group} families must be {sorted(expected)}; '
+                f'paired axis templates {surface_group} families must be {sorted(expected)}; '
                 f'got {sorted(actual)}'
             )
         empty = [family for family, specs in templates.items() if not specs]
@@ -1084,8 +1103,7 @@ class SemanticAxisBinTemplates(BenchmarkPydanticModel):
 
 
 class ChunkAxisSentenceTemplates(BenchmarkPydanticModel):
-    ontology_explicit: dict[ClinicalAxis, dict[str, list[str]]]
-    semantic_hardened: dict[ClinicalAxis, dict[str, SemanticAxisBinTemplates]]
+    paired: dict[ClinicalAxis, PairedAxisSentenceTemplates]
 
 
 class ChunkTemplateUtils(BenchmarkPydanticModel):
@@ -1096,7 +1114,7 @@ class ChunkTemplateUtils(BenchmarkPydanticModel):
     axis_sentence_templates: ChunkAxisSentenceTemplates
 
     @model_validator(mode='after')
-    def _validate_semantic_hardened_template_inventory(self) -> ChunkTemplateUtils:
+    def _validate_template_inventory(self) -> ChunkTemplateUtils:
         template_ids: set[str] = set()
         duplicate_ids: set[str] = set()
         for bucket in self.note_style_templates.values():
@@ -1112,30 +1130,29 @@ class ChunkTemplateUtils(BenchmarkPydanticModel):
                 if spec.id in template_ids:
                     duplicate_ids.add(spec.id)
                 template_ids.add(spec.id)
-        for axis, bins in self.axis_sentence_templates.semantic_hardened.items():
-            seen_families_by_bin: set[frozenset[AxisTemplateFamily]] = set()
-            heldout_families_by_bin: set[frozenset[AxisTemplateFamily]] = set()
-            for value_bin, grouped in bins.items():
-                seen_specs = grouped.template_specs('seen')
-                heldout_specs = grouped.template_specs('heldout')
-                total = len(seen_specs) + len(heldout_specs)
-                if len(seen_specs) != 5 or len(heldout_specs) != 3 or total != 8:
-                    raise ValueError(
-                        f'semantic_hardened {axis}/{value_bin} must define exactly '
-                        f'5 seen and 3 heldout templates; got {len(seen_specs)} seen '
-                        f'and {len(heldout_specs)} heldout'
-                    )
-                seen_families_by_bin.add(frozenset(family for family, _ in seen_specs))
-                heldout_families_by_bin.add(frozenset(family for family, _ in heldout_specs))
-                for _, spec in [*seen_specs, *heldout_specs]:
-                    if spec.id in template_ids:
-                        duplicate_ids.add(spec.id)
-                    template_ids.add(spec.id)
-            if len(seen_families_by_bin) != 1 or len(heldout_families_by_bin) != 1:
+        expected_axes = set(CLINICAL_AXIS_LIST)
+        actual_axes = set(self.axis_sentence_templates.paired)
+        if actual_axes != expected_axes:
+            raise ValueError(
+                f'paired axis templates must define every clinical axis; '
+                f'missing={sorted(expected_axes - actual_axes)}, '
+                f'unexpected={sorted(actual_axes - expected_axes)}'
+            )
+        for axis, paired in self.axis_sentence_templates.paired.items():
+            seen_specs = paired.template_specs('seen')
+            heldout_specs = paired.template_specs('heldout')
+            if len(seen_specs) != len(SEEN_AXIS_TEMPLATE_FAMILIES) or len(heldout_specs) != len(
+                HELDOUT_AXIS_TEMPLATE_FAMILIES
+            ):
                 raise ValueError(
-                    f'semantic_hardened template families must be identical across bins '
-                    f'for axis {axis}'
+                    f'paired {axis} templates must define exactly '
+                    f'{len(SEEN_AXIS_TEMPLATE_FAMILIES)} seen and '
+                    f'{len(HELDOUT_AXIS_TEMPLATE_FAMILIES)} heldout families'
                 )
+            for _, spec in [*seen_specs, *heldout_specs]:
+                if spec.id in template_ids:
+                    duplicate_ids.add(spec.id)
+                template_ids.add(spec.id)
         if duplicate_ids:
             raise ValueError(f'duplicate chunk template ids: {sorted(duplicate_ids)}')
         return self

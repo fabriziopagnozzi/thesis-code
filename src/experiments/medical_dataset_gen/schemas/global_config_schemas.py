@@ -35,7 +35,7 @@ class BasePydanticCfgModel(BaseModel):
 class GlobalCfg(BasePydanticCfgModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
-    output_experiment: str = 'v2'
+    output_experiment: str = 'v3'
     use_shared: bool = True
     result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
@@ -182,8 +182,8 @@ class GenerationLlmConfig(BasePydanticCfgModel):
     model_name: str = 'gemma4:12b-ud_q8_xl'
     num_workers: PositiveInt = 4
     max_attempts: PositiveInt = 3
-    temperature: PositiveFloat = 0.1
-    num_ctx: PositiveInt = 4096
+    temperature: PositiveFloat = 0.5
+    num_ctx: PositiveInt = 8192
 
 
 class AxisPairPolicyOverrideCfg(BasePydanticCfgModel):
@@ -324,9 +324,6 @@ class RetrievalCfg(BasePydanticCfgModel):
         default_factory=lambda: set(['top_k', 'mmr', 'fac_loc'])
     )
     mmr_window: int | None = None
-    # Deprecated no-op retained so older saved configs still validate. Evaluation
-    # now scores all queries and records the geometry pass flag per query.
-    only_pass_geometry: bool | None = None
     compute_answer_rouge: bool = True
 
     def lambda_values_for_strategy(
@@ -381,6 +378,7 @@ class LambdaSelectionCfg(BasePydanticCfgModel):
 
 
 type EvalPlotTheme = Literal['dark', 'light']
+type DatasetSchemaVersion = Literal[2, 3]
 
 
 class EvaluationCfg(BasePydanticCfgModel):
@@ -410,7 +408,8 @@ class QueryGeometryCfg(BasePydanticCfgModel):
 
 
 class ExperimentCfg(BasePydanticCfgModel):
-    dataset_schema_version: Literal[2] = 2
+    # v2 remains readable for archived experiments; new dataset construction uses v3.
+    dataset_schema_version: DatasetSchemaVersion = 3
     global_: GlobalCfg = Field(alias='global')
     generation: GenerationCfg
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
@@ -421,16 +420,33 @@ class ExperimentCfg(BasePydanticCfgModel):
 
     model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
+    @model_validator(mode='before')
+    @classmethod
+    def _discard_archived_v2_geometry_option(cls, data: object) -> object:
+        if not isinstance(data, dict) or data.get('dataset_schema_version') != 2:
+            return data
+        retrieval = data.get('retrieval')
+        if not isinstance(retrieval, dict) or 'only_pass_geometry' not in retrieval:
+            return data
+
+        normalized = dict(data)
+        normalized_retrieval = dict(retrieval)
+        normalized_retrieval.pop('only_pass_geometry')
+        normalized['retrieval'] = normalized_retrieval
+        return normalized
+
     @model_validator(mode='after')
-    def _validate_v2_scope(self) -> ExperimentCfg:
+    def _validate_v3_scope(self) -> ExperimentCfg:
+        if self.dataset_schema_version != 3:
+            return self
         if self.retrieval.pool_scope != 'query_local':
-            raise ValueError('dataset schema v2 supports only retrieval.pool_scope=query_local')
+            raise ValueError('dataset schema v3 supports only retrieval.pool_scope=query_local')
         local_pool_size = (
             self.generation.total_gold_chunks() + self.generation.total_distractor_chunks()
         )
         if self.retrieval.candidate_pool_n < local_pool_size:
             raise ValueError(
-                'retrieval.candidate_pool_n must include the complete v2 query-local pool '
+                'retrieval.candidate_pool_n must include the complete v3 query-local pool '
                 f'({local_pool_size} chunks)'
             )
         return self

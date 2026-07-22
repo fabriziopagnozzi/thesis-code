@@ -31,8 +31,10 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 
-GENERATION_CACHE_VERSION = 13
-REWRITE_CACHE_VERSION = 4
+# Schema v3 changes deterministic draft structure and identifiers, so cached
+# generated or rewritten prose from earlier revisions is not reusable.
+GENERATION_CACHE_VERSION = 14
+REWRITE_CACHE_VERSION = 5
 
 
 @dataclass

@@ -53,9 +53,9 @@ def render_query_template(
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'primary_axis_label': axis_query_label(plan.primary_axis),
+        'primary_axis_label': axis_query_label(plan.primary_axis, ontology),
         'primary_axis_focus': primary_axis.query_focus.text_for(focus_mode),
-        'secondary_axis_label': axis_query_label(plan.secondary_axis),
+        'secondary_axis_label': axis_query_label(plan.secondary_axis, ontology),
         'secondary_axis_focus': secondary_axis.query_focus.text_for(focus_mode),
     }
 
@@ -79,8 +79,8 @@ def render_answer_template(
         'subgroup_a_id': plan.subgroup_a_id,
         'subgroup_b': plan.subgroup_b_label,
         'subgroup_b_id': plan.subgroup_b_id,
-        'primary_axis_label': axis_query_label(plan.primary_axis),
-        'secondary_axis_label': axis_query_label(plan.secondary_axis),
+        'primary_axis_label': axis_query_label(plan.primary_axis, ontology),
+        'secondary_axis_label': axis_query_label(plan.secondary_axis, ontology),
         'subgroup_a_primary': subgroup_a_primary,
         'subgroup_a_secondary': subgroup_a_secondary,
         'subgroup_b_primary': subgroup_b_primary,
@@ -113,7 +113,10 @@ def query_template_spec(
     )
 
 
-def axis_query_label(axis: ClinicalAxis) -> str:
+def axis_query_label(axis: ClinicalAxis, ontology: MedicalOntology | None = None) -> str:
+    """Return the ontology-owned query wording, with a legacy-safe fallback."""
+    if ontology is not None:
+        return ontology.clinical_axes[axis].query_label
     return axis.replace('_', ' ')
 
 

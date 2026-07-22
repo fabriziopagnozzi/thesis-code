@@ -1,3 +1,5 @@
+dataset_schema_version: 3
+
 global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
     conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
@@ -5,7 +7,7 @@ global:
 generation:
     query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 6,174 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
-    chunk_text_style: semantic_hardened # "semantic_hardened" removes axis/bin label statements from chunks; "ontology_explicit" keeps the older controlled sanity-check tier.
+    chunk_text_style: semantic_hardened # Both styles share the same note and clinical evidence; "ontology_explicit" adds one axis/bin suffix and "semantic_hardened" omits it.
     focus_mode: natural # "natural" uses middle-level clinical evidence requests; "list" restores the older list-like axis focus wording.
     query_structure: unbalanced # "unbalanced" keeps secondary-axis wording light; "balanced" includes the secondary-axis focus text too.
     chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families.
@@ -98,7 +100,6 @@ retrieval:
         num_values: 30
     mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
     compute_answer_rouge: false # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
-    # only_pass_geometry is deprecated and ignored. Evaluation always scores all queries and stores the geometry pass flag per row.
 
 geometry_filter:
     stress_horizon_basis: competitive_pool_mass # Gold plus near-miss chunks define the relative rank-depth gate.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
@@ -51,7 +52,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     load_config_from_cli,
     paths_for,
 )
-from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_json, write_parquet
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -530,6 +531,7 @@ def _write_normalized_chunks(
         chunk_memberships = pl.DataFrame()
         write_parquet(paths, 'chunk_documents', chunk_documents)
         write_parquet(paths, 'chunk_memberships', chunk_memberships)
+        _write_chunk_rendering_diagnostics(paths, chunk_documents, chunk_memberships)
         return chunk_documents, chunk_memberships
 
     duplicate_text_keys = (
@@ -636,12 +638,120 @@ def _write_normalized_chunks(
 
     write_parquet(paths, 'chunk_documents', chunk_documents)
     write_parquet(paths, 'chunk_memberships', chunk_memberships)
+    _write_chunk_rendering_diagnostics(paths, chunk_documents, chunk_memberships)
     print(
         f'[chunks] normalized {len(chunk_rows):,} generated row(s) -> '
         f'{len(chunk_documents):,} chunk document(s), '
         f'{len(chunk_memberships):,} query membership(s)'
     )
     return chunk_documents, chunk_memberships
+
+
+def _write_chunk_rendering_diagnostics(
+    paths: MedicalDatasetGenPaths,
+    chunk_documents: pl.DataFrame,
+    chunk_memberships: pl.DataFrame,
+) -> None:
+    """Report equal normalized texts without conflating them with reuse-key identity.
+
+    Canonical reuse intentionally collapses equal facts into one document. This
+    diagnostic instead finds distinct document IDs whose final text is equal,
+    both globally and within a query-local retrieval pool.
+    """
+    if chunk_documents.is_empty() or chunk_memberships.is_empty():
+        write_json(
+            paths,
+            'chunk_rendering_diagnostics.json',
+            {
+                'normalization': 'casefolded and whitespace-collapsed text',
+                'n_documents': len(chunk_documents),
+                'n_memberships': len(chunk_memberships),
+                'n_global_duplicate_text_groups': 0,
+                'global_duplicate_document_rate': 0.0,
+                'n_query_duplicate_text_groups': 0,
+                'n_affected_queries': 0,
+                'query_duplicate_membership_rate': 0.0,
+                'n_cross_axis_query_duplicate_groups': 0,
+                'n_cross_role_query_duplicate_groups': 0,
+                'n_mixed_gold_status_query_duplicate_groups': 0,
+                'examples': [],
+            },
+        )
+        return
+
+    normalized_documents = chunk_documents.select('chunk_id', 'text').with_columns(
+        pl.col('text')
+        .str.to_lowercase()
+        .str.replace_all(r'\s+', ' ')
+        .str.strip_chars()
+        .alias('_normalized_text')
+    )
+    global_duplicates = (
+        normalized_documents.group_by('_normalized_text')
+        .agg(pl.col('chunk_id').n_unique().alias('n_chunk_ids'))
+        .filter(pl.col('n_chunk_ids') > 1)
+    )
+    pool_duplicates = (
+        chunk_memberships.join(normalized_documents, on='chunk_id', how='inner', validate='m:1')
+        .group_by('query_id', '_normalized_text')
+        .agg(
+            pl.col('chunk_id').n_unique().alias('n_chunk_ids'),
+            pl.col('axis').n_unique().alias('n_axes'),
+            pl.col('cluster_role').n_unique().alias('n_cluster_roles'),
+            pl.col('is_gold').n_unique().alias('n_gold_statuses'),
+        )
+        .filter(pl.col('n_chunk_ids') > 1)
+        .sort('query_id', 'n_chunk_ids', descending=[False, True])
+    )
+    examples = [
+        {
+            'query_id': str(row['query_id']),
+            'normalized_text_sha256': hashlib.sha256(
+                str(row['_normalized_text']).encode()
+            ).hexdigest(),
+            'n_chunk_ids': int(row['n_chunk_ids']),
+            'n_axes': int(row['n_axes']),
+            'n_cluster_roles': int(row['n_cluster_roles']),
+            'n_gold_statuses': int(row['n_gold_statuses']),
+        }
+        for row in pool_duplicates.head(20).iter_rows(named=True)
+    ]
+    affected_queries = pool_duplicates['query_id'].n_unique() if len(pool_duplicates) else 0
+    payload = {
+        'normalization': 'casefolded and whitespace-collapsed text',
+        'n_documents': len(chunk_documents),
+        'n_memberships': len(chunk_memberships),
+        'n_global_duplicate_text_groups': len(global_duplicates),
+        'global_duplicate_document_rate': (
+            float(global_duplicates['n_chunk_ids'].sum()) / len(chunk_documents)
+            if len(global_duplicates)
+            else 0.0
+        ),
+        'n_query_duplicate_text_groups': len(pool_duplicates),
+        'n_affected_queries': int(affected_queries),
+        'query_duplicate_membership_rate': (
+            float(pool_duplicates['n_chunk_ids'].sum()) / len(chunk_memberships)
+            if len(pool_duplicates)
+            else 0.0
+        ),
+        'n_cross_axis_query_duplicate_groups': int(
+            pool_duplicates.filter(pl.col('n_axes') > 1).height
+        ),
+        'n_cross_role_query_duplicate_groups': int(
+            pool_duplicates.filter(pl.col('n_cluster_roles') > 1).height
+        ),
+        'n_mixed_gold_status_query_duplicate_groups': int(
+            pool_duplicates.filter(pl.col('n_gold_statuses') > 1).height
+        ),
+        'examples': examples,
+    }
+    write_json(paths, 'chunk_rendering_diagnostics.json', payload)
+    if len(pool_duplicates):
+        print(
+            '[chunks] warning: normalized duplicate text appears in '
+            f'{len(pool_duplicates):,} query-local pool group(s) across '
+            f'{affected_queries:,} query/queries; see chunk_rendering_diagnostics.json'
+        )
 
 
 def _doc_key_to_chunk_id(chunk_reuse_keys: list[str]) -> dict[str, str]:

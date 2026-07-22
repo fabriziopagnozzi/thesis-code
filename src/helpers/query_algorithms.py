@@ -110,23 +110,23 @@ def fac_loc_lazy_greedy(
     k: int,
     sim_matrix: NDArray[np.float32],
     lam: float = 0.5,
-    normalize_cov_term: bool = True,
     **_kwargs: object,
 ) -> NDArray[np.intp]:
-    n = len(sim_to_query)
-    if n == 0:
+    dataset_size = len(sim_to_query)
+    if dataset_size == 0:
         return np.array([], dtype=np.intp)
-    k = min(k, n)
+    k = min(k, dataset_size)
 
     selected_indices = list[int]()
 
-    initial_coverage = np.maximum(0, sim_matrix).sum(axis=0)
-    if normalize_cov_term:
-        initial_coverage /= n
-    initial_gains = lam * sim_to_query + (1 - lam) * initial_coverage
+    relevance_scale = lam / k
+    coverage_scale = (1 - lam) / dataset_size
+
+    initial_coverage = coverage_scale * np.maximum(0, sim_matrix).sum(axis=0)
+    initial_gains = relevance_scale * sim_to_query + initial_coverage
 
     # heapq stores min-heap so we use negative value to simulate max-heap
-    priority_q = [(-initial_gains[i], i, 0) for i in range(n)]
+    priority_q = [(-initial_gains[i], i, 0) for i in range(dataset_size)]
     heapq.heapify(priority_q)
 
     # Let D be the whole dataset to cover
@@ -134,7 +134,7 @@ def fac_loc_lazy_greedy(
     # induced by the selected set S_t:
     #     m[i]_t = max_{j in S_t} max(0, sim_matrix[i, j])
     #     m[i]_0 = 0
-    m = np.zeros(n, dtype=np.float64)
+    m = np.zeros(dataset_size, dtype=np.float64)
 
     # Lazy Greedy Selection (exactly k times)
     for curr_step in range(k):
@@ -151,11 +151,11 @@ def fac_loc_lazy_greedy(
             else:
                 # otherwise, recompute the candidate's true marginal gain under the current vector m,
                 #  then push it back and save the freshness info as third tuple elem
-                marginal_cov_gain = np.sum(np.maximum(0, sim_matrix[:, node_idx] - m))
-                if normalize_cov_term:
-                    marginal_cov_gain /= n
+                marginal_cov_gain = coverage_scale * np.sum(
+                    np.maximum(0, sim_matrix[:, node_idx] - m)
+                )
 
-                new_gain = lam * sim_to_query[node_idx] + (1 - lam) * marginal_cov_gain
+                new_gain = relevance_scale * sim_to_query[node_idx] + marginal_cov_gain
                 heapq.heappush(priority_q, (-new_gain, node_idx, curr_step))
 
     return np.array(selected_indices, dtype=np.intp)

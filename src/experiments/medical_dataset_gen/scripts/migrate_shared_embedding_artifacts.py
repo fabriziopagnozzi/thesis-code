@@ -55,9 +55,7 @@ def main() -> None:
     artifacts = _selected_artifacts(args.artifacts)
     plans = _build_plans(parents=parents, artifacts=artifacts)
 
-    move_count = sum(
-        1 for plan in plans if not plan.target_exists and bool(plan.existing_sources)
-    )
+    move_count = sum(1 for plan in plans if not plan.target_exists and bool(plan.existing_sources))
     move_bytes = sum(
         plan.existing_sources[0].path.stat().st_size
         for plan in plans
@@ -83,9 +81,7 @@ def main() -> None:
         )
         if source.path.exists()
     )
-    missing_count = sum(
-        1 for plan in plans if not plan.target_exists and not plan.existing_sources
-    )
+    missing_count = sum(1 for plan in plans if not plan.target_exists and not plan.existing_sources)
     strip_count = _count_embedding_override_strips(parents=parents, artifacts=artifacts)
 
     mode = 'apply' if args.apply else 'dry-run'
@@ -366,7 +362,8 @@ def _format_bytes(value: int) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Move old local/canonical embedding arrays into parent _embeddings storage.'
+        description='Move old local/canonical embedding arrays into schema-versioned parent '
+        '_embeddings_v<version> storage.'
     )
     parser.add_argument(
         '--parent',

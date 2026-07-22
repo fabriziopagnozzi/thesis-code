@@ -65,6 +65,7 @@ EMBEDDING_ARTIFACT_FILENAMES: dict[EmbeddingArtifactName, str] = {
 
 type ResultDirOverrides = dict[SyntheticMedicalDatasetTableName | EmbeddingArtifactName, str]
 type SharedEmbeddingArtifactPaths = dict[EmbeddingArtifactName, Path]
+type SharedArtifactStoreName = Literal['_shared', '_embeddings']
 
 type YamlMapping = dict[str, object]
 
@@ -275,7 +276,7 @@ def shared_generation_dir_for_config(cfg: ExperimentCfg) -> Path | None:
     return (
         MedicalDatasetGenPaths.results_dir
         / parent_name
-        / '_shared'
+        / shared_artifact_store_name('_shared', cfg.dataset_schema_version)
         / shared_generation_mode_key(cfg)
     )
 
@@ -288,7 +289,18 @@ def shared_embeddings_dir_for_config(cfg: ExperimentCfg) -> Path | None:
     if len(exp_path.parts) != 2:
         return None
 
-    return MedicalDatasetGenPaths.results_dir / exp_path.parts[0] / '_embeddings'
+    return (
+        MedicalDatasetGenPaths.results_dir
+        / exp_path.parts[0]
+        / shared_artifact_store_name('_embeddings', cfg.dataset_schema_version)
+    )
+
+
+def shared_artifact_store_name(
+    base_name: SharedArtifactStoreName,
+    dataset_schema_version: int,
+) -> str:
+    return f'{base_name}_v{dataset_schema_version}'
 
 
 def shared_embedding_artifact_paths_for_config(
@@ -333,9 +345,7 @@ def shared_generation_mode_key(cfg: ExperimentCfg) -> str:
 
 
 def chunk_document_mode_key(cfg: ExperimentCfg) -> str:
-    chunk_mode = (
-        'simple' if cfg.generation.chunk_text_style == 'ontology_explicit' else 'hardened'
-    )
+    chunk_mode = 'simple' if cfg.generation.chunk_text_style == 'ontology_explicit' else 'hardened'
     return f'{chunk_mode}_c'
 
 

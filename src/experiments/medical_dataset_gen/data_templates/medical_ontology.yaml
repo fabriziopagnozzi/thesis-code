@@ -3649,6 +3649,7 @@ subgroups:
 clinical_axes:
     treatment_duration:
         label: active inpatient treatment interval
+        query_label: treatment duration
         allow_as_primary: false
         query_focus:
             list: the documented days of active inpatient therapy and whether the regimen ended early, followed an expected interval, or required extended treatment
@@ -3688,6 +3689,7 @@ clinical_axes:
                 - longer-than-usual therapy interval
     rehab_outcome:
         label: functional outcome and discharge support
+        query_label: rehab outcome
         allow_as_primary: true
         query_focus:
             list: discharge functional status, therapy destination, and support needs
@@ -3725,6 +3727,7 @@ clinical_axes:
                 - ongoing functional deficit
     complication_burden:
         label: in-hospital complication burden
+        query_label: complication burden
         allow_as_primary: true
         query_focus:
             list: whether the admission had no major complication, a limited complication, or a major complication
@@ -3761,6 +3764,7 @@ clinical_axes:
                 - major adverse clinical event
     acute_clinical_course:
         label: acute clinical course
+        query_label: acute clinical course
         allow_as_primary: true
         query_focus:
             list: whether the patient had early stabilization, delayed improvement, or a refractory or worsening course
@@ -3796,6 +3800,7 @@ clinical_axes:
                 - limited response to initial management
     care_intensity:
         label: highest care setting
+        query_label: care intensity
         allow_as_primary: true
         query_focus:
             list: whether the admission stayed on a routine ward, required a step-down or telemetry-capable monitored bed, or required an ICU bed with critical-care monitoring
@@ -3834,6 +3839,7 @@ clinical_axes:
                 - critical-care staffing with continuous bedside monitoring
     diagnostic_evidence_type:
         label: dominant diagnostic evidence modality
+        query_label: diagnostic evidence type
         allow_as_primary: false
         query_focus:
             list: whether diagnosis was supported mainly by bedside or laboratory findings, imaging or visual evidence, or specimen-based or specialized testing

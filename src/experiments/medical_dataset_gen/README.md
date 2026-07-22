@@ -83,7 +83,7 @@ Key outputs written by the pipeline:
 - `query_geometry_points.parquet`
 - `query_geometry_stats.parquet`
 
-The embedding stage also writes resolved chunk/query vector arrays, chunk/query ID arrays, and embedding metadata. For subexperiments with `global.use_shared: true`, these live under the parent `_embeddings/` directory instead of each child result folder. Existing local/canonical arrays can be moved into that layout with:
+The embedding stage also writes resolved chunk/query vector arrays, chunk/query ID arrays, and embedding metadata. For subexperiments with `global.use_shared: true`, these live under the parent schema-specific `_embeddings_v<dataset-schema-version>/` directory instead of each child result folder. Existing local/canonical arrays can be moved into that layout with:
 
 ```bash
 uv run -m experiments.medical_dataset_gen.utils.migrate_shared_embedding_artifacts --summary-only
@@ -92,7 +92,7 @@ uv run -m experiments.medical_dataset_gen.utils.migrate_shared_embedding_artifac
 
 ## Retrieval Pool
 
-Schema v2 uses only `retrieval.pool_scope: query_local`: chunks linked to the query through `chunk_memberships.parquet`.
+Schema v3 uses only `retrieval.pool_scope: query_local`: chunks linked to the query through `chunk_memberships.parquet`.
 
 ## LLM Usage
 

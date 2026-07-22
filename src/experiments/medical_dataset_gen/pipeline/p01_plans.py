@@ -1,4 +1,4 @@
-"""Build deterministic schema-v2 query plans from explicit evidence profiles.
+"""Build deterministic schema-v3 query plans from explicit evidence profiles.
 
 Pair-level ontology policies can restrict which axis may be dominant for a
 given joint profile, preventing clinically entangled primary-axis queries from
@@ -43,6 +43,8 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
 QUERY_TYPE: QueryType = 'prioritized_subgroup_comparison'
+_PROFILE_SPLIT_BUCKET_COUNT = 10
+_TEST_PROFILE_BUCKET_COUNT = 5
 
 
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -86,7 +88,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     continue
                 for profile in profiles:
                     evidence_profile_id = _stable_id(
-                        'epv2',
+                        'epv3',
                         cfg.dataset_schema_version,
                         cfg.global_.seed,
                         condition_key,
@@ -181,7 +183,7 @@ def _materialize_plan(
     query_id: str,
 ) -> QueryPlan:
     query_key = _stable_id(
-        'qv2',
+        'qv3',
         cfg.dataset_schema_version,
         cfg.global_.seed,
         spec.evidence_profile_id,
@@ -189,7 +191,7 @@ def _materialize_plan(
         secondary_axis,
     )
     pool_id = _stable_id(
-        'poolv2',
+        'poolv3',
         cfg.dataset_schema_version,
         cfg.global_.seed,
         spec.evidence_profile_id,
@@ -325,8 +327,9 @@ def _stable_int(*parts: object) -> int:
 
 
 def _split_for_profile(evidence_profile_id: str) -> DataSplit:
-    bucket = _stable_int(evidence_profile_id, 'split') % 10
-    return 'test' if bucket < 5 else 'validation'
+    """Assign the benchmark's fixed 50/50 profile-level split once in p01."""
+    bucket = _stable_int(evidence_profile_id, 'split') % _PROFILE_SPLIT_BUCKET_COUNT
+    return 'test' if bucket < _TEST_PROFILE_BUCKET_COUNT else 'validation'
 
 
 if __name__ == '__main__':
