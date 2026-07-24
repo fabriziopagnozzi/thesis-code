@@ -68,8 +68,8 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('embed', run_embed),
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
-    # ('eval_plots', run_eval_plots),
-    # ('geom_plots', run_query_geom_plots),
+    ('eval_plots', run_eval_plots),
+    ('geom_plots', run_query_geom_plots),
 ]
 
 SHARED_STAGE_OUTPUTS: dict[PipelineStage, tuple[SharedGenerationTableName, ...]] = {

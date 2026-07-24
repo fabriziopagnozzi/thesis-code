@@ -14,6 +14,8 @@ type DeltaMetricLabel = Literal[
     'FacetWeightedRecall',
     'Precision',
     'alpha_nDCG',
+    'NearMissDistractorRate',
+    'BackgroundOutlierRate',
 ]
 DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_args(DeltaMetricLabel.__value__))
 
@@ -26,6 +28,8 @@ PRACTICAL_EFFECT_THRESHOLDS: dict[DeltaMetricLabel, float] = {
     'FacetWeightedRecall': 0.05,
     'Precision': 0.05,
     'alpha_nDCG': 0.05,
+    'NearMissDistractorRate': 0.05,
+    'BackgroundOutlierRate': 0.05,
 }
 
 
@@ -186,6 +190,8 @@ TABLE_HEADERS = {
     'Delta_FacLoc_TopK_FCP': 'F-Top FCP',
     'Delta_FacLoc_MMR_AllFacetCoverageRate': 'F-MM AllCov',
     'Delta_FacLoc_MMR_AllFacetCleanRate': 'F-MM Clean',
+    'Delta_FacLoc_MMR_NearMissDistractorRate': 'F-MM NearMiss',
+    'Delta_FacLoc_MMR_BackgroundOutlierRate': 'F-MM BgOut',
     'FacLocVsMMR_FCPOutcome': 'F vs M',
     'FacLocBetterRows': 'F > M',
     'FacLocTiedRows': 'Tie',

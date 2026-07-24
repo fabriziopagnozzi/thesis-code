@@ -1,7 +1,16 @@
+# Before tomorrow
+
+- generare alcuni query_geometry in modalità mixed
+    - parlare del fatto che in alcune query top-k non collassa sul cluster dominante --> problema semantico, separazione facet nello spazio di embedding? 
+        - io ho chiesto a GPT di escludere tutte le combinazioni semanticamente irrilevanti
+    - è lecito togliere queste query via dal dataset? non è un bias?
+
+
+- rirunna gli esperimenti mal configurati da _run.sh; poi le eval plots per la notte
+
+---------
+
 # Code - Primary
-
-## verifica che tutte le migrazioni siano giuste rirunnando una run vecchia e controllando i grafici
-
 
 ---------
 

@@ -14,6 +14,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
 )
 from experiments.medical_dataset_gen.reports.helpers import (
     bullets,
+    family_balanced_mean,
     float_or_none,
     numeric_values,
     section_with_table,
@@ -416,12 +417,14 @@ def render_interesting_findings(
     )
     if fcp_deltas:
         lines.append(
-            f'- Mean FacLoc - MMR FCP delta: `{statistics.fmean(fcp_deltas):.4f}`; '
+            '- Family-balanced mean FacLoc - MMR FCP delta: '
+            f'`{(family_balanced_mean(comparison_rows, "Delta_FacLoc_MMR_FCP") or 0.0):.4f}`; '
             f'median: `{statistics.median(fcp_deltas):.4f}`.'
         )
     if topk_deltas:
         lines.append(
-            f'- Mean FacLoc - top-k FCP delta: `{statistics.fmean(topk_deltas):.4f}`; '
+            '- Family-balanced mean FacLoc - top-k FCP delta: '
+            f'`{(family_balanced_mean(comparison_rows, "Delta_FacLoc_TopK_FCP") or 0.0):.4f}`; '
             f'median: `{statistics.median(topk_deltas):.4f}`.'
         )
     if family_summary_rows:

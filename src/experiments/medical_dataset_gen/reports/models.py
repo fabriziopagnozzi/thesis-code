@@ -13,6 +13,7 @@ from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGen
 
 type PlotFormat = Literal['png', 'pdf', 'svg']
 type BudgetCategory = Literal['low_budget', 'medium_budget', 'high_budget']
+type MainQueryScope = Literal['all', 'geometry_eligible']
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,7 @@ class DeltaMetricPlotSpec:
     title_label: str
     filename_token: str
     source_metric_name: str
+    higher_is_better: bool = True
 
 
 @runtime_checkable
@@ -45,6 +47,7 @@ class CliArgs:
     plots_from_report: Path | None = None
     bootstrap_replicates: int = 1000
     bootstrap_seed: int = 20260712
+    main_query_scope: MainQueryScope = 'all'
 
 
 @dataclass(frozen=True)

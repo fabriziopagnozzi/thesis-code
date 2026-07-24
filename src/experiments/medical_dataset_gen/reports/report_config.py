@@ -58,6 +58,20 @@ REPORT_METRIC_SPECS: tuple[DeltaMetricPlotSpec, ...] = (
     # ),
     # DeltaMetricPlotSpec('Recall', 'Recall@k', 'recall', 'Recall@k'),
     DeltaMetricPlotSpec('alpha_nDCG', 'alpha-nDCG@k', 'alpha_ndcg', 'alpha-nDCG@k'),
+    DeltaMetricPlotSpec(
+        'NearMissDistractorRate',
+        'NearMissDistractorRate',
+        'near_miss_distractor_rate',
+        'NearMissDistractorRate',
+        higher_is_better=False,
+    ),
+    DeltaMetricPlotSpec(
+        'BackgroundOutlierRate',
+        'BackgroundOutlierRate',
+        'background_outlier_rate',
+        'BackgroundOutlierRate',
+        higher_is_better=False,
+    ),
 )
 REPORT_METRIC_LABELS: tuple[DeltaMetricLabel, ...] = tuple(
     spec.metric_label for spec in REPORT_METRIC_SPECS
@@ -65,4 +79,7 @@ REPORT_METRIC_LABELS: tuple[DeltaMetricLabel, ...] = tuple(
 REPORT_METRIC_LABEL_SET = frozenset(REPORT_METRIC_LABELS)
 REPORT_METRIC_NAME_TO_LABEL: dict[str, DeltaMetricLabel] = {
     spec.source_metric_name: spec.metric_label for spec in REPORT_METRIC_SPECS
+}
+REPORT_METRIC_LABEL_TO_SPEC: dict[DeltaMetricLabel, DeltaMetricPlotSpec] = {
+    spec.metric_label: spec for spec in REPORT_METRIC_SPECS
 }

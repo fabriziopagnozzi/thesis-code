@@ -4,7 +4,7 @@ import json
 import math
 import re
 import statistics
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Literal, cast
 
@@ -252,6 +252,54 @@ def numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[fl
     return [
         value for value in (float_or_none(row.get(column)) for row in rows) if value is not None
     ]
+
+
+def family_balanced_mean(
+    rows: Sequence[Mapping[str, object]],
+    column: str,
+    *,
+    family_field: str = 'ExperimentFamilyLabel',
+) -> float | None:
+    """Mean a numeric column after giving each represented family equal total weight."""
+    family_values = _family_grouped_values(
+        rows,
+        family_field=family_field,
+        value_for_row=lambda row: float_or_none(row.get(column)),
+    )
+    family_means = [statistics.fmean(values) for values in family_values.values() if values]
+    return statistics.fmean(family_means) if family_means else None
+
+
+def family_balanced_rate(
+    rows: Sequence[Mapping[str, object]],
+    predicate: Callable[[Mapping[str, object]], bool],
+    *,
+    family_field: str = 'ExperimentFamilyLabel',
+) -> float | None:
+    """Rate a boolean row condition after giving each represented family equal total weight."""
+    family_values = _family_grouped_values(
+        rows,
+        family_field=family_field,
+        value_for_row=lambda row: 1.0 if predicate(row) else 0.0,
+    )
+    family_rates = [statistics.fmean(values) for values in family_values.values() if values]
+    return statistics.fmean(family_rates) if family_rates else None
+
+
+def _family_grouped_values(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    family_field: str,
+    value_for_row: Callable[[Mapping[str, object]], float | None],
+) -> dict[str, list[float]]:
+    grouped: dict[str, list[float]] = {}
+    for row in rows:
+        value = value_for_row(row)
+        if value is None:
+            continue
+        family = str(row.get(family_field) or row.get('ExperimentFamily') or 'Unknown')
+        grouped.setdefault(family, []).append(value)
+    return grouped
 
 
 def quantile(sorted_values: Sequence[float], q: float) -> float:

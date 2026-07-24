@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import cast
 
 from experiments.medical_dataset_gen.reports.analysis_constants import TABLEFMT_OPTS
-from experiments.medical_dataset_gen.reports.models import CliArgs, PlotFormat
+from experiments.medical_dataset_gen.reports.models import CliArgs, MainQueryScope, PlotFormat
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 
@@ -30,7 +30,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     )
     parser.add_argument(
         '--refresh-output-artifacts',
-        '--plots-from-report',
         dest='refresh_output_artifacts',
         type=Path,
         default=None,
@@ -93,6 +92,15 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help=(
             'Enable cross-wording-configuration analyses across query_mode, focus_mode, '
             'and chunk_text_mode triples. This is intended for full all-mode reports.'
+        ),
+    )
+    parser.add_argument(
+        '--main-query-scope',
+        choices=('all', 'geometry_eligible'),
+        default='all',
+        help=(
+            'Population used for primary strategy/comparison summaries. '
+            'geometry_eligible recomputes them from queries that pass the geometry filter.'
         ),
     )
     parser.add_argument(
@@ -160,4 +168,5 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         plots_from_report=plots_from_report,
         bootstrap_replicates=max(100, int(parsed.bootstrap_replicates)),
         bootstrap_seed=int(parsed.bootstrap_seed),
+        main_query_scope=cast(MainQueryScope, parsed.main_query_scope),
     )

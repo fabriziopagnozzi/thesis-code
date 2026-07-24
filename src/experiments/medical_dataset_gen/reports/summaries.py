@@ -14,6 +14,8 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
 from experiments.medical_dataset_gen.reports.helpers import (
     boundary_rate,
     delta_outcome,
+    family_balanced_mean,
+    family_balanced_rate,
     float_or_none,
     int_or_none,
     numeric_stats,
@@ -27,6 +29,7 @@ from experiments.medical_dataset_gen.reports.models import BudgetCategory
 from experiments.medical_dataset_gen.reports.report_config import (
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
+    REPORT_METRIC_LABEL_TO_SPEC,
     REPORT_METRIC_LABELS,
     REPORT_METRIC_NAME_TO_LABEL,
     REPORT_METRIC_SPECS,
@@ -92,9 +95,16 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             fac_loc = float_or_none(out.get(f'FacLoc_{metric_label}'))
             mmr = float_or_none(out.get(f'MMR_{metric_label}'))
             top_k = float_or_none(out.get(f'TopK_{metric_label}'))
-            out[f'Delta_FacLoc_MMR_{metric_label}'] = subtract(fac_loc, mmr)
-            out[f'Delta_FacLoc_TopK_{metric_label}'] = subtract(fac_loc, top_k)
-            out[f'Delta_MMR_TopK_{metric_label}'] = subtract(mmr, top_k)
+            higher_is_better = REPORT_METRIC_LABEL_TO_SPEC[metric_label].higher_is_better
+            out[f'Delta_FacLoc_MMR_{metric_label}'] = _oriented_delta(
+                fac_loc, mmr, higher_is_better=higher_is_better
+            )
+            out[f'Delta_FacLoc_TopK_{metric_label}'] = _oriented_delta(
+                fac_loc, top_k, higher_is_better=higher_is_better
+            )
+            out[f'Delta_MMR_TopK_{metric_label}'] = _oriented_delta(
+                mmr, top_k, higher_is_better=higher_is_better
+            )
 
         out['FacLocVsMMR_FCPOutcome'] = delta_outcome(
             float_or_none(out.get('Delta_FacLoc_MMR_FCP')),
@@ -449,13 +459,15 @@ def _metric_aggregate_row(
     mmr_col = f'MMR_{metric}'
     facloc_col = f'FacLoc_{metric}'
     complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
+    threshold = practical_effect_threshold(metric)
     deltas_fm = numeric_values(complete_rows, delta_fm_col)
     deltas_ft = numeric_values(complete_rows, delta_ft_col)
     deltas_mt = numeric_values(complete_rows, delta_mt_col)
-    threshold = practical_effect_threshold(metric)
     facloc_better = sum(delta > threshold for delta in deltas_fm)
     facloc_tied = sum(abs(delta) <= threshold for delta in deltas_fm)
     facloc_worse = sum(delta < -threshold for delta in deltas_fm)
+    facloc_topk_better = sum(delta > 0.0 for delta in deltas_ft)
+    mmr_topk_better = sum(delta > 0.0 for delta in deltas_mt)
     return {
         'Metric': metric_title,
         'MetricLabel': metric,
@@ -465,32 +477,53 @@ def _metric_aggregate_row(
         'FacLocBetterRows': facloc_better,
         'FacLocTiedRows': facloc_tied,
         'FacLocWorseRows': facloc_worse,
-        'FacLocTopKBetterRows': sum(delta > 0.0 for delta in deltas_ft),
-        'MMRTopKBetterRows': sum(delta > 0.0 for delta in deltas_mt),
-        'FacLocBetterPct': _fraction_or_none(facloc_better, len(complete_rows)),
-        'FacLocTiedPct': _fraction_or_none(facloc_tied, len(complete_rows)),
-        'FacLocWorsePct': _fraction_or_none(facloc_worse, len(complete_rows)),
-        'FacLocTopKBetterPct': _fraction_or_none(
-            sum(delta > 0.0 for delta in deltas_ft),
-            len(complete_rows),
+        'FacLocTopKBetterRows': facloc_topk_better,
+        'MMRTopKBetterRows': mmr_topk_better,
+        'FacLocBetterPct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_fm_col)) or 0.0) > threshold,
         ),
-        'MMRTopKBetterPct': _fraction_or_none(
-            sum(delta > 0.0 for delta in deltas_mt),
-            len(complete_rows),
+        'FacLocTiedPct': family_balanced_rate(
+            complete_rows,
+            lambda row: abs(float_or_none(row.get(delta_fm_col)) or 0.0) <= threshold,
         ),
-        'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
+        'FacLocWorsePct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_fm_col)) or 0.0) < -threshold,
+        ),
+        'FacLocTopKBetterPct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_ft_col)) or 0.0) > 0.0,
+        ),
+        'MMRTopKBetterPct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_mt_col)) or 0.0) > 0.0,
+        ),
+        'MeanDeltaFacLocMMR': family_balanced_mean(complete_rows, delta_fm_col),
         'MedianDeltaFacLocMMR': statistics.median(deltas_fm) if deltas_fm else None,
-        'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
-        'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
-        'MeanTopK': _mean_or_none(numeric_values(complete_rows, topk_col)),
-        'MeanMMR': _mean_or_none(numeric_values(complete_rows, mmr_col)),
-        'MeanFacLoc': _mean_or_none(numeric_values(complete_rows, facloc_col)),
+        'MeanDeltaFacLocTopK': family_balanced_mean(complete_rows, delta_ft_col),
+        'MeanDeltaMMRTopK': family_balanced_mean(complete_rows, delta_mt_col),
+        'MeanTopK': family_balanced_mean(complete_rows, topk_col),
+        'MeanMMR': family_balanced_mean(complete_rows, mmr_col),
+        'MeanFacLoc': family_balanced_mean(complete_rows, facloc_col),
         'TieEpsilon': threshold,
     }
 
 
 def _mean_or_none(values: Sequence[float]) -> float | None:
     return statistics.fmean(values) if values else None
+
+
+def _oriented_delta(
+    left: float | None,
+    right: float | None,
+    *,
+    higher_is_better: bool,
+) -> float | None:
+    delta = subtract(left, right)
+    if delta is None:
+        return None
+    return delta if higher_is_better else -delta
 
 
 def low_budget_rows_from_comparisons(
@@ -613,6 +646,8 @@ def embedding_model_summary_rows(
         low_budget = low_budget_by_exp.get(experiment, {})
         run_rows.append({
             'EmbeddingModel': manifest.get('EmbeddingModel'),
+            'ExperimentFamily': manifest.get('ExperimentFamily'),
+            'ExperimentFamilyLabel': manifest.get('ExperimentFamilyLabel'),
             'EmbeddingDimension': manifest.get('EmbeddingDimension'),
             'GeometryPassRate': geometry.get('GeometryPassRate'),
             'GeometryQueries': geometry.get('GeometryQueries'),
@@ -651,6 +686,15 @@ def embedding_model_summary_rows(
                 'Delta_FacLoc_TopK_FCP',
             )
         )
+        for column in (
+            'GeometryPassRate',
+            'TopK_FCP',
+            'MMR_FCP',
+            'FacLoc_FCP',
+            'Delta_FacLoc_MMR_FCP',
+            'Delta_FacLoc_TopK_FCP',
+        ):
+            out[f'{column}_mean'] = family_balanced_mean(group, column)
         out['PassFilterRuns'] = sum(row.get('OnlyPassGeometry') is True for row in group)
         rows.append(out)
     return rows

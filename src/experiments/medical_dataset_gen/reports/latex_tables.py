@@ -12,6 +12,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DeltaMetricLabel,
     practical_effect_threshold,
 )
+from experiments.medical_dataset_gen.reports.helpers import family_balanced_mean
 from experiments.medical_dataset_gen.reports.report_config import REPORT_METRIC_LABELS
 from experiments.medical_dataset_gen.reports.wording_result_macros import (
     render_wording_result_macros,
@@ -213,13 +214,6 @@ def render_thesis_result_macros(
 
 def _geometry_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
     pass_rates = _values(rows, 'GeometryPassRate')
-    bge_rates = [
-        rate
-        for row, rate in zip(
-            rows, (_float(row.get('GeometryPassRate')) for row in rows), strict=True
-        )
-        if rate is not None and row.get('EmbeddingModel') == 'BAAI/bge-m3'
-    ]
     qwen_rates = [
         rate
         for row, rate in zip(
@@ -228,9 +222,17 @@ def _geometry_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, s
         if rate is not None and str(row.get('EmbeddingModel') or '').startswith('Qwen/')
     ]
     return {
-        'ResultGeometryPassMean': _fixed(_mean(pass_rates), digits=3),
+        'ResultGeometryPassMean': _fixed(
+            family_balanced_mean(rows, 'GeometryPassRate'), digits=3
+        ),
         'ResultGeometryPassMedian': _fixed(_median(pass_rates), digits=3),
-        'ResultGeometryBgeMean': _fixed(_mean(bge_rates), digits=3),
+        'ResultGeometryBgeMean': _fixed(
+            family_balanced_mean(
+                [row for row in rows if row.get('EmbeddingModel') == 'BAAI/bge-m3'],
+                'GeometryPassRate',
+            ),
+            digits=3,
+        ),
         'ResultGeometryQwenMin': _fixed(min(qwen_rates) if qwen_rates else None, digits=3),
         'ResultGeometryQwenMax': _fixed(max(qwen_rates) if qwen_rates else None, digits=3),
     }
@@ -258,9 +260,13 @@ def _comparison_result_macros(
         'ResultFacLocTopKBetterRows': _integer(
             sum((_float(row.get('Delta_FacLoc_TopK_FCP')) or 0.0) > 0.0 for row in fcp_rows)
         ),
-        'ResultMmrTopKMeanFcpDelta': _signed(_mean(_values(fcp_rows, 'Delta_MMR_TopK_FCP'))),
+        'ResultMmrTopKMeanFcpDelta': _signed(
+            family_balanced_mean(fcp_rows, 'Delta_MMR_TopK_FCP')
+        ),
         'ResultMmrTopKMedianFcpDelta': _signed(_median(_values(fcp_rows, 'Delta_MMR_TopK_FCP'))),
-        'ResultFacLocTopKMeanFcpDelta': _signed(_mean(_values(fcp_rows, 'Delta_FacLoc_TopK_FCP'))),
+        'ResultFacLocTopKMeanFcpDelta': _signed(
+            family_balanced_mean(fcp_rows, 'Delta_FacLoc_TopK_FCP')
+        ),
         'ResultFacLocTopKMedianFcpDelta': _signed(
             _median(_values(fcp_rows, 'Delta_FacLoc_TopK_FCP'))
         ),
@@ -409,7 +415,9 @@ def _embedding_low_budget_result_macros(
                     f'{prefix}BetterRows': _integer(sum(delta > threshold for delta in deltas)),
                     f'{prefix}TiedRows': _integer(sum(abs(delta) <= threshold for delta in deltas)),
                     f'{prefix}WorseRows': _integer(sum(delta < -threshold for delta in deltas)),
-                    f'{prefix}MeanDelta': _signed(_mean(deltas)),
+                    f'{prefix}MeanDelta': _signed(
+                        family_balanced_mean(rows, f'Delta_FacLoc_MMR_{metric}')
+                    ),
                     f'{prefix}MedianDelta': _signed(_median(deltas)),
                 }
             )
@@ -462,7 +470,7 @@ def _lambda_safety_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
     return {
         'ResultLambdaSafetyRows': _integer(len(facloc_rows)),
         'ResultFacLocSafeLambdaMean': _fixed(
-            _mean(_values(facloc_rows, 'SafeLambdaFraction')), digits=3
+            family_balanced_mean(facloc_rows, 'SafeLambdaFraction'), digits=3
         ),
         'ResultFacLocSafeLambdaMedian': _fixed(
             _median(_values(facloc_rows, 'SafeLambdaFraction')), digits=3
@@ -470,7 +478,9 @@ def _lambda_safety_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
         'ResultFacLocSafeLambdaMin': _fixed(
             min(_values(facloc_rows, 'SafeLambdaFraction') or [0.0]), digits=3
         ),
-        'ResultMmrSafeLambdaMean': _fixed(_mean(_values(mmr_rows, 'SafeLambdaFraction')), digits=3),
+        'ResultMmrSafeLambdaMean': _fixed(
+            family_balanced_mean(mmr_rows, 'SafeLambdaFraction'), digits=3
+        ),
         'ResultMmrSafeLambdaMedian': _fixed(
             _median(_values(mmr_rows, 'SafeLambdaFraction')), digits=3
         ),
@@ -503,7 +513,7 @@ def _alpha_ndcg_result_macros(
             sum((_float(row.get('Delta_FacLoc_TopK_alpha_nDCG')) or 0.0) > 0.0 for row in rows)
         ),
         'ResultLowBudgetAlphaNdcgFacLocMmrMeanDelta': _signed(
-            _mean(_values(low_rows, 'Delta_FacLoc_MMR_alpha_nDCG'))
+            family_balanced_mean(low_rows, 'Delta_FacLoc_MMR_alpha_nDCG')
         ),
     }
 

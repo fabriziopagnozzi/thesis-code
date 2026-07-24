@@ -107,6 +107,15 @@ def run_report(args: CliArgs) -> ReportOutputs:
         dataset_rows = [dataset_distribution_row(record, warnings=warnings) for record in records]
         geometry_rows = [geometry_filter_row(record, warnings=warnings) for record in records]
 
+        _progress('computing geometry-population validity summaries')
+        geometry_population_strategy_rows_data = geometry_population_strategy_rows(
+            plot_and_recap_records,
+            warnings=warnings,
+        )
+        geometry_population_comparison_rows = comparison_by_k_rows(
+            geometry_population_strategy_rows_data
+        )
+
         _progress('loading selected strategy rows and near-optimal lambda summaries')
         strategy_rows: list[dict[str, object]] = []
         near_optimal_rows: list[dict[str, object]] = []
@@ -119,19 +128,17 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     warnings=warnings,
                 )
             )
+        if args.main_query_scope == 'geometry_eligible':
+            strategy_rows = [
+                dict(row)
+                for row in geometry_population_strategy_rows_data
+                if row.get('GeometryPopulation') == 'geometry_eligible'
+            ]
 
         _progress('computing lambda-grid and main comparison summaries')
         lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
         lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
         comparison_rows = comparison_by_k_rows(strategy_rows)
-        _progress('computing geometry-population validity summaries')
-        geometry_population_strategy_rows_data = geometry_population_strategy_rows(
-            plot_and_recap_records,
-            warnings=warnings,
-        )
-        geometry_population_comparison_rows = comparison_by_k_rows(
-            geometry_population_strategy_rows_data
-        )
         _progress('computing global-lambda validity summaries')
         global_lambda_strategy_rows_data = global_lambda_strategy_rows(records, warnings=warnings)
         global_lambda_comparison_rows = comparison_by_k_rows(global_lambda_strategy_rows_data)
@@ -368,6 +375,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'requested_experiments': list(args.experiments),
                     'experiment_regex': args.experiment_regex,
                     'exclude_experiment_regex': args.exclude_experiment_regex,
+                    'main_query_scope': args.main_query_scope,
                     'experiments_discovered': len(records),
                     'cross_query_chunk_modes': args.cross_query_chunk_modes,
                     'wording_configurations': wording_configurations,

@@ -269,7 +269,7 @@ def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:
     query_dir_name = state['query_dir_name_by_id'].get(qid, qid)
     query_dir = state['out_dir'] / query_group / query_dir_name
     query_dir.mkdir(parents=True, exist_ok=True)
-    selected_plot_names: Container[str] | None = state['selected_plot_names']
+    selected_plot_names: Container[GeomPlotName] | None = state['selected_plot_names']
     if _should_render_plot(selected_plot_names, 'query_overview_4panel'):
         plot_query_overview_4panel(artifact, query_dir)
     if _should_render_plot(selected_plot_names, 'strategy_overlay'):

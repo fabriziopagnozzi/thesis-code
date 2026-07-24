@@ -60,7 +60,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
-    read_parquet_if_exists_else_empty_df,
     write_parquet,
 )
 from experiments.medical_dataset_gen.utils.logging_utils import setup_logging
@@ -215,7 +214,8 @@ def stats_sliced_results_df(results: pl.DataFrame) -> pl.DataFrame:
         if source_col in results.columns
     )
     return (
-        results.group_by(*slice_columns, 'strategy', 'lam', 'k')
+        results
+        .group_by(*slice_columns, 'strategy', 'lam', 'k')
         .agg(agg_exprs)
         .sort(*slice_columns, 'k', 'strategy', 'lam')
     )
@@ -234,24 +234,6 @@ def _ensure_eval_results_loaded(
     loaded_df = _read_required_table(paths, 'evaluation_results', requesting_step)
     assert_pool_scope_match(loaded_df, cfg.retrieval.pool_scope, table_name='evaluation_results')
     return loaded_df
-
-
-def _load_eval_stats_or_compute_from_results(
-    *,
-    cfg: ExperimentCfg,
-    paths: MedicalDatasetGenPaths,
-    eval_results_df: pl.DataFrame,
-) -> pl.DataFrame:
-    stats_df = read_parquet_if_exists_else_empty_df(paths, 'evaluation_stats')
-    if stats_df.is_empty():
-        return stats_for_evaluation_mode(
-            eval_results_df,
-            mode=cfg.evaluation.mode,
-            cfg=cfg,
-        )[0]
-
-    assert_pool_scope_match(stats_df, cfg.retrieval.pool_scope, table_name='evaluation_stats')
-    return stats_df
 
 
 def _read_required_table(
@@ -381,56 +363,54 @@ def _evaluate_query(qid: str) -> list[EvaluationResultRow]:
                 continue
             selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
 
-            eval_result_rows.append(
-                {
-                    'query_id': qid,
-                    'evidence_profile_id': query.evidence_profile_id,
-                    'pool_id': query.pool_id,
-                    'query_type': query.query_type,
-                    'template_id': query.template_id,
-                    'condition_id': query.condition_id,
-                    'cohort_dimension_id': query.cohort_dimension_id,
-                    'cohort_contrast_family': query.cohort_contrast_family,
-                    'cohort_contrast_id': query.cohort_contrast_id,
-                    'primary_axis': query.primary_axis,
-                    'secondary_axis': query.secondary_axis,
-                    'dominant_primary_facet_id': query.dominant_primary_facet_id,
-                    'split': query.split,
-                    'strategy': strategy,
-                    'k': k,
-                    'lam': lam,
-                    'reranker_model_name': (
-                        cfg.evaluation.reranker.model_name
-                        if strategy == DENSE_RERANKER_STRATEGY
-                        else None
+            eval_result_rows.append({
+                'query_id': qid,
+                'evidence_profile_id': query.evidence_profile_id,
+                'pool_id': query.pool_id,
+                'query_type': query.query_type,
+                'template_id': query.template_id,
+                'condition_id': query.condition_id,
+                'cohort_dimension_id': query.cohort_dimension_id,
+                'cohort_contrast_family': query.cohort_contrast_family,
+                'cohort_contrast_id': query.cohort_contrast_id,
+                'primary_axis': query.primary_axis,
+                'secondary_axis': query.secondary_axis,
+                'dominant_primary_facet_id': query.dominant_primary_facet_id,
+                'split': query.split,
+                'strategy': strategy,
+                'k': k,
+                'lam': lam,
+                'reranker_model_name': (
+                    cfg.evaluation.reranker.model_name
+                    if strategy == DENSE_RERANKER_STRATEGY
+                    else None
+                ),
+                'pool_scope': cfg.retrieval.pool_scope,
+                'pool_size': len(candidate_chunk_ids),
+                **compute_retrieval_metrics(
+                    selected_chunk_ids=selected_chunk_ids,
+                    chunk_by_id=maps['chunk_by_id'],
+                    query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
+                    facet_to_gold=query_facet_gold,
+                    all_gold_ids=query_all_gold,
+                    primary_axis=query.primary_axis,
+                    dominant_primary_facet_id=query.dominant_primary_facet_id,
+                    all_clean_rate_precision_threshold=(
+                        cfg.evaluation.all_clean_rate_precision_threshold
                     ),
-                    'pool_scope': cfg.retrieval.pool_scope,
-                    'pool_size': len(candidate_chunk_ids),
-                    **compute_retrieval_metrics(
-                        selected_chunk_ids=selected_chunk_ids,
-                        chunk_by_id=maps['chunk_by_id'],
-                        query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
-                        facet_to_gold=query_facet_gold,
-                        all_gold_ids=query_all_gold,
-                        primary_axis=query.primary_axis,
-                        dominant_primary_facet_id=query.dominant_primary_facet_id,
-                        all_clean_rate_precision_threshold=(
-                            cfg.evaluation.all_clean_rate_precision_threshold
-                        ),
-                    ),
-                    **(
-                        answer_rouge_scorer.score(selected_chunk_ids)
-                        if answer_rouge_scorer is not None
-                        else {}
-                    ),
-                    **compute_retrieval_diagnostics(
-                        selected_local,
-                        sim_to_query,
-                        sim_matrix,
-                        topk_local_indices=(topk_full[:k] if strategy != 'top_k' else None),
-                    ),
-                }
-            )
+                ),
+                **(
+                    answer_rouge_scorer.score(selected_chunk_ids)
+                    if answer_rouge_scorer is not None
+                    else {}
+                ),
+                **compute_retrieval_diagnostics(
+                    selected_local,
+                    sim_to_query,
+                    sim_matrix,
+                    topk_local_indices=(topk_full[:k] if strategy != 'top_k' else None),
+                ),
+            })
 
     for strategy in cfg.retrieval.strategies:
         lam_values = cfg.retrieval.lambda_values_for_strategy(strategy)
@@ -698,7 +678,8 @@ def _evaluation_strategy_sort_key(strategy: str) -> tuple[int, str]:
 
 def _has_lambda_grid(stats_df: pl.DataFrame, strategy: str, k: int) -> bool:
     return (
-        stats_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
+        stats_df
+        .filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
         .select(pl.col('lam').drop_nulls().len())
         .item()
         != 0

@@ -319,7 +319,9 @@ def _fcp_summary_macros(prefix: str, rows: Sequence[ReportRow]) -> dict[str, str
         f'{prefix}TopKFcpMean': _fixed(_column_mean(rows, 'TopK_FCP'), digits=3),
         f'{prefix}MmrFcpMean': _fixed(_column_mean(rows, 'MMR_FCP'), digits=3),
         f'{prefix}FacLocFcpMean': _fixed(_column_mean(rows, 'FacLoc_FCP'), digits=3),
-        f'{prefix}FacLocMmrFcpMeanDelta': _signed(statistics.fmean(deltas), digits=3),
+        f'{prefix}FacLocMmrFcpMeanDelta': _signed(
+            _column_mean(rows, 'Delta_FacLoc_MMR_FCP'), digits=3
+        ),
         f'{prefix}FacLocMmrFcpBetterCells': _integer(sum(delta > threshold for delta in deltas)),
         f'{prefix}FacLocMmrFcpTiedCells': _integer(
             sum(abs(delta) <= threshold for delta in deltas)
@@ -345,10 +347,14 @@ def _required_wording_key(row: ReportRow) -> WordingKey:
 
 
 def _column_mean(rows: Sequence[ReportRow], column: str) -> float:
-    values = [_numeric(row, column) for row in rows]
-    if not values:
+    grouped: dict[str, list[float]] = {}
+    for row in rows:
+        family = str(row.get('ExperimentFamily') or row.get('ExperimentFamilyLabel') or 'Unknown')
+        grouped.setdefault(family, []).append(_numeric(row, column))
+    family_means = [statistics.fmean(values) for values in grouped.values() if values]
+    if not family_means:
         raise ValueError(f'Cannot calculate {column} from an empty row set.')
-    return statistics.fmean(values)
+    return statistics.fmean(family_means)
 
 
 def _numeric(row: ReportRow, column: str) -> float:

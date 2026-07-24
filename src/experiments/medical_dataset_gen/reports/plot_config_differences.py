@@ -15,7 +15,12 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DeltaMetricLabel,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.reports.helpers import float_or_none, short_model_label
+from experiments.medical_dataset_gen.reports.helpers import (
+    family_balanced_mean,
+    family_balanced_rate,
+    float_or_none,
+    short_model_label,
+)
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, PlotFormat
 from experiments.medical_dataset_gen.reports.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
@@ -34,6 +39,7 @@ from experiments.medical_dataset_gen.reports.report_config import (
 class DeltaPanelSpec:
     title: str
     value_field: str
+    raw_value_field: str
     pct_field: str
     cmap: str
     colorbar_label: str
@@ -67,7 +73,7 @@ def plot_config_fcp_budget_delta_heatmaps(
     summary_rows = _metric_config_budget_rows(rows, metric_filter='FCP')
     if not _has_multiple_configs(summary_rows):
         return []
-    configs = _ordered_configs(summary_rows)
+    configs = _ordered_configs_by_metric_score(summary_rows)
     budget_labels = _budget_labels()
     axis = SummaryAxisSpec(
         row_keys=tuple(configs),
@@ -85,8 +91,10 @@ def plot_config_fcp_budget_delta_heatmaps(
         axis=axis,
         title='FCP deltas by wording configuration and retrieval budget',
         footnote=(
-            'Each cell aggregates all matching experiment families and both core embedding models. '
-            'Top line = mean FCP delta; bottom line = win rate for the comparison.'
+            'Each cell gives every represented experiment family equal total weight and includes '
+            'both core embedding models. Cell lines: raw mean for the first strategy; bold FCP '
+            'improvement delta; family-balanced win rate. Wording configurations are ordered by mean '
+            'FacLoc-vs-MMR improvement across the shown metrics.'
         ),
         output_path=output_dir / f'cross_config_fcp_budget_delta_heatmaps.{plot_format}',
         figsize=(15.0, max(4.8, 0.46 * len(configs) + 2.2)),
@@ -104,7 +112,7 @@ def plot_config_fcp_budget_delta_heatmaps_by_distribution(
     summary_rows = _metric_config_family_budget_rows(rows, metric_filter='FCP')
     if not _has_multiple_configs(summary_rows):
         return []
-    configs = _ordered_configs(summary_rows)
+    configs = _ordered_configs_by_metric_score(summary_rows)
     budget_labels = _budget_labels()
     panel_rows: list[HeatmapPanelRow] = []
     for family in _ordered_distribution_family_labels(summary_rows):
@@ -134,8 +142,9 @@ def plot_config_fcp_budget_delta_heatmaps_by_distribution(
         panel_rows=panel_rows,
         title='FCP deltas by wording configuration and retrieval budget within each family',
         footnote=(
-            'Each row filters to one experiment family. Cell format: top line = mean FCP delta; '
-            'bottom line = win rate for the comparison.'
+            'Each row filters to one experiment family. Cell lines: raw mean for the first '
+            'strategy; bold FCP improvement delta; win rate. Wording configurations are ordered by '
+            'mean FacLoc-vs-MMR improvement across the shown metrics.'
         ),
         output_path=output_dir
         / f'cross_config_fcp_budget_delta_heatmaps_by_distribution.{plot_format}',
@@ -163,7 +172,7 @@ def plot_config_metric_delta_heatmap_low_budget(
     if not _has_multiple_configs(summary_rows):
         return []
     metric_labels = _ordered_metric_labels(summary_rows)
-    configs = _ordered_configs(summary_rows)
+    configs = _ordered_configs_by_metric_score(summary_rows)
     axis = SummaryAxisSpec(
         row_keys=tuple(metric_labels),
         column_keys=tuple(configs),
@@ -180,8 +189,9 @@ def plot_config_metric_delta_heatmap_low_budget(
         axis=axis,
         title='Low-budget metric deltas by wording configuration',
         footnote=(
-            'Each cell aggregates all matching experiment families and both core embedding models. '
-            'Top line = mean delta; bottom line = win rate for the comparison.'
+            'Each cell gives every represented experiment family equal total weight and includes '
+            'both core embedding models. Cell lines: raw mean for the first strategy; bold '
+            'improvement delta; family-balanced win rate.'
         ),
         output_path=output_dir / f'cross_config_metric_delta_heatmap_low_budget.{plot_format}',
         figsize=(15.0, max(5.2, 0.58 * len(metric_labels) + 2.4)),
@@ -205,7 +215,7 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution(
     if not _has_multiple_configs(summary_rows):
         return []
     metric_labels = _ordered_metric_labels(summary_rows)
-    configs = _ordered_configs(summary_rows)
+    configs = _ordered_configs_by_metric_score(summary_rows)
     panel_rows: list[HeatmapPanelRow] = []
     for family in _ordered_distribution_family_labels(summary_rows):
         family_rows = [row for row in summary_rows if row.get('ExperimentFamilyLabel') == family]
@@ -236,8 +246,9 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution(
         panel_rows=panel_rows,
         title='Low-budget metric deltas by wording configuration within each family',
         footnote=(
-            'Each row filters to one experiment family. Cell format: top line = mean delta; '
-            'bottom line = win rate for the comparison.'
+            'Each row filters to one experiment family. Cell lines: raw mean for the first '
+            'strategy; bold improvement delta; win rate. Wording configurations are ordered by '
+            'mean FacLoc-vs-MMR improvement across the shown metrics.'
         ),
         output_path=output_dir
         / f'cross_config_metric_delta_heatmap_low_budget_by_distribution.{plot_format}',
@@ -265,7 +276,7 @@ def plot_config_metric_delta_heatmap_low_budget_by_embedding_model(
     if not _has_multiple_configs(summary_rows):
         return []
     metric_labels = _ordered_metric_labels(summary_rows)
-    configs = _ordered_configs(summary_rows)
+    configs = _ordered_configs_by_metric_score(summary_rows)
     panel_rows: list[HeatmapPanelRow] = []
     for model in _ordered_embedding_models(summary_rows):
         model_rows = [row for row in summary_rows if row.get('EmbeddingModel') == model]
@@ -296,9 +307,10 @@ def plot_config_metric_delta_heatmap_low_budget_by_embedding_model(
         panel_rows=panel_rows,
         title='Low-budget metric deltas by wording configuration and embedding model',
         footnote=(
-            'Each row filters to one core embedding model and aggregates all matching '
-            'experiment families. Cell format: top line = mean delta; bottom line = win rate '
-            'for the comparison.'
+            'Each row filters to one core embedding model and gives every represented experiment '
+            'family equal total weight. Cell lines: raw mean for the first strategy; bold '
+            'improvement delta; family-balanced win rate. Wording configurations are ordered by '
+            'mean FacLoc-vs-MMR improvement across the shown metrics.'
         ),
         output_path=output_dir
         / f'cross_config_metric_delta_heatmap_low_budget_by_emb_model.{plot_format}',
@@ -326,7 +338,7 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model(
     if not _has_multiple_configs(summary_rows):
         return []
     metric_labels = _ordered_metric_labels(summary_rows)
-    configs = _ordered_configs(summary_rows)
+    configs = _ordered_configs_by_metric_score(summary_rows)
     paths: list[Path] = []
     for family in _ordered_distribution_family_labels(summary_rows):
         family_rows = [row for row in summary_rows if row.get('ExperimentFamilyLabel') == family]
@@ -368,8 +380,9 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution_embedding_model(
                 ),
                 footnote=(
                     'Each row filters to one embedding model within the experiment family. '
-                    'Cell format: top line = mean delta; bottom line = win rate for the '
-                    'comparison.'
+                    'Cell lines: raw mean for the first strategy; bold improvement delta; '
+                    'win rate. Wording configurations are ordered by mean FacLoc-vs-MMR '
+                    'improvement across the shown metrics.'
                 ),
                 output_path=output_dir
                 / (
@@ -403,7 +416,7 @@ def plot_config_fcp_family_budget_delta_heatmaps(
         title='FCP deltas by wording configuration, experiment family, and retrieval budget',
         footnote=(
             'Each row is one wording configuration. '
-            'Top line = mean FCP delta; bottom line = win rate for the comparison.'
+            'Cell lines: raw mean for the first strategy; bold FCP improvement delta; win rate.'
         ),
         output_path=output_dir / f'cross_config_fcp_family_budget_delta_heatmaps.{plot_format}',
         figsize=(
@@ -437,7 +450,7 @@ def plot_config_fcp_family_budget_delta_heatmaps_by_embedding_model(
                 ),
                 footnote=(
                     'Each row is one wording configuration. '
-                    'Top line = mean FCP delta; bottom line = win rate for the comparison.'
+                    'Cell lines: raw mean for the first strategy; bold FCP improvement delta; win rate.'
                 ),
                 output_path=(
                     output_dir
@@ -478,7 +491,7 @@ def plot_config_metric_family_delta_heatmap_low_budget(
         title='Low-budget metric deltas by wording configuration and experiment family',
         footnote=(
             'Each row is one wording configuration. '
-            'Top line = mean delta; bottom line = win rate for the comparison.'
+            'Cell lines: raw mean for the first strategy; bold improvement delta; win rate.'
         ),
         output_path=output_dir
         / f'cross_config_metric_family_delta_heatmap_low_budget.{plot_format}',
@@ -518,7 +531,7 @@ def plot_config_metric_family_delta_heatmap_low_budget_by_embedding_model(
                 ),
                 footnote=(
                     'Each row is one wording configuration. '
-                    'Top line = mean delta; bottom line = win rate for the comparison.'
+                    'Cell lines: raw mean for the first strategy; bold improvement delta; win rate.'
                 ),
                 output_path=(
                     output_dir
@@ -610,7 +623,7 @@ def _plot_delta_heatmap_panel_grid(
         nrows=nrows,
         ncols=3,
         figsize=figsize,
-        sharex='col',
+        sharex=False,
         squeeze=False,
         gridspec_kw={'wspace': 0.38},
     )
@@ -628,7 +641,7 @@ def _plot_delta_heatmap_panel_grid(
                     spec=spec,
                     matrix=matrix,
                     show_title=False,
-                    show_x_tick_labels=row_index == nrows - 1,
+                    show_x_tick_labels=True,
                     show_y_tick_labels=column_index == 0,
                 )
                 cbar = fig.colorbar(
@@ -661,24 +674,24 @@ def _panel_grid_fig_height(
     min_cell_height: float,
     min_height: float,
 ) -> float:
-    title_gap_height = 0.50
+    title_gap_height = 1.35
     body_height = sum(
         max(1, len(panel_row.axis.row_keys)) * min_cell_height + title_gap_height
         for panel_row in panel_rows
     )
-    return max(min_height, body_height + 1.4)
+    return max(min_height, body_height + 2.2)
 
 
 def _panel_grid_hspace(nrows: int) -> float:
     if nrows <= 1:
         return 0.0
     if nrows == 2:
-        return 0.20
+        return 0.85
     if nrows <= 4:
-        return 0.40
+        return 1.05
     if nrows <= 6:
-        return 0.54
-    return 0.65
+        return 1.20
+    return 1.35
 
 
 def _panel_grid_bottom_margin(panel_rows: Sequence[HeatmapPanelRow]) -> float:
@@ -749,6 +762,7 @@ def _draw_delta_heatmap_axis(
         rotation=_tick_label_rotation(axis.column_tick_labels),
         ha=_tick_label_alignment(axis.column_tick_labels),
     )
+    ax.tick_params(axis='x', labelbottom=show_x_tick_labels)
     ax.set_yticks(range(len(axis.row_tick_labels)))
     ax.set_yticklabels(
         axis.row_tick_labels if show_y_tick_labels else [''] * len(axis.row_tick_labels),
@@ -767,16 +781,64 @@ def _draw_delta_heatmap_axis(
             if value is None:
                 continue
             pct = float_or_none(source_row.get(spec.pct_field)) if source_row is not None else None
-            ax.text(
-                x_index,
-                y_index,
-                f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
-                ha='center',
-                va='center',
-                fontsize=6.5,
-                color=_heatmap_text_color(value, spec.value_field),
+            raw_value = (
+                float_or_none(source_row.get(spec.raw_value_field))
+                if source_row is not None
+                else None
+            )
+            _annotate_delta_heatmap_cell(
+                ax=ax,
+                x_index=x_index,
+                y_index=y_index,
+                raw_value=raw_value,
+                delta=value,
+                pct=pct,
+                value_field=spec.value_field,
             )
     return image
+
+
+def _annotate_delta_heatmap_cell(
+    *,
+    ax: Any,
+    x_index: int,
+    y_index: int,
+    raw_value: float | None,
+    delta: float,
+    pct: float | None,
+    value_field: str,
+) -> None:
+    color = _heatmap_text_color(delta, value_field)
+    if raw_value is not None:
+        ax.text(
+            x_index,
+            y_index - 0.27,
+            f'{raw_value:.3f}',
+            ha='center',
+            va='center',
+            fontsize=5.6,
+            color=color,
+        )
+    ax.text(
+        x_index,
+        y_index,
+        f'{delta:+.3f}',
+        ha='center',
+        va='center',
+        fontsize=6.4,
+        fontweight='bold',
+        color=color,
+    )
+    if pct is not None:
+        ax.text(
+            x_index,
+            y_index + 0.27,
+            f'{pct:.0%}',
+            ha='center',
+            va='center',
+            fontsize=5.6,
+            color=color,
+        )
 
 
 def _metric_config_budget_rows(
@@ -994,29 +1056,39 @@ def _metric_summary_row(
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
     complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
-    deltas_fm = _numeric_values(complete_rows, delta_fm_col)
-    deltas_ft = _numeric_values(complete_rows, delta_ft_col)
-    deltas_mt = _numeric_values(complete_rows, delta_mt_col)
     threshold = practical_effect_threshold(metric)
     row_count = len(complete_rows)
-    facloc_better = sum(delta > threshold for delta in deltas_fm)
-    facloc_tied = sum(abs(delta) <= threshold for delta in deltas_fm)
-    facloc_worse = sum(delta < -threshold for delta in deltas_fm)
-    facloc_topk_better = sum(delta > 0.0 for delta in deltas_ft)
-    mmr_topk_better = sum(delta > 0.0 for delta in deltas_mt)
     return {
         **dict(extra),
         'Metric': metric_title,
         'MetricLabel': metric,
         'Rows': row_count,
-        'FacLocBetterPct': _fraction_or_none(facloc_better, row_count),
-        'FacLocTiedPct': _fraction_or_none(facloc_tied, row_count),
-        'FacLocWorsePct': _fraction_or_none(facloc_worse, row_count),
-        'FacLocTopKBetterPct': _fraction_or_none(facloc_topk_better, row_count),
-        'MMRTopKBetterPct': _fraction_or_none(mmr_topk_better, row_count),
-        'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
-        'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
-        'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
+        'MeanTopK': family_balanced_mean(complete_rows, f'TopK_{metric}'),
+        'MeanMMR': family_balanced_mean(complete_rows, f'MMR_{metric}'),
+        'MeanFacLoc': family_balanced_mean(complete_rows, f'FacLoc_{metric}'),
+        'FacLocBetterPct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_fm_col)) or 0.0) > threshold,
+        ),
+        'FacLocTiedPct': family_balanced_rate(
+            complete_rows,
+            lambda row: abs(float_or_none(row.get(delta_fm_col)) or 0.0) <= threshold,
+        ),
+        'FacLocWorsePct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_fm_col)) or 0.0) < -threshold,
+        ),
+        'FacLocTopKBetterPct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_ft_col)) or 0.0) > 0.0,
+        ),
+        'MMRTopKBetterPct': family_balanced_rate(
+            complete_rows,
+            lambda row: (float_or_none(row.get(delta_mt_col)) or 0.0) > 0.0,
+        ),
+        'MeanDeltaFacLocMMR': family_balanced_mean(complete_rows, delta_fm_col),
+        'MeanDeltaFacLocTopK': family_balanced_mean(complete_rows, delta_ft_col),
+        'MeanDeltaMMRTopK': family_balanced_mean(complete_rows, delta_mt_col),
     }
 
 
@@ -1071,23 +1143,26 @@ def _delta_panel_specs() -> tuple[DeltaPanelSpec, ...]:
         DeltaPanelSpec(
             title='Mean FacLoc - MMR',
             value_field='MeanDeltaFacLocMMR',
+            raw_value_field='MeanFacLoc',
             pct_field='FacLocBetterPct',
             cmap='RdBu',
-            colorbar_label='Mean FacLoc - MMR delta',
+            colorbar_label='Mean improvement delta (positive favors FacLoc)',
         ),
         DeltaPanelSpec(
             title='Mean FacLoc - top-k',
             value_field='MeanDeltaFacLocTopK',
+            raw_value_field='MeanFacLoc',
             pct_field='FacLocTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean FacLoc - top-k delta',
+            colorbar_label='Mean improvement delta (positive favors FacLoc)',
         ),
         DeltaPanelSpec(
             title='Mean MMR - top-k',
             value_field='MeanDeltaMMRTopK',
+            raw_value_field='MeanMMR',
             pct_field='MMRTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean MMR - top-k delta',
+            colorbar_label='Mean improvement delta (positive favors MMR)',
         ),
     )
 
@@ -1163,6 +1238,33 @@ def _has_summary_row(
 def _ordered_configs(rows: Sequence[Mapping[str, object]]) -> list[str]:
     configs = {str(row.get('WordingConfig') or '') for row in rows if row.get('WordingConfig')}
     return sorted(configs, key=_config_sort_key)
+
+
+def _ordered_configs_by_metric_score(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    grouped: dict[str, list[float]] = {}
+    for row in rows:
+        config = str(row.get('WordingConfig') or '')
+        metric = str(row.get('MetricLabel') or '')
+        value = float_or_none(row.get('MeanDeltaFacLocMMR'))
+        if not config or metric not in REPORT_METRIC_LABEL_SET or value is None:
+            continue
+        grouped.setdefault(config, []).append(value)
+    if not grouped:
+        return _ordered_configs(rows)
+    scored = [
+        (config, statistics.fmean(values))
+        for config, values in grouped.items()
+        if values
+    ]
+    ordered = [
+        config
+        for config, _score in sorted(
+            scored,
+            key=lambda item: (-item[1], _config_sort_key(item[0])),
+        )
+    ]
+    missing = [config for config in _ordered_configs(rows) if config not in set(ordered)]
+    return [*ordered, *missing]
 
 
 def _ordered_families(rows: Sequence[Mapping[str, object]]) -> list[str]:

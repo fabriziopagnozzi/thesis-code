@@ -186,6 +186,11 @@ _POPULATION_LABELS: dict[GeometryPopulation, str] = {
     'geometry_eligible': 'Geometry-eligible queries',
     'geometry_ineligible': 'Geometry-ineligible queries',
 }
+_POPULATION_QUERY_SCOPE_LABELS: dict[GeometryPopulation, str] = {
+    'all_generated': 'all-query',
+    'geometry_eligible': 'geometry-eligible',
+    'geometry_ineligible': 'geometry-ineligible',
+}
 _POPULATION_PASS_FILTER_VALUE: dict[GeometryPopulation, bool | None] = {
     'all_generated': None,
     'geometry_eligible': True,
@@ -647,6 +652,8 @@ def _population_row_from_stats(
     lam = float_or_none(row.get(_LAMBDA))
     out = base_experiment_row(record)
     out.update({
+        'OnlyPassGeometry': population == 'geometry_eligible',
+        'QueryScope': _POPULATION_QUERY_SCOPE_LABELS[population],
         'GeometrySourceExperiment': record.name,
         'GeometryPopulation': population,
         'GeometryPopulationLabel': _POPULATION_LABELS[population],

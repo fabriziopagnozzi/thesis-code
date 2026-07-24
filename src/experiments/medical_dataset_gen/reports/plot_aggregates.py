@@ -42,6 +42,7 @@ from experiments.medical_dataset_gen.reports.report_config import (
 class DeltaHeatmapSpec:
     title: str
     value_field: str
+    raw_value_field: str
     pct_field: str
     cmap: str
     colorbar_label: str
@@ -188,9 +189,9 @@ def plot_metric_family_delta_heatmap_low_budget(
         fig.text(
             0.5,
             0.02,
-            'Cell format: top line = mean delta. Bottom line = row share where the first '
-            'strategy beats the second; FacLoc - MMR uses the metric-specific practical '
-            'effect threshold, top-k comparisons use > 0.',
+            'Cell lines: raw mean for the first strategy; bold improvement delta; win rate. '
+            'FacLoc - MMR uses the metric-specific practical effect threshold, top-k '
+            'comparisons use > 0.',
             ha='center',
             va='bottom',
             fontsize=8,
@@ -385,10 +386,9 @@ def plot_metric_family_delta_heatmap_low_budget_best_embedding_model(
         fig.text(
             0.5,
             0.02,
-            'Embedding model selected by the Balanced clean / FCP cell. Cell format: top line '
-            '= mean delta. Bottom line = row share where the first strategy beats the second; '
-            'FacLoc - MMR uses the metric-specific practical effect threshold, top-k '
-            'comparisons use > 0.',
+            'Embedding model selected by the Balanced clean / FCP cell. Cell lines: raw mean '
+            'for the first strategy; bold improvement delta; win rate. FacLoc - MMR uses the '
+            'metric-specific practical effect threshold, top-k comparisons use > 0.',
             ha='center',
             va='bottom',
             fontsize=8,
@@ -457,9 +457,8 @@ def plot_fcp_family_budget_heatmaps(
         fig.text(
             0.5,
             0.02,
-            'Cell format: top line = mean FCP delta. Bottom line = FacLoc win rate '
-            'within that family-budget group: left panel uses FacLoc - MMR FCP > 0.05; '
-            'top-k comparison panels use > 0.',
+            'Cell lines: raw mean for the first strategy; bold FCP improvement delta; win rate. '
+            'Left panel uses FacLoc - MMR FCP > 0.05; top-k comparison panels use > 0.',
             ha='center',
             va='bottom',
             fontsize=8,
@@ -649,23 +648,26 @@ def _delta_heatmap_specs(*, metric_suffix: str) -> tuple[DeltaHeatmapSpec, ...]:
         DeltaHeatmapSpec(
             title=f'Mean FacLoc - MMR{metric_suffix}',
             value_field='MeanDeltaFacLocMMR',
+            raw_value_field='MeanFacLoc',
             pct_field='FacLocBetterPct',
             cmap='RdBu',
-            colorbar_label='Mean FacLoc - MMR delta',
+            colorbar_label='Mean improvement delta (positive favors FacLoc)',
         ),
         DeltaHeatmapSpec(
             title=f'Mean FacLoc - top-k{metric_suffix}',
             value_field='MeanDeltaFacLocTopK',
+            raw_value_field='MeanFacLoc',
             pct_field='FacLocTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean FacLoc - top-k delta',
+            colorbar_label='Mean improvement delta (positive favors FacLoc)',
         ),
         DeltaHeatmapSpec(
             title=f'Mean MMR - top-k{metric_suffix}',
             value_field='MeanDeltaMMRTopK',
+            raw_value_field='MeanMMR',
             pct_field='MMRTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean MMR - top-k delta',
+            colorbar_label='Mean improvement delta (positive favors MMR)',
         ),
     )
 
@@ -739,17 +741,65 @@ def _draw_delta_heatmap_row(
                 )
                 if value is None:
                     continue
-                ax.text(
-                    x_index,
-                    y_index,
-                    f'{value:+.3f}\n{pct:.0%}' if pct is not None else f'{value:+.3f}',
-                    ha='center',
-                    va='center',
-                    fontsize=7,
-                    color=_heatmap_text_color(value, spec.value_field),
+                raw_value = (
+                    float_or_none(source_row.get(spec.raw_value_field))
+                    if source_row is not None
+                    else None
+                )
+                _annotate_delta_heatmap_cell(
+                    ax=ax,
+                    x_index=x_index,
+                    y_index=y_index,
+                    raw_value=raw_value,
+                    delta=value,
+                    pct=pct,
+                    value_field=spec.value_field,
                 )
         cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, extend='both')
         cbar.set_label(spec.colorbar_label)
+
+
+def _annotate_delta_heatmap_cell(
+    *,
+    ax: Any,
+    x_index: int,
+    y_index: int,
+    raw_value: float | None,
+    delta: float,
+    pct: float | None,
+    value_field: str,
+) -> None:
+    color = _heatmap_text_color(delta, value_field)
+    if raw_value is not None:
+        ax.text(
+            x_index,
+            y_index - 0.27,
+            f'{raw_value:.3f}',
+            ha='center',
+            va='center',
+            fontsize=5.8,
+            color=color,
+        )
+    ax.text(
+        x_index,
+        y_index,
+        f'{delta:+.3f}',
+        ha='center',
+        va='center',
+        fontsize=6.6,
+        fontweight='bold',
+        color=color,
+    )
+    if pct is not None:
+        ax.text(
+            x_index,
+            y_index + 0.27,
+            f'{pct:.0%}',
+            ha='center',
+            va='center',
+            fontsize=5.8,
+            color=color,
+        )
 
 
 def _add_embedding_heatmap_row_title(*, fig: Any, axes: Sequence[Any], title: str) -> None:
@@ -827,10 +877,16 @@ def _metric_family_budget_row_by_embedding(
     delta_fm_col = f'Delta_FacLoc_MMR_{metric}'
     delta_ft_col = f'Delta_FacLoc_TopK_{metric}'
     delta_mt_col = f'Delta_MMR_TopK_{metric}'
+    topk_col = f'TopK_{metric}'
+    mmr_col = f'MMR_{metric}'
+    facloc_col = f'FacLoc_{metric}'
     complete_rows = [row for row in rows if float_or_none(row.get(delta_fm_col)) is not None]
     deltas_fm = _numeric_values(complete_rows, delta_fm_col)
     deltas_ft = _numeric_values(complete_rows, delta_ft_col)
     deltas_mt = _numeric_values(complete_rows, delta_mt_col)
+    topk_values = _numeric_values(complete_rows, topk_col)
+    mmr_values = _numeric_values(complete_rows, mmr_col)
+    facloc_values = _numeric_values(complete_rows, facloc_col)
     threshold = practical_effect_threshold(metric)
     row_count = len(complete_rows)
     facloc_better = sum(delta > threshold for delta in deltas_fm)
@@ -856,6 +912,9 @@ def _metric_family_budget_row_by_embedding(
         'FacLocWorsePct': _fraction_or_none(facloc_worse, row_count),
         'FacLocTopKBetterPct': _fraction_or_none(facloc_topk_better, row_count),
         'MMRTopKBetterPct': _fraction_or_none(mmr_topk_better, row_count),
+        'MeanTopK': statistics.fmean(topk_values) if topk_values else None,
+        'MeanMMR': statistics.fmean(mmr_values) if mmr_values else None,
+        'MeanFacLoc': statistics.fmean(facloc_values) if facloc_values else None,
         'MeanDeltaFacLocMMR': statistics.fmean(deltas_fm) if deltas_fm else None,
         'MeanDeltaFacLocTopK': statistics.fmean(deltas_ft) if deltas_ft else None,
         'MeanDeltaMMRTopK': statistics.fmean(deltas_mt) if deltas_mt else None,
