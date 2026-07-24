@@ -94,7 +94,7 @@ Schema v4 uses only `retrieval.pool_scope: query_local`: chunks linked to the qu
 
 ## Language Surfaces
 
-Chunk and query text is generated deterministically from [medical_ontology.yaml](./data_templates/medical_ontology.yaml) and [chunk_templates.yaml](./data_templates/chunk_templates.yaml). `generation.chunk_text_style` selects either `semantic_hardened`, which keeps chart-like evidence only, or `ontology_explicit`, which adds one authored interpretation sentence for the active axis/value bin. Use the v4 review script to inspect rendered language before running embeddings:
+Chunk and query text is generated deterministically from [medical_ontology.yaml](./data_templates/medical_ontology.yaml) and [chunk_templates.yaml](./data_templates/chunk_templates.yaml). `generation.chunk_text_style` selects either `semantic_hardened`, which keeps chart-like evidence only, or `ontology_explicit`, which adds one of several authored interpretation sentences that explicitly names the active axis (for example, `care intensity`) and states its value bin. Chunk outer templates contain no admission-presentation evidence: they combine one condition anchor, cohort evidence, and one axis payload so another diagnostic modality cannot leak through a shared presentation scaffold. The v4 review script exhaustively renders every ontology payload across note styles, chunk styles, and surface groups before embeddings are run:
 
 ```bash
 uv run python -m experiments.medical_dataset_gen.scripts.render_v4_language_review

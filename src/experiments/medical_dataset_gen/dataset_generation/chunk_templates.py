@@ -11,7 +11,6 @@ import yaml
 
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
     AcuteClinicalCoursePayload,
-    AxisFactPayload,
     CareIntensityPayload,
     ChunkSurfaceGroup,
     ChunkSurfacePolicy,
@@ -88,12 +87,13 @@ TEMPLATE_DATA = _load_template_utils()
 
 
 def available_note_styles(surface_group: ChunkSurfaceGroup | None = None) -> list[str]:
+    templates = TEMPLATE_DATA.note_style_templates.outer_template
     if surface_group is None:
-        return list(TEMPLATE_DATA.note_style_templates)
+        return list(templates)
     return [
         family
-        for family, templates in TEMPLATE_DATA.note_style_templates.items()
-        if templates.templates_for_group(surface_group)
+        for family, bucket in templates.items()
+        if bucket.templates_for_group(surface_group)
     ]
 
 
@@ -144,16 +144,6 @@ def render_chunk_text_template_result(
         text_style=text_style,
         surface_group=resolved_surface_group,
     )
-    presentation = _presentation_without_axis_repetition(
-        fact,
-        payload,
-        ontology,
-        resolved_surface_group,
-    )
-    condition_already_stated = bool(
-        _phrase_count(axis_sentence, fact.condition_display)
-        or _phrase_count(presentation, fact.condition_display)
-    )
     outer_template_family, outer_template_id, outer_template = _outer_template(
         fact,
         resolved_surface_group,
@@ -167,11 +157,6 @@ def render_chunk_text_template_result(
         'possessive_cap': patient.possessive_cap,
         'age': fact.patient_age,
         'condition': fact.condition_display,
-        'condition_intro': '' if condition_already_stated else f' for {fact.condition_display}',
-        'condition_management_clause': ''
-        if condition_already_stated
-        else f' and was managed for {fact.condition_display}',
-        'presentation': presentation,
         'cohort_sentence': _cohort_sentence(fact, patient, rng, resolved_surface_group),
         'axis_sentence': axis_sentence,
     }
@@ -186,55 +171,16 @@ def render_chunk_text_template_result(
     )
 
 
-def _presentation_without_axis_repetition(
-    fact: ClinicalFact,
-    payload: AxisFactPayload,
-    ontology: MedicalOntology,
-    surface_group: ChunkSurfaceGroup,
-) -> str:
-    """Select an authored presentation without deleting words from it."""
-    presentations = ontology.conditions[fact.condition_id].presentations
-    evidence_phrases = _presentation_exclusion_phrases(payload, fact.condition_display)
-    nonrepeating_presentations = [
-        presentation
-        for presentation in presentations
-        if not any(_phrase_count(presentation, phrase) for phrase in evidence_phrases)
-    ]
-    choices = nonrepeating_presentations or presentations
-    index = _stable_index(fact, surface_group, 'presentation', len(choices))
-    return choices[index]
-
-
-def _presentation_exclusion_phrases(
-    payload: AxisFactPayload,
-    condition_display: str,
-) -> list[str]:
-    if isinstance(payload, TreatmentDurationPayload):
-        return [payload.treatment]
-    if isinstance(payload, RehabOutcomePayload):
-        return [payload.outcome]
-    if isinstance(
-        payload,
-        (
-            ComplicationBurdenPayload,
-            AcuteClinicalCoursePayload,
-            CareIntensityPayload,
-            DiagnosticEvidencePayload,
-        ),
-    ):
-        return [payload.detail]
-    raise TypeError(type(payload))
-
-
 def _outer_template(
     fact: ClinicalFact,
     surface_group: ChunkSurfaceGroup,
 ) -> tuple[str | None, str | None, str]:
     family = _canonical_outer_family(fact.note_style)
-    bucket = TEMPLATE_DATA.note_style_templates.get(family)
+    templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(fact.condition_anchor)
+    bucket = templates.get(family)
     if bucket is None:
-        family = next(iter(TEMPLATE_DATA.note_style_templates))
-        bucket = TEMPLATE_DATA.note_style_templates[family]
+        family = next(iter(templates))
+        bucket = templates[family]
     choices = bucket.templates_for_group(surface_group)
     index = _stable_index(fact, surface_group, f'outer:{family}', len(choices))
     selected = choices[index]
@@ -288,7 +234,10 @@ def _axis_sentence(
             surface_group=surface_group,
         )
         if text_style == 'ontology_explicit':
-            text = f'{text} {_simple_interpretation_sentence(fact, axis_query_label)}'
+            text = (
+                f'{text} '
+                f'{_simple_interpretation_sentence(fact, surface_group=surface_group)}'
+            )
         return text, family, template_id
     elif isinstance(payload, RehabOutcomePayload):
         axis_value = payload.outcome
@@ -319,7 +268,7 @@ def _axis_sentence(
     }
     text = template_spec.template.format(**context)
     if text_style == 'ontology_explicit':
-        text = f'{text} {_simple_interpretation_sentence(fact, axis_query_label)}'
+        text = f'{text} {_simple_interpretation_sentence(fact, surface_group=surface_group)}'
     return text, family, template_spec.id
 
 
@@ -347,18 +296,20 @@ def _treatment_duration_sentence(
     return text, f'treatment_course:{course_id}', selected.id
 
 
-def _simple_interpretation_sentence(fact: ClinicalFact, axis_query_label: str) -> str:
+def _simple_interpretation_sentence(
+    fact: ClinicalFact,
+    *,
+    surface_group: ChunkSurfaceGroup,
+) -> str:
     try:
-        template = TEMPLATE_DATA.simple_interpretations[fact.axis][fact.value_bin]
+        bucket = TEMPLATE_DATA.simple_interpretations[fact.axis][fact.value_bin]
     except KeyError as exc:
         raise ValueError(
             f'missing simple interpretation for {fact.axis!r}/{fact.value_bin!r}'
         ) from exc
-    return template.format(
-        axis_query_label=axis_query_label,
-        axis_bin_term=fact.axis_bin_term,
-        value_bin=fact.value_bin.replace('_', ' '),
-    )
+    choices = bucket.templates_for_group(surface_group)
+    index = _stable_index(fact, surface_group, 'simple_interpretation', len(choices))
+    return choices[index].template
 
 
 def _canonical_outer_family(note_style: str) -> str:
@@ -397,6 +348,7 @@ def validate_chunk_text(
     fact: ClinicalFact,
     ontology: MedicalOntology,
     text_style: ChunkTextStyle = 'semantic_hardened',
+    surface_group: ChunkSurfaceGroup | None = None,
 ) -> ChunkValidation:
     lower = text.lower()
     hard_errors: list[str] = []
@@ -408,23 +360,24 @@ def validate_chunk_text(
         hard_errors.append('contains leading note-section header')
 
     condition_occurrences = _phrase_count(text, fact.condition_display)
-    if condition_occurrences < 1:
+    if condition_occurrences != 1:
         hard_errors.append(
-            f'condition display must occur at least once; found {condition_occurrences}: '
+            f'condition display must occur exactly once; found {condition_occurrences}: '
             f'{fact.condition_display}'
         )
     if not _contains_subgroup_evidence(text, fact, ontology):
         hard_errors.append(f'missing subgroup evidence: {fact.subgroup_label}')
     axis = ontology.clinical_axes[fact.axis]
     if text_style == 'ontology_explicit':
-        interpretation = _simple_interpretation_sentence(fact, axis.query_label)
+        interpretation = _simple_interpretation_sentence(
+            fact,
+            surface_group=surface_group or fact.chunk_surface_group,
+        )
         if _phrase_count(text, interpretation) != 1:
             hard_errors.append(
                 'simple interpretation sentence must occur exactly once: '
                 f'{interpretation}'
             )
-        if _phrase_count(text, axis.query_label) < 1:
-            hard_errors.append(f'axis query label must occur in simple style: {axis.query_label}')
     else:
         for term in (axis.query_label, axis.label):
             if _phrase_count(text, term):
@@ -495,32 +448,74 @@ def _validate_simple_interpretation_coverage(
     for axis_id, axis in ontology.clinical_axes.items():
         expected = set(axis.bins)
         actual = set(TEMPLATE_DATA.simple_interpretations.get(axis_id, {}))
+        axis_name = axis_id.replace('_', ' ')
         missing = sorted(expected - actual)
         extra = sorted(actual - expected)
         if missing or extra:
             errors.append(
                 f'simple_interpretations.{axis_id}: missing={missing}, extra={extra}'
             )
+        for value_bin, bucket in TEMPLATE_DATA.simple_interpretations.get(
+            axis_id, {}
+        ).items():
+            for spec in [*bucket.seen, *bucket.heldout]:
+                if _phrase_count(spec.template, axis_name) != 1:
+                    errors.append(
+                        f'simple_interpretations.{axis_id}.{value_bin}/{spec.id} '
+                        f'must contain the axis name exactly once: {axis_name!r}'
+                    )
 
 
 def _validate_template_placeholders(errors: list[str]) -> None:
     treatment_fields = {'duration_days', 'treatment', 'duration_phrase'}
-    simple_fields = {'axis_query_label', 'axis_bin_term', 'value_bin'}
+    outer_fields = {
+        'patient',
+        'patient_lower',
+        'pronoun',
+        'pronoun_cap',
+        'possessive',
+        'possessive_cap',
+        'age',
+        'condition',
+        'cohort_sentence',
+        'axis_sentence',
+    }
+    for condition_anchor in ('outer_template', 'axis_evidence'):
+        templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
+        for family, bucket in templates.items():
+            for spec in [*bucket.seen, *bucket.heldout]:
+                fields = _template_fields(spec.template)
+                unknown = sorted(fields - outer_fields)
+                if unknown:
+                    errors.append(f'{family}/{spec.id} has unknown placeholders: {unknown}')
+                condition_count = sum(
+                    1
+                    for _, field_name, _, _ in Formatter().parse(spec.template)
+                    if field_name == 'condition'
+                )
+                expected_count = 1 if condition_anchor == 'outer_template' else 0
+                if condition_count != expected_count:
+                    errors.append(
+                        f'{family}/{spec.id} must contain {{condition}} {expected_count} time(s)'
+                    )
+                if 'axis_sentence' not in fields:
+                    errors.append(f'{family}/{spec.id} must contain {{axis_sentence}}')
     for course_id, bucket in TEMPLATE_DATA.treatment_course_templates.items():
         for spec in [*bucket.seen, *bucket.heldout]:
             fields = _template_fields(spec.template)
             unknown = sorted(fields - treatment_fields)
             if unknown:
                 errors.append(f'{course_id}/{spec.id} has unknown placeholders: {unknown}')
-    for axis_id, templates in TEMPLATE_DATA.simple_interpretations.items():
-        for value_bin, template in templates.items():
-            fields = _template_fields(template)
-            unknown = sorted(fields - simple_fields)
-            if unknown:
-                errors.append(
-                    f'simple_interpretations.{axis_id}.{value_bin} has unknown placeholders: '
-                    f'{unknown}'
-                )
+    for axis_id, interpretations_by_bin in TEMPLATE_DATA.simple_interpretations.items():
+        for value_bin, bucket in interpretations_by_bin.items():
+            for spec in [*bucket.seen, *bucket.heldout]:
+                fields = _template_fields(spec.template)
+                if fields:
+                    errors.append(
+                        f'simple_interpretations.{axis_id}.{value_bin}/{spec.id} '
+                        f'must be a complete authored sentence without placeholders: '
+                        f'{sorted(fields)}'
+                    )
 
 
 def _template_fields(template: str) -> set[str]:

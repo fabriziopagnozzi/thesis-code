@@ -46,6 +46,7 @@ QUERY_STRUCTURE_LIST = list[QueryStructure](get_args(QueryStructure.__value__))
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
 CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_args(ChunkSurfaceGroup.__value__))
 type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']
+type ConditionAnchor = Literal['outer_template', 'axis_evidence']
 type AxisTemplateFamily = Literal[
     'direct_fact',
     'temporal_course',
@@ -165,6 +166,14 @@ def parse_axis_payload(value: str) -> AxisFactPayload:
     except KeyError as exc:
         raise ValueError(f'unsupported axis payload: {axis!r}') from exc
     return model.model_validate(payload)
+
+
+def axis_payload_required_phrase(payload: AxisFactPayload) -> str:
+    if isinstance(payload, TreatmentDurationPayload):
+        return f'{payload.duration_days} days of {payload.treatment}'
+    if isinstance(payload, RehabOutcomePayload):
+        return payload.outcome
+    return payload.detail
 
 
 class AnswerSourceFact(BenchmarkPydanticModel):
@@ -328,7 +337,6 @@ class ConditionOntology(BenchmarkPydanticModel):
         default_factory=list
     )
     terms: list[str]
-    presentations: list[str]
     axis_values: dict[ClinicalAxis, ConditionAxisValues]
 
     @model_validator(mode='after')
@@ -908,6 +916,7 @@ class ClinicalFact(BenchmarkPydanticModel):
     value_bin: str
     axis_bin_term: str
     axis_payload_json: str
+    condition_anchor: ConditionAnchor = 'outer_template'
     facet_priority: Literal['primary', 'secondary'] | None
     is_gold: bool
     distractor_type: str | None
@@ -927,6 +936,18 @@ class ClinicalFact(BenchmarkPydanticModel):
         payload = parse_axis_payload(self.axis_payload_json)
         if payload.axis != self.axis:
             raise ValueError(f'axis payload {payload.axis!r} does not match {self.axis!r}')
+        if 'condition_anchor' in self.model_fields_set:
+            required_phrase = axis_payload_required_phrase(payload)
+            expected_anchor: ConditionAnchor = (
+                'axis_evidence'
+                if self.condition_display.casefold() in required_phrase.casefold()
+                else 'outer_template'
+            )
+            if self.condition_anchor != expected_anchor:
+                raise ValueError(
+                    f'condition_anchor {self.condition_anchor!r} does not match '
+                    f'payload-derived anchor {expected_anchor!r}'
+                )
         return self
 
 
@@ -1006,6 +1027,27 @@ class CohortEvidenceTemplates(BenchmarkPydanticModel):
     comorbidity_reference: SurfaceTemplateBucket
 
 
+class NoteStyleTemplates(BenchmarkPydanticModel):
+    outer_template: dict[str, SurfaceTemplateBucket]
+    axis_evidence: dict[str, SurfaceTemplateBucket]
+
+    @model_validator(mode='after')
+    def _validate_matching_families(self) -> NoteStyleTemplates:
+        if set(self.outer_template) != set(self.axis_evidence):
+            raise ValueError(
+                'note-style families must match for outer_template and axis_evidence anchors'
+            )
+        return self
+
+    def templates_for_anchor(
+        self,
+        condition_anchor: ConditionAnchor,
+    ) -> dict[str, SurfaceTemplateBucket]:
+        if condition_anchor == 'outer_template':
+            return self.outer_template
+        return self.axis_evidence
+
+
 class PairedAxisSentenceTemplates(BenchmarkPydanticModel):
     """Shared clinical evidence wording for deterministic v4 chunks.
 
@@ -1059,21 +1101,25 @@ class ChunkAxisSentenceTemplates(BenchmarkPydanticModel):
 
 class ChunkTemplateUtils(BenchmarkPydanticModel):
     hidden_benchmark_terms: list[str]
-    note_style_templates: dict[str, SurfaceTemplateBucket]
+    note_style_templates: NoteStyleTemplates
     cohort_evidence_templates: CohortEvidenceTemplates
     treatment_course_templates: dict[str, SurfaceTemplateBucket]
     axis_sentence_templates: ChunkAxisSentenceTemplates
-    simple_interpretations: dict[ClinicalAxis, dict[str, str]]
+    simple_interpretations: dict[ClinicalAxis, dict[str, SurfaceTemplateBucket]]
 
     @model_validator(mode='after')
     def _validate_template_inventory(self) -> ChunkTemplateUtils:
         template_ids: set[str] = set()
         duplicate_ids: set[str] = set()
-        for bucket in self.note_style_templates.values():
-            for spec in [*bucket.seen, *bucket.heldout]:
-                if spec.id in template_ids:
-                    duplicate_ids.add(spec.id)
-                template_ids.add(spec.id)
+        for templates_by_family in (
+            self.note_style_templates.outer_template,
+            self.note_style_templates.axis_evidence,
+        ):
+            for bucket in templates_by_family.values():
+                for spec in [*bucket.seen, *bucket.heldout]:
+                    if spec.id in template_ids:
+                        duplicate_ids.add(spec.id)
+                    template_ids.add(spec.id)
         for bucket in (
             self.cohort_evidence_templates.comorbidity_present,
             self.cohort_evidence_templates.comorbidity_reference,
@@ -1114,14 +1160,16 @@ class ChunkTemplateUtils(BenchmarkPydanticModel):
                 template_ids.add(spec.id)
         if set(self.simple_interpretations) != expected_axes:
             raise ValueError('simple_interpretations must define every clinical axis')
-        for axis, interpretations in self.simple_interpretations.items():
-            if not interpretations:
+        for axis, interpretations_by_bin in self.simple_interpretations.items():
+            if not interpretations_by_bin:
                 raise ValueError(f'simple_interpretations for {axis!r} must not be empty')
-            for value_bin, template in interpretations.items():
-                if not value_bin.strip() or not template.strip():
-                    raise ValueError(
-                        f'simple_interpretations for {axis!r} contains an empty bin/template'
-                    )
+            for value_bin, bucket in interpretations_by_bin.items():
+                if not value_bin.strip():
+                    raise ValueError(f'simple_interpretations for {axis!r} contains an empty bin')
+                for spec in [*bucket.seen, *bucket.heldout]:
+                    if spec.id in template_ids:
+                        duplicate_ids.add(spec.id)
+                    template_ids.add(spec.id)
         if duplicate_ids:
             raise ValueError(f'duplicate chunk template ids: {sorted(duplicate_ids)}')
         return self

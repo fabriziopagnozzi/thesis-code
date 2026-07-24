@@ -40,6 +40,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     SubgroupAxis,
     TreatmentDurationAxisValues,
     TreatmentDurationPayload,
+    axis_payload_required_phrase,
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import (
     BackgroundDistractorSpec,
@@ -606,6 +607,11 @@ def make_base_fact(
         f'{plan.query_id}_{"g" if is_gold else "d"}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     )
     required_payload = _payload_required_phrase(payload)
+    condition_anchor = (
+        'axis_evidence'
+        if condition_display.casefold() in required_payload.casefold()
+        else 'outer_template'
+    )
     must_mention = [
         condition_display,
         ontology.clinical_axes[axis].label,
@@ -644,6 +650,7 @@ def make_base_fact(
         value_bin=value_bin,
         axis_bin_term=axis_bin_term,
         axis_payload_json=payload_json,
+        condition_anchor=condition_anchor,
         facet_priority=facet.priority if facet is not None else None,
         is_gold=is_gold,
         distractor_type=distractor_type,
@@ -699,11 +706,7 @@ def _axis_payload(
 
 
 def _payload_required_phrase(payload: AxisFactPayload) -> str:
-    if isinstance(payload, TreatmentDurationPayload):
-        return f'{payload.duration_days} days of {payload.treatment}'
-    if isinstance(payload, RehabOutcomePayload):
-        return payload.outcome
-    return payload.detail
+    return axis_payload_required_phrase(payload)
 
 
 def _patient_age(

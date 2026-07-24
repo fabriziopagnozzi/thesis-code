@@ -12,8 +12,8 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 )
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     TEMPLATE_DATA,
-    validate_chunk_text,
     validate_chunk_template_sources,
+    validate_chunk_text,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axis_pair_profiles,
@@ -25,7 +25,6 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
 )
 from experiments.medical_dataset_gen.pipeline.p01_plans import _materialize_plan
 from experiments.medical_dataset_gen.pipeline.p03_facts import (
-    _axis_payload,
     _payload_required_phrase,
 )
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
@@ -33,11 +32,19 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     CLINICAL_AXIS_LIST,
     QUERY_FOCUS_MODE_LIST,
     QUERY_STRUCTURE_LIST,
+    AcuteClinicalCoursePayload,
+    AxisFactPayload,
+    CareIntensityPayload,
     ChunkSurfaceGroup,
     ClinicalAxis,
     ClinicalFact,
+    ComplicationBurdenPayload,
+    DiagnosticEvidencePayload,
     MedicalOntology,
     QueryPlanSpec,
+    RehabOutcomePayload,
+    TreatmentDurationAxisValues,
+    TreatmentDurationPayload,
 )
 from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
@@ -95,8 +102,12 @@ def _review_cfg() -> ExperimentCfg:
 
 def _surface_inventory_rows() -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for family, bucket in TEMPLATE_DATA.note_style_templates.items():
-        rows.extend(_bucket_rows('note_style', family, bucket))
+    for condition_anchor in ('outer_template', 'axis_evidence'):
+        templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
+        for family, bucket in templates.items():
+            rows.extend(
+                _bucket_rows('note_style', f'{condition_anchor}:{family}', bucket)
+            )
     for family, bucket in TEMPLATE_DATA.cohort_evidence_templates.model_dump().items():
         for group, specs in bucket.items():
             for spec in specs:
@@ -119,15 +130,11 @@ def _surface_inventory_rows() -> list[dict[str, object]]:
                     'template_id': spec.id,
                     'template': spec.template,
                 })
-    for axis, interpretations in TEMPLATE_DATA.simple_interpretations.items():
-        for value_bin, template in interpretations.items():
-            rows.append({
-                'source': 'simple_interpretation',
-                'family': f'{axis}:{value_bin}',
-                'surface_group': 'all',
-                'template_id': f'{axis}_{value_bin}_simple_interpretation',
-                'template': template,
-            })
+    for axis, interpretations_by_bin in TEMPLATE_DATA.simple_interpretations.items():
+        for value_bin, bucket in interpretations_by_bin.items():
+            rows.extend(
+                _bucket_rows('simple_interpretation', f'{axis}:{value_bin}', bucket)
+            )
     return rows
 
 
@@ -148,43 +155,58 @@ def _bucket_rows(source: str, family: str, bucket) -> list[dict[str, object]]:
 def _chunk_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
     ontology = load_ontology(cfg)
     rows: list[dict[str, object]] = []
+    note_styles = list(TEMPLATE_DATA.note_style_templates.outer_template)
     for condition_id, condition in ontology.conditions.items():
         for axis in CLINICAL_AXIS_LIST:
             for value_bin in ontology.clinical_axes[axis].bins:
-                for surface_group in ('seen', 'heldout'):
-                    fact = _sample_fact(
-                        cfg=cfg,
-                        ontology=ontology,
-                        condition_id=condition_id,
-                        axis=axis,
-                        value_bin=value_bin,
-                        surface_group=surface_group,
-                    )
-                    for style in CHUNK_TEXT_STYLE_LIST:
-                        rendered = render_canonical_chunk(fact, ontology, text_style=style)
-                        validation = validate_chunk_text(
-                            rendered.text,
-                            fact,
-                            ontology,
-                            text_style=style,
-                        )
-                        if validation.hard_errors:
-                            raise RuntimeError(
-                                f'invalid sample {condition_id}/{axis}/{value_bin}/{style}: '
-                                + '; '.join(validation.hard_errors)
+                payloads = _all_axis_payloads(ontology, condition_id, axis, value_bin)
+                for payload_index, payload in enumerate(payloads):
+                    for surface_group in ('seen', 'heldout'):
+                        for note_style in note_styles:
+                            fact = _sample_fact(
+                                cfg=cfg,
+                                ontology=ontology,
+                                condition_id=condition_id,
+                                axis=axis,
+                                value_bin=value_bin,
+                                surface_group=surface_group,
+                                payload=payload,
+                                payload_index=payload_index,
+                                note_style=note_style,
                             )
-                        rows.append({
-                            'condition_id': condition_id,
-                            'condition_display': condition.display,
-                            'axis': axis,
-                            'value_bin': value_bin,
-                            'chunk_text_style': style,
-                            'surface_group': surface_group,
-                            'outer_template_id': rendered.provenance.outer_template_id,
-                            'axis_template_family': rendered.provenance.axis_template_family,
-                            'axis_template_id': rendered.provenance.axis_template_id,
-                            'text': rendered.text,
-                        })
+                            for style in CHUNK_TEXT_STYLE_LIST:
+                                rendered = render_canonical_chunk(
+                                    fact,
+                                    ontology,
+                                    text_style=style,
+                                )
+                                validation = validate_chunk_text(
+                                    rendered.text,
+                                    fact,
+                                    ontology,
+                                    text_style=style,
+                                )
+                                if validation.hard_errors:
+                                    raise RuntimeError(
+                                        f'invalid sample '
+                                        f'{condition_id}/{axis}/{value_bin}/{style}: '
+                                        + '; '.join(validation.hard_errors)
+                                    )
+                                rows.append({
+                                    'condition_id': condition_id,
+                                    'condition_display': condition.display,
+                                    'axis': axis,
+                                    'value_bin': value_bin,
+                                    'axis_payload_json': fact.axis_payload_json,
+                                    'condition_anchor': fact.condition_anchor,
+                                    'note_style': note_style,
+                                    'chunk_text_style': style,
+                                    'surface_group': surface_group,
+                                    'outer_template_id': rendered.provenance.outer_template_id,
+                                    'axis_template_family': rendered.provenance.axis_template_family,
+                                    'axis_template_id': rendered.provenance.axis_template_id,
+                                    'text': rendered.text,
+                                })
     return rows
 
 
@@ -196,14 +218,30 @@ def _sample_fact(
     axis: ClinicalAxis,
     value_bin: str,
     surface_group: ChunkSurfaceGroup,
+    payload: AxisFactPayload,
+    payload_index: int,
+    note_style: str,
 ) -> ClinicalFact:
     condition = ontology.conditions[condition_id]
     subgroup_id = 'age_under_50'
     subgroup = ontology.subgroups[subgroup_id]
-    payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx=0)
     payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
     axis_bin_term = ontology.clinical_axes[axis].bin_terms[value_bin][0]
-    reuse_key = _stable_hash(condition_id, axis, value_bin, surface_group, payload_json)
+    reuse_key = _stable_hash(
+        condition_id,
+        axis,
+        value_bin,
+        surface_group,
+        payload_index,
+        note_style,
+        payload_json,
+    )
+    required_payload = _payload_required_phrase(payload)
+    condition_anchor = (
+        'axis_evidence'
+        if condition.display.casefold() in required_payload.casefold()
+        else 'outer_template'
+    )
     return ClinicalFact(
         query_id=f'review_{condition_id}_{axis}_{value_bin}',
         evidence_profile_id='review_profile',
@@ -231,6 +269,7 @@ def _sample_fact(
         value_bin=value_bin,
         axis_bin_term=axis_bin_term,
         axis_payload_json=payload_json,
+        condition_anchor=condition_anchor,
         facet_priority='primary',
         is_gold=True,
         distractor_type=None,
@@ -239,17 +278,57 @@ def _sample_fact(
         patient_age=subgroup.patient_age_range[0] if subgroup.patient_age_range else 42,
         patient_sex='female',
         clinical_subgroup_phrase=subgroup.surface_phrases[0],
-        note_style='admission_course',
+        note_style=note_style,
         chunk_surface_group=surface_group,
         split='validation' if surface_group == 'seen' else 'test',
         must_mention=[
             condition.display,
             ontology.clinical_axes[axis].label,
             axis_bin_term,
-            _payload_required_phrase(payload),
+            required_payload,
         ],
         must_not_mention=[],
     )
+
+
+def _all_axis_payloads(
+    ontology: MedicalOntology,
+    condition_id: str,
+    axis: ClinicalAxis,
+    value_bin: str,
+) -> list[AxisFactPayload]:
+    axis_values = ontology.conditions[condition_id].axis_values[axis]
+    if axis == 'treatment_duration':
+        if not isinstance(axis_values, TreatmentDurationAxisValues):
+            raise TypeError(f'{condition_id}/{axis} has the wrong axis-values payload')
+        return [
+            TreatmentDurationPayload(
+                axis='treatment_duration',
+                duration_days=duration_days,
+                treatment=treatment,
+                treatment_course_id=course_id,
+            )
+            for course_id, course in axis_values.treatments.items()
+            for duration_days in course.bins[value_bin]
+            for treatment in course.surface_forms
+        ]
+
+    raw_values = axis_values.bins[value_bin]
+    if any(not isinstance(value, str) for value in raw_values):
+        raise TypeError(f'{condition_id}/{axis}/{value_bin} contains a non-text value')
+    values = [str(value) for value in raw_values]
+    if axis == 'rehab_outcome':
+        return [RehabOutcomePayload(axis=axis, outcome=value) for value in values]
+    if axis == 'complication_burden':
+        return [ComplicationBurdenPayload(axis=axis, detail=value) for value in values]
+    if axis == 'acute_clinical_course':
+        return [AcuteClinicalCoursePayload(axis=axis, detail=value) for value in values]
+    if axis == 'care_intensity':
+        return [CareIntensityPayload(axis=axis, detail=value) for value in values]
+    return [
+        DiagnosticEvidencePayload(axis='diagnostic_evidence_type', detail=value)
+        for value in values
+    ]
 
 
 def _query_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
@@ -312,7 +391,7 @@ def _readme(
         'retrieval evaluation.\n\n'
         f'- `surface_inventory.parquet`: {surface_inventory.height:,} authored template rows.\n'
         f'- `chunk_samples.parquet`: {chunk_samples.height:,} rendered chunk rows covering '
-        'condition-axis-bin, chunk style, and surface group combinations.\n'
+        'every ontology payload, note style, chunk style, and surface group combination.\n'
         f'- `query_samples.parquet`: {query_samples.height:,} rendered query rows covering '
         'all query structures, focus modes, and template IDs.\n'
     )

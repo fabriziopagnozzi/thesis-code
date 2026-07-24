@@ -152,10 +152,6 @@ conditions:
                             prolonged:
                                 - 14
                                 - 21
-        presentations:
-            - several days of fever, confusion, and gait instability
-            - headache, altered mental status, and lower-extremity weakness
-            - new focal neurologic deficits and inflammatory cerebrospinal fluid findings
     pneumonia:
         display: pneumonia
         allowed_comorbidity_contrast_ids:
@@ -301,10 +297,6 @@ conditions:
                         - sputum or blood culture supporting a bacterial source
                         - respiratory viral and sputum testing clarifying the infectious cause
                         - microbiology testing from respiratory specimens supporting pneumonia
-        presentations:
-            - fever, productive cough, and worsening hypoxemia
-            - a new oxygen requirement and bibasilar infiltrates
-            - dyspnea, leukocytosis, and lobar consolidation on imaging
     ischemic_stroke:
         display: ischemic stroke
         allowed_comorbidity_contrast_ids:
@@ -448,10 +440,6 @@ conditions:
                         - cardiac rhythm and embolic-source testing supporting stroke mechanism
                         - echocardiography and vascular studies clarifying the ischemic source
                         - specialized stroke workup identifying cardioembolic or vascular risk features
-        presentations:
-            - acute dysarthria with unilateral weakness
-            - new focal neurologic deficits at presentation
-            - hemiparesis and imaging evidence of acute infarction
     heart_failure:
         display: acute decompensated heart failure
         allowed_comorbidity_contrast_ids:
@@ -595,10 +583,6 @@ conditions:
                         - natriuretic peptide trend and hemodynamic testing supporting the diagnosis
                         - electrocardiographic and biomarker evaluation supporting cardiac decompensation
                         - specialized cardiac testing clarifying the heart-failure phenotype
-        presentations:
-            - progressive volume overload with edema and exertional dyspnea
-            - pulmonary congestion with elevated filling pressures
-            - worsening orthopnea with increasing lower-extremity edema
     bacterial_meningitis:
         display: bacterial meningitis
         allowed_comorbidity_contrast_ids:
@@ -749,10 +733,6 @@ conditions:
                         - cerebrospinal fluid cell count, glucose, and protein supporting bacterial meningitis
                         - cerebrospinal fluid culture or molecular testing supporting bacterial infection
                         - lumbar-puncture results confirming a bacterial meningeal pattern
-        presentations:
-            - fever, headache, neck stiffness, and photophobia
-            - meningeal signs, confusion, and inflammatory cerebrospinal fluid findings
-            - sepsis physiology with meningismus and altered mental status
     multiple_sclerosis_relapse:
         display: multiple sclerosis relapse
         allowed_comorbidity_contrast_ids:
@@ -888,10 +868,6 @@ conditions:
                         - evoked-potential or cerebrospinal fluid studies supporting demyelinating disease context
                         - specialized neuroimmunology testing supporting relapse evaluation
                         - prior demyelinating-disease testing linked to the new syndrome
-        presentations:
-            - new weakness, sensory change, and gait instability
-            - a demyelinating flare causing leg weakness and urinary urgency
-            - worsening neurologic symptoms without signs of acute infection
     spinal_epidural_abscess:
         display: spinal epidural abscess
         allowed_comorbidity_contrast_ids:
@@ -1037,10 +1013,6 @@ conditions:
                         - blood culture or operative culture identifying the infectious organism
                         - microbiology from drainage or blood supporting the diagnosis
                         - specialized culture data confirming spinal infection
-        presentations:
-            - severe back pain, fever, and progressive leg weakness
-            - an epidural infection with canal narrowing and concern for cord compression
-            - back pain with neurologic deficits and elevated inflammatory markers
     pulmonary_embolism:
         display: pulmonary embolism
         allowed_comorbidity_contrast_ids:
@@ -1180,10 +1152,6 @@ conditions:
                         - D-dimer and thrombophilia-related testing supporting embolism evaluation
                         - lower-extremity venous ultrasound identifying associated thrombosis
                         - specialized coagulation and venous studies supporting thromboembolic disease
-        presentations:
-            - acute dyspnea, pleuritic chest pain, and hypoxemia
-            - tachycardia, imaging-confirmed pulmonary emboli, and concern for right-heart strain
-            - a new oxygen requirement and imaging-confirmed pulmonary embolism
     copd_exacerbation:
         display: acute COPD exacerbation
         allowed_comorbidity_contrast_ids:
@@ -1336,10 +1304,6 @@ conditions:
                         - viral testing or sputum studies clarifying the exacerbation trigger
                         - arterial or venous blood gas testing defining the respiratory pattern
                         - specialized respiratory testing supporting the exacerbation phenotype
-        presentations:
-            - worsening dyspnea, wheezing, and increased sputum production
-            - hypercapnia with increased work of breathing
-            - acute bronchospasm with hypoxemia above baseline oxygen needs
     infective_endocarditis:
         display: infective endocarditis
         allowed_comorbidity_contrast_ids:
@@ -1482,10 +1446,6 @@ conditions:
                         - blood cultures identifying a typical endocarditis organism
                         - serial microbiology testing supporting persistent bloodstream infection
                         - specialized culture data meeting endocarditis diagnostic criteria
-        presentations:
-            - persistent bacteremia, fever, and concern for valvular infection
-            - a new murmur, bloodstream infection, and embolic risk
-            - positive blood cultures and echocardiographic findings concerning for endocarditis
     osteomyelitis:
         display: osteomyelitis
         allowed_comorbidity_contrast_ids:
@@ -1632,10 +1592,6 @@ conditions:
                         - bone biopsy or deep culture identifying an organism
                         - microbiology from bone or deep tissue supporting osteomyelitis
                         - pathology or culture evidence confirming bone infection
-        presentations:
-            - focal bone pain, elevated inflammatory markers, and imaging concerning for infection
-            - chronic wound changes with contiguous bone involvement
-            - localized swelling and tenderness with suspected osteomyelitis
     pyelonephritis_sepsis:
         display: pyelonephritis with sepsis
         allowed_comorbidity_contrast_ids:
@@ -1781,10 +1737,6 @@ conditions:
                         - urine or blood culture identifying the urinary pathogen
                         - microbiology testing supporting bacteremic urinary infection
                         - culture data confirming pyelonephritis-associated infection
-        presentations:
-            - fever, flank pain, hypotension, and urinary tract infection
-            - urosepsis with leukocytosis and acute kidney injury
-            - pyelonephritis complicated by bacteremia and systemic inflammatory response
     diabetic_foot_infection:
         display: diabetic foot infection
         allowed_comorbidity_contrast_ids:
@@ -1931,10 +1883,6 @@ conditions:
                         - deep wound or operative culture identifying the infecting organism
                         - tissue culture supporting diabetic foot infection
                         - microbiology from debridement confirming wound infection
-        presentations:
-            - plantar ulceration with cellulitis and concern for deep soft-tissue infection
-            - an infected diabetic foot wound with drainage and offloading needs
-            - progressive foot erythema, pain, and wound-care complexity
     cirrhosis_encephalopathy:
         display: cirrhosis with hepatic encephalopathy
         allowed_comorbidity_contrast_ids:
@@ -2087,10 +2035,6 @@ conditions:
                         - ammonia and liver-related specialized testing supporting encephalopathy evaluation
                         - paracentesis or infection testing clarifying encephalopathy triggers
                         - specialized hepatic and infectious workup supporting the diagnosis
-        presentations:
-            - confusion, asterixis, and decompensated cirrhosis
-            - hepatic encephalopathy with sleep-wake reversal and poor orientation
-            - worsening mentation in the setting of chronic liver disease
     lupus_nephritis:
         display: lupus nephritis flare
         allowed_comorbidity_contrast_ids:
@@ -2230,10 +2174,6 @@ conditions:
                         - kidney biopsy showing immune-complex nephritis
                         - serologic lupus markers and urinary studies supporting nephritis
                         - specialized autoimmune and renal pathology testing confirming lupus nephritis
-        presentations:
-            - proteinuria, edema, and immune-mediated kidney injury
-            - worsening renal function and active lupus serologies
-            - nephritic urine findings and volume overload during lupus flare
     severe_cellulitis:
         display: severe cellulitis
         allowed_comorbidity_contrast_ids:
@@ -2378,10 +2318,6 @@ conditions:
                         - blood culture or wound testing supporting bacterial soft-tissue infection
                         - microbiology testing clarifying the infectious organism
                         - specialized wound or bloodstream testing supporting cellulitis diagnosis
-        presentations:
-            - limb erythema, swelling, pain, and systemic inflammatory signs
-            - rapidly progressive soft-tissue infection without a drainable abscess
-            - cellulitis with fever, leukocytosis, and impaired ambulation
     ulcerative_colitis_flare:
         display: ulcerative colitis flare
         allowed_comorbidity_contrast_ids:
@@ -2517,10 +2453,6 @@ conditions:
                         - stool testing and inflammatory markers excluding infectious mimics
                         - biopsy or fecal inflammatory testing supporting ulcerative colitis activity
                         - specialized stool and pathology testing clarifying flare diagnosis
-        presentations:
-            - bloody diarrhea, abdominal pain, and elevated inflammatory markers
-            - severe colitis with dehydration and poor oral intake
-            - frequent bloody stools, cramping, and worsening inflammatory bowel disease activity
     acute_pancreatitis:
         display: acute pancreatitis
         allowed_comorbidity_contrast_ids:
@@ -2663,10 +2595,6 @@ conditions:
                         - lipase trend and triglyceride or biliary testing clarifying the pancreatitis subtype
                         - specialized metabolic testing supporting pancreatitis evaluation
                         - laboratory subtype testing identifying pancreatitis-associated risk factors
-        presentations:
-            - epigastric pain radiating to the back with vomiting and lipase elevation
-            - severe abdominal pain with ileus and inflammatory pancreatitis findings
-            - pancreatitis with nausea, poor oral intake, and systemic inflammatory response
     acute_cholecystitis:
         display: acute cholecystitis
         allowed_comorbidity_contrast_ids:
@@ -2809,10 +2737,6 @@ conditions:
                         - bile or blood culture supporting an infectious biliary source
                         - specialized hepatobiliary testing supporting cholecystitis evaluation
                         - microbiology and biliary laboratory data clarifying the diagnosis
-        presentations:
-            - right upper quadrant pain, fever, and gallbladder wall thickening
-            - biliary colic progressing to fever, leukocytosis, and poor oral intake
-            - abdominal pain with vomiting and a positive sonographic Murphy sign
     complicated_diverticulitis:
         display: complicated diverticulitis
         allowed_comorbidity_contrast_ids:
@@ -2955,10 +2879,6 @@ conditions:
                         - drain culture or blood culture supporting an intra-abdominal infectious source
                         - microbiology from abscess drainage clarifying the organism
                         - specialized culture data supporting complicated intra-abdominal infection
-        presentations:
-            - left lower quadrant pain, fever, and leukocytosis from diverticulitis
-            - diverticulitis with a pericolic abscess and worsening abdominal tenderness
-            - abdominal pain with ileus, inflammatory markers, and concern for complicated diverticulitis
     upper_gastrointestinal_bleeding:
         display: upper gastrointestinal bleeding
         allowed_comorbidity_contrast_ids:
@@ -3102,10 +3022,6 @@ conditions:
                         - type-and-screen, coagulation testing, and bleeding-source studies supporting evaluation
                         - specialized hemostasis and transfusion testing supporting the bleeding workup
                         - pathology or organism testing clarifying ulcer-related bleeding context
-        presentations:
-            - melena, symptomatic anemia, and orthostatic dizziness
-            - hematemesis with tachycardia and acute blood-loss symptoms
-            - black stools, weakness, and concern for upper gastrointestinal hemorrhage
     septic_arthritis:
         display: septic arthritis
         allowed_comorbidity_contrast_ids:
@@ -3251,10 +3167,6 @@ conditions:
                         - synovial fluid cell count and culture supporting septic arthritis
                         - arthrocentesis results identifying inflammatory synovial fluid
                         - joint-fluid microbiology confirming infectious arthritis
-        presentations:
-            - an acutely swollen painful joint with fever and limited motion
-            - septic knee with effusion, leukocytosis, and inability to bear weight
-            - hot joint, systemic inflammatory findings, and concern for invasive joint infection
 subgroups:
     age_under_50:
         dimension_id: age_band
