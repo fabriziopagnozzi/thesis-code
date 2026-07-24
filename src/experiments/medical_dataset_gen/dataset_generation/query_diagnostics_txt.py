@@ -152,9 +152,6 @@ _CHUNK_COLUMNS = [
     'chunk_reuse_key',
     'text',
     'approx_words',
-    'text_generation_source',
-    'llm_attempted',
-    'llm_rejected',
     'condition_id',
     'condition_display',
     'subgroup_id',
@@ -169,8 +166,6 @@ _CHUNK_COLUMNS = [
     'patient_sex',
     'clinical_subgroup_phrase',
     'note_style',
-    'validation_soft_warning_count',
-    'validation_soft_warnings_json',
 ]
 
 
@@ -853,10 +848,6 @@ def _render_composition(lines: list[str], composition_df: pl.DataFrame, *, detai
                 'By condition/subgroup/axis/value',
                 ['condition_display', 'subgroup_label', 'axis', 'value_bin'],
             ),
-            (
-                'By text generation and soft warnings',
-                ['text_generation_source', 'validation_soft_warning_count'],
-            ),
         ])
 
     for title, keys in groups:
@@ -1126,7 +1117,6 @@ def _render_chunk_text(
             ('axis', row.get('axis')),
             ('value_bin', row.get('value_bin')),
             ('axis_payload_json', row.get('axis_payload_json')),
-            ('warnings', row.get('validation_soft_warning_count')),
         ]
         lines.append(
             'meta: '
@@ -1168,7 +1158,6 @@ def _render_chunk_text(
         ('axis', row.get('axis')),
         ('value_bin', row.get('value_bin')),
         ('axis_payload_json', row.get('axis_payload_json')),
-        ('validation_soft_warning_count', row.get('validation_soft_warning_count')),
     ]
     if not compact:
         metadata.extend([
@@ -1179,8 +1168,6 @@ def _render_chunk_text(
             ('patient_sex', row.get('patient_sex')),
             ('note_style', row.get('note_style')),
             ('approx_words', row.get('approx_words')),
-            ('text_generation_source', row.get('text_generation_source')),
-            ('validation_soft_warnings_json', row.get('validation_soft_warnings_json')),
             ('fact_id', row.get('fact_id')),
             ('must_mention', row.get('must_mention')),
             ('must_not_mention', row.get('must_not_mention')),
@@ -1296,8 +1283,6 @@ def _composition_frame(ranked_rows: list[dict[str, Any]]) -> pl.DataFrame:
         'subgroup_label',
         'axis',
         'value_bin',
-        'text_generation_source',
-        'validation_soft_warning_count',
     ]
     return pl.DataFrame([{key: row.get(key) for key in keys} for row in ranked_rows])
 
@@ -1802,7 +1787,7 @@ def _parse_args() -> argparse.Namespace:
         '--detail',
         choices=['compact', 'full'],
         default='compact',
-        help='compact keeps only LLM-sized diagnostic evidence; full dumps every candidate row.',
+        help='compact keeps concise diagnostic evidence; full dumps every candidate row.',
     )
     parser.add_argument(
         '--chunk-text-mode',

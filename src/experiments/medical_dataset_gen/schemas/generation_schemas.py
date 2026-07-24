@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import combinations
 from typing import Annotated, Literal, TypedDict, get_args
 
@@ -51,13 +51,12 @@ type AxisTemplateFamily = Literal[
     'temporal_course',
     'clinical_assessment',
     'contrast_or_alternative',
-    'fragmented_or_split_evidence',
 ]
 AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](
     get_args(AxisTemplateFamily.__value__)
 )
 SEEN_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
-HELDOUT_AXIS_TEMPLATE_FAMILIES = list[AxisTemplateFamily](AXIS_TEMPLATE_FAMILY_LIST[2:])
+HELDOUT_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 type SubgroupAxis = Literal['demographic', 'comorbidity']
 type SubgroupKey = str
 type ConditionKey = str
@@ -931,26 +930,9 @@ class ClinicalFact(BenchmarkPydanticModel):
         return self
 
 
-class ChunkGenerationCacheEntry(BenchmarkPydanticModel):
-    cache_version: int
-    fact_id: str
-    fact_chunk_reuse_key: str | None = None
-    chunk_generation_cache_key: str
-    text: str
-    text_generation_source: Literal['llm', 'fallback']
-    llm_attempted: bool
-    llm_rejected: bool
-
-
 @dataclass
 class ChunkState:
     final_text: str
-    text_generation_source: Literal['llm', 'fallback', 'cache']
-    llm_attempted: bool
-    llm_rejected: bool
-    cache_hit: bool = False
-    cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'] = 'miss'
-    validation_soft_warnings: list[str] = field(default_factory=list[str])
     outer_template_family: str | None = None
     outer_template_id: str | None = None
     axis_template_family: str | None = None
@@ -961,17 +943,10 @@ class ChunkRow(ClinicalFact):
     chunk_id: str
     text: str
     approx_words: int
-    text_generation_source: Literal['llm', 'fallback', 'cache']
-    llm_attempted: bool
-    llm_rejected: bool
-    generation_cache_hit: bool
-    generation_cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key']
     outer_template_family: str | None = None
     outer_template_id: str | None = None
     axis_template_family: str | None = None
     axis_template_id: str | None = None
-    validation_soft_warning_count: int
-    validation_soft_warnings_json: str
 
     @classmethod
     def from_fact(
@@ -981,12 +956,6 @@ class ChunkRow(ClinicalFact):
         chunk_id: str,
         final_text: str,
         word_count: int,
-        text_generation_source: Literal['llm', 'fallback', 'cache'],
-        llm_attempted: bool,
-        llm_rejected: bool,
-        cache_hit: bool,
-        cache_hit_kind: Literal['miss', 'fact_id', 'reuse_key'],
-        validation_soft_warnings: list[str],
         outer_template_family: str | None = None,
         outer_template_id: str | None = None,
         axis_template_family: str | None = None,
@@ -997,17 +966,10 @@ class ChunkRow(ClinicalFact):
             chunk_id=chunk_id,
             text=final_text,
             approx_words=word_count,
-            text_generation_source=text_generation_source,
-            llm_attempted=llm_attempted,
-            llm_rejected=llm_rejected,
-            generation_cache_hit=cache_hit,
-            generation_cache_hit_kind=cache_hit_kind,
             outer_template_family=outer_template_family,
             outer_template_id=outer_template_id,
             axis_template_family=axis_template_family,
             axis_template_id=axis_template_id,
-            validation_soft_warning_count=len(validation_soft_warnings),
-            validation_soft_warnings_json=json.dumps(validation_soft_warnings, sort_keys=True),
         )
 
     @classmethod
@@ -1017,12 +979,6 @@ class ChunkRow(ClinicalFact):
             chunk_id=chunk_id,
             final_text=state.final_text,
             word_count=len(state.final_text.split()),
-            text_generation_source=state.text_generation_source,
-            llm_attempted=state.llm_attempted,
-            llm_rejected=state.llm_rejected,
-            cache_hit=state.cache_hit,
-            cache_hit_kind=state.cache_hit_kind,
-            validation_soft_warnings=list(state.validation_soft_warnings),
             outer_template_family=state.outer_template_family,
             outer_template_id=state.outer_template_id,
             axis_template_family=state.axis_template_family,
@@ -1051,25 +1007,20 @@ class CohortEvidenceTemplates(BenchmarkPydanticModel):
 
 
 class PairedAxisSentenceTemplates(BenchmarkPydanticModel):
-    """Shared clinical evidence wording with an explicit ontology suffix.
+    """Shared clinical evidence wording for deterministic v4 chunks.
 
-    The base template is used by both experimental conditions. Only the
-    explicit suffix changes, so the intervention cannot also alter note order
-    or the clinical evidence surface.
+    The template renders the same clinical evidence sentence for both chunk
+    styles. The simple style adds an authored interpretation sentence from the
+    top-level template data; the hardened style stops after this evidence.
     """
 
     seen: dict[AxisTemplateFamily, list[TemplateSpec]]
     heldout: dict[AxisTemplateFamily, list[TemplateSpec]]
-    ontology_explicit_suffix: str
 
     @model_validator(mode='after')
     def _validate_surface_counts(self) -> PairedAxisSentenceTemplates:
         self._validate_group('seen', self.seen, SEEN_AXIS_TEMPLATE_FAMILIES)
         self._validate_group('heldout', self.heldout, HELDOUT_AXIS_TEMPLATE_FAMILIES)
-        if '{axis_query_label}' not in self.ontology_explicit_suffix:
-            raise ValueError('ontology-explicit suffix must include {axis_query_label}')
-        if '{axis_bin_term}' not in self.ontology_explicit_suffix:
-            raise ValueError('ontology-explicit suffix must include {axis_bin_term}')
         return self
 
     @staticmethod
@@ -1108,10 +1059,11 @@ class ChunkAxisSentenceTemplates(BenchmarkPydanticModel):
 
 class ChunkTemplateUtils(BenchmarkPydanticModel):
     hidden_benchmark_terms: list[str]
-    duration_phrase_templates: list[str]
     note_style_templates: dict[str, SurfaceTemplateBucket]
     cohort_evidence_templates: CohortEvidenceTemplates
+    treatment_course_templates: dict[str, SurfaceTemplateBucket]
     axis_sentence_templates: ChunkAxisSentenceTemplates
+    simple_interpretations: dict[ClinicalAxis, dict[str, str]]
 
     @model_validator(mode='after')
     def _validate_template_inventory(self) -> ChunkTemplateUtils:
@@ -1126,6 +1078,13 @@ class ChunkTemplateUtils(BenchmarkPydanticModel):
             self.cohort_evidence_templates.comorbidity_present,
             self.cohort_evidence_templates.comorbidity_reference,
         ):
+            for spec in [*bucket.seen, *bucket.heldout]:
+                if spec.id in template_ids:
+                    duplicate_ids.add(spec.id)
+                template_ids.add(spec.id)
+        if not self.treatment_course_templates:
+            raise ValueError('treatment_course_templates must not be empty')
+        for bucket in self.treatment_course_templates.values():
             for spec in [*bucket.seen, *bucket.heldout]:
                 if spec.id in template_ids:
                     duplicate_ids.add(spec.id)
@@ -1153,6 +1112,16 @@ class ChunkTemplateUtils(BenchmarkPydanticModel):
                 if spec.id in template_ids:
                     duplicate_ids.add(spec.id)
                 template_ids.add(spec.id)
+        if set(self.simple_interpretations) != expected_axes:
+            raise ValueError('simple_interpretations must define every clinical axis')
+        for axis, interpretations in self.simple_interpretations.items():
+            if not interpretations:
+                raise ValueError(f'simple_interpretations for {axis!r} must not be empty')
+            for value_bin, template in interpretations.items():
+                if not value_bin.strip() or not template.strip():
+                    raise ValueError(
+                        f'simple_interpretations for {axis!r} contains an empty bin/template'
+                    )
         if duplicate_ids:
             raise ValueError(f'duplicate chunk template ids: {sorted(duplicate_ids)}')
         return self

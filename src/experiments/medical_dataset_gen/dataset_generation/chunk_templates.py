@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from random import Random
+from string import Formatter
 
 import yaml
 
@@ -43,7 +44,6 @@ _SECTION_HEADER_RE = re.compile(
 @dataclass
 class ChunkValidation:
     hard_errors: list[str]
-    soft_warnings: list[str]
 
 
 @dataclass(frozen=True)
@@ -144,6 +144,16 @@ def render_chunk_text_template_result(
         text_style=text_style,
         surface_group=resolved_surface_group,
     )
+    presentation = _presentation_without_axis_repetition(
+        fact,
+        payload,
+        ontology,
+        resolved_surface_group,
+    )
+    condition_already_stated = bool(
+        _phrase_count(axis_sentence, fact.condition_display)
+        or _phrase_count(presentation, fact.condition_display)
+    )
     outer_template_family, outer_template_id, outer_template = _outer_template(
         fact,
         resolved_surface_group,
@@ -157,12 +167,11 @@ def render_chunk_text_template_result(
         'possessive_cap': patient.possessive_cap,
         'age': fact.patient_age,
         'condition': fact.condition_display,
-        'presentation': _presentation_without_axis_repetition(
-            fact,
-            payload,
-            ontology,
-            resolved_surface_group,
-        ),
+        'condition_intro': '' if condition_already_stated else f' for {fact.condition_display}',
+        'condition_management_clause': ''
+        if condition_already_stated
+        else f' and was managed for {fact.condition_display}',
+        'presentation': presentation,
         'cohort_sentence': _cohort_sentence(fact, patient, rng, resolved_surface_group),
         'axis_sentence': axis_sentence,
     }
@@ -183,12 +192,7 @@ def _presentation_without_axis_repetition(
     ontology: MedicalOntology,
     surface_group: ChunkSurfaceGroup,
 ) -> str:
-    """Select a condition presentation that does not restate the axis evidence.
-
-    Some condition presentations intentionally contain diagnostic detail that can
-    also be selected as an axis payload. Keeping both sentences makes a chunk
-    repetitive and violates the one-evidence-span rendering invariant.
-    """
+    """Select an authored presentation without deleting words from it."""
     presentations = ontology.conditions[fact.condition_id].presentations
     evidence_phrases = _presentation_exclusion_phrases(payload, fact.condition_display)
     nonrepeating_presentations = [
@@ -198,7 +202,7 @@ def _presentation_without_axis_repetition(
     ]
     choices = nonrepeating_presentations or presentations
     index = _stable_index(fact, surface_group, 'presentation', len(choices))
-    return _context_free_surface(choices[index], fact.condition_display)
+    return choices[index]
 
 
 def _presentation_exclusion_phrases(
@@ -208,7 +212,7 @@ def _presentation_exclusion_phrases(
     if isinstance(payload, TreatmentDurationPayload):
         return [payload.treatment]
     if isinstance(payload, RehabOutcomePayload):
-        return [_context_free_surface(payload.outcome, condition_display)]
+        return [payload.outcome]
     if isinstance(
         payload,
         (
@@ -218,7 +222,7 @@ def _presentation_exclusion_phrases(
             DiagnosticEvidencePayload,
         ),
     ):
-        return [_context_free_surface(payload.detail, condition_display)]
+        return [payload.detail]
     raise TypeError(type(payload))
 
 
@@ -237,54 +241,8 @@ def _outer_template(
     return family, selected.id, selected.template
 
 
-def _duration_axis_value(payload: TreatmentDurationPayload, rng: Random) -> str:
-    templates = TEMPLATE_DATA.duration_phrase_templates
-    if 'therapy' in payload.treatment.casefold():
-        templates = [template for template in templates if 'therapy with' not in template]
-    return rng.choice(templates).format(
-        treatment=payload.treatment,
-        duration_days=payload.duration_days,
-    )
-
-
-def _treatment_completion_clause(payload: TreatmentDurationPayload) -> str:
-    treatment = payload.treatment.lower()
-    course_id = (payload.treatment_course_id or '').lower()
-    if 'plasma' in treatment or 'exchange' in treatment:
-        return 'no further exchange sessions were scheduled'
-    if any(
-        token in treatment
-        for token in (
-            'corticosteroid',
-            'dexamethasone',
-            'hydrocortisone',
-            'methylprednisolone',
-            'prednisone',
-            'steroid',
-        )
-    ):
-        return 'no additional inpatient steroid doses were planned'
-    if 'antibiotic' in course_id:
-        return 'no further inpatient antibiotic doses were scheduled'
-    if 'antiviral' in course_id:
-        return 'no further inpatient antiviral doses were scheduled'
-    if 'prophylaxis' in course_id and 'ceftriaxone' in treatment:
-        return 'no further inpatient prophylaxis doses were scheduled'
-    if any(token in course_id for token in ('anticoagulation', 'antithrombotic')):
-        return 'the inpatient antithrombotic transition was documented as complete'
-    if 'decongestion' in course_id:
-        return 'IV decongestion was stepped down afterward'
-    if 'albumin' in treatment:
-        return 'the albumin infusion interval was documented as complete'
-    if 'encephalopathy' in course_id:
-        return 'the inpatient encephalopathy regimen was documented as complete'
-    if any(token in course_id for token in ('immunosuppression', 'antiinflammatory')):
-        return 'the inpatient immunosuppression plan was finalized'
-    if 'supportive_care' in course_id:
-        return 'supportive measures were tapered afterward'
-    if 'infusion' in course_id:
-        return 'the inpatient infusion order was documented as complete'
-    return 'the active inpatient order was documented as complete'
+def _duration_phrase(payload: TreatmentDurationPayload) -> str:
+    return f'{payload.duration_days} days of {payload.treatment}'
 
 
 def _cohort_sentence(
@@ -323,11 +281,17 @@ def _axis_sentence(
     surface_group: ChunkSurfaceGroup,
 ) -> tuple[str, str | None, str | None]:
     if isinstance(payload, TreatmentDurationPayload):
-        axis_value = _duration_axis_value(payload, rng)
-        treatment_completion_clause = _treatment_completion_clause(payload)
+        text, family, template_id = _treatment_duration_sentence(
+            fact,
+            payload,
+            rng=rng,
+            surface_group=surface_group,
+        )
+        if text_style == 'ontology_explicit':
+            text = f'{text} {_simple_interpretation_sentence(fact, axis_query_label)}'
+        return text, family, template_id
     elif isinstance(payload, RehabOutcomePayload):
         axis_value = payload.outcome
-        treatment_completion_clause = ''
     elif isinstance(
         payload,
         (
@@ -338,10 +302,8 @@ def _axis_sentence(
         ),
     ):
         axis_value = payload.detail
-        treatment_completion_clause = ''
     else:
         raise TypeError(type(payload))
-    axis_value = _context_free_surface(axis_value, fact.condition_display)
     paired_templates = TEMPLATE_DATA.axis_sentence_templates.paired[fact.axis]
     template_specs = paired_templates.template_specs(surface_group)
     index = _stable_index(fact, surface_group, 'axis_sentence', len(template_specs))
@@ -354,23 +316,49 @@ def _axis_sentence(
         'pronoun_cap': patient.pronoun_cap,
         'possessive': patient.possessive,
         'possessive_cap': patient.possessive_cap,
-        'treatment_completion_clause': treatment_completion_clause,
-        'treatment_completion_clause_cap': _sentence_start(treatment_completion_clause),
     }
     text = template_spec.template.format(**context)
     if text_style == 'ontology_explicit':
-        bin_in_base = bool(_phrase_count(text, fact.axis_bin_term))
-        label_in_bin = axis_query_label.casefold() in fact.axis_bin_term.casefold()
-        if bin_in_base and label_in_bin:
-            suffix = 'This category was recorded in the chart.'
-        elif bin_in_base:
-            suffix = 'This {axis_query_label} was recorded in the chart.'
-        elif label_in_bin:
-            suffix = 'This category corresponded to {axis_bin_term}.'
-        else:
-            suffix = paired_templates.ontology_explicit_suffix
-        text = f'{text} {suffix.format(**context)}'
+        text = f'{text} {_simple_interpretation_sentence(fact, axis_query_label)}'
     return text, family, template_spec.id
+
+
+def _treatment_duration_sentence(
+    fact: ClinicalFact,
+    payload: TreatmentDurationPayload,
+    *,
+    rng: Random,
+    surface_group: ChunkSurfaceGroup,
+) -> tuple[str, str, str]:
+    course_id = payload.treatment_course_id
+    if course_id is None:
+        raise ValueError(f'treatment duration payload for {fact.fact_id} lacks treatment_course_id')
+    bucket = TEMPLATE_DATA.treatment_course_templates.get(course_id)
+    if bucket is None:
+        raise ValueError(f'missing treatment-course template for {course_id!r}')
+    choices = bucket.templates_for_group(surface_group)
+    index = _stable_index(fact, surface_group, f'treatment_course:{course_id}', len(choices))
+    selected = choices[index]
+    text = selected.template.format(
+        duration_days=payload.duration_days,
+        treatment=payload.treatment,
+        duration_phrase=_duration_phrase(payload),
+    )
+    return text, f'treatment_course:{course_id}', selected.id
+
+
+def _simple_interpretation_sentence(fact: ClinicalFact, axis_query_label: str) -> str:
+    try:
+        template = TEMPLATE_DATA.simple_interpretations[fact.axis][fact.value_bin]
+    except KeyError as exc:
+        raise ValueError(
+            f'missing simple interpretation for {fact.axis!r}/{fact.value_bin!r}'
+        ) from exc
+    return template.format(
+        axis_query_label=axis_query_label,
+        axis_bin_term=fact.axis_bin_term,
+        value_bin=fact.value_bin.replace('_', ' '),
+    )
 
 
 def _canonical_outer_family(note_style: str) -> str:
@@ -404,19 +392,6 @@ def _stable_index(
     return int(digest[:16], 16) % size
 
 
-def _context_free_surface(text: str, condition_display: str) -> str:
-    """Remove only a repeated full diagnosis from a local evidence phrase.
-
-    The outer note already identifies the diagnosis. Removing an exact repeat
-    keeps condition-specific clinical detail while avoiding the common
-    ``condition ... condition`` construction in a single short chunk.
-    """
-    cleaned = re.sub(re.escape(condition_display), '', text, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip(' ,;')
-    cleaned = re.sub(r'\b(?:after|during|for|with|of)\s*(?=[.,;]|$)', '', cleaned)
-    return cleaned.strip(' ,;')
-
-
 def validate_chunk_text(
     text: str,
     fact: ClinicalFact,
@@ -425,7 +400,6 @@ def validate_chunk_text(
 ) -> ChunkValidation:
     lower = text.lower()
     hard_errors: list[str] = []
-    soft_warnings: list[str] = []
 
     for term in TEMPLATE_DATA.hidden_benchmark_terms:
         if term in lower:
@@ -434,27 +408,27 @@ def validate_chunk_text(
         hard_errors.append('contains leading note-section header')
 
     condition_occurrences = _phrase_count(text, fact.condition_display)
-    if condition_occurrences != 1:
+    if condition_occurrences < 1:
         hard_errors.append(
-            f'condition display must occur exactly once; found {condition_occurrences}: '
+            f'condition display must occur at least once; found {condition_occurrences}: '
             f'{fact.condition_display}'
         )
     if not _contains_subgroup_evidence(text, fact, ontology):
         hard_errors.append(f'missing subgroup evidence: {fact.subgroup_label}')
     axis = ontology.clinical_axes[fact.axis]
     if text_style == 'ontology_explicit':
-        if _phrase_count(text, axis.query_label) != 1:
-            hard_errors.append(f'axis query label must occur exactly once: {axis.query_label}')
-        if _phrase_count(text, fact.axis_bin_term) != 1:
-            hard_errors.append(f'value-bin term must occur exactly once: {fact.axis_bin_term}')
+        interpretation = _simple_interpretation_sentence(fact, axis.query_label)
+        if _phrase_count(text, interpretation) != 1:
+            hard_errors.append(
+                'simple interpretation sentence must occur exactly once: '
+                f'{interpretation}'
+            )
+        if _phrase_count(text, axis.query_label) < 1:
+            hard_errors.append(f'axis query label must occur in simple style: {axis.query_label}')
     else:
         for term in (axis.query_label, axis.label):
             if _phrase_count(text, term):
                 hard_errors.append(f'contains explicit target-axis terminology: {term}')
-        if _phrase_count(text, fact.axis_bin_term):
-            soft_warnings.append(
-                f'payload overlaps the canonical value-bin term: {fact.axis_bin_term}'
-            )
 
     payload = parse_axis_payload(fact.axis_payload_json)
     if isinstance(payload, TreatmentDurationPayload):
@@ -463,12 +437,12 @@ def validate_chunk_text(
             hard_errors.append(
                 'treatment-duration evidence must occur exactly once; '
                 f'found {duration_occurrences}: {payload.duration_days}-day'
-            )
+        )
         required = [payload.treatment]
     elif isinstance(payload, RehabOutcomePayload):
-        required = [_context_free_surface(payload.outcome, fact.condition_display)]
+        required = [payload.outcome]
     else:
-        required = [_context_free_surface(payload.detail, fact.condition_display)]
+        required = [payload.detail]
     for phrase in required:
         occurrences = _phrase_count(text, phrase)
         if occurrences != 1:
@@ -483,7 +457,78 @@ def validate_chunk_text(
         if any(term.lower() in lower for term in foreign_terms):
             hard_errors.append(f'contains explicit foreign-axis evidence: {other_axis}')
 
-    return ChunkValidation(hard_errors=hard_errors, soft_warnings=soft_warnings)
+    return ChunkValidation(hard_errors=hard_errors)
+
+
+def validate_chunk_template_sources(ontology: MedicalOntology) -> None:
+    """Fail before generation if the ontology/template cross-product is incomplete."""
+    errors: list[str] = []
+    _validate_treatment_course_template_coverage(ontology, errors)
+    _validate_simple_interpretation_coverage(ontology, errors)
+    _validate_template_placeholders(errors)
+    if errors:
+        raise ValueError('invalid v4 chunk template sources: ' + '; '.join(errors))
+
+
+def _validate_treatment_course_template_coverage(
+    ontology: MedicalOntology,
+    errors: list[str],
+) -> None:
+    course_ids = {
+        course_id
+        for condition in ontology.conditions.values()
+        for course_id in condition.axis_values['treatment_duration'].treatments
+    }
+    template_ids = set(TEMPLATE_DATA.treatment_course_templates)
+    missing = sorted(course_ids - template_ids)
+    extra = sorted(template_ids - course_ids)
+    if missing:
+        errors.append(f'missing treatment_course_templates: {missing}')
+    if extra:
+        errors.append(f'treatment_course_templates define unknown courses: {extra}')
+
+
+def _validate_simple_interpretation_coverage(
+    ontology: MedicalOntology,
+    errors: list[str],
+) -> None:
+    for axis_id, axis in ontology.clinical_axes.items():
+        expected = set(axis.bins)
+        actual = set(TEMPLATE_DATA.simple_interpretations.get(axis_id, {}))
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        if missing or extra:
+            errors.append(
+                f'simple_interpretations.{axis_id}: missing={missing}, extra={extra}'
+            )
+
+
+def _validate_template_placeholders(errors: list[str]) -> None:
+    treatment_fields = {'duration_days', 'treatment', 'duration_phrase'}
+    simple_fields = {'axis_query_label', 'axis_bin_term', 'value_bin'}
+    for course_id, bucket in TEMPLATE_DATA.treatment_course_templates.items():
+        for spec in [*bucket.seen, *bucket.heldout]:
+            fields = _template_fields(spec.template)
+            unknown = sorted(fields - treatment_fields)
+            if unknown:
+                errors.append(f'{course_id}/{spec.id} has unknown placeholders: {unknown}')
+    for axis_id, templates in TEMPLATE_DATA.simple_interpretations.items():
+        for value_bin, template in templates.items():
+            fields = _template_fields(template)
+            unknown = sorted(fields - simple_fields)
+            if unknown:
+                errors.append(
+                    f'simple_interpretations.{axis_id}.{value_bin} has unknown placeholders: '
+                    f'{unknown}'
+                )
+
+
+def _template_fields(template: str) -> set[str]:
+    return {
+        field_name
+        for _, field_name, _, _ in Formatter().parse(template)
+        if field_name is not None and field_name
+    }
 
 
 def patient_descriptor(fact: ClinicalFact) -> str:

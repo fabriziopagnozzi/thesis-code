@@ -2,38 +2,24 @@ note_style_templates:
     admission_course:
         seen:
             - id: outer_admission_course_seen_1
-              template: "{patient} was admitted with {condition} after {presentation}. {cohort_sentence} {axis_sentence}"
+              template: "{patient} was admitted{condition_intro} after {presentation}. {cohort_sentence} {axis_sentence}"
         heldout:
             - id: outer_admission_course_heldout_1
-              template: "{patient} came in after {presentation} and was managed for {condition}. {axis_sentence} {cohort_sentence}"
+              template: "{patient} came in after {presentation}{condition_management_clause}. {cohort_sentence} {axis_sentence}"
     cohort_first:
         seen:
             - id: outer_cohort_first_seen_1
-              template: "{cohort_sentence} {patient} presented with {presentation} and was treated for {condition}. {axis_sentence}"
+              template: "{cohort_sentence} {patient} presented after {presentation}{condition_management_clause}. {axis_sentence}"
         heldout:
             - id: outer_cohort_first_heldout_1
-              template: "{cohort_sentence} In this hospitalization, {patient_lower} had {condition} after {presentation}. {axis_sentence}"
+              template: "{cohort_sentence} During this hospitalization, {patient_lower} was admitted{condition_intro} after {presentation}. {axis_sentence}"
     embedded_course:
         seen:
             - id: outer_embedded_course_seen_1
-              template: "{patient} presented with {presentation} and was treated for {condition}. {cohort_sentence} {axis_sentence}"
+              template: "{patient} presented after {presentation}{condition_management_clause}. {cohort_sentence} {axis_sentence}"
         heldout:
             - id: outer_embedded_course_heldout_1
-              template: "After presentation with {presentation}, {patient_lower} was treated for {condition}. {axis_sentence} {cohort_sentence}"
-    axis_first:
-        seen:
-            - id: outer_axis_first_seen_1
-              template: "{axis_sentence} {patient} had been admitted for {condition} after {presentation}. {cohort_sentence}"
-        heldout:
-            - id: outer_axis_first_heldout_1
-              template: "{axis_sentence} The same chart described {patient_lower} as hospitalized with {condition} after {presentation}. {cohort_sentence}"
-    fragmented_note:
-        seen:
-            - id: outer_fragmented_note_seen_1
-              template: "{patient}; presentation with {presentation}; working problem: {condition}. {cohort_sentence} Course detail: {axis_sentence}"
-        heldout:
-            - id: outer_fragmented_note_heldout_1
-              template: "Patient: {patient_lower}. Reason for stay: {condition} after {presentation}. {cohort_sentence} Entry: {axis_sentence}"
+              template: "After {presentation}, {patient_lower} was admitted{condition_intro}. {cohort_sentence} {axis_sentence}"
 
 cohort_evidence_templates:
     comorbidity_present:
@@ -67,38 +53,143 @@ cohort_evidence_templates:
             - id: cohort_reference_heldout_3
               template: "Pre-round review identified {subgroup_phrase}."
 
+treatment_course_templates:
+    adjunctive_steroid_course:
+        seen:
+            - id: treatment_course_adjunctive_steroid_seen_1
+              template: "The medication administration record documented {duration_phrase} as adjunctive steroid therapy."
+        heldout:
+            - id: treatment_course_adjunctive_steroid_heldout_1
+              template: "The inpatient medication list recorded {duration_phrase} for adjunctive steroid treatment."
+    antibiotic_course:
+        seen:
+            - id: treatment_course_antibiotic_seen_1
+              template: "The medication administration record documented {duration_phrase} for the inpatient antimicrobial plan."
+        heldout:
+            - id: treatment_course_antibiotic_heldout_1
+              template: "The inpatient medication list recorded {duration_phrase} for antimicrobial treatment."
+    antiviral_course:
+        seen:
+            - id: treatment_course_antiviral_seen_1
+              template: "The medication administration record documented {duration_phrase} for antiviral therapy."
+        heldout:
+            - id: treatment_course_antiviral_heldout_1
+              template: "The inpatient medication list recorded {duration_phrase} for antiviral treatment."
+    immunosuppression_induction_interval:
+        seen:
+            - id: treatment_course_immunosuppression_induction_seen_1
+              template: "The inpatient treatment record documented {duration_phrase} for immunosuppression induction."
+        heldout:
+            - id: treatment_course_immunosuppression_induction_heldout_1
+              template: "The active orders recorded {duration_phrase} for induction immunosuppression."
+    infection_prophylaxis_or_albumin_interval:
+        seen:
+            - id: treatment_course_infection_prophylaxis_albumin_seen_1
+              template: "The inpatient order record documented {duration_phrase} for prophylaxis or albumin support."
+        heldout:
+            - id: treatment_course_infection_prophylaxis_albumin_heldout_1
+              template: "The active orders recorded {duration_phrase} for prophylaxis or albumin therapy."
+    infusion_or_prophylaxis_interval:
+        seen:
+            - id: treatment_course_infusion_prophylaxis_seen_1
+              template: "The inpatient order record documented {duration_phrase} for infusion or prophylaxis therapy."
+        heldout:
+            - id: treatment_course_infusion_prophylaxis_heldout_1
+              template: "The active orders recorded {duration_phrase} for infusion or prophylaxis treatment."
+    inpatient_anticoagulation_phase:
+        seen:
+            - id: treatment_course_anticoagulation_seen_1
+              template: "The anticoagulation record documented {duration_phrase} during inpatient treatment."
+        heldout:
+            - id: treatment_course_anticoagulation_heldout_1
+              template: "The inpatient anticoagulation plan recorded {duration_phrase}."
+    inpatient_antiinflammatory_rescue_interval:
+        seen:
+            - id: treatment_course_antiinflammatory_rescue_seen_1
+              template: "The rescue-therapy order record documented {duration_phrase}."
+        heldout:
+            - id: treatment_course_antiinflammatory_rescue_heldout_1
+              template: "The inpatient rescue-treatment plan recorded {duration_phrase}."
+    inpatient_antithrombotic_initiation:
+        seen:
+            - id: treatment_course_antithrombotic_seen_1
+              template: "The antithrombotic initiation record documented {duration_phrase} during the admission."
+        heldout:
+            - id: treatment_course_antithrombotic_heldout_1
+              template: "The inpatient antithrombotic plan recorded {duration_phrase}."
+    inpatient_encephalopathy_therapy_interval:
+        seen:
+            - id: treatment_course_encephalopathy_seen_1
+              template: "The encephalopathy-treatment orders documented {duration_phrase}."
+        heldout:
+            - id: treatment_course_encephalopathy_heldout_1
+              template: "The inpatient encephalopathy regimen recorded {duration_phrase}."
+    inpatient_immunotherapy_course:
+        seen:
+            - id: treatment_course_immunotherapy_seen_1
+              template: "The immunotherapy record documented {duration_phrase} during inpatient treatment."
+        heldout:
+            - id: treatment_course_immunotherapy_heldout_1
+              template: "The inpatient immunotherapy plan recorded {duration_phrase}."
+    intravenous_decongestion_interval:
+        seen:
+            - id: treatment_course_decongestion_seen_1
+              template: "The decongestion record documented {duration_phrase}."
+        heldout:
+            - id: treatment_course_decongestion_heldout_1
+              template: "The inpatient decongestion plan recorded {duration_phrase}."
+    relapse_immunotherapy_course:
+        seen:
+            - id: treatment_course_relapse_immunotherapy_seen_1
+              template: "The relapse-treatment record documented {duration_phrase}."
+        heldout:
+            - id: treatment_course_relapse_immunotherapy_heldout_1
+              template: "The inpatient relapse-immunotherapy plan recorded {duration_phrase}."
+    supportive_care_interval:
+        seen:
+            - id: treatment_course_supportive_care_seen_1
+              template: "The supportive-care order record documented {duration_phrase}."
+        heldout:
+            - id: treatment_course_supportive_care_heldout_1
+              template: "The inpatient supportive-care plan recorded {duration_phrase}."
+    systemic_corticosteroid_course:
+        seen:
+            - id: treatment_course_systemic_corticosteroid_seen_1
+              template: "The systemic corticosteroid record documented {duration_phrase}."
+        heldout:
+            - id: treatment_course_systemic_corticosteroid_heldout_1
+              template: "The inpatient corticosteroid plan recorded {duration_phrase}."
+
 axis_sentence_templates:
     paired:
         treatment_duration:
-            ontology_explicit_suffix: "The {axis_query_label} was classified as {axis_bin_term}."
             seen:
                 direct_fact:
                     - id: treatment_duration_seen_direct_fact
-                      template: "{pronoun_cap} completed {axis_value}; {treatment_completion_clause}."
+                      template: "The treatment record documented {axis_value}."
                 temporal_course:
                     - id: treatment_duration_seen_temporal_course
-                      template: "The active treatment record shows {axis_value}; {treatment_completion_clause}."
+                      template: "The active inpatient orders listed {axis_value}."
                 clinical_assessment:
                     - id: treatment_duration_seen_clinical_assessment
-                      template: "After reassessment, the team documented {axis_value}; {treatment_completion_clause}."
+                      template: "Medication reconciliation before discharge recorded {axis_value}."
                 contrast_or_alternative:
                     - id: treatment_duration_seen_contrast_or_alternative
-                      template: "{treatment_completion_clause_cap} after {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: treatment_duration_seen_fragmented_or_split_evidence
-                      template: "Treatment record: {axis_value}. {treatment_completion_clause_cap}."
+                      template: "The final inpatient order review showed {axis_value}."
             heldout:
+                direct_fact:
+                    - id: treatment_duration_heldout_direct_fact
+                      template: "The treatment record listed {axis_value}."
+                temporal_course:
+                    - id: treatment_duration_heldout_temporal_course
+                      template: "The active inpatient orders recorded {axis_value}."
                 clinical_assessment:
                     - id: treatment_duration_heldout_clinical_assessment
-                      template: "The active treatment record listed {axis_value}; {treatment_completion_clause}."
+                      template: "Discharge medication review documented {axis_value}."
                 contrast_or_alternative:
                     - id: treatment_duration_heldout_contrast_or_alternative
-                      template: "Orders were reviewed after {axis_value}; {treatment_completion_clause}."
-                fragmented_or_split_evidence:
-                    - id: treatment_duration_heldout_fragmented_or_split_evidence
-                      template: "Orders reviewed. Treatment record: {axis_value}. {treatment_completion_clause_cap}."
+                      template: "The final inpatient order review recorded {axis_value}."
         rehab_outcome:
-            ontology_explicit_suffix: "This {axis_query_label} corresponded to {axis_bin_term}."
             seen:
                 direct_fact:
                     - id: rehab_outcome_seen_direct_fact
@@ -112,21 +203,20 @@ axis_sentence_templates:
                 contrast_or_alternative:
                     - id: rehab_outcome_seen_contrast_or_alternative
                       template: "At discharge, planning addressed {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: rehab_outcome_seen_fragmented_or_split_evidence
-                      template: "Discharge detail: {axis_value}."
             heldout:
+                direct_fact:
+                    - id: rehab_outcome_heldout_direct_fact
+                      template: "The discharge assessment described {axis_value}."
+                temporal_course:
+                    - id: rehab_outcome_heldout_temporal_course
+                      template: "The final rehabilitation note documented {axis_value}."
                 clinical_assessment:
                     - id: rehab_outcome_heldout_clinical_assessment
-                      template: "The discharge assessment described {axis_value}."
+                      template: "Therapy review before discharge noted {axis_value}."
                 contrast_or_alternative:
                     - id: rehab_outcome_heldout_contrast_or_alternative
-                      template: "The final plan accounted for {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: rehab_outcome_heldout_fragmented_or_split_evidence
-                      template: "Disposition note: {axis_value}."
+                      template: "The final care plan accounted for {axis_value}."
         complication_burden:
-            ontology_explicit_suffix: "This {axis_query_label} corresponded to {axis_bin_term}."
             seen:
                 direct_fact:
                     - id: complication_burden_seen_direct_fact
@@ -140,21 +230,20 @@ axis_sentence_templates:
                 contrast_or_alternative:
                     - id: complication_burden_seen_contrast_or_alternative
                       template: "Before discharge, the team documented {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: complication_burden_seen_fragmented_or_split_evidence
-                      template: "Course detail: {axis_value}."
             heldout:
+                direct_fact:
+                    - id: complication_burden_heldout_direct_fact
+                      template: "The final assessment recorded {axis_value}."
+                temporal_course:
+                    - id: complication_burden_heldout_temporal_course
+                      template: "The inpatient course recorded {axis_value}."
                 clinical_assessment:
                     - id: complication_burden_heldout_clinical_assessment
-                      template: "The final assessment recorded {axis_value}."
+                      template: "Safety review before discharge identified {axis_value}."
                 contrast_or_alternative:
                     - id: complication_burden_heldout_contrast_or_alternative
                       template: "The discharge review included {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: complication_burden_heldout_fragmented_or_split_evidence
-                      template: "Safety note: {axis_value}."
         acute_clinical_course:
-            ontology_explicit_suffix: "This {axis_query_label} corresponded to {axis_bin_term}."
             seen:
                 direct_fact:
                     - id: acute_clinical_course_seen_direct_fact
@@ -168,21 +257,20 @@ axis_sentence_templates:
                 contrast_or_alternative:
                     - id: acute_clinical_course_seen_contrast_or_alternative
                       template: "The course was notable for {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: acute_clinical_course_seen_fragmented_or_split_evidence
-                      template: "Progress note: {axis_value}."
             heldout:
+                direct_fact:
+                    - id: acute_clinical_course_heldout_direct_fact
+                      template: "The final assessment described {axis_value}."
+                temporal_course:
+                    - id: acute_clinical_course_heldout_temporal_course
+                      template: "The inpatient notes tracked {axis_value}."
                 clinical_assessment:
                     - id: acute_clinical_course_heldout_clinical_assessment
-                      template: "The final assessment described {axis_value}."
+                      template: "The treating service documented {axis_value}."
                 contrast_or_alternative:
                     - id: acute_clinical_course_heldout_contrast_or_alternative
-                      template: "The inpatient notes tracked {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: acute_clinical_course_heldout_fragmented_or_split_evidence
-                      template: "Course update: {axis_value}."
+                      template: "The discharge course emphasized {axis_value}."
         care_intensity:
-            ontology_explicit_suffix: "This {axis_query_label} corresponded to {axis_bin_term}."
             seen:
                 direct_fact:
                     - id: care_intensity_seen_direct_fact
@@ -196,21 +284,20 @@ axis_sentence_templates:
                 contrast_or_alternative:
                     - id: care_intensity_seen_contrast_or_alternative
                       template: "The stay included {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: care_intensity_seen_fragmented_or_split_evidence
-                      template: "Care detail: {axis_value}."
             heldout:
+                direct_fact:
+                    - id: care_intensity_heldout_direct_fact
+                      template: "The bed-assignment record listed {axis_value}."
+                temporal_course:
+                    - id: care_intensity_heldout_temporal_course
+                      template: "During the admission, the care record listed {axis_value}."
                 clinical_assessment:
                     - id: care_intensity_heldout_clinical_assessment
-                      template: "The bed-assignment record listed {axis_value}."
+                      template: "Nursing and bed-assignment notes recorded {axis_value}."
                 contrast_or_alternative:
                     - id: care_intensity_heldout_contrast_or_alternative
                       template: "The chart documented {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: care_intensity_heldout_fragmented_or_split_evidence
-                      template: "Bed record: {axis_value}."
         diagnostic_evidence_type:
-            ontology_explicit_suffix: "This {axis_query_label} corresponded to {axis_bin_term}."
             seen:
                 direct_fact:
                     - id: diagnostic_evidence_type_seen_direct_fact
@@ -224,24 +311,45 @@ axis_sentence_templates:
                 contrast_or_alternative:
                     - id: diagnostic_evidence_type_seen_contrast_or_alternative
                       template: "Diagnostic review noted {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: diagnostic_evidence_type_seen_fragmented_or_split_evidence
-                      template: "Workup detail: {axis_value}."
             heldout:
+                direct_fact:
+                    - id: diagnostic_evidence_type_heldout_direct_fact
+                      template: "The final note cited {axis_value}."
+                temporal_course:
+                    - id: diagnostic_evidence_type_heldout_temporal_course
+                      template: "During the diagnostic review, clinicians cited {axis_value}."
                 clinical_assessment:
                     - id: diagnostic_evidence_type_heldout_clinical_assessment
-                      template: "The final note cited {axis_value}."
+                      template: "The final assessment referenced {axis_value}."
                 contrast_or_alternative:
                     - id: diagnostic_evidence_type_heldout_contrast_or_alternative
                       template: "The diagnostic review emphasized {axis_value}."
-                fragmented_or_split_evidence:
-                    - id: diagnostic_evidence_type_heldout_fragmented_or_split_evidence
-                      template: "Workup entry: {axis_value}."
 
-duration_phrase_templates:
-    - "{duration_days} days of {treatment}"
-    - "{duration_days} days of therapy with {treatment}"
-    - "a {duration_days}-day course of {treatment}"
+simple_interpretations:
+    treatment_duration:
+        short: "This treatment duration evidence indicates a short active inpatient therapy interval."
+        standard: "This treatment duration evidence indicates a standard inpatient therapy interval."
+        prolonged: "This treatment duration evidence indicates a prolonged inpatient therapy interval."
+    rehab_outcome:
+        home_rehab: "This rehab outcome evidence indicates discharge with home or outpatient therapy support."
+        inpatient_rehab: "This rehab outcome evidence indicates facility-based rehabilitation needs after discharge."
+        persistent_deficit: "This rehab outcome evidence indicates persistent functional limitation at discharge."
+    complication_burden:
+        none_documented: "This complication burden evidence indicates no major inpatient complication."
+        limited_complication: "This complication burden evidence indicates a limited or self-limited inpatient complication."
+        major_complication: "This complication burden evidence indicates a major inpatient complication affecting management."
+    acute_clinical_course:
+        early_stabilization: "This acute clinical course evidence indicates early stabilization during the admission."
+        delayed_improvement: "This acute clinical course evidence indicates delayed improvement during the admission."
+        refractory_or_worsening: "This acute clinical course evidence indicates refractory or worsening illness despite initial management."
+    care_intensity:
+        ward_level: "This care intensity evidence indicates routine ward-level inpatient management."
+        monitored_bed: "This care intensity evidence indicates step-down or telemetry-level monitoring."
+        intensive_care: "This care intensity evidence indicates ICU-level management."
+    diagnostic_evidence_type:
+        bedside_laboratory_pattern: "This diagnostic evidence type indicates bedside findings and laboratory results as the main support."
+        structural_visual_evidence: "This diagnostic evidence type indicates imaging or other visualized structural support."
+        specimen_or_specialized_test: "This diagnostic evidence type indicates specimen-based or specialized diagnostic testing."
 
 hidden_benchmark_terms:
     - admission adm_

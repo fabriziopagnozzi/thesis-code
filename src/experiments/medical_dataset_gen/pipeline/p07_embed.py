@@ -186,10 +186,8 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
 
 
 def _uses_global_chunk_embedding_cache(cfg: ExperimentCfg) -> bool:
-    return (
-        not cfg.generation.llm_config.use_llm_chunk_generation
-        and not cfg.generation.llm_config.use_llm_chunk_rewriting
-    )
+    _ = cfg
+    return True
 
 
 def _fill_deterministic_chunk_embedding_memmaps(

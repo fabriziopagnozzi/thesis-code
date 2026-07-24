@@ -20,7 +20,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     paths_for,
 )
 from experiments.medical_dataset_gen.utils.logging_utils import colorprint, setup_logging
-from helpers.ollama_client import stop_model
 
 from .p01_plans import run_make_query_plans
 from .p03_facts import run_make_facts
@@ -75,7 +74,7 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
 SHARED_STAGE_OUTPUTS: dict[PipelineStage, tuple[SharedGenerationTableName, ...]] = {
     'plans': ('query_plans',),
     'facts': ('clinical_facts',),
-    'chunks': ('chunk_documents', 'chunk_memberships', 'generation_rejects'),
+    'chunks': ('chunk_documents', 'chunk_memberships'),
     'queries_answers': ('queries', 'gold_answers'),
     'qrels': ('qrels',),
 }
@@ -104,7 +103,6 @@ def main() -> None:
             'May be repeated. Format: --run "eval --steps evaluation_stats".'
         ),
     )
-    parser.add_argument('--release-llm', type=bool, default=None)
     parser.add_argument('--no-log-tee', action='store_true')
     parser.add_argument(
         '--parent',
@@ -177,8 +175,6 @@ def main() -> None:
             continue
         if name == 'embed' and _should_skip_existing_embed_stage(paths):
             continue
-        if name == 'embed' and args.release_llm:
-            _release_ollama(cfg)
         colorprint('bright_green', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
         fn(cfg, paths)
 
@@ -190,8 +186,6 @@ def _validate_run_mode_args(
 ) -> None:
     if args.from_stage or args.to_stage or args.stages or args.exclude:
         parser.error('--run cannot be combined with --from, --to, --stages, or --exclude')
-    if args.release_llm is not None:
-        parser.error('--release-llm is only supported for normal stage runs')
     if unknown_args:
         parser.error(
             'unknown argument(s) outside --run: '
@@ -343,20 +337,6 @@ def _parse_stages_arg(parser: argparse.ArgumentParser, raw_stages: str) -> list[
         parser.error('--stages contains duplicate stage name(s): ' + ', '.join(duplicate_stages))
 
     return [cast(PipelineStage, stage) for stage in stages]
-
-
-def _release_ollama(cfg: ExperimentCfg) -> None:
-    llm_used = (
-        cfg.generation.llm_config.use_llm_chunk_generation
-        or cfg.generation.llm_config.use_llm_query_paraphrase
-    )
-    if not llm_used:
-        return
-
-    print(
-        f'[pipeline] releasing Ollama model before embeddings: {cfg.generation.llm_config.model_name}'
-    )
-    stop_model(cfg.generation.llm_config.model_name)
 
 
 if __name__ == '__main__':

@@ -20,7 +20,6 @@ The orchestrator in [pipeline/__main__.py](./src/experiments/medical_dataset_gen
 - `--to <stage>`
 - `--from <stage>`
 - `--stages <stage1,stage2,...>`
-- `--release-llm <bool>`
 - `--no-log-tee`
 
 Example: rerun only the evaluation and plotting tail of a completed experiment:
@@ -58,7 +57,7 @@ The current pipeline stages are:
 ## Package Layout
 
 - [pipeline](./src/experiments/medical_dataset_gen/pipeline): runnable stage entrypoints and the pipeline orchestrator
-- [dataset_generation](./src/experiments/medical_dataset_gen/dataset_generation): ontology loading, plan helpers, fact construction, chunk rendering, caches, and query/answer templating
+- [dataset_generation](./src/experiments/medical_dataset_gen/dataset_generation): ontology loading, plan helpers, fact construction, deterministic chunk rendering, validation, and query/answer templating
 - [query_geometry](./src/experiments/medical_dataset_gen/query_geometry): geometry artifact building, dimensionality reduction, diagnostics, and plot helpers
 - [evaluation](./src/experiments/medical_dataset_gen/evaluation): retrieval metrics, answer metrics, lambda selection, worker setup, and plotting
 - [schemas](./src/experiments/medical_dataset_gen/schemas): typed models shared across the pipeline
@@ -73,7 +72,6 @@ Key outputs written by the pipeline:
 - `clinical_facts.parquet`
 - `chunk_documents.parquet`
 - `chunk_memberships.parquet`
-- `generation_rejects.parquet`
 - `queries.parquet`
 - `gold_answers.parquet`
 - `qrels.parquet`
@@ -92,28 +90,15 @@ uv run -m experiments.medical_dataset_gen.utils.migrate_shared_embedding_artifac
 
 ## Retrieval Pool
 
-Schema v3 uses only `retrieval.pool_scope: query_local`: chunks linked to the query through `chunk_memberships.parquet`.
+Schema v4 uses only `retrieval.pool_scope: query_local`: chunks linked to the query through `chunk_memberships.parquet`.
 
-## LLM Usage
+## Language Surfaces
 
-Chunk generation behavior is controlled from the experiment config:
+Chunk and query text is generated deterministically from [medical_ontology.yaml](./data_templates/medical_ontology.yaml) and [chunk_templates.yaml](./data_templates/chunk_templates.yaml). `generation.chunk_text_style` selects either `semantic_hardened`, which keeps chart-like evidence only, or `ontology_explicit`, which adds one authored interpretation sentence for the active axis/value bin. Use the v4 review script to inspect rendered language before running embeddings:
 
-- `generation.llm_config.use_llm_chunk_generation`
-- `generation.llm_config.use_llm_chunk_rewriting`
-- `generation.llm_config.use_llm_query_paraphrase`
-- `generation.llm_config.model_name`
-- `generation.llm_config.num_workers`
-
-If LLM chunk generation is enabled, accepted generations are cached in:
-
-- `_results/<exp>/chunk_generation_cache.jsonl`
-- `src/experiments/medical_dataset_gen/_cache/chunk_generation_cache.jsonl`
-
-If LLM rewrite is enabled, rewrite cache entries are stored in:
-
-- `src/experiments/medical_dataset_gen/_cache/chunk_rewrite_cache.jsonl`
-
-When `--release-llm true` is passed to the pipeline orchestrator, the configured Ollama model is released just before the `embed` stage.
+```bash
+uv run python -m experiments.medical_dataset_gen.scripts.render_v4_language_review
+```
 
 ## Direct Stage Execution
 

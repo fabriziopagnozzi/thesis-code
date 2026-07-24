@@ -4,14 +4,9 @@ from collections import defaultdict
 from collections.abc import Sequence
 
 import polars as pl
-import pyarrow.parquet as pq
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
-from experiments.medical_dataset_gen.dataset_generation.prompts_default import (
-    MedicalDatasetGenDefaultPrompts,
-)
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
-    axis_query_label,
     render_answer_template,
     render_query_template,
 )
@@ -43,7 +38,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
-from helpers.ollama_client import generate
 
 
 def run_make_queries_answers(
@@ -52,53 +46,48 @@ def run_make_queries_answers(
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     ontology = load_ontology(cfg)
     plans_df = read_parquet(paths, 'query_plans')
-    failed_query_ids = _failed_query_ids(paths)
 
     plans_by_query: dict[str, QueryPlan] = {}
     for plan_row in plans_df.iter_rows(named=True):
         plan = QueryPlan.model_validate(plan_row)
-        if plan.query_id not in failed_query_ids:
-            plans_by_query[plan.query_id] = plan
+        plans_by_query[plan.query_id] = plan
 
     query_rows: list[QueryOutputRow] = []
     answer_rows: list[GoldAnswerOutputRow] = []
 
     current_query_id: str | None = None
     current_fact_rows: list[AnswerSourceFact] = []
-    facts_file = pq.ParquetFile(paths.table_path('clinical_facts'))
-    for batch in facts_file.iter_batches(  # type: ignore
-        columns=[
+    retained_memberships = (
+        read_parquet(paths, 'chunk_memberships')
+        .filter(pl.col('is_gold'))
+        .select(
             'query_id',
-            'is_gold',
             'facet_id',
             'axis',
             'value_bin',
             'axis_payload_json',
             'facet_priority',
             'fact_id',
-        ],
-        batch_size=65536,
-    ):
-        for raw_fact_row in batch.to_pylist():
-            if not raw_fact_row['is_gold']:
-                continue
-            fact_row = AnswerSourceFact.model_validate(raw_fact_row)
-            query_id = fact_row.query_id
-            if current_query_id is None:
-                current_query_id = query_id
-            elif query_id != current_query_id:
-                _finalize_query(
-                    query_id=current_query_id,
-                    fact_rows=current_fact_rows,
-                    plans_by_query=plans_by_query,
-                    ontology=ontology,
-                    cfg=cfg,
-                    query_rows=query_rows,
-                    answer_rows=answer_rows,
-                )
-                current_fact_rows = []
-                current_query_id = query_id
-            current_fact_rows.append(fact_row)
+        )
+    )
+    for raw_fact_row in retained_memberships.iter_rows(named=True):
+        fact_row = AnswerSourceFact.model_validate(raw_fact_row)
+        query_id = fact_row.query_id
+        if current_query_id is None:
+            current_query_id = query_id
+        elif query_id != current_query_id:
+            _finalize_query(
+                query_id=current_query_id,
+                fact_rows=current_fact_rows,
+                plans_by_query=plans_by_query,
+                ontology=ontology,
+                cfg=cfg,
+                query_rows=query_rows,
+                answer_rows=answer_rows,
+            )
+            current_fact_rows = []
+            current_query_id = query_id
+        current_fact_rows.append(fact_row)
 
     if current_query_id is not None:
         _finalize_query(
@@ -121,10 +110,6 @@ def run_make_queries_answers(
         )
     write_parquet(paths, 'queries', queries)
     write_parquet(paths, 'gold_answers', answers)
-    if failed_query_ids:
-        print(
-            f'[queries_answers] skipped {len(failed_query_ids):,} failed query/queries from chunk generation'
-        )
     return queries, answers
 
 
@@ -147,15 +132,6 @@ def _finalize_query(
         ontology,
         focus_mode=cfg.generation.focus_mode,
         query_structure=cfg.generation.query_structure,
-    )
-    query_text = maybe_paraphrase_query(
-        query_text=query_text,
-        plan=plan,
-        ontology=ontology,
-        llm_name=cfg.generation.llm_config.model_name,
-        use_llm=cfg.generation.llm_config.use_llm_query_paraphrase,
-        temperature=cfg.generation.llm_config.temperature,
-        num_ctx=cfg.generation.llm_config.num_ctx,
     )
 
     facet_summaries, facet_answer_objects = _facet_summaries(plan.facets, fact_rows)
@@ -187,35 +163,6 @@ def render_query(
         focus_mode=focus_mode,
         query_structure=query_structure,
     )
-
-
-def maybe_paraphrase_query(
-    query_text: str,
-    plan: QueryPlan,
-    ontology: MedicalOntology,
-    llm_name: str,
-    use_llm: bool,
-    temperature: float,
-    num_ctx: int,
-) -> str:
-    if not use_llm:
-        return query_text
-
-    prompt = MedicalDatasetGenDefaultPrompts.query_paraphrase_prompt(query_text, plan, ontology)
-    paraphrase = generate(prompt, model=llm_name, temperature=temperature, num_ctx=num_ctx).strip()
-    required = [plan.condition_display, plan.subgroup_a_label, plan.subgroup_b_label]
-    lower = paraphrase.lower()
-    has_required_entities = all(label.lower() in lower for label in required)
-    primary_label = axis_query_label(plan.primary_axis, ontology).lower()
-    secondary_label = axis_query_label(plan.secondary_axis, ontology).lower()
-    has_ordered_axes = (
-        primary_label in lower
-        and secondary_label in lower
-        and lower.index(primary_label) < lower.index(secondary_label)
-    )
-    if paraphrase and has_required_entities and has_ordered_axes:
-        return paraphrase
-    return query_text
 
 
 def _canonical_answer(
@@ -302,18 +249,6 @@ def _summarize_payload(value_bin: str, payload) -> str:
     if isinstance(payload, DiagnosticEvidencePayload):
         return f'{_with_indefinite_article(bin_label)} evidence source: {payload.detail}'
     raise TypeError(type(payload))
-
-
-def _failed_query_ids(paths: MedicalDatasetGenPaths) -> set[str]:
-    reject_path = paths.table_path('generation_rejects')
-    if not reject_path.exists():
-        return set()
-    rejects = read_parquet(paths, 'generation_rejects')
-    if 'query_id' not in rejects.columns or rejects.height == 0:
-        return set()
-    return {str(query_id) for query_id in rejects['query_id'].drop_nulls().to_list()}
-
-
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.utils.logging_utils import (
         setup_logging,

@@ -1,4 +1,4 @@
-"""Build deterministic schema-v3 query plans from explicit evidence profiles.
+"""Build deterministic schema-v4 query plans from explicit evidence profiles.
 
 Pair-level ontology policies can restrict which axis may be dominant for a
 given joint profile, preventing clinically entangled primary-axis queries from
@@ -88,7 +88,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     continue
                 for profile in profiles:
                     evidence_profile_id = _stable_id(
-                        'epv3',
+                        'epv4',
                         cfg.dataset_schema_version,
                         cfg.global_.seed,
                         condition_key,
@@ -183,7 +183,7 @@ def _materialize_plan(
     query_id: str,
 ) -> QueryPlan:
     query_key = _stable_id(
-        'qv3',
+        'qv4',
         cfg.dataset_schema_version,
         cfg.global_.seed,
         spec.evidence_profile_id,
@@ -191,7 +191,7 @@ def _materialize_plan(
         secondary_axis,
     )
     pool_id = _stable_id(
-        'poolv3',
+        'poolv4',
         cfg.dataset_schema_version,
         cfg.global_.seed,
         spec.evidence_profile_id,

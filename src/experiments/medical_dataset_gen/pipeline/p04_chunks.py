@@ -1,46 +1,23 @@
 from __future__ import annotations
 
-import hashlib
 import os
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import polars as pl
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.dataset_generation.chunk_cache import (
-    GENERATION_CACHE_VERSION,
-    REWRITE_CACHE_VERSION,
-    GenerationCache,
-    append_generation_cache,
-    cached_chunk_state,
-    cached_rewrite_chunk_state,
-    chunk_generation_cache_key,
-    chunk_rewrite_cache_key,
-    load_generation_cache,
-    remember_cache_entry,
-)
-from experiments.medical_dataset_gen.dataset_generation.chunk_grouped_llm import (
-    render_chunks_grouped_llm,
-    render_chunks_grouped_rewrite,
-)
 from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     chunk_id,
     finalize_chunk_row,
-    generate_llm_chunk,
     new_chunk_state,
-    reject_row,
-    rejects_frame,
     render_canonical_chunk,
-    rewrite_llm_chunk,
-    row_from_state,
 )
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_text,
+    validate_chunk_template_sources,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    ChunkRow,
     ClinicalFact,
     MedicalOntology,
 )
@@ -52,310 +29,20 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     load_config_from_cli,
     paths_for,
 )
-from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_json, write_parquet
+from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
 
 def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
+    validate_chunk_template_sources(ontology)
     facts = read_parquet(paths, 'clinical_facts')
-    if cfg.generation.llm_config.use_llm_chunk_generation:
-        print(f'[chunks] LLM generation enabled for all {len(facts):,} facts')
-        if cfg.generation.llm_config.num_workers > 1:
-            print(
-                f'[chunks] using {cfg.generation.llm_config.num_workers} parallel workers; '
-                f'configure the Ollama server with OLLAMA_NUM_PARALLEL>={cfg.generation.llm_config.num_workers} '
-                'for actual concurrent decoding'
-            )
-    else:
-        print('[chunks] LLM generation disabled; using deterministic clinical fallback')
-        if cfg.generation.llm_config.use_llm_chunk_rewriting:
-            print(
-                '[chunks] deterministic chunks will be LLM-rewritten with the isolated global '
-                'rewrite cache'
-            )
-            if cfg.generation.llm_config.num_workers > 1:
-                print(
-                    f'[chunks] using {cfg.generation.llm_config.num_workers} parallel workers for rewrite '
-                    'calls; configure the Ollama server with '
-                    f'OLLAMA_NUM_PARALLEL>={cfg.generation.llm_config.num_workers} for actual concurrent decoding'
-                )
-    if (
-        cfg.generation.llm_config.use_llm_chunk_generation
-        and cfg.generation.llm_config.use_llm_chunk_rewriting
-    ):
-        print(
-            '[chunks] use_llm_chunk_rewriting is ignored when use_llm_chunk_generation is enabled'
-        )
-
-    if (
-        not cfg.generation.llm_config.use_llm_chunk_generation
-        and not cfg.generation.llm_config.use_llm_chunk_rewriting
-    ):
-        return _render_chunks_deterministic_parallel(
-            cfg=cfg,
-            paths=paths,
-            facts=facts,
-            ontology=ontology,
-        )
-
-    fact_rows = [ClinicalFact.model_validate(row) for row in facts.iter_rows(named=True)]
-    local_cache_path = paths.experiment_dir / 'chunk_generation_cache.jsonl'
-    shared_cache_path = paths.root / '_cache' / 'chunk_generation_cache.jsonl'
-    rewrite_cache_path = paths.root / '_cache' / 'chunk_rewrite_cache.jsonl'
-    generation_cache = (
-        load_generation_cache(
-            [shared_cache_path, local_cache_path],
-            cache_version=GENERATION_CACHE_VERSION,
-        )
-        if cfg.generation.llm_config.use_llm_chunk_generation
-        else GenerationCache(by_fact_id={}, by_reuse_key={})
+    print(f'[chunks] deterministic v4 rendering for {len(facts):,} facts')
+    return _render_chunks_deterministic_parallel(
+        cfg=cfg,
+        paths=paths,
+        facts=facts,
+        ontology=ontology,
     )
-    if generation_cache.loaded_rows:
-        print(
-            f'[chunks] loaded {generation_cache.loaded_rows:,} cached chunk generation row(s) '
-            f'({len(generation_cache.by_fact_id):,} exact fact keys, '
-            f'{len(generation_cache.by_reuse_key):,} reusable keys)'
-        )
-    rewrite_cache = (
-        load_generation_cache([rewrite_cache_path], cache_version=REWRITE_CACHE_VERSION)
-        if (
-            not cfg.generation.llm_config.use_llm_chunk_generation
-            and cfg.generation.llm_config.use_llm_chunk_rewriting
-        )
-        else GenerationCache(by_fact_id={}, by_reuse_key={})
-    )
-    if rewrite_cache.loaded_rows:
-        print(
-            f'[chunks] loaded {rewrite_cache.loaded_rows:,} cached template rewrite row(s) '
-            f'({len(rewrite_cache.by_fact_id):,} exact fact keys, '
-            f'{len(rewrite_cache.by_reuse_key):,} reusable keys)'
-        )
-
-    if cfg.generation.llm_config.use_llm_chunk_generation:
-        rows, rejects, failed_queries = render_chunks_grouped_llm(
-            cfg=cfg,
-            facts=fact_rows,
-            ontology=ontology,
-            cache=generation_cache,
-            local_cache_path=local_cache_path,
-            shared_cache_path=shared_cache_path,
-            cache_version=GENERATION_CACHE_VERSION,
-        )
-    elif (
-        cfg.generation.llm_config.use_llm_chunk_rewriting
-        and cfg.generation.llm_config.num_workers > 1
-    ):
-        rows, rejects, failed_queries = render_chunks_grouped_rewrite(
-            cfg=cfg,
-            facts=fact_rows,
-            ontology=ontology,
-            cache=rewrite_cache,
-            rewrite_cache_path=rewrite_cache_path,
-            cache_version=REWRITE_CACHE_VERSION,
-        )
-    else:
-        rows, rejects, failed_queries = render_chunks_sequential(
-            cfg=cfg,
-            facts=fact_rows,
-            ontology=ontology,
-            generation_cache=generation_cache,
-            generation_cache_path=local_cache_path,
-            rewrite_cache=rewrite_cache,
-            rewrite_cache_path=rewrite_cache_path,
-        )
-
-    chunk_rows = pl.from_dicts(
-        [row.model_dump(mode='python') for row in rows], infer_schema_length=None
-    )
-    chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
-
-    write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
-    soft_warning_count = sum(row.validation_soft_warning_count for row in rows)
-    chunks_with_soft_warnings = sum(1 for row in rows if row.validation_soft_warning_count > 0)
-    if chunks_with_soft_warnings:
-        print(
-            f'[chunks] kept {chunks_with_soft_warnings:,} chunk(s) with soft warnings '
-            f'({soft_warning_count:,} warnings total)'
-        )
-    if failed_queries:
-        print(
-            f'[chunks] dropped {len(failed_queries):,} query/queries after LLM validation failure; '
-            f'kept {len(chunk_memberships):,}/{len(facts):,} chunk membership rows'
-        )
-    return chunk_documents
-
-
-def render_chunks_sequential(
-    cfg: ExperimentCfg,
-    facts: list[ClinicalFact],
-    ontology: MedicalOntology,
-    generation_cache: GenerationCache,
-    generation_cache_path: Path,
-    rewrite_cache: GenerationCache,
-    rewrite_cache_path: Path,
-) -> tuple[list[ChunkRow], list[dict[str, object]], set[str]]:
-    rows: list[ChunkRow] = []
-    rejects: list[dict[str, object]] = []
-    failed_queries: set[str] = set()
-
-    for i, fact in tqdm(
-        enumerate(facts),
-        total=len(facts),
-        desc='Rendering chunks',
-        dynamic_ncols=True,
-    ):
-        if fact.query_id in failed_queries:
-            continue
-        cached = cached_chunk_state(cfg, fact, ontology, generation_cache)
-        if cached is not None:
-            rows.append(row_from_state(i, fact, cached[0]))
-            continue
-
-        cache_key: str | None = None
-
-        if cfg.generation.llm_config.use_llm_chunk_generation:
-            final_text, attempt_errors = generate_llm_chunk(cfg=cfg, fact=fact, ontology=ontology)
-            if attempt_errors:
-                rejects.append(reject_row(fact, '; '.join(attempt_errors), final_text))
-                failed_queries.add(fact.query_id)
-                print(
-                    f'[chunks] dropping query {fact.query_id} after failed chunk {fact.fact_id}: '
-                    + '; '.join(attempt_errors)
-                )
-                continue
-            validation = validate_chunk_text(
-                final_text,
-                fact,
-                ontology,
-                text_style=cfg.generation.chunk_text_style,
-            )
-            state = new_chunk_state(
-                final_text,
-                text_generation_source='llm',
-                llm_attempted=True,
-                llm_rejected=False,
-                validation=validation,
-            )
-        else:
-            rendered_draft = render_canonical_chunk(
-                fact,
-                ontology,
-                cfg.generation.chunk_text_style,
-            )
-            draft_text = rendered_draft.text
-            if cfg.generation.llm_config.use_llm_chunk_rewriting:
-                cached = cached_rewrite_chunk_state(
-                    cfg=cfg,
-                    fact=fact,
-                    ontology=ontology,
-                    cache=rewrite_cache,
-                    draft_text=draft_text,
-                    rendered_template=rendered_draft,
-                )
-                if cached is not None:
-                    rows.append(row_from_state(i, fact, cached[0]))
-                    continue
-
-                rewrite_key = chunk_rewrite_cache_key(cfg, fact, draft_text)
-                rewritten_text, attempt_errors = rewrite_llm_chunk(
-                    cfg=cfg,
-                    fact=fact,
-                    ontology=ontology,
-                    draft_text=draft_text,
-                )
-                if attempt_errors:
-                    print(
-                        f'[chunks] keeping deterministic template for {fact.query_id} after rewrite '
-                        f'failure in {fact.fact_id}: ' + '; '.join(attempt_errors)
-                    )
-                    final_text = draft_text
-                    state = new_chunk_state(
-                        final_text,
-                        text_generation_source='fallback',
-                        llm_attempted=True,
-                        llm_rejected=True,
-                        validation=validate_chunk_text(
-                            final_text,
-                            fact,
-                            ontology,
-                            text_style=cfg.generation.chunk_text_style,
-                        ),
-                        rendered_template=rendered_draft,
-                    )
-                    cache_key = None
-                else:
-                    final_text = rewritten_text
-                    state = new_chunk_state(
-                        final_text,
-                        text_generation_source='llm',
-                        llm_attempted=True,
-                        llm_rejected=False,
-                        validation=validate_chunk_text(
-                            final_text,
-                            fact,
-                            ontology,
-                            text_style=cfg.generation.chunk_text_style,
-                        ),
-                        rendered_template=rendered_draft,
-                    )
-                    cache_key = rewrite_key
-            else:
-                final_text = draft_text
-                state = new_chunk_state(
-                    final_text,
-                    text_generation_source='fallback',
-                    llm_attempted=False,
-                    llm_rejected=False,
-                    validation=validate_chunk_text(
-                        final_text,
-                        fact,
-                        ontology,
-                        text_style=cfg.generation.chunk_text_style,
-                    ),
-                    rendered_template=rendered_draft,
-                )
-
-        try:
-            row, cache_entry = finalize_chunk_row(
-                cfg=cfg,
-                fact=fact,
-                ontology=ontology,
-                index=i,
-                state=state,
-                should_cache=cfg.generation.llm_config.use_llm_chunk_generation
-                or (
-                    cfg.generation.llm_config.use_llm_chunk_rewriting
-                    and state.text_generation_source == 'llm'
-                ),
-                cache_key=cache_key
-                if not cfg.generation.llm_config.use_llm_chunk_generation
-                else None,
-                cache_version=(
-                    GENERATION_CACHE_VERSION
-                    if cfg.generation.llm_config.use_llm_chunk_generation
-                    else REWRITE_CACHE_VERSION
-                ),
-                cache_key_fn=chunk_generation_cache_key,
-            )
-        except RuntimeError as exc:
-            rejects.append(reject_row(fact, str(exc), state.final_text))
-            failed_queries.add(fact.query_id)
-            print(
-                f'[chunks] dropping query {fact.query_id} after final validation failure in {fact.fact_id}: {exc}'
-            )
-            continue
-
-        if cache_entry is not None:
-            if cfg.generation.llm_config.use_llm_chunk_generation:
-                append_generation_cache(generation_cache_path, cache_entry)
-                remember_cache_entry(generation_cache, cache_entry)
-            else:
-                append_generation_cache(rewrite_cache_path, cache_entry)
-                remember_cache_entry(rewrite_cache, cache_entry)
-        rows.append(row)
-
-    kept_rows = [row for row in rows if row.query_id not in failed_queries]
-    return kept_rows, rejects, failed_queries
 
 
 def _render_chunks_deterministic_parallel(
@@ -369,11 +56,6 @@ def _render_chunks_deterministic_parallel(
     n_batches = facts.select(pl.col('query_id').n_unique()).item()
     workers = max(1, os.cpu_count() or 1)
     rows_all: list[dict[str, object]] = []
-    kept_rows = 0
-    soft_warning_count = 0
-    chunks_with_soft_warnings = 0
-    rejects: list[dict[str, object]] = []
-    failed_queries: set[str] = set()
 
     with ProcessPoolExecutor(
         max_workers=workers,
@@ -381,47 +63,17 @@ def _render_chunks_deterministic_parallel(
         initargs=(cfg_dump, ontology_dump),
     ) as executor:
         batch_iter = _iter_fact_batches(facts)
-        for (
-            _query_id,
-            rows,
-            batch_soft_warning_count,
-            batch_chunks_with_soft_warnings,
-            reject_rows,
-            failed,
-        ) in tqdm(
+        for _query_id, rows in tqdm(
             executor.map(_render_deterministic_chunk_batch, batch_iter, chunksize=1),
             total=n_batches,
             desc='Rendering chunks',
             dynamic_ncols=True,
         ):
-            soft_warning_count += batch_soft_warning_count
-            chunks_with_soft_warnings += batch_chunks_with_soft_warnings
-            rejects.extend(reject_rows)
-            if failed is not None:
-                failed_queries.add(failed)
-                print(
-                    f'[chunks] dropping query {failed} after deterministic validation failure: '
-                    f'{reject_rows[0]["reason"] if reject_rows else "validation failure"}'
-                )
-                continue
-
             rows_all.extend(rows)
-            kept_rows += len(rows)
 
     chunk_rows = _chunk_rows_frame(rows_all) if rows_all else pl.DataFrame()
     chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
 
-    write_parquet(paths, 'generation_rejects', rejects_frame(rejects))
-    if chunks_with_soft_warnings:
-        print(
-            f'[chunks] kept {chunks_with_soft_warnings:,} chunk(s) with soft warnings '
-            f'({soft_warning_count:,} warnings total)'
-        )
-    if failed_queries:
-        print(
-            f'[chunks] dropped {len(failed_queries):,} query/queries after deterministic '
-            f'validation failure; kept {kept_rows:,}/{len(facts):,} chunk membership rows'
-        )
     print(
         f'[chunks] normalized deterministic rows: '
         f'{len(chunk_documents):,} documents, {len(chunk_memberships):,} memberships'
@@ -443,16 +95,13 @@ def _init_deterministic_worker(
 
 def _render_deterministic_chunk_batch(
     batch: tuple[int, list[dict[str, object]]],
-) -> tuple[str, list[dict[str, object]], int, int, list[dict[str, object]], str | None]:
+) -> tuple[str, list[dict[str, object]]]:
     if _deterministic_worker_cfg is None or _deterministic_worker_ontology is None:
         raise RuntimeError('deterministic chunk worker was not initialized')
 
     start_index, fact_rows = batch
     first_fact = ClinicalFact.model_validate(fact_rows[0])
     rows: list[dict[str, object]] = []
-    rejects: list[dict[str, object]] = []
-    soft_warning_count = 0
-    chunks_with_soft_warnings = 0
 
     for offset, fact_row in enumerate(fact_rows):
         fact = ClinicalFact.model_validate(fact_row)
@@ -464,9 +113,6 @@ def _render_deterministic_chunk_batch(
         draft_text = rendered_draft.text
         state = new_chunk_state(
             draft_text,
-            text_generation_source='fallback',
-            llm_attempted=False,
-            llm_rejected=False,
             validation=validate_chunk_text(
                 draft_text,
                 fact,
@@ -475,26 +121,17 @@ def _render_deterministic_chunk_batch(
             ),
             rendered_template=rendered_draft,
         )
-        try:
-            row, _ = finalize_chunk_row(
-                cfg=_deterministic_worker_cfg,
-                fact=fact,
-                ontology=_deterministic_worker_ontology,
-                index=start_index + offset,
-                state=state,
-                should_cache=False,
-            )
-        except RuntimeError as exc:
-            reject = reject_row(fact, str(exc), state.final_text)
-            rejects.append(reject)
-            return fact.query_id, [], 0, 0, rejects, fact.query_id
+        row = finalize_chunk_row(
+            cfg=_deterministic_worker_cfg,
+            fact=fact,
+            ontology=_deterministic_worker_ontology,
+            index=start_index + offset,
+            state=state,
+        )
 
         rows.append(row.model_dump(mode='python'))
-        soft_warning_count += row.validation_soft_warning_count
-        if row.validation_soft_warning_count > 0:
-            chunks_with_soft_warnings += 1
 
-    return first_fact.query_id, rows, soft_warning_count, chunks_with_soft_warnings, rejects, None
+    return first_fact.query_id, rows
 
 
 def _iter_fact_batches(facts: pl.DataFrame):
@@ -531,7 +168,6 @@ def _write_normalized_chunks(
         chunk_memberships = pl.DataFrame()
         write_parquet(paths, 'chunk_documents', chunk_documents)
         write_parquet(paths, 'chunk_memberships', chunk_memberships)
-        _write_chunk_rendering_diagnostics(paths, chunk_documents, chunk_memberships)
         return chunk_documents, chunk_memberships
 
     duplicate_text_keys = (
@@ -547,10 +183,30 @@ def _write_normalized_chunks(
             f'found {len(duplicate_text_keys):,} violating key(s), examples={examples}'
         )
 
-    doc_keys = chunk_rows.select('chunk_reuse_key').unique(maintain_order=True)
+    chunk_rows = chunk_rows.with_columns(
+        pl.col('text')
+        .str.to_lowercase()
+        .str.replace_all(r'\s+', ' ')
+        .str.strip_chars()
+        .alias('_normalized_text')
+    )
+    before_dedup = len(chunk_rows)
+    retained_rows = chunk_rows.unique(
+        subset=['query_id', '_normalized_text'],
+        keep='first',
+        maintain_order=True,
+    )
+    dropped_duplicate_memberships = before_dedup - len(retained_rows)
+    if dropped_duplicate_memberships:
+        print(
+            f'[chunks] dropped {dropped_duplicate_memberships:,} query-local duplicate '
+            'membership row(s) by normalized text'
+        )
+
+    doc_keys = retained_rows.select('chunk_reuse_key').unique(maintain_order=True)
     doc_key_to_id = _doc_key_to_chunk_id(doc_keys['chunk_reuse_key'].to_list())
 
-    with_doc_id = chunk_rows.with_columns(
+    with_doc_id = retained_rows.with_columns(
         pl
         .col('chunk_reuse_key')
         .replace_strict(doc_key_to_id, return_dtype=pl.String)
@@ -563,9 +219,6 @@ def _write_normalized_chunks(
         'chunk_reuse_key',
         'text',
         'approx_words',
-        'text_generation_source',
-        'llm_attempted',
-        'llm_rejected',
         'condition_id',
         'condition_display',
         'subgroup_id',
@@ -589,8 +242,6 @@ def _write_normalized_chunks(
         'outer_template_id',
         'axis_template_family',
         'axis_template_id',
-        'validation_soft_warning_count',
-        'validation_soft_warnings_json',
     ]
     membership_cols = [
         'membership_id',
@@ -607,6 +258,8 @@ def _write_normalized_chunks(
         'cluster_id',
         'cluster_role',
         'axis',
+        'value_bin',
+        'axis_payload_json',
         'facet_priority',
         'is_gold',
         'distractor_type',
@@ -636,122 +289,28 @@ def _write_normalized_chunks(
             f'found {len(duplicate_memberships):,} duplicate pair(s), examples={examples}'
         )
 
+    invalid_gold_coverage = (
+        chunk_memberships
+        .filter(pl.col('is_gold'))
+        .group_by('query_id')
+        .agg(pl.col('facet_id').n_unique().alias('n_gold_facets'))
+        .filter(pl.col('n_gold_facets') != 4)
+    )
+    if len(invalid_gold_coverage):
+        examples = invalid_gold_coverage.head(5).to_dicts()
+        raise RuntimeError(
+            'query-local duplicate dropping removed a required gold facet; '
+            f'examples={examples}'
+        )
+
     write_parquet(paths, 'chunk_documents', chunk_documents)
     write_parquet(paths, 'chunk_memberships', chunk_memberships)
-    _write_chunk_rendering_diagnostics(paths, chunk_documents, chunk_memberships)
     print(
         f'[chunks] normalized {len(chunk_rows):,} generated row(s) -> '
         f'{len(chunk_documents):,} chunk document(s), '
         f'{len(chunk_memberships):,} query membership(s)'
     )
     return chunk_documents, chunk_memberships
-
-
-def _write_chunk_rendering_diagnostics(
-    paths: MedicalDatasetGenPaths,
-    chunk_documents: pl.DataFrame,
-    chunk_memberships: pl.DataFrame,
-) -> None:
-    """Report equal normalized texts without conflating them with reuse-key identity.
-
-    Canonical reuse intentionally collapses equal facts into one document. This
-    diagnostic instead finds distinct document IDs whose final text is equal,
-    both globally and within a query-local retrieval pool.
-    """
-    if chunk_documents.is_empty() or chunk_memberships.is_empty():
-        write_json(
-            paths,
-            'chunk_rendering_diagnostics.json',
-            {
-                'normalization': 'casefolded and whitespace-collapsed text',
-                'n_documents': len(chunk_documents),
-                'n_memberships': len(chunk_memberships),
-                'n_global_duplicate_text_groups': 0,
-                'global_duplicate_document_rate': 0.0,
-                'n_query_duplicate_text_groups': 0,
-                'n_affected_queries': 0,
-                'query_duplicate_membership_rate': 0.0,
-                'n_cross_axis_query_duplicate_groups': 0,
-                'n_cross_role_query_duplicate_groups': 0,
-                'n_mixed_gold_status_query_duplicate_groups': 0,
-                'examples': [],
-            },
-        )
-        return
-
-    normalized_documents = chunk_documents.select('chunk_id', 'text').with_columns(
-        pl.col('text')
-        .str.to_lowercase()
-        .str.replace_all(r'\s+', ' ')
-        .str.strip_chars()
-        .alias('_normalized_text')
-    )
-    global_duplicates = (
-        normalized_documents.group_by('_normalized_text')
-        .agg(pl.col('chunk_id').n_unique().alias('n_chunk_ids'))
-        .filter(pl.col('n_chunk_ids') > 1)
-    )
-    pool_duplicates = (
-        chunk_memberships.join(normalized_documents, on='chunk_id', how='inner', validate='m:1')
-        .group_by('query_id', '_normalized_text')
-        .agg(
-            pl.col('chunk_id').n_unique().alias('n_chunk_ids'),
-            pl.col('axis').n_unique().alias('n_axes'),
-            pl.col('cluster_role').n_unique().alias('n_cluster_roles'),
-            pl.col('is_gold').n_unique().alias('n_gold_statuses'),
-        )
-        .filter(pl.col('n_chunk_ids') > 1)
-        .sort('query_id', 'n_chunk_ids', descending=[False, True])
-    )
-    examples = [
-        {
-            'query_id': str(row['query_id']),
-            'normalized_text_sha256': hashlib.sha256(
-                str(row['_normalized_text']).encode()
-            ).hexdigest(),
-            'n_chunk_ids': int(row['n_chunk_ids']),
-            'n_axes': int(row['n_axes']),
-            'n_cluster_roles': int(row['n_cluster_roles']),
-            'n_gold_statuses': int(row['n_gold_statuses']),
-        }
-        for row in pool_duplicates.head(20).iter_rows(named=True)
-    ]
-    affected_queries = pool_duplicates['query_id'].n_unique() if len(pool_duplicates) else 0
-    payload = {
-        'normalization': 'casefolded and whitespace-collapsed text',
-        'n_documents': len(chunk_documents),
-        'n_memberships': len(chunk_memberships),
-        'n_global_duplicate_text_groups': len(global_duplicates),
-        'global_duplicate_document_rate': (
-            float(global_duplicates['n_chunk_ids'].sum()) / len(chunk_documents)
-            if len(global_duplicates)
-            else 0.0
-        ),
-        'n_query_duplicate_text_groups': len(pool_duplicates),
-        'n_affected_queries': int(affected_queries),
-        'query_duplicate_membership_rate': (
-            float(pool_duplicates['n_chunk_ids'].sum()) / len(chunk_memberships)
-            if len(pool_duplicates)
-            else 0.0
-        ),
-        'n_cross_axis_query_duplicate_groups': int(
-            pool_duplicates.filter(pl.col('n_axes') > 1).height
-        ),
-        'n_cross_role_query_duplicate_groups': int(
-            pool_duplicates.filter(pl.col('n_cluster_roles') > 1).height
-        ),
-        'n_mixed_gold_status_query_duplicate_groups': int(
-            pool_duplicates.filter(pl.col('n_gold_statuses') > 1).height
-        ),
-        'examples': examples,
-    }
-    write_json(paths, 'chunk_rendering_diagnostics.json', payload)
-    if len(pool_duplicates):
-        print(
-            '[chunks] warning: normalized duplicate text appears in '
-            f'{len(pool_duplicates):,} query-local pool group(s) across '
-            f'{affected_queries:,} query/queries; see chunk_rendering_diagnostics.json'
-        )
 
 
 def _doc_key_to_chunk_id(chunk_reuse_keys: list[str]) -> dict[str, str]:

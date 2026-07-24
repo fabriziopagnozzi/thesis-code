@@ -35,7 +35,7 @@ class BasePydanticCfgModel(BaseModel):
 class GlobalCfg(BasePydanticCfgModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
-    output_experiment: str = 'v3'
+    output_experiment: str = 'v4'
     use_shared: bool = True
     result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
@@ -175,17 +175,6 @@ class ChunkPoolsCfg(BasePydanticCfgModel):
         return self.near_miss_distractors_per_query() + self.background_outliers_per_query()
 
 
-class GenerationLlmConfig(BasePydanticCfgModel):
-    use_llm_chunk_generation: bool = False
-    use_llm_chunk_rewriting: bool = False
-    use_llm_query_paraphrase: bool = False
-    model_name: str = 'gemma4:12b-ud_q8_xl'
-    num_workers: PositiveInt = 4
-    max_attempts: PositiveInt = 3
-    temperature: PositiveFloat = 0.5
-    num_ctx: PositiveInt = 8192
-
-
 class AxisPairPolicyOverrideCfg(BasePydanticCfgModel):
     axes: tuple[ClinicalAxis, ClinicalAxis]
     allowed_primary_axes: list[ClinicalAxis] | None = None
@@ -238,7 +227,6 @@ class GenerationCfg(BasePydanticCfgModel):
     axis_pair_policy_overrides: list[AxisPairPolicyOverrideCfg] = Field(default_factory=list)
 
     chunk_pools: ChunkPoolsCfg
-    llm_config: GenerationLlmConfig = Field(default_factory=GenerationLlmConfig)
 
     @model_validator(mode='after')
     def _validate_niche_cluster_size(self) -> GenerationCfg:
@@ -378,7 +366,7 @@ class LambdaSelectionCfg(BasePydanticCfgModel):
 
 
 type EvalPlotTheme = Literal['dark', 'light']
-type DatasetSchemaVersion = Literal[2, 3]
+type DatasetSchemaVersion = Literal[2, 3, 4]
 
 
 class EvaluationRerankerCfg(BasePydanticCfgModel):
@@ -424,8 +412,8 @@ class QueryGeometryCfg(BasePydanticCfgModel):
 
 
 class ExperimentCfg(BasePydanticCfgModel):
-    # v2 remains readable for archived experiments; new dataset construction uses v3.
-    dataset_schema_version: DatasetSchemaVersion = 3
+    # v2/v3 remain readable for archived experiments; new dataset construction uses v4.
+    dataset_schema_version: DatasetSchemaVersion = 4
     global_: GlobalCfg = Field(alias='global')
     generation: GenerationCfg
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
@@ -452,17 +440,20 @@ class ExperimentCfg(BasePydanticCfgModel):
         return normalized
 
     @model_validator(mode='after')
-    def _validate_v3_scope(self) -> ExperimentCfg:
-        if self.dataset_schema_version != 3:
+    def _validate_query_local_generation_scope(self) -> ExperimentCfg:
+        if self.dataset_schema_version not in {3, 4}:
             return self
         if self.retrieval.pool_scope != 'query_local':
-            raise ValueError('dataset schema v3 supports only retrieval.pool_scope=query_local')
+            raise ValueError(
+                f'dataset schema v{self.dataset_schema_version} supports only '
+                'retrieval.pool_scope=query_local'
+            )
         local_pool_size = (
             self.generation.total_gold_chunks() + self.generation.total_distractor_chunks()
         )
         if self.retrieval.candidate_pool_n < local_pool_size:
             raise ValueError(
-                'retrieval.candidate_pool_n must include the complete v3 query-local pool '
+                'retrieval.candidate_pool_n must include the complete query-local pool '
                 f'({local_pool_size} chunks)'
             )
         return self

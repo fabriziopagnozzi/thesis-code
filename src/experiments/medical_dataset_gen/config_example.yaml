@@ -1,4 +1,4 @@
-dataset_schema_version: 3
+dataset_schema_version: 4
 
 global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
@@ -7,7 +7,7 @@ global:
 generation:
     query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 6,174 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
-    chunk_text_style: semantic_hardened # Both styles share the same note and clinical evidence; "ontology_explicit" adds one axis/bin suffix and "semantic_hardened" omits it.
+    chunk_text_style: semantic_hardened # "semantic_hardened" keeps authored chart evidence only; "ontology_explicit" adds one authored interpretation sentence.
     focus_mode: natural # "natural" uses middle-level clinical evidence requests; "list" restores the older list-like axis focus wording.
     query_structure: unbalanced # "unbalanced" keeps secondary-axis wording light; "balanced" includes the secondary-axis focus text too.
     chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families.
@@ -65,16 +65,6 @@ generation:
         chunk_min_words: 25
         chunk_max_words: 200
         chunk_word_tolerance: 5 # Soft tolerance around the target range for concise deterministic prose.
-
-    llm_config:
-        use_llm_chunk_generation: false
-        use_llm_chunk_rewriting: false # If true and chunk generation is deterministic, rewrite fallback chunks with the LLM via the isolated global rewrite cache.
-        use_llm_query_paraphrase: false # If true, generated query strings are paraphrased by LLM.
-        model_name: gemma4:12b # Ollama generation model. This pipeline passes it explicitly; no OLLAMA_MODEL env var is needed.
-        num_workers: 2 # Parallel chunk-generation workers. Match this with Ollama server OLLAMA_NUM_PARALLEL.
-        max_attempts: 3 # Maximum LLM retries per chunk before that query is dropped from the benchmark.
-        temperature: 0.5
-        num_ctx: 4096 # Keep this modest for chunk generation; VRAM scales with context and parallelism.
 
 embeddings:
     model_name: BAAI/bge-m3

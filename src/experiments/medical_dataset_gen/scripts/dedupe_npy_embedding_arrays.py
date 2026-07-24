@@ -111,7 +111,6 @@ def main() -> None:
     plans = _build_plans(
         children,
         scope=cast(CompactScope, args.scope),
-        include_llm=bool(args.include_llm),
     )
     verify_byte_identical = bool(args.require_byte_identical) or (
         bool(args.apply) and not bool(args.trust_config)
@@ -138,7 +137,6 @@ def main() -> None:
     repaired_subconfigs, removed_invalid_overrides = _remove_invalid_existing_overrides(
         children,
         scope=cast(CompactScope, args.scope),
-        include_llm=bool(args.include_llm),
     )
     changed_subconfigs = repaired_subconfigs | _apply_overrides(plans)
     deleted_files, deleted_bytes = (0, 0) if args.no_delete else _delete_duplicate_files(plans)
@@ -154,7 +152,6 @@ def _build_plans(
     children: list[ChildEmbeddingArtifacts],
     *,
     scope: CompactScope,
-    include_llm: bool,
 ) -> list[ArtifactGroupPlan]:
     plans: list[ArtifactGroupPlan] = []
     if scope in {'all', 'chunk'}:
@@ -163,7 +160,6 @@ def _build_plans(
                 children,
                 kind='chunk',
                 artifacts=CHUNK_ARTIFACTS,
-                include_llm=include_llm,
             )
         )
     if scope in {'all', 'query'}:
@@ -172,7 +168,6 @@ def _build_plans(
                 children,
                 kind='query',
                 artifacts=QUERY_ARTIFACTS,
-                include_llm=include_llm,
             )
         )
     return plans
@@ -183,14 +178,9 @@ def _plans_for_kind(
     *,
     kind: ArtifactGroupKind,
     artifacts: tuple[EmbeddingArtifactName, ...],
-    include_llm: bool,
 ) -> list[ArtifactGroupPlan]:
     groups: dict[tuple[object, ...], list[ChildEmbeddingArtifacts]] = defaultdict(list)
     for child in children:
-        if kind == 'chunk' and _skip_llm_chunks(child.cfg, include_llm=include_llm):
-            continue
-        if kind == 'query' and _skip_llm_queries(child.cfg, include_llm=include_llm):
-            continue
         key = _group_key(child, kind=kind)
         groups[key].append(child)
 
@@ -334,17 +324,6 @@ def _has_all_local_files(
     return all(child.files[artifact].exists for artifact in artifacts)
 
 
-def _skip_llm_chunks(cfg: ExperimentCfg, *, include_llm: bool) -> bool:
-    return not include_llm and (
-        cfg.generation.llm_config.use_llm_chunk_generation
-        or cfg.generation.llm_config.use_llm_chunk_rewriting
-    )
-
-
-def _skip_llm_queries(cfg: ExperimentCfg, *, include_llm: bool) -> bool:
-    return not include_llm and cfg.generation.llm_config.use_llm_query_paraphrase
-
-
 def _filter_byte_identical_plans(plans: list[ArtifactGroupPlan]) -> list[ArtifactGroupPlan]:
     digest_cache: dict[Path, str] = {}
     filtered: list[ArtifactGroupPlan] = []
@@ -423,7 +402,6 @@ def _remove_invalid_existing_overrides(
     children: list[ChildEmbeddingArtifacts],
     *,
     scope: CompactScope,
-    include_llm: bool,
 ) -> tuple[set[Path], int]:
     children_by_dir = {_normalized_path(child.experiment_dir): child for child in children}
     changed: set[Path] = set()
@@ -440,10 +418,6 @@ def _remove_invalid_existing_overrides(
         result_overrides = cast(YamlMapping, result_dir_overrides)
         did_change = False
         for kind, artifacts in _scoped_artifact_groups(scope):
-            if kind == 'chunk' and _skip_llm_chunks(child.cfg, include_llm=include_llm):
-                continue
-            if kind == 'query' and _skip_llm_queries(child.cfg, include_llm=include_llm):
-                continue
             for artifact in artifacts:
                 target_raw = result_overrides.get(artifact)
                 if target_raw is None:
@@ -699,11 +673,6 @@ def _parse_args() -> argparse.Namespace:
         '--no-delete',
         action='store_true',
         help='Only write result_dir_overrides; keep duplicate local .npy files.',
-    )
-    parser.add_argument(
-        '--include-llm',
-        action='store_true',
-        help='Allow grouping LLM-generated/re-written/paraphrased artifacts by config.',
     )
     parser.add_argument(
         '--require-byte-identical',

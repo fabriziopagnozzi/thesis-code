@@ -1,4 +1,4 @@
-"""Expand schema-v3 plans into deterministic, typed clinical facts."""
+"""Expand schema-v4 plans into deterministic, typed clinical facts."""
 
 from __future__ import annotations
 
@@ -733,7 +733,7 @@ def _chunk_reuse_key(
 ) -> str:
     raw = json.dumps(
         {
-            'schema': 3,
+            'schema': 4,
             'condition_id': condition_id,
             'subgroup_id': subgroup_id,
             'axis': axis,
