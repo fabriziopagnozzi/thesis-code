@@ -519,9 +519,11 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     )
     if recap_records:
         _progress('refreshing experiment configuration recap from saved configurations')
-        (report_dir / 'txt_experiments_config_recap.md').write_text(
-            render_experiment_config_recap(recap_records)
-        )
+        (
+            Path(
+                '/home/pagnozzi/thesis/src/medical_dataset_gen/docs/thesis/txt_experiments_config_recap.md'
+            )
+        ).write_text(render_experiment_config_recap(recap_records))
     if _should_write_thesis_outputs(args):
         _progress('refreshing thesis LaTeX tables and macros from existing CSV artifacts')
         _write_thesis_outputs_from_rows(
@@ -649,21 +651,19 @@ def _update_plot_refresh_manifest(
         manifest = {}
     if not isinstance(manifest, dict):
         manifest = {}
-    manifest.update(
-        {
-            'plots_refreshed_at_utc': datetime.now(UTC).isoformat(),
-            'plot_refresh_only': True,
-            'plot_format': args.plot_format,
-            'cross_query_chunk_modes': args.cross_query_chunk_modes,
-            'wording_configurations': list(wording_configurations),
-            'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
-            'cross_triplet_figures_enabled': args.cross_query_chunk_modes
-            and cross_triplet_analysis_enabled,
-            'warnings_count': len(warnings),
-            'experiments_discovered': experiments_discovered,
-            'figures': [str(path.relative_to(report_dir)) for path in figures],
-        }
-    )
+    manifest.update({
+        'plots_refreshed_at_utc': datetime.now(UTC).isoformat(),
+        'plot_refresh_only': True,
+        'plot_format': args.plot_format,
+        'cross_query_chunk_modes': args.cross_query_chunk_modes,
+        'wording_configurations': list(wording_configurations),
+        'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
+        'cross_triplet_figures_enabled': args.cross_query_chunk_modes
+        and cross_triplet_analysis_enabled,
+        'warnings_count': len(warnings),
+        'experiments_discovered': experiments_discovered,
+        'figures': [str(path.relative_to(report_dir)) for path in figures],
+    })
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
 
 

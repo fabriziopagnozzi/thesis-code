@@ -1,12 +1,7 @@
 # Before tomorrow
 
-- generare alcuni query_geometry in modalità mixed
-    - parlare del fatto che in alcune query top-k non collassa sul cluster dominante --> problema semantico, separazione facet nello spazio di embedding? 
-        - io ho chiesto a GPT di escludere tutte le combinazioni semanticamente irrilevanti
-    - è lecito togliere queste query via dal dataset? non è un bias?
-
-
-- rirunna gli esperimenti mal configurati da _run.sh; poi le eval plots per la notte
+- presentazione aneddotica: quando effettivamente la coverage recupera evidenza che serve e che MMR si perde? fare un esempio di query e documenti
+    - in generale, la domanda più grande è: un vantaggio di 0.10 su FCP come viene interpretato? E' statisticamente un buon margine di vantaggio per la coverage?
 
 ---------
 
@@ -95,3 +90,12 @@ Include:
 * Fine tune the medical ontology somehow
 * use LLMs to rewrite chunks into a more natural clinical prose while retaining all the meaning --> drawback: expensive and time-consuming
 * Eventually, go back to the MIMIC pipeline and find a way to make it work.
+
+
+## Top-k works already on some queries.
+- generare alcuni query_geometry in modalità mixed
+    - parlare del fatto che in alcune query top-k non collassa sul cluster dominante --> problema semantico, separazione facet nello spazio di embedding? --> DONE, dicono che ci sta che in alcuni casi ci siano delle query degeneri.
+        - io ho chiesto a GPT di escludere tutte le combinazioni semanticamente irrilevanti
+    - è lecito togliere queste query via dal dataset? non è un bias?
+        - Martinenghi: bisogna tenerle. Per fairness.
+

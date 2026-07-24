@@ -75,13 +75,11 @@ def _family_grouped_rows(
             for value in (float_or_none(row.get(value_column)) for row in group)
             if value is not None
         ]
-        family_order.append(
-            (
-                statistics.fmean(values) if values else float('-inf'),
-                EXPERIMENT_FAMILY_LABELS[family_id],
-                family_id,
-            )
-        )
+        family_order.append((
+            statistics.fmean(values) if values else float('-inf'),
+            EXPERIMENT_FAMILY_LABELS[family_id],
+            family_id,
+        ))
 
     ordered_rows: list[Mapping[str, object]] = []
     for _mean_value, _label, family_id in sorted(
@@ -418,14 +416,12 @@ def _binned_lambda_delta_stats(
         if not values:
             continue
         sorted_values = sorted(values)
-        out.append(
-            {
-                'x': (index + 0.5) / n_bins,
-                'mean': statistics.fmean(values),
-                'q25': quantile(sorted_values, 0.25),
-                'q75': quantile(sorted_values, 0.75),
-            }
-        )
+        out.append({
+            'x': (index + 0.5) / n_bins,
+            'mean': statistics.fmean(values),
+            'q25': quantile(sorted_values, 0.25),
+            'q75': quantile(sorted_values, 0.75),
+        })
     return out
 
 
@@ -494,8 +490,9 @@ def plot_dataset_composition(
     gold = [float_or_none(row.get('GoldPercentage')) or 0.0 for row in plot_rows]
     near = [float_or_none(row.get('NearMissDistractorPercentage')) or 0.0 for row in plot_rows]
     background = [float_or_none(row.get('BackgroundOutlierPercentage')) or 0.0 for row in plot_rows]
-    positions = list(range(len(labels)))
-    fig_height = max(5.0, 0.28 * len(labels) + 1.6)
+    positions = _family_spaced_positions(plot_rows)
+    family_gap_count = max(0, len(set(_family_id_for_row(row) for row in plot_rows)) - 1)
+    fig_height = max(5.0, 0.28 * len(labels) + 0.18 * family_gap_count + 1.9)
     fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
         granular_gold = _gold_role_share_series(plot_rows)
@@ -530,21 +527,33 @@ def plot_dataset_composition(
         ax.invert_yaxis()
         ax.set_xlim(0, 1)
         ax.grid(axis='x', alpha=0.25)
-        _color_tick_labels_by_family(ax=ax, rows=plot_rows)
-        ax.legend(
+        fig.legend(
+            *ax.get_legend_handles_labels(),
             loc='lower center',
-            bbox_to_anchor=(0.5, 1.01),
             ncol=3,
             frameon=False,
             fontsize=8,
         )
-        _add_family_legend(fig=fig, rows=plot_rows)
-        fig.tight_layout(rect=(0, 0.06, 1, 0.90))
+        fig.tight_layout(rect=(0, 0.12, 1, 1))
         path = output_dir / f'dataset_composition_stacked.{plot_format}'
-        fig.savefig(path, dpi=180)
+        fig.savefig(path, dpi=180, bbox_inches='tight')
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _family_spaced_positions(rows: Sequence[Mapping[str, object]]) -> list[float]:
+    positions: list[float] = []
+    current_position = 0.0
+    previous_family_id: ExperimentFamilyId | None = None
+    for row in rows:
+        family_id = _family_id_for_row(row)
+        if previous_family_id is not None and family_id != previous_family_id:
+            current_position += 0.75
+        positions.append(current_position)
+        current_position += 1.0
+        previous_family_id = family_id
+    return positions
 
 
 def _gold_role_share_series(
