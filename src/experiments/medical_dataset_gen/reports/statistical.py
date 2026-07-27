@@ -38,9 +38,6 @@ type CellKey = tuple[str, int]
 
 CORE_EMBEDDING_MODELS: tuple[str, ...] = EMBEDDING_MODEL_FACETED_PLOT_MODELS
 CORE_RUN_LABELS: tuple[str, str] = ('bge_m3', 'qwen3_06')
-THESIS_STATISTICAL_TABLE_PATH = Path(
-    '/home/pagnozzi/thesis/src/experiments/medical_dataset_gen/docs/thesis/paired_statistical_tables.tex'
-)
 
 
 @dataclass(frozen=True)

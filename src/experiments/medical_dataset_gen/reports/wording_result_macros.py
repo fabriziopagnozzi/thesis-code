@@ -13,11 +13,6 @@ from experiments.medical_dataset_gen.reports.report_config import (
     EMBEDDING_MODEL_FACETED_PLOT_MODELS,
     REPORT_METRIC_SPECS,
 )
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
-    CHUNK_TEXT_STYLE_LIST,
-    QUERY_FOCUS_MODE_LIST,
-    QUERY_STRUCTURE_LIST,
-)
 
 type ReportRow = Mapping[str, object]
 type WordingKey = tuple[str, str, str]
@@ -35,9 +30,6 @@ FACTOR_CONTRASTS: tuple[FactorContrast, ...] = (
     FactorContrast('QueryMode', 'biased', 'unbiased'),
     FactorContrast('FocusMode', 'list', 'natural'),
     FactorContrast('ChunkTextMode', 'simple', 'hardened'),
-)
-EXPECTED_WORDING_CONFIGURATIONS = (
-    len(QUERY_STRUCTURE_LIST) * len(QUERY_FOCUS_MODE_LIST) * len(CHUNK_TEXT_STYLE_LIST)
 )
 _MODEL_TOKENS = dict(zip(EMBEDDING_MODEL_FACETED_PLOT_MODELS, ('Bge', 'Qwen'), strict=True))
 
@@ -84,17 +76,14 @@ def render_wording_result_macros(
 
 def _wording_grid_error(rows: Sequence[ReportRow]) -> str | None:
     configurations = {_required_wording_key(row) for row in rows}
-    if len(configurations) != EXPECTED_WORDING_CONFIGURATIONS:
-        return (
-            'The wording macro grid is incomplete: expected '
-            f'{EXPECTED_WORDING_CONFIGURATIONS} triplets, found {len(configurations)}.'
-        )
-
     query_modes = sorted({key[0] for key in configurations})
     focus_modes = sorted({key[1] for key in configurations})
     chunk_modes = sorted({key[2] for key in configurations})
     if configurations != set(product(query_modes, focus_modes, chunk_modes)):
-        return 'The wording macro grid does not contain the complete modality cross-product.'
+        return (
+            'The wording macro grid is ragged: it must contain the complete cross-product '
+            'of the wording factor levels represented in the report.'
+        )
 
     expected_models = set(EMBEDDING_MODEL_FACETED_PLOT_MODELS)
     models = {str(row.get('EmbeddingModel') or '') for row in rows}
@@ -187,12 +176,15 @@ def _factor_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
         source_rows = [row for row in rows if row.get(contrast.column) == contrast.source]
         target_rows = [row for row in rows if row.get(contrast.column) == contrast.target]
         for level, level_rows in ((contrast.source, source_rows), (contrast.target, target_rows)):
-            macros.update(
-                _fcp_summary_macros(
-                    f'ResultWordingLowFactor{_macro_token(level)}',
-                    level_rows,
+            if level_rows:
+                macros.update(
+                    _fcp_summary_macros(
+                        f'ResultWordingLowFactor{_macro_token(level)}',
+                        level_rows,
+                    )
                 )
-            )
+        if not source_rows or not target_rows:
+            continue
         contrast_prefix = (
             'ResultWordingLowContrast'
             f'{_macro_token(contrast.source)}To{_macro_token(contrast.target)}'
@@ -214,20 +206,24 @@ def _family_chunk_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
     macros: dict[str, str] = {}
     for family in DISTRIBUTION_EXPERIMENT_FAMILIES:
         family_rows = [row for row in rows if row.get('ExperimentFamily') == family]
+        if not family_rows:
+            continue
         chunk_rows = {
             chunk_mode: [row for row in family_rows if row.get('ChunkTextMode') == chunk_mode]
             for chunk_mode in ('simple', 'hardened')
         }
         prefix = f'ResultWordingLowFamily{_macro_token(family)}'
         for chunk_mode, matching_rows in chunk_rows.items():
-            macros[f'{prefix}Chunk{_macro_token(chunk_mode)}FacLocMmrFcpMeanDelta'] = _signed(
-                _column_mean(matching_rows, 'Delta_FacLoc_MMR_FCP'), digits=3
+            if matching_rows:
+                macros[f'{prefix}Chunk{_macro_token(chunk_mode)}FacLocMmrFcpMeanDelta'] = _signed(
+                    _column_mean(matching_rows, 'Delta_FacLoc_MMR_FCP'), digits=3
+                )
+        if chunk_rows['hardened'] and chunk_rows['simple']:
+            macros[f'{prefix}ChunkHardenedMinusSimpleFacLocMmrFcpMeanDelta'] = _signed(
+                _column_mean(chunk_rows['hardened'], 'Delta_FacLoc_MMR_FCP')
+                - _column_mean(chunk_rows['simple'], 'Delta_FacLoc_MMR_FCP'),
+                digits=3,
             )
-        macros[f'{prefix}ChunkHardenedMinusSimpleFacLocMmrFcpMeanDelta'] = _signed(
-            _column_mean(chunk_rows['hardened'], 'Delta_FacLoc_MMR_FCP')
-            - _column_mean(chunk_rows['simple'], 'Delta_FacLoc_MMR_FCP'),
-            digits=3,
-        )
     return macros
 
 

@@ -14,6 +14,7 @@ from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGen
 type PlotFormat = Literal['png', 'pdf', 'svg']
 type BudgetCategory = Literal['low_budget', 'medium_budget', 'high_budget']
 type MainQueryScope = Literal['all', 'geometry_eligible']
+type RefreshMode = Literal['plots', 'latex_macros']
 
 
 @dataclass(frozen=True)
@@ -38,13 +39,15 @@ class CliArgs:
     experiments: tuple[str, ...]
     experiment_regex: str | None
     exclude_experiment_regex: str | None
+    artifact_version: str | None
     max_table_rows: int
     tablefmt: str
     plots: bool
     plot_format: PlotFormat
     near_optimal_epsilon: float
     cross_query_chunk_modes: bool = False
-    plots_from_report: Path | None = None
+    refresh_report_dir: Path | None = None
+    refresh_mode: RefreshMode | None = None
     bootstrap_replicates: int = 1000
     bootstrap_seed: int = 20260712
     main_query_scope: MainQueryScope = 'all'

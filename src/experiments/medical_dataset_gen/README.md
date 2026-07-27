@@ -10,8 +10,10 @@ src/experiments/medical_dataset_gen/_results/<experiment_name>/_config.yaml
 ```
 Outputs are written under:
 ```text
-src/experiments/medical_dataset_gen/_results/<experiment_name>/
+src/experiments/medical_dataset_gen/_results/<experiment_name>/v<dataset-schema-version>/
 ```
+
+For subexperiments, keep `_subconfig.yaml` in the unversioned child directory. Run-local, non-shared artifacts are written below the version leaf, for example `_results/<parent>/<child>/v4/` for schema v4.
 
 ## Stage Selection
 

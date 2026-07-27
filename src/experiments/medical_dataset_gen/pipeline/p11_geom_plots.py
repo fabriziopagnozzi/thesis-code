@@ -216,8 +216,8 @@ def run_query_geom_plots(
                 all_point_rows.extend(result['point_rows'])
                 all_stat_rows.append(result['query_stats'])
 
-    points = pl.DataFrame(all_point_rows) if all_point_rows else pl.DataFrame()
-    stats = pl.DataFrame(all_stat_rows) if all_stat_rows else pl.DataFrame()
+    points = _rows_to_dataframe(all_point_rows)
+    stats = _rows_to_dataframe(all_stat_rows)
     if len(points):
         write_parquet(paths, 'query_geometry_points', points)
     if len(stats):
@@ -293,6 +293,12 @@ def _should_render_plot(
     plot_name: GeomPlotName,
 ) -> bool:
     return selected_plot_names is None or plot_name in selected_plot_names
+
+
+def _rows_to_dataframe(rows: list[dict[str, object]]) -> pl.DataFrame:
+    if not rows:
+        return pl.DataFrame()
+    return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def parse_plot_names(raw_value: str | None) -> set[GeomPlotName] | None:

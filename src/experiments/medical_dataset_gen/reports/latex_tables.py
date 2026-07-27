@@ -18,11 +18,26 @@ from experiments.medical_dataset_gen.reports.wording_result_macros import (
     render_wording_result_macros,
 )
 
-_MEDICAL_DATASET_GEN_DIR = Path(__file__).resolve().parents[1]
-THESIS_AGGREGATE_TABLES_PATH = (
-    _MEDICAL_DATASET_GEN_DIR / 'docs' / 'thesis' / 'exp_results_tables.tex'
-)
-THESIS_RESULT_MACROS_PATH = _MEDICAL_DATASET_GEN_DIR / 'docs' / 'thesis' / 'exp_results_macros.tex'
+LATEX_OUTPUT_DIRNAME = 'latex'
+THESIS_AGGREGATE_TABLES_FILENAME = 'exp_results_tables.tex'
+THESIS_RESULT_MACROS_FILENAME = 'exp_results_macros.tex'
+THESIS_STATISTICAL_TABLES_FILENAME = 'paired_statistical_tables.tex'
+
+
+def thesis_latex_dir(report_dir: Path) -> Path:
+    return report_dir / LATEX_OUTPUT_DIRNAME
+
+
+def thesis_aggregate_tables_path(report_dir: Path) -> Path:
+    return thesis_latex_dir(report_dir) / THESIS_AGGREGATE_TABLES_FILENAME
+
+
+def thesis_result_macros_path(report_dir: Path) -> Path:
+    return thesis_latex_dir(report_dir) / THESIS_RESULT_MACROS_FILENAME
+
+
+def thesis_statistical_tables_path(report_dir: Path) -> Path:
+    return thesis_latex_dir(report_dir) / THESIS_STATISTICAL_TABLES_FILENAME
 
 type TableKind = Literal['metric_budget', 'metric_family', 'metric_family_budget']
 

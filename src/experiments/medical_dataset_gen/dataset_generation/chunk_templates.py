@@ -91,9 +91,7 @@ def available_note_styles(surface_group: ChunkSurfaceGroup | None = None) -> lis
     if surface_group is None:
         return list(templates)
     return [
-        family
-        for family, bucket in templates.items()
-        if bucket.templates_for_group(surface_group)
+        family for family, bucket in templates.items() if bucket.templates_for_group(surface_group)
     ]
 
 
@@ -234,10 +232,7 @@ def _axis_sentence(
             surface_group=surface_group,
         )
         if text_style == 'ontology_explicit':
-            text = (
-                f'{text} '
-                f'{_simple_interpretation_sentence(fact, surface_group=surface_group)}'
-            )
+            text = f'{text} {_simple_interpretation_sentence(fact, surface_group=surface_group)}'
         return text, family, template_id
     elif isinstance(payload, RehabOutcomePayload):
         axis_value = payload.outcome
@@ -375,8 +370,7 @@ def validate_chunk_text(
         )
         if _phrase_count(text, interpretation) != 1:
             hard_errors.append(
-                'simple interpretation sentence must occur exactly once: '
-                f'{interpretation}'
+                f'simple interpretation sentence must occur exactly once: {interpretation}'
             )
     else:
         for term in (axis.query_label, axis.label):
@@ -390,7 +384,7 @@ def validate_chunk_text(
             hard_errors.append(
                 'treatment-duration evidence must occur exactly once; '
                 f'found {duration_occurrences}: {payload.duration_days}-day'
-        )
+            )
         required = [payload.treatment]
     elif isinstance(payload, RehabOutcomePayload):
         required = [payload.outcome]
@@ -430,7 +424,7 @@ def _validate_treatment_course_template_coverage(
     course_ids = {
         course_id
         for condition in ontology.conditions.values()
-        for course_id in condition.axis_values['treatment_duration'].treatments
+        for course_id in condition.axis_values['treatment_duration'].treatments  # type: ignore
     }
     template_ids = set(TEMPLATE_DATA.treatment_course_templates)
     missing = sorted(course_ids - template_ids)
@@ -452,12 +446,8 @@ def _validate_simple_interpretation_coverage(
         missing = sorted(expected - actual)
         extra = sorted(actual - expected)
         if missing or extra:
-            errors.append(
-                f'simple_interpretations.{axis_id}: missing={missing}, extra={extra}'
-            )
-        for value_bin, bucket in TEMPLATE_DATA.simple_interpretations.get(
-            axis_id, {}
-        ).items():
+            errors.append(f'simple_interpretations.{axis_id}: missing={missing}, extra={extra}')
+        for value_bin, bucket in TEMPLATE_DATA.simple_interpretations.get(axis_id, {}).items():
             for spec in [*bucket.seen, *bucket.heldout]:
                 if _phrase_count(spec.template, axis_name) != 1:
                     errors.append(

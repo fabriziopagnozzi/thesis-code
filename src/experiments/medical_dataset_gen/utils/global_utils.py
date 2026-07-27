@@ -81,9 +81,9 @@ class MedicalDatasetGenPaths:
         result_dir_overrides: ResultDirOverrides | None = None,
         shared_generation_dir: Path | str | None = None,
         shared_embedding_artifact_paths: SharedEmbeddingArtifactPaths | None = None,
+        local_artifact_version: str | None = None,
     ):
         self.exp_name = exp_name
-        self.experiment_dir = self.results_dir / exp_name
         if not exp_name:
             raise ValueError('experiment name cannot be empty')
 
@@ -92,13 +92,20 @@ class MedicalDatasetGenPaths:
         if len(exp_parts) > 2:
             raise ValueError(f'subexperiments support only one nesting level: {exp_name!r}')
 
+        self.config_experiment_dir = self.results_dir / exp_name
+        self.local_artifact_version = local_artifact_version
+        self.experiment_dir = (
+            self.config_experiment_dir / local_artifact_version
+            if local_artifact_version is not None
+            else self.config_experiment_dir
+        )
         parent_exp_name = exp_parts[0] if len(exp_parts) == 2 else exp_path.name
         self.parent_experiment_dir = self.results_dir / parent_exp_name
         self.logs_dir = self.experiment_dir / '_logs'
         self.figures_dir = self.experiment_dir / '_figures'
-        self.config_path = self.experiment_dir / '_config.yaml'
+        self.config_path = self.config_experiment_dir / '_config.yaml'
         self.parent_config_path = self.parent_experiment_dir / '_config.yaml'
-        self.subconfig_path = self.experiment_dir / '_subconfig.yaml'
+        self.subconfig_path = self.config_experiment_dir / '_subconfig.yaml'
         self.result_dir_overrides = dict(result_dir_overrides or {})
         self.shared_generation_dir = (
             Path(shared_generation_dir) if shared_generation_dir is not None else None
@@ -251,15 +258,25 @@ def load_config_from_cli() -> ExperimentCfg:
     return load_config(exp=args.exp)  # a pydantic validated model
 
 
-def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
+def paths_for(
+    cfg: ExperimentCfg,
+    *,
+    local_artifact_version: str | None = None,
+) -> MedicalDatasetGenPaths:
+    resolved_local_artifact_version = local_artifact_version or local_artifact_version_for_config(cfg)
     paths = MedicalDatasetGenPaths(
         cfg.global_.output_experiment,
         result_dir_overrides=cfg.global_.result_dir_overrides,
         shared_generation_dir=shared_generation_dir_for_config(cfg),
         shared_embedding_artifact_paths=shared_embedding_artifact_paths_for_config(cfg),
+        local_artifact_version=resolved_local_artifact_version,
     )
     paths.ensure_dirs()
     return paths
+
+
+def local_artifact_version_for_config(cfg: ExperimentCfg) -> str:
+    return f'v{cfg.dataset_schema_version}'
 
 
 def shared_generation_dir_for_config(cfg: ExperimentCfg) -> Path | None:

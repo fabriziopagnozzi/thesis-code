@@ -22,10 +22,12 @@ from experiments.medical_dataset_gen.reports.discovery import (
     load_experiment_record,
 )
 from experiments.medical_dataset_gen.reports.latex_tables import (
-    THESIS_AGGREGATE_TABLES_PATH,
-    THESIS_RESULT_MACROS_PATH,
     render_thesis_aggregate_tables,
     render_thesis_result_macros,
+    thesis_aggregate_tables_path,
+    thesis_latex_dir,
+    thesis_result_macros_path,
+    thesis_statistical_tables_path,
 )
 from experiments.medical_dataset_gen.reports.models import CliArgs, ExperimentRecord, ReportOutputs
 from experiments.medical_dataset_gen.reports.plots import write_figures
@@ -44,7 +46,6 @@ from experiments.medical_dataset_gen.reports.rows import (
     selected_strategy_rows,
 )
 from experiments.medical_dataset_gen.reports.statistical import (
-    THESIS_STATISTICAL_TABLE_PATH,
     cell_effect_summary_rows,
     configuration_suite_effect_summary_rows,
     leave_one_out_sensitivity_rows,
@@ -73,8 +74,12 @@ from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGen
 
 
 def run_report(args: CliArgs) -> ReportOutputs:
-    if args.plots_from_report is not None:
-        return refresh_report_plots(args)
+    if args.refresh_report_dir is not None:
+        if args.refresh_mode == 'plots':
+            return refresh_report_plots(args)
+        if args.refresh_mode == 'latex_macros':
+            return refresh_latex_macros(args)
+        raise ValueError('refresh_report_dir requires a refresh mode')
 
     old_results_dir = MedicalDatasetGenPaths.results_dir
     MedicalDatasetGenPaths.results_dir = args.results_dir
@@ -97,6 +102,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             requested_experiments=args.experiments,
             experiment_regex=args.experiment_regex,
             exclude_experiment_regex=args.exclude_experiment_regex,
+            artifact_version=args.artifact_version,
             warnings=warnings,
         )
         _progress(f'discovered {len(records)} completed experiments')
@@ -279,20 +285,20 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
         write_csv(data_dir / 'paired_config_suite_effect_summary.csv', paired_config_suite_rows)
         write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
-        if _should_write_thesis_outputs(args):
-            _progress('writing thesis LaTeX tables and macros')
-            _write_thesis_outputs_from_rows(
-                geometry_rows=geometry_rows,
-                comparison_rows=comparison_rows,
-                budget_rows=budget_rows,
-                lambda_safety_rows=lambda_safety_rows,
-                metric_summary_rows=metric_summary_rows,
-                metric_family_summary_rows=metric_family_summary_rows_data,
-                metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-                paired_suite_rows=paired_suite_rows,
-                embedding_summary_rows=embedding_summary_rows,
-                require_complete_wording_grid=False,
-            )
+        _progress('writing report LaTeX tables and macros')
+        _write_thesis_outputs_from_rows(
+            geometry_rows=geometry_rows,
+            comparison_rows=comparison_rows,
+            budget_rows=budget_rows,
+            lambda_safety_rows=lambda_safety_rows,
+            metric_summary_rows=metric_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows_data,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
+            paired_suite_rows=paired_suite_rows,
+            embedding_summary_rows=embedding_summary_rows,
+            require_complete_wording_grid=False,
+            output_dir=args.output_dir,
+        )
 
         figures: list[Path] = []
         if args.plots:
@@ -375,6 +381,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'requested_experiments': list(args.experiments),
                     'experiment_regex': args.experiment_regex,
                     'exclude_experiment_regex': args.exclude_experiment_regex,
+                    'artifact_version': args.artifact_version,
                     'main_query_scope': args.main_query_scope,
                     'experiments_discovered': len(records),
                     'cross_query_chunk_modes': args.cross_query_chunk_modes,
@@ -415,7 +422,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
 
 
 def refresh_report_plots(args: CliArgs) -> ReportOutputs:
-    report_dir = args.plots_from_report or args.output_dir
+    report_dir = args.refresh_report_dir or args.output_dir
     data_dir = report_dir / 'data'
     if not data_dir.is_dir():
         raise FileNotFoundError(f'report data directory not found: {data_dir}')
@@ -425,18 +432,12 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     manifest_rows = _read_report_csv_rows(data_dir, 'experiment_manifest.csv')
     dataset_rows = _read_report_csv_rows(data_dir, 'dataset_distribution.csv')
     geometry_rows = _read_report_csv_rows(data_dir, 'geometry_filter_summary.csv')
-    comparison_rows = _read_report_csv_rows(data_dir, 'comparison_by_k.csv')
-    family_summary_rows = _read_report_csv_rows(data_dir, 'experiment_family_summary.csv')
-    family_budget_summary_rows = _read_report_csv_rows(
-        data_dir, 'experiment_family_budget_summary.csv'
-    )
     metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
     metric_family_budget_summary_rows_data = _read_report_csv_rows(
         data_dir, 'metric_family_budget_summary.csv'
     )
     metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
     budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
-    low_budget_rows = _read_report_csv_rows(data_dir, 'low_budget_strategy_summary.csv')
     lambda_rows = _read_report_csv_rows(data_dir, 'lambda_stability.csv')
     lambda_grid_delta_rows = _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv')
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
@@ -469,94 +470,59 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
         warnings=warnings,
     )
     _progress(f'rendered {len(figures)} figures')
-    wording_configurations = _wording_configurations_for_rows(budget_rows)
-    cross_triplet_analysis_enabled = (
-        args.cross_query_chunk_modes and len(wording_configurations) > 1
-    )
-    _progress('refreshing markdown reports from existing CSV artifacts')
-    (report_dir / 'txt_report.md').write_text(
-        render_report(
-            args=args,
-            experiment_count=len(manifest_rows),
-            dataset_rows=dataset_rows,
-            geometry_rows=geometry_rows,
-            comparison_rows=comparison_rows,
-            family_summary_rows=family_summary_rows,
-            family_budget_summary_rows=family_budget_summary_rows,
-            metric_family_summary_rows=metric_family_summary_rows_data,
-            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-            metric_summary_rows=metric_summary_rows,
-            low_budget_rows=low_budget_rows,
-            lambda_rows=lambda_rows,
-            lambda_safety_rows=lambda_safety_rows,
-            embedding_summary_rows=embedding_summary_rows,
-            paired_config_suite_rows=paired_config_suite_rows,
-            figures=figures,
-        )
-    )
-    (report_dir / 'txt_report_highlights.md').write_text(
-        render_interesting_findings(
-            comparison_rows=comparison_rows,
-            low_budget_rows=low_budget_rows,
-            family_summary_rows=family_summary_rows,
-            family_budget_summary_rows=family_budget_summary_rows,
-            metric_family_summary_rows=metric_family_summary_rows_data,
-            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-            metric_summary_rows=metric_summary_rows,
-            geometry_rows=geometry_rows,
-            lambda_rows=lambda_rows,
-            lambda_safety_rows=lambda_safety_rows,
-            embedding_summary_rows=embedding_summary_rows,
-            tablefmt=args.tablefmt,
-            max_table_rows=args.max_table_rows,
-        )
-    )
-    recap_records = _load_refresh_recap_records(
-        report_dir=report_dir,
-        fallback_results_dir=args.results_dir,
-        manifest_rows=manifest_rows,
-        warnings=warnings,
-    )
-    if recap_records:
-        _progress('refreshing experiment configuration recap from saved configurations')
-        (
-            Path(
-                '/home/pagnozzi/thesis/src/medical_dataset_gen/docs/thesis/txt_experiments_config_recap.md'
-            )
-        ).write_text(render_experiment_config_recap(recap_records))
-    if _should_write_thesis_outputs(args):
-        _progress('refreshing thesis LaTeX tables and macros from existing CSV artifacts')
-        _write_thesis_outputs_from_rows(
-            geometry_rows=geometry_rows,
-            comparison_rows=comparison_rows,
-            budget_rows=budget_rows,
-            lambda_safety_rows=lambda_safety_rows,
-            metric_summary_rows=metric_summary_rows,
-            metric_family_summary_rows=metric_family_summary_rows_data,
-            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-            paired_suite_rows=paired_suite_rows,
-            embedding_summary_rows=embedding_summary_rows,
-            require_complete_wording_grid=args.cross_query_chunk_modes,
-        )
-    _update_plot_refresh_manifest(
-        report_dir=report_dir,
-        args=args,
-        figures=figures,
-        warnings=warnings,
-        experiments_discovered=len(manifest_rows),
-        wording_configurations=wording_configurations,
-        cross_triplet_analysis_enabled=cross_triplet_analysis_enabled,
-    )
     if warnings:
-        _progress(f'plot refresh finished with {len(warnings)} warnings')
+        _progress(f'plot-only refresh finished with {len(warnings)} warnings')
     else:
-        _progress('plot refresh complete')
+        _progress('plot-only refresh complete')
     return ReportOutputs(
         output_dir=report_dir,
         experiments_discovered=len(manifest_rows),
         experiments_loaded=len(manifest_rows),
         warnings_count=len(warnings),
         figures_count=len(figures),
+    )
+
+
+def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
+    report_dir = args.refresh_report_dir or args.output_dir
+    data_dir = report_dir / 'data'
+    if not data_dir.is_dir():
+        raise FileNotFoundError(f'report data directory not found: {data_dir}')
+
+    _progress(f'loading existing report CSV artifacts from: {data_dir}')
+    manifest_rows = _read_report_csv_rows(data_dir, 'experiment_manifest.csv')
+    geometry_rows = _read_report_csv_rows(data_dir, 'geometry_filter_summary.csv')
+    comparison_rows = _read_report_csv_rows(data_dir, 'comparison_by_k.csv')
+    budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
+    lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
+    metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
+    metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
+    paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
+    embedding_summary_rows = _read_report_csv_rows(data_dir, 'embedding_model_summary.csv')
+
+    output_path = thesis_result_macros_path(report_dir)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _progress(f'writing LaTeX result macros: {output_path}')
+    output_path.write_text(
+        render_thesis_result_macros(
+            geometry_rows=geometry_rows,
+            comparison_rows=comparison_rows,
+            budget_rows=budget_rows,
+            lambda_safety_rows=lambda_safety_rows,
+            metric_summary_rows=metric_summary_rows,
+            metric_family_summary_rows=metric_family_summary_rows_data,
+            paired_suite_rows=paired_suite_rows,
+            embedding_summary_rows=embedding_summary_rows,
+            require_complete_wording_grid=args.cross_query_chunk_modes,
+        )
+    )
+    _progress('LaTeX macro refresh complete')
+    return ReportOutputs(
+        output_dir=report_dir,
+        experiments_discovered=len(manifest_rows),
+        experiments_loaded=len(manifest_rows),
+        warnings_count=0,
+        figures_count=0,
     )
 
 
@@ -631,42 +597,6 @@ def _saved_report_results_dir(report_dir: Path) -> Path | None:
     )
 
 
-def _update_plot_refresh_manifest(
-    *,
-    report_dir: Path,
-    args: CliArgs,
-    figures: Sequence[Path],
-    warnings: Sequence[str],
-    experiments_discovered: int,
-    wording_configurations: Sequence[Mapping[str, str]],
-    cross_triplet_analysis_enabled: bool,
-) -> None:
-    manifest_path = report_dir / 'manifest.json'
-    if manifest_path.is_file():
-        try:
-            manifest: object = json.loads(manifest_path.read_text())
-        except json.JSONDecodeError:
-            manifest = {}
-    else:
-        manifest = {}
-    if not isinstance(manifest, dict):
-        manifest = {}
-    manifest.update({
-        'plots_refreshed_at_utc': datetime.now(UTC).isoformat(),
-        'plot_refresh_only': True,
-        'plot_format': args.plot_format,
-        'cross_query_chunk_modes': args.cross_query_chunk_modes,
-        'wording_configurations': list(wording_configurations),
-        'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
-        'cross_triplet_figures_enabled': args.cross_query_chunk_modes
-        and cross_triplet_analysis_enabled,
-        'warnings_count': len(warnings),
-        'experiments_discovered': experiments_discovered,
-        'figures': [str(path.relative_to(report_dir)) for path in figures],
-    })
-    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
-
-
 def _remove_obsolete_flat_data_files(output_dir: Path) -> None:
     for report_file in REPORT_FILES:
         path = Path(report_file)
@@ -694,11 +624,6 @@ def _wording_configurations_for_rows(
     ]
 
 
-def _should_write_thesis_outputs(args: CliArgs) -> bool:
-    default_output_dir = args.results_dir / '_reports' / 'experiment_comparison'
-    return args.output_dir.resolve() == default_output_dir.resolve()
-
-
 def _write_thesis_outputs_from_rows(
     *,
     geometry_rows: Sequence[Mapping[str, object]],
@@ -711,15 +636,18 @@ def _write_thesis_outputs_from_rows(
     paired_suite_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
     require_complete_wording_grid: bool,
+    output_dir: Path,
 ) -> None:
-    THESIS_AGGREGATE_TABLES_PATH.write_text(
+    latex_dir = thesis_latex_dir(output_dir)
+    latex_dir.mkdir(parents=True, exist_ok=True)
+    thesis_aggregate_tables_path(output_dir).write_text(
         render_thesis_aggregate_tables(
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows,
             metric_family_budget_summary_rows=metric_family_budget_summary_rows,
         )
     )
-    THESIS_RESULT_MACROS_PATH.write_text(
+    thesis_result_macros_path(output_dir).write_text(
         render_thesis_result_macros(
             geometry_rows=geometry_rows,
             comparison_rows=comparison_rows,
@@ -732,7 +660,9 @@ def _write_thesis_outputs_from_rows(
             require_complete_wording_grid=require_complete_wording_grid,
         )
     )
-    THESIS_STATISTICAL_TABLE_PATH.write_text(render_statistical_latex_table(paired_suite_rows))
+    thesis_statistical_tables_path(output_dir).write_text(
+        render_statistical_latex_table(paired_suite_rows)
+    )
 
 
 def main() -> None:
