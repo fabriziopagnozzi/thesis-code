@@ -105,13 +105,15 @@ def select_conditions(
             ]
             scored.sort(key=lambda x: x['rate'], reverse=True)
 
-        rows.append({
-            'icd10_3char': icd3,
-            'condition_name': code_to_info.get(icd3, (cond_name, True))[0],
-            'n_admissions': n,
-            'mean_comorbidity_count': mean_comorbidity_count,
-            'top_comorbidity_mods_json': json.dumps(scored),
-        })
+        rows.append(
+            {
+                'icd10_3char': icd3,
+                'condition_name': code_to_info.get(icd3, (cond_name, True))[0],
+                'n_admissions': n,
+                'mean_comorbidity_count': mean_comorbidity_count,
+                'top_comorbidity_mods_json': json.dumps(scored),
+            }
+        )
     # end for icd3, cond_name, n in kept_rows
 
     df = pl.DataFrame(rows).sort('n_admissions', descending=True)

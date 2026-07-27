@@ -11,23 +11,23 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import select_indices
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import SETTINGS
-from experiments.medical_dataset_gen.schemas.generation_schemas import ClusterRole
-from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import ClusterRole
+from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryArtifact,
     GeometrySelection,
 )
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import RetrievalStrategy
+from experiments.medical_dataset_gen.retrieval.schemas import RetrievalStrategy
 
 
 def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     strategy_order: tuple[RetrievalStrategy, ...] = ('top_k', 'mmr', 'fac_loc')
-    strategies = list[RetrievalStrategy]([
-        strategy for strategy in strategy_order if strategy in artifact.selections
-    ])
+    strategies = list[RetrievalStrategy](
+        [strategy for strategy in strategy_order if strategy in artifact.selections]
+    )
     if not strategies:
         return
 
@@ -1560,11 +1560,13 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
         for index, facet_id in enumerate(_ordered_facet_ids(artifact))
         if facet_id in gold_label_by_facet_id
     }
-    background_cluster_ids = sorted({
-        _cluster_id_for_index(artifact, indices[0]) or label
-        for label, indices in label_groups.items()
-        if _is_background_outlier_point(artifact, indices[0])
-    })
+    background_cluster_ids = sorted(
+        {
+            _cluster_id_for_index(artifact, indices[0]) or label
+            for label, indices in label_groups.items()
+            if _is_background_outlier_point(artifact, indices[0])
+        }
+    )
     background_cmap = plt.get_cmap('Dark2')  # type: ignore
     background_palette = {
         cluster_id: background_cmap(i % max(1, background_cmap.N))
@@ -1837,12 +1839,14 @@ def _add_axes_in_inches(
     width: float,
     height: float,
 ) -> Any:
-    return fig.add_axes([
-        left / fig_width,
-        bottom / fig_height,
-        width / fig_width,
-        height / fig_height,
-    ])
+    return fig.add_axes(
+        [
+            left / fig_width,
+            bottom / fig_height,
+            width / fig_width,
+            height / fig_height,
+        ]
+    )
 
 
 def _draw_query_marker_at(ax: Any, query_coord: NDArray[np.float32]) -> None:

@@ -37,7 +37,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     title_token,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
-from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
+from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 
 def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
@@ -76,19 +76,21 @@ def dataset_distribution_row(
     qrels_path = record.paths.table_path('qrels')
     base = base_experiment_row(record)
     cfg = record.cfg
-    base.update({
-        'QrelsPath': str(qrels_path),
-        'ConfiguredGoldChunksPerQuery': cfg.generation.total_gold_chunks() if cfg else None,
-        'ConfiguredDistractorChunksPerQuery': cfg.generation.total_distractor_chunks()
-        if cfg
-        else None,
-        'ConfiguredBackgroundOutlierChunksPerQuery': (
-            cfg.generation.chunk_pools.background_outliers_per_query() if cfg else None
-        ),
-        'ConfiguredNicheClustersPerQuery': (
-            cfg.generation.chunk_pools.niche.num_clusters_per_query if cfg else None
-        ),
-    })
+    base.update(
+        {
+            'QrelsPath': str(qrels_path),
+            'ConfiguredGoldChunksPerQuery': cfg.generation.total_gold_chunks() if cfg else None,
+            'ConfiguredDistractorChunksPerQuery': cfg.generation.total_distractor_chunks()
+            if cfg
+            else None,
+            'ConfiguredBackgroundOutlierChunksPerQuery': (
+                cfg.generation.chunk_pools.background_outliers_per_query() if cfg else None
+            ),
+            'ConfiguredNicheClustersPerQuery': (
+                cfg.generation.chunk_pools.niche.num_clusters_per_query if cfg else None
+            ),
+        }
+    )
     if not qrels_path.is_file():
         warnings.append(f'{record.name}: qrels missing at {qrels_path}')
         return base
@@ -136,15 +138,17 @@ def dataset_distribution_row(
     background_count = float_or_none(summary.get('BackgroundOutlierCountMean'))
 
     base.update(summary)
-    base.update({
-        'QueriesInQrels': per_query.height,
-        'QrelRows': qrels.height,
-        'GoldPercentage': ratio(gold_count, pool_size),
-        'NearMissDistractorPercentage': ratio(near_miss_count, pool_size),
-        'BackgroundOutlierPercentage': ratio(background_count, pool_size),
-        'PrimaryDominanceRatio': primary_dominance_ratio(summary),
-        'DistributionCategory': distribution_category(summary),
-    })
+    base.update(
+        {
+            'QueriesInQrels': per_query.height,
+            'QrelRows': qrels.height,
+            'GoldPercentage': ratio(gold_count, pool_size),
+            'NearMissDistractorPercentage': ratio(near_miss_count, pool_size),
+            'BackgroundOutlierPercentage': ratio(background_count, pool_size),
+            'PrimaryDominanceRatio': primary_dominance_ratio(summary),
+            'DistributionCategory': distribution_category(summary),
+        }
+    )
     return base
 
 
@@ -239,13 +243,15 @@ def selected_strategy_rows(
         strategy = cast(StrategyName, row.get('strategy'))
         lam = float_or_none(row.get('lam'))
         out = base_experiment_row(record)
-        out.update({
-            'SelectionSource': source,
-            'strategy': strategy,
-            'k': int_or_none(row.get('k')),
-            'lam': lam,
-            'lambda_norm': lambda_norm(record, strategy, lam, stats),
-        })
+        out.update(
+            {
+                'SelectionSource': source,
+                'strategy': strategy,
+                'k': int_or_none(row.get('k')),
+                'lam': lam,
+                'lambda_norm': lambda_norm(record, strategy, lam, stats),
+            }
+        )
         for metric in EVALUATION_METRICS:
             if metric in row:
                 out[metric] = json_scalar(row[metric])
@@ -292,9 +298,9 @@ def _selected_stats_frame(
         frames.append(selected)
     if not frames:
         return pl.DataFrame(), 'posthoc_selected'
-    return pl.concat(frames).sort([
-        col for col in ('k', 'strategy', 'lam') if col in stats.columns
-    ]), ('posthoc_selected')
+    return pl.concat(frames).sort(
+        [col for col in ('k', 'strategy', 'lam') if col in stats.columns]
+    ), ('posthoc_selected')
 
 
 def near_optimal_lambda_rows(
@@ -339,20 +345,22 @@ def near_optimal_lambda_rows(
             full_span = max(lambdas) - min(lambdas)
             near_span = max(near_lambdas) - min(near_lambdas) if near_lambdas else 0.0
             out = base_experiment_row(record)
-            out.update({
-                'strategy': strategy,
-                'k': k,
-                'GridStatsPath': str(grid_path),
-                'NearOptimalEpsilon': epsilon,
-                'BestFCP': best_fcp,
-                'WorstFCP': worst_fcp,
-                'FCPRange': best_fcp - worst_fcp,
-                'NearOptimalLambdaCount': near.height,
-                'TotalLambdaCount': sub.height,
-                'NearOptimalLambdaFraction': near.height / sub.height,
-                'NearOptimalLambdaSpan': near_span,
-                'NearOptimalLambdaSpanNorm': near_span / full_span if full_span else 0.0,
-            })
+            out.update(
+                {
+                    'strategy': strategy,
+                    'k': k,
+                    'GridStatsPath': str(grid_path),
+                    'NearOptimalEpsilon': epsilon,
+                    'BestFCP': best_fcp,
+                    'WorstFCP': worst_fcp,
+                    'FCPRange': best_fcp - worst_fcp,
+                    'NearOptimalLambdaCount': near.height,
+                    'TotalLambdaCount': sub.height,
+                    'NearOptimalLambdaFraction': near.height / sub.height,
+                    'NearOptimalLambdaSpan': near_span,
+                    'NearOptimalLambdaSpanNorm': near_span / full_span if full_span else 0.0,
+                }
+            )
             rows.append(out)
     return rows
 
@@ -406,17 +414,19 @@ def lambda_grid_fcp_delta_rows(
                 continue
 
             out = base_experiment_row(record)
-            out.update({
-                'DataSplit': 'validation',
-                'GridStatsPath': str(grid_path),
-                'strategy': typed_strategy,
-                'k': k,
-                'lam': lam,
-                'lambda_norm': lambda_norm(record, typed_strategy, lam, stats),
-                'TopK_FCP': topk_fcp,
-                'Strategy_FCP': fcp,
-                'DeltaStrategyTopK_FCP': fcp - topk_fcp,
-            })
+            out.update(
+                {
+                    'DataSplit': 'validation',
+                    'GridStatsPath': str(grid_path),
+                    'strategy': typed_strategy,
+                    'k': k,
+                    'lam': lam,
+                    'lambda_norm': lambda_norm(record, typed_strategy, lam, stats),
+                    'TopK_FCP': topk_fcp,
+                    'Strategy_FCP': fcp,
+                    'DeltaStrategyTopK_FCP': fcp - topk_fcp,
+                }
+            )
             rows.append(out)
     return rows
 
@@ -466,22 +476,24 @@ def lambda_safety_summary_rows(
                 'DataSplit',
             )
         }
-        out.update({
-            'strategy': strategy,
-            'k': k,
-            'LambdaCount': lambda_count,
-            'NonnegativeDeltaLambdaCount': nonnegative_count,
-            'SafeLambdaFraction': nonnegative_count / lambda_count,
-            'WorstDeltaStrategyTopK_FCP': min(deltas),
-            'BestDeltaStrategyTopK_FCP': max(deltas),
-            'MeanDeltaStrategyTopK_FCP': statistics.fmean(deltas),
-            'MedianDeltaStrategyTopK_FCP': statistics.median(deltas),
-            'DeltaStrategyTopK_FCPRange': max(deltas) - min(deltas),
-            'WorstLambda': worst_row.get('lam'),
-            'WorstLambdaNorm': worst_row.get('lambda_norm'),
-            'BestLambda': best_row.get('lam'),
-            'BestLambdaNorm': best_row.get('lambda_norm'),
-        })
+        out.update(
+            {
+                'strategy': strategy,
+                'k': k,
+                'LambdaCount': lambda_count,
+                'NonnegativeDeltaLambdaCount': nonnegative_count,
+                'SafeLambdaFraction': nonnegative_count / lambda_count,
+                'WorstDeltaStrategyTopK_FCP': min(deltas),
+                'BestDeltaStrategyTopK_FCP': max(deltas),
+                'MeanDeltaStrategyTopK_FCP': statistics.fmean(deltas),
+                'MedianDeltaStrategyTopK_FCP': statistics.median(deltas),
+                'DeltaStrategyTopK_FCPRange': max(deltas) - min(deltas),
+                'WorstLambda': worst_row.get('lam'),
+                'WorstLambdaNorm': worst_row.get('lambda_norm'),
+                'BestLambda': best_row.get('lam'),
+                'BestLambdaNorm': best_row.get('lambda_norm'),
+            }
+        )
         rows.append(out)
     return rows
 

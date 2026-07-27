@@ -9,20 +9,20 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotName
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     BenchmarkPydanticModel,
     ChunkPoolScope,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
-    ExperimentCfg,
-    GeometryStressHorizonBasis,
-)
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotName
+from experiments.medical_dataset_gen.retrieval.schemas import (
     ChunkDocumentRecord,
     QrelRecord,
     QueryRecord,
     RetrievalStrategy,
+)
+from experiments.medical_dataset_gen.utils.global_schemas import (
+    ExperimentCfg,
+    GeometryStressHorizonBasis,
 )
 
 type GeometryGlobalLambdaKey = tuple[RetrievalStrategy, int]

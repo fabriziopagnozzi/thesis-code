@@ -14,7 +14,7 @@ from experiments.medical_dataset_gen.embedding_geometry.plots import (
     plot_query_overview_4panel,
     plot_strategy_overlay,
 )
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import select_indices
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import select_indices
 from experiments.mimic.global_configs import MimicPaths, get_pool_analysis_path, read_parquet
 from experiments.mimic.pool_analysis.schemas_pool_analysis import PoolAnalysisCfg
 from experiments.mimic.queries.schemas_queries import QueryModifier, QueryRow
@@ -65,9 +65,7 @@ def render_embedding_geometry_figures(
     out_root = MimicPaths.figures_dir / 'pool_analysis' / 'embedding_geometry'
     out_root.mkdir(parents=True, exist_ok=True)
 
-    stats_by_qid = {
-        int(row['query_id']): row for row in stats_df.iter_rows(named=True)
-    }
+    stats_by_qid = {int(row['query_id']): row for row in stats_df.iter_rows(named=True)}
     points_by_qid = {
         int(df['query_id'][0]): df.sort('cos_to_query', descending=True)
         for df in points_df.partition_by('query_id')
@@ -221,10 +219,12 @@ def _render_query(
 
     selected_sets = {
         'top_k': {
-            int(idx) for idx in selections.get('top_k', {}).get('local_indices', np.array([], dtype=int))
+            int(idx)
+            for idx in selections.get('top_k', {}).get('local_indices', np.array([], dtype=int))
         },
         'mmr': {
-            int(idx) for idx in selections.get('mmr', {}).get('local_indices', np.array([], dtype=int))
+            int(idx)
+            for idx in selections.get('mmr', {}).get('local_indices', np.array([], dtype=int))
         },
         'fac_loc': {
             int(idx)
@@ -391,18 +391,15 @@ def _best_lambda_for_query(
     )
     if subset.is_empty() or 'lam' not in subset.columns:
         return None
-    ranked = (
-        subset.with_columns((1.0 - pl.col('gold_precision')).alias('distractor_rate'))
-        .sort(
-            [
-                'aspect_recall',
-                'gold_precision',
-                'weighted_aspect_recall',
-                'distractor_rate',
-                'lam',
-            ],
-            descending=[True, True, True, False, False],
-        )
+    ranked = subset.with_columns((1.0 - pl.col('gold_precision')).alias('distractor_rate')).sort(
+        [
+            'aspect_recall',
+            'gold_precision',
+            'weighted_aspect_recall',
+            'distractor_rate',
+            'lam',
+        ],
+        descending=[True, True, True, False, False],
     )
     lam = ranked['lam'][0]
     return None if lam is None else float(lam)
@@ -419,53 +416,57 @@ def _point_rows(
     rows: list[dict[str, Any]] = []
     qid = int(artifact['query']['query_id'])
     for idx, chunk_id in enumerate(pool.chunk_ids):
-        rows.append({
+        rows.append(
+            {
+                'query_id': qid,
+                'query_key': artifact['query_id'],
+                'selection_group': group,
+                'point_kind': 'chunk',
+                'chunk_id': chunk_id,
+                'hadm_id': int(pool.hadm_ids[idx]),
+                'section_name': pool.section_names[idx],
+                'rank': idx + 1,
+                'x': float(artifact['coords'][idx, 0]),
+                'y': float(artifact['coords'][idx, 1]),
+                'reduction_method': artifact['reduction_method'],
+                'sim_to_query': float(artifact['sim_to_query'][idx]),
+                'plot_label': artifact['labels'][idx],
+                'label_id': artifact['label_ids'][idx],
+                'cluster_role': artifact['roles'][idx],
+                'is_gold': bool(artifact['is_gold'][idx]),
+                'facet_combined': points_df['facet_combined'][idx],
+                'hdbscan_label': int(artifact['cluster_labels'][idx]),
+                'selected_top_k': idx in selected_sets.get('top_k', set()),
+                'selected_mmr': idx in selected_sets.get('mmr', set()),
+                'selected_fac_loc': idx in selected_sets.get('fac_loc', set()),
+            }
+        )
+
+    rows.append(
+        {
             'query_id': qid,
             'query_key': artifact['query_id'],
             'selection_group': group,
-            'point_kind': 'chunk',
-            'chunk_id': chunk_id,
-            'hadm_id': int(pool.hadm_ids[idx]),
-            'section_name': pool.section_names[idx],
-            'rank': idx + 1,
-            'x': float(artifact['coords'][idx, 0]),
-            'y': float(artifact['coords'][idx, 1]),
+            'point_kind': 'query',
+            'chunk_id': None,
+            'hadm_id': None,
+            'section_name': None,
+            'rank': 0,
+            'x': float(artifact['query_coord'][0]),
+            'y': float(artifact['query_coord'][1]),
             'reduction_method': artifact['reduction_method'],
-            'sim_to_query': float(artifact['sim_to_query'][idx]),
-            'plot_label': artifact['labels'][idx],
-            'label_id': artifact['label_ids'][idx],
-            'cluster_role': artifact['roles'][idx],
-            'is_gold': bool(artifact['is_gold'][idx]),
-            'facet_combined': points_df['facet_combined'][idx],
-            'hdbscan_label': int(artifact['cluster_labels'][idx]),
-            'selected_top_k': idx in selected_sets.get('top_k', set()),
-            'selected_mmr': idx in selected_sets.get('mmr', set()),
-            'selected_fac_loc': idx in selected_sets.get('fac_loc', set()),
-        })
-
-    rows.append({
-        'query_id': qid,
-        'query_key': artifact['query_id'],
-        'selection_group': group,
-        'point_kind': 'query',
-        'chunk_id': None,
-        'hadm_id': None,
-        'section_name': None,
-        'rank': 0,
-        'x': float(artifact['query_coord'][0]),
-        'y': float(artifact['query_coord'][1]),
-        'reduction_method': artifact['reduction_method'],
-        'sim_to_query': 1.0,
-        'plot_label': 'query',
-        'label_id': 'query',
-        'cluster_role': 'query',
-        'is_gold': False,
-        'facet_combined': None,
-        'hdbscan_label': None,
-        'selected_top_k': False,
-        'selected_mmr': False,
-        'selected_fac_loc': False,
-    })
+            'sim_to_query': 1.0,
+            'plot_label': 'query',
+            'label_id': 'query',
+            'cluster_role': 'query',
+            'is_gold': False,
+            'facet_combined': None,
+            'hdbscan_label': None,
+            'selected_top_k': False,
+            'selected_mmr': False,
+            'selected_fac_loc': False,
+        }
+    )
     return rows
 
 
@@ -567,7 +568,9 @@ def _gold_silhouette(artifact: dict[str, Any]) -> float | None:
     if len(gold_idx) <= len(set(labels)) or len(set(labels)) < 2:
         return None
     try:
-        return float(silhouette_score(artifact['candidate_vectors'][gold_idx], labels, metric='cosine'))
+        return float(
+            silhouette_score(artifact['candidate_vectors'][gold_idx], labels, metric='cosine')
+        )
     except Exception:
         return None
 
@@ -612,7 +615,9 @@ def _masked_mean(values: NDArray[np.float32], mask: NDArray[np.bool_]) -> float 
     return float(values[mask].mean())
 
 
-def _query_coord(coords: NDArray[np.float32], sim_to_query: NDArray[np.float32]) -> NDArray[np.float32]:
+def _query_coord(
+    coords: NDArray[np.float32], sim_to_query: NDArray[np.float32]
+) -> NDArray[np.float32]:
     if len(coords) == 0:
         return np.zeros(2, dtype=np.float32)
     weights = sim_to_query - float(sim_to_query.min())
@@ -639,11 +644,7 @@ def _query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[int]]:
     remaining = ranked.filter(~pl.col('query_id').is_in(excluded))
     mid_start = max(0, (remaining.height - n_mid) // 2)
     mid = remaining['query_id'].slice(mid_start, n_mid).to_list()
-    return {
-        key: value
-        for key, value in [('good', good), ('mid', mid), ('bad', bad)]
-        if value
-    }
+    return {key: value for key, value in [('good', good), ('mid', mid), ('bad', bad)] if value}
 
 
 def _mixed_group_sizes(n_queries: int) -> tuple[int, int, int]:

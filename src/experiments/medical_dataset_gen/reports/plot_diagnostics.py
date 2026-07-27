@@ -75,11 +75,13 @@ def _family_grouped_rows(
             for value in (float_or_none(row.get(value_column)) for row in group)
             if value is not None
         ]
-        family_order.append((
-            statistics.fmean(values) if values else float('-inf'),
-            EXPERIMENT_FAMILY_LABELS[family_id],
-            family_id,
-        ))
+        family_order.append(
+            (
+                statistics.fmean(values) if values else float('-inf'),
+                EXPERIMENT_FAMILY_LABELS[family_id],
+                family_id,
+            )
+        )
 
     ordered_rows: list[Mapping[str, object]] = []
     for _mean_value, _label, family_id in sorted(
@@ -416,12 +418,14 @@ def _binned_lambda_delta_stats(
         if not values:
             continue
         sorted_values = sorted(values)
-        out.append({
-            'x': (index + 0.5) / n_bins,
-            'mean': statistics.fmean(values),
-            'q25': quantile(sorted_values, 0.25),
-            'q75': quantile(sorted_values, 0.75),
-        })
+        out.append(
+            {
+                'x': (index + 0.5) / n_bins,
+                'mean': statistics.fmean(values),
+                'q25': quantile(sorted_values, 0.25),
+                'q75': quantile(sorted_values, 0.75),
+            }
+        )
     return out
 
 

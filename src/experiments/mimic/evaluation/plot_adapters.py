@@ -41,10 +41,7 @@ def adapt_stats_for_synthetic_plots(stats_df: pl.DataFrame) -> pl.DataFrame:
         exprs.append(pl.col('cos').alias('avg_cos'))
     if 'ans_rouge1_rec' in stats_df.columns and 'AnswerROUGE1Recall@k' not in stats_df.columns:
         exprs.append(pl.col('ans_rouge1_rec').alias('AnswerROUGE1Recall@k'))
-    if (
-        'ans_rouge1_prec' in stats_df.columns
-        and 'AnswerROUGE1Precision@k' not in stats_df.columns
-    ):
+    if 'ans_rouge1_prec' in stats_df.columns and 'AnswerROUGE1Precision@k' not in stats_df.columns:
         exprs.append(pl.col('ans_rouge1_prec').alias('AnswerROUGE1Precision@k'))
     if exprs:
         stats_df = stats_df.with_columns(exprs)

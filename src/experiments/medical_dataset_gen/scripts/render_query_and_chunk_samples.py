@@ -19,7 +19,7 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     render_query_template,
 )
 from experiments.medical_dataset_gen.pipeline.p03_facts import make_gold_fact
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
     QUERY_FOCUS_MODE_LIST,
     QUERY_STRUCTURE_LIST,

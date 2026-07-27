@@ -99,19 +99,21 @@ def annotate_all(
         if answer_text is None:
             continue
 
-        new_row = pl.DataFrame([
-            {
-                'query_id': row['query_id'],
-                'icd10_3char': row['icd10_3char'],
-                'condition_name': row['condition_name'],
-                'modifiers_json': row['modifiers_json'],
-                'query_text': row['query_text'],
-                'facets_json': json.dumps(facets),
-                'answer_text': answer_text,
-                'n_facets': len(facets),
-                'n_gold_chunks': len({c_id for c_ids in facets.values() for c_id in c_ids}),
-            }
-        ])
+        new_row = pl.DataFrame(
+            [
+                {
+                    'query_id': row['query_id'],
+                    'icd10_3char': row['icd10_3char'],
+                    'condition_name': row['condition_name'],
+                    'modifiers_json': row['modifiers_json'],
+                    'query_text': row['query_text'],
+                    'facets_json': json.dumps(facets),
+                    'answer_text': answer_text,
+                    'n_facets': len(facets),
+                    'n_gold_chunks': len({c_id for c_ids in facets.values() for c_id in c_ids}),
+                }
+            ]
+        )
         existing = pl.read_parquet(out_path) if out_path.exists() else pl.DataFrame()
         pl.concat([existing, new_row], how='diagonal_relaxed').write_parquet(out_path)
         print(f'\t[saved] query_id={row["query_id"]} → {out_path.name} ({n_done} total)')
@@ -186,13 +188,15 @@ def annotate_query(
                 query_id=query_id,
                 persistence=persistence,
             )
-            persistence.append_annotation({
-                'query_id': query_id,
-                'batch_idx': batch_idx,
-                'facet_label': modifier.label,
-                'chunk_ids': eligible_pool.chunk_ids,
-                'decisions': facts if facts is not None else '<LLM_ERROR>',
-            })
+            persistence.append_annotation(
+                {
+                    'query_id': query_id,
+                    'batch_idx': batch_idx,
+                    'facet_label': modifier.label,
+                    'chunk_ids': eligible_pool.chunk_ids,
+                    'decisions': facts if facts is not None else '<LLM_ERROR>',
+                }
+            )
             if facts is not None:
                 facts_per_facet[modifier.label].extend(facts)
 
@@ -200,11 +204,13 @@ def annotate_query(
     pool_id_set = set(pool.chunk_ids)
     aspects_to_chunk_ids: dict[QueryModifierLabelId, list[str]] = {}
     for modifier in modifiers:
-        cited = sorted({
-            d['chunk_id']
-            for d in facts_per_facet.get(modifier.label, [])
-            if d['chunk_id'] in pool_id_set
-        })
+        cited = sorted(
+            {
+                d['chunk_id']
+                for d in facts_per_facet.get(modifier.label, [])
+                if d['chunk_id'] in pool_id_set
+            }
+        )
         if cited:
             aspects_to_chunk_ids[modifier.label] = cited
 
@@ -226,11 +232,13 @@ def annotate_query(
             query_id=query_id,
             persistence=persistence,
         )
-        persistence.append_answer({
-            'query_id': query_id,
-            'query_text': query_row['query_text'],
-            'answer_text': final_answer if final_answer is not None else '<LLM_ERROR>',
-        })
+        persistence.append_answer(
+            {
+                'query_id': query_id,
+                'query_text': query_row['query_text'],
+                'answer_text': final_answer if final_answer is not None else '<LLM_ERROR>',
+            }
+        )
 
     return aspects_to_chunk_ids, final_answer
 

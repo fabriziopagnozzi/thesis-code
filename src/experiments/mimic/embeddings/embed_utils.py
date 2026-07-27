@@ -35,8 +35,7 @@ def get_embedded_chunk_ids(table: Table, model: str) -> frozenset[str]:
         return cast(
             frozenset[str],
             frozenset(
-                lance_ds
-                .scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
+                lance_ds.scanner(columns=['chunk_id'], filter=f'{vec_col} IS NOT NULL')
                 .to_table()['chunk_id']
                 .to_pylist()
             ),
@@ -75,8 +74,7 @@ def embed_and_commit(
         ]
 
         batch_pa = (
-            batch_df
-            .to_arrow()
+            batch_df.to_arrow()
             .append_column(field_=vec_col, column=batch_v)
             .append_column(
                 'icd10_3char_list', pa.array(icd10_3char_list, type=pa.list_(pa.string()))
@@ -150,8 +148,7 @@ def build_chunks_df_for_embedding(chunks: pl.DataFrame) -> pl.DataFrame:
     Returns (augmented_chunks) sorted ascending by text length for efficient batching.
     """
     return (
-        chunks
-        .with_columns(
+        chunks.with_columns(
             text_to_embed=(
                 pl.col('contextual_prefix').fill_null('')
                 + pl.lit('\nExcerpt from the ')

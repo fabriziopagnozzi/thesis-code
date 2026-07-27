@@ -9,7 +9,7 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     render_chunk_text_template_result,
     validate_chunk_text,
 )
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ChunkRow,
     ChunkState,
     ChunkSurfaceGroup,
@@ -17,7 +17,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
 
 def word_count_ok(word_count: int, min_words: int, max_words: int, tolerance: int) -> bool:

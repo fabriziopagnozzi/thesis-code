@@ -17,11 +17,11 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_template_sources,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ClinicalFact,
     MedicalOntology,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -171,8 +171,7 @@ def _write_normalized_chunks(
         return chunk_documents, chunk_memberships
 
     duplicate_text_keys = (
-        chunk_rows
-        .group_by('chunk_reuse_key')
+        chunk_rows.group_by('chunk_reuse_key')
         .agg(pl.col('text').n_unique().alias('n_texts'))
         .filter(pl.col('n_texts') > 1)
     )
@@ -207,8 +206,7 @@ def _write_normalized_chunks(
     doc_key_to_id = _doc_key_to_chunk_id(doc_keys['chunk_reuse_key'].to_list())
 
     with_doc_id = retained_rows.with_columns(
-        pl
-        .col('chunk_reuse_key')
+        pl.col('chunk_reuse_key')
         .replace_strict(doc_key_to_id, return_dtype=pl.String)
         .alias('chunk_id'),
         pl.col('chunk_id').alias('membership_id'),
@@ -267,18 +265,16 @@ def _write_normalized_chunks(
     ]
 
     chunk_documents = (
-        with_doc_id
-        .select([col for col in doc_cols if col in with_doc_id.columns])
+        with_doc_id.select([col for col in doc_cols if col in with_doc_id.columns])
         .unique(subset=['chunk_id'], keep='first', maintain_order=True)
         .sort('chunk_id')
     )
-    chunk_memberships = with_doc_id.select([
-        col for col in membership_cols if col in with_doc_id.columns
-    ])
+    chunk_memberships = with_doc_id.select(
+        [col for col in membership_cols if col in with_doc_id.columns]
+    )
 
     duplicate_memberships = (
-        chunk_memberships
-        .group_by('query_id', 'chunk_id')
+        chunk_memberships.group_by('query_id', 'chunk_id')
         .agg(pl.len().alias('n'))
         .filter(pl.col('n') > 1)
     )
@@ -290,8 +286,7 @@ def _write_normalized_chunks(
         )
 
     invalid_gold_coverage = (
-        chunk_memberships
-        .filter(pl.col('is_gold'))
+        chunk_memberships.filter(pl.col('is_gold'))
         .group_by('query_id')
         .agg(pl.col('facet_id').n_unique().alias('n_gold_facets'))
         .filter(pl.col('n_gold_facets') != 4)
@@ -299,8 +294,7 @@ def _write_normalized_chunks(
     if len(invalid_gold_coverage):
         examples = invalid_gold_coverage.head(5).to_dicts()
         raise RuntimeError(
-            'query-local duplicate dropping removed a required gold facet; '
-            f'examples={examples}'
+            f'query-local duplicate dropping removed a required gold facet; examples={examples}'
         )
 
     write_parquet(paths, 'chunk_documents', chunk_documents)

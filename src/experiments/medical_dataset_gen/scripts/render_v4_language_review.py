@@ -27,7 +27,7 @@ from experiments.medical_dataset_gen.pipeline.p01_plans import _materialize_plan
 from experiments.medical_dataset_gen.pipeline.p03_facts import (
     _payload_required_phrase,
 )
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
     CLINICAL_AXIS_LIST,
     QUERY_FOCUS_MODE_LIST,
@@ -46,7 +46,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     TreatmentDurationAxisValues,
     TreatmentDurationPayload,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 DEFAULT_OUTPUT_DIR = MedicalDatasetGenPaths.results_dir / '_v4_language_review'
@@ -105,36 +105,36 @@ def _surface_inventory_rows() -> list[dict[str, object]]:
     for condition_anchor in ('outer_template', 'axis_evidence'):
         templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
         for family, bucket in templates.items():
-            rows.extend(
-                _bucket_rows('note_style', f'{condition_anchor}:{family}', bucket)
-            )
+            rows.extend(_bucket_rows('note_style', f'{condition_anchor}:{family}', bucket))
     for family, bucket in TEMPLATE_DATA.cohort_evidence_templates.model_dump().items():
         for group, specs in bucket.items():
             for spec in specs:
-                rows.append({
-                    'source': 'cohort_evidence',
-                    'family': family,
-                    'surface_group': group,
-                    'template_id': spec['id'],
-                    'template': spec['template'],
-                })
+                rows.append(
+                    {
+                        'source': 'cohort_evidence',
+                        'family': family,
+                        'surface_group': group,
+                        'template_id': spec['id'],
+                        'template': spec['template'],
+                    }
+                )
     for course_id, bucket in TEMPLATE_DATA.treatment_course_templates.items():
         rows.extend(_bucket_rows('treatment_course', course_id, bucket))
     for axis, templates in TEMPLATE_DATA.axis_sentence_templates.paired.items():
         for surface_group in ('seen', 'heldout'):
             for family, spec in templates.template_specs(surface_group):
-                rows.append({
-                    'source': 'axis_sentence',
-                    'family': f'{axis}:{family}',
-                    'surface_group': surface_group,
-                    'template_id': spec.id,
-                    'template': spec.template,
-                })
+                rows.append(
+                    {
+                        'source': 'axis_sentence',
+                        'family': f'{axis}:{family}',
+                        'surface_group': surface_group,
+                        'template_id': spec.id,
+                        'template': spec.template,
+                    }
+                )
     for axis, interpretations_by_bin in TEMPLATE_DATA.simple_interpretations.items():
         for value_bin, bucket in interpretations_by_bin.items():
-            rows.extend(
-                _bucket_rows('simple_interpretation', f'{axis}:{value_bin}', bucket)
-            )
+            rows.extend(_bucket_rows('simple_interpretation', f'{axis}:{value_bin}', bucket))
     return rows
 
 
@@ -192,21 +192,23 @@ def _chunk_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
                                         f'{condition_id}/{axis}/{value_bin}/{style}: '
                                         + '; '.join(validation.hard_errors)
                                     )
-                                rows.append({
-                                    'condition_id': condition_id,
-                                    'condition_display': condition.display,
-                                    'axis': axis,
-                                    'value_bin': value_bin,
-                                    'axis_payload_json': fact.axis_payload_json,
-                                    'condition_anchor': fact.condition_anchor,
-                                    'note_style': note_style,
-                                    'chunk_text_style': style,
-                                    'surface_group': surface_group,
-                                    'outer_template_id': rendered.provenance.outer_template_id,
-                                    'axis_template_family': rendered.provenance.axis_template_family,
-                                    'axis_template_id': rendered.provenance.axis_template_id,
-                                    'text': rendered.text,
-                                })
+                                rows.append(
+                                    {
+                                        'condition_id': condition_id,
+                                        'condition_display': condition.display,
+                                        'axis': axis,
+                                        'value_bin': value_bin,
+                                        'axis_payload_json': fact.axis_payload_json,
+                                        'condition_anchor': fact.condition_anchor,
+                                        'note_style': note_style,
+                                        'chunk_text_style': style,
+                                        'surface_group': surface_group,
+                                        'outer_template_id': rendered.provenance.outer_template_id,
+                                        'axis_template_family': rendered.provenance.axis_template_family,
+                                        'axis_template_id': rendered.provenance.axis_template_id,
+                                        'text': rendered.text,
+                                    }
+                                )
     return rows
 
 
@@ -326,8 +328,7 @@ def _all_axis_payloads(
     if axis == 'care_intensity':
         return [CareIntensityPayload(axis=axis, detail=value) for value in values]
     return [
-        DiagnosticEvidencePayload(axis='diagnostic_evidence_type', detail=value)
-        for value in values
+        DiagnosticEvidencePayload(axis='diagnostic_evidence_type', detail=value) for value in values
     ]
 
 
@@ -364,18 +365,20 @@ def _query_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
     for structure in QUERY_STRUCTURE_LIST:
         for focus_mode in QUERY_FOCUS_MODE_LIST:
             for template_id in query_template_ids(structure, focus_mode):
-                rows.append({
-                    'query_structure': structure,
-                    'focus_mode': focus_mode,
-                    'template_id': template_id,
-                    'query_text': render_query_template(
-                        plan,
-                        ontology,
-                        template_id=template_id,
-                        focus_mode=focus_mode,
-                        query_structure=structure,
-                    ),
-                })
+                rows.append(
+                    {
+                        'query_structure': structure,
+                        'focus_mode': focus_mode,
+                        'template_id': template_id,
+                        'query_text': render_query_template(
+                            plan,
+                            ontology,
+                            template_id=template_id,
+                            focus_mode=focus_mode,
+                            query_structure=structure,
+                        ),
+                    }
+                )
     return rows
 
 

@@ -11,7 +11,7 @@ from typing import TypedDict
 
 import polars as pl
 
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 from helpers.embedder import MODEL_PROFILES
 
@@ -102,11 +102,13 @@ def chunk_embedding_cache_key(
     # Embeddings are a pure function of model/prompt settings plus input text.
     # Local chunk IDs can change across chunk generation runs, so they must not
     # be part of the reusable embedding identity.
-    return _hash_json({
-        'cache_version': CHUNK_EMBEDDING_CACHE_VERSION,
-        'embedding_signature': embedding_signature,
-        'text_sha256': text_sha256,
-    })
+    return _hash_json(
+        {
+            'cache_version': CHUNK_EMBEDDING_CACHE_VERSION,
+            'embedding_signature': embedding_signature,
+            'text_sha256': text_sha256,
+        }
+    )
 
 
 def load_matching_chunk_embedding_cache_by_text(
@@ -220,8 +222,7 @@ def _validated_unique_cache(
     label: str,
 ) -> pl.DataFrame:
     conflicts = (
-        cache
-        .group_by(key_column)
+        cache.group_by(key_column)
         .agg(pl.col(fingerprint_column).n_unique().alias('n_fingerprints'))
         .filter(pl.col('n_fingerprints') > 1)
     )

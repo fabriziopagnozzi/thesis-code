@@ -12,7 +12,7 @@ from experiments.medical_dataset_gen.utils.exp_naming import resolve_experiment_
 from helpers.dir_paths import ROOT_DIR
 
 if TYPE_CHECKING:
-    from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+    from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
 
 type SyntheticMedicalDatasetTableName = Literal[
@@ -185,7 +185,7 @@ class MedicalDatasetGenPaths:
 
 
 def load_config(exp: str | None = None) -> ExperimentCfg:
-    from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+    from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
     exp_name = exp or os.getenv('EXP') or os.getenv('EXP_NAME')
     if exp_name is None:
@@ -263,7 +263,9 @@ def paths_for(
     *,
     local_artifact_version: str | None = None,
 ) -> MedicalDatasetGenPaths:
-    resolved_local_artifact_version = local_artifact_version or local_artifact_version_for_config(cfg)
+    resolved_local_artifact_version = local_artifact_version or local_artifact_version_for_config(
+        cfg
+    )
     paths = MedicalDatasetGenPaths(
         cfg.global_.output_experiment,
         result_dir_overrides=cfg.global_.result_dir_overrides,
@@ -325,7 +327,7 @@ def shared_embedding_artifact_paths_for_config(
     if embeddings_dir is None:
         return None
 
-    from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
+    from experiments.medical_dataset_gen.dataset_generation.caches import (
         chunk_embedding_signature,
         query_embedding_signature,
     )

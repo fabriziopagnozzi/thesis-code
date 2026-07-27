@@ -7,8 +7,8 @@ from typing import Any, cast
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightChunkRecord
-from experiments.medical_dataset_gen.schemas.global_config_schemas import EvaluationRerankerCfg
+from experiments.medical_dataset_gen.evaluation.schemas import LightweightChunkRecord
+from experiments.medical_dataset_gen.utils.global_schemas import EvaluationRerankerCfg
 
 DENSE_RERANKER_STRATEGY = 'reranker'
 

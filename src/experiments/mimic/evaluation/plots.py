@@ -312,8 +312,7 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
 
     topk_df = results_df.filter(pl.col('strategy') == 'top_k')
     k_ar = (
-        topk_df
-        .group_by('k')
+        topk_df.group_by('k')
         .agg(pl.col('aspect_recall').median().alias('med_ar'))
         .sort('med_ar', descending=True)
     )
@@ -334,8 +333,7 @@ def plot_per_query_distributions(results_df: pl.DataFrame, out_dir: Path) -> Non
             slice_df = strat_df
         else:
             lam_ar = (
-                strat_df
-                .group_by('lam')
+                strat_df.group_by('lam')
                 .agg(pl.col('aspect_recall').mean().alias('mean_ar'))
                 .sort('mean_ar', descending=True)
             )
@@ -749,8 +747,7 @@ def plot_answer_distributions(results_df: pl.DataFrame, out_dir: Path) -> None:
 
     topk_df = results_df.filter(pl.col('strategy') == 'top_k')
     k_ar = (
-        topk_df
-        .group_by('k')
+        topk_df.group_by('k')
         .agg(pl.col('aspect_recall').median().alias('med_ar'))
         .sort('med_ar', descending=True)
     )
@@ -764,8 +761,7 @@ def plot_answer_distributions(results_df: pl.DataFrame, out_dir: Path) -> None:
             slice_df = strat_df
         else:
             lam_ar = (
-                strat_df
-                .group_by('lam')
+                strat_df.group_by('lam')
                 .agg(pl.col('aspect_recall').mean().alias('mean_ar'))
                 .sort('mean_ar', descending=True)
             )

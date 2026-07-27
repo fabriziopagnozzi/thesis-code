@@ -39,6 +39,7 @@ def thesis_result_macros_path(report_dir: Path) -> Path:
 def thesis_statistical_tables_path(report_dir: Path) -> Path:
     return thesis_latex_dir(report_dir) / THESIS_STATISTICAL_TABLES_FILENAME
 
+
 type TableKind = Literal['metric_budget', 'metric_family', 'metric_family_budget']
 
 
@@ -237,9 +238,7 @@ def _geometry_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, s
         if rate is not None and str(row.get('EmbeddingModel') or '').startswith('Qwen/')
     ]
     return {
-        'ResultGeometryPassMean': _fixed(
-            family_balanced_mean(rows, 'GeometryPassRate'), digits=3
-        ),
+        'ResultGeometryPassMean': _fixed(family_balanced_mean(rows, 'GeometryPassRate'), digits=3),
         'ResultGeometryPassMedian': _fixed(_median(pass_rates), digits=3),
         'ResultGeometryBgeMean': _fixed(
             family_balanced_mean(
@@ -275,9 +274,7 @@ def _comparison_result_macros(
         'ResultFacLocTopKBetterRows': _integer(
             sum((_float(row.get('Delta_FacLoc_TopK_FCP')) or 0.0) > 0.0 for row in fcp_rows)
         ),
-        'ResultMmrTopKMeanFcpDelta': _signed(
-            family_balanced_mean(fcp_rows, 'Delta_MMR_TopK_FCP')
-        ),
+        'ResultMmrTopKMeanFcpDelta': _signed(family_balanced_mean(fcp_rows, 'Delta_MMR_TopK_FCP')),
         'ResultMmrTopKMedianFcpDelta': _signed(_median(_values(fcp_rows, 'Delta_MMR_TopK_FCP'))),
         'ResultFacLocTopKMeanFcpDelta': _signed(
             family_balanced_mean(fcp_rows, 'Delta_FacLoc_TopK_FCP')

@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal, TypedDict, cast
 
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.exp_naming import child_experiment_names
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
@@ -120,10 +120,12 @@ def build_dataset_size_profile(
         thresholds = (
             manual_thresholds
             if manual_thresholds is not None
-            else infer_size_thresholds([
-                parent_profile['total_chunks_per_query']
-                for _parent_name, _config_path, _cfg, parent_profile in loaded_parents
-            ])
+            else infer_size_thresholds(
+                [
+                    parent_profile['total_chunks_per_query']
+                    for _parent_name, _config_path, _cfg, parent_profile in loaded_parents
+                ]
+            )
         )
         threshold_source: ThresholdSource = (
             'manual_cli' if manual_thresholds is not None else 'inferred_natural_breaks'

@@ -8,19 +8,19 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Json
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     AnswerFact,
     BenchmarkPydanticModel,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+from experiments.medical_dataset_gen.retrieval.schemas import (
     ChunkDocumentRecord,
     QrelRecord,
     QueryRecord,
 )
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
 if TYPE_CHECKING:
-    from experiments.medical_dataset_gen.evaluation.reranker import DenseReranker
+    from experiments.medical_dataset_gen.retrieval.reranker import DenseReranker
 
 __all__ = [
     'AnswerReferenceTexts',

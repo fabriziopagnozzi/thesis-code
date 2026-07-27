@@ -10,7 +10,7 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     render_answer_template,
     render_query_template,
 )
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     AcuteClinicalCoursePayload,
     AnswerFact,
     AnswerSourceFact,
@@ -29,7 +29,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     TreatmentDurationPayload,
     parse_axis_payload,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -249,6 +249,8 @@ def _summarize_payload(value_bin: str, payload) -> str:
     if isinstance(payload, DiagnosticEvidencePayload):
         return f'{_with_indefinite_article(bin_label)} evidence source: {payload.detail}'
     raise TypeError(type(payload))
+
+
 if __name__ == '__main__':
     from experiments.medical_dataset_gen.utils.logging_utils import (
         setup_logging,

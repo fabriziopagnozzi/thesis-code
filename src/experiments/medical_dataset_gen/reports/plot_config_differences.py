@@ -1251,11 +1251,7 @@ def _ordered_configs_by_metric_score(rows: Sequence[Mapping[str, object]]) -> li
         grouped.setdefault(config, []).append(value)
     if not grouped:
         return _ordered_configs(rows)
-    scored = [
-        (config, statistics.fmean(values))
-        for config, values in grouped.items()
-        if values
-    ]
+    scored = [(config, statistics.fmean(values)) for config, values in grouped.items() if values]
     ordered = [
         config
         for config, _score in sorted(

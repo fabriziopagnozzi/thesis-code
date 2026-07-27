@@ -49,11 +49,15 @@ def run_pool_analysis(cfg: PoolAnalysisCfg | None = None) -> None:
     for d in (fig_per, fig_agg):
         d.mkdir(parents=True, exist_ok=True)
 
-    ckpt_rows = get_pool_analysis_path('checkpoint_rows.jsonl', prefer_existing=False, ensure_parent=True)
+    ckpt_rows = get_pool_analysis_path(
+        'checkpoint_rows.jsonl', prefer_existing=False, ensure_parent=True
+    )
     ckpt_points = get_pool_analysis_path(
         'checkpoint_points.parquet', prefer_existing=False, ensure_parent=True
     )
-    ckpt_meta = get_pool_analysis_path('checkpoint_meta.json', prefer_existing=False, ensure_parent=True)
+    ckpt_meta = get_pool_analysis_path(
+        'checkpoint_meta.json', prefer_existing=False, ensure_parent=True
+    )
 
     rows: list[dict] = []
     point_frames: list[pl.DataFrame] = []
@@ -70,7 +74,9 @@ def run_pool_analysis(cfg: PoolAnalysisCfg | None = None) -> None:
         print(f'[checkpoint] {len(processed_ids)} queries already done, resuming …')
 
     new_since_ckpt = 0
-    print(f'\n[1/5] Analyzing pools ({cfg.pool_n} chunks/query, output → {MimicPaths.pool_analysis_dir})')
+    print(
+        f'\n[1/5] Analyzing pools ({cfg.pool_n} chunks/query, output → {MimicPaths.pool_analysis_dir})'
+    )
 
     queries_filtered_df = load_filtered_queries(embedding_model)
     if pool_analysis_cfg.limit is not None:
@@ -130,16 +136,22 @@ def run_pool_analysis(cfg: PoolAnalysisCfg | None = None) -> None:
 
     print(f'\n[2/5] Writing per-query stats ({len(rows):,} rows)')
     stats_df = pl.DataFrame(rows)
-    stats_path = get_pool_analysis_path('per_query_stats.parquet', prefer_existing=False, ensure_parent=True)
+    stats_path = get_pool_analysis_path(
+        'per_query_stats.parquet', prefer_existing=False, ensure_parent=True
+    )
     stats_df.write_parquet(stats_path)
 
     points_df = pl.concat(point_frames, how='diagonal_relaxed')
-    pts_path = get_pool_analysis_path('pool_points.parquet', prefer_existing=False, ensure_parent=True)
+    pts_path = get_pool_analysis_path(
+        'pool_points.parquet', prefer_existing=False, ensure_parent=True
+    )
     points_df.write_parquet(pts_path)
 
     print('\n[3/5] Aggregating stats')
     agg = aggregate_stats(stats_df)
-    agg_path = get_pool_analysis_path('aggregate_stats.parquet', prefer_existing=False, ensure_parent=True)
+    agg_path = get_pool_analysis_path(
+        'aggregate_stats.parquet', prefer_existing=False, ensure_parent=True
+    )
     agg.write_parquet(agg_path)
 
     print('\n[4/5] Plotting aggregate figures')
@@ -225,18 +237,20 @@ def analyze_query(qp: QueryPool, cfg: PoolAnalysisCfg) -> PerQueryResult:
         **lof_stat,
     }
 
-    points = pl.DataFrame({
-        'query_id': [qp.query_id] * pool.n,
-        'chunk_id': pool.chunk_ids,
-        'hadm_id': pool.hadm_ids.tolist(),
-        'section_name': pool.section_names,
-        'facet_combined': qp.facet_combined.tolist(),
-        'cos_to_query': sim_to_query.tolist(),
-        'umap_x': umap_plot[:, 0].tolist(),
-        'umap_y': umap_plot[:, 1].tolist(),
-        'hdbscan_cluster': hdb_labels.tolist(),
-        'lof': scores.tolist(),
-    })
+    points = pl.DataFrame(
+        {
+            'query_id': [qp.query_id] * pool.n,
+            'chunk_id': pool.chunk_ids,
+            'hadm_id': pool.hadm_ids.tolist(),
+            'section_name': pool.section_names,
+            'facet_combined': qp.facet_combined.tolist(),
+            'cos_to_query': sim_to_query.tolist(),
+            'umap_x': umap_plot[:, 0].tolist(),
+            'umap_y': umap_plot[:, 1].tolist(),
+            'hdbscan_cluster': hdb_labels.tolist(),
+            'lof': scores.tolist(),
+        }
+    )
 
     return PerQueryResult(stats=stats, points=points)
 

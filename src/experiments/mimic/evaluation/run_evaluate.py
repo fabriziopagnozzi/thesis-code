@@ -116,12 +116,14 @@ def evaluate_llm(annotations_df: pl.DataFrame, pool_builder: ChunkPoolBuilder) -
         )
 
         for m in query_metrics:
-            all_rows.append({
-                'query_id': row['query_id'],
-                'icd10_3char': row['icd10_3char'],
-                'n_facets': row['n_facets'],
-                **m,
-            })
+            all_rows.append(
+                {
+                    'query_id': row['query_id'],
+                    'icd10_3char': row['icd10_3char'],
+                    'n_facets': row['n_facets'],
+                    **m,
+                }
+            )
 
     return pl.DataFrame(all_rows)
 
@@ -164,13 +166,15 @@ def evaluate_structural(builder: ChunkPoolBuilder) -> pl.DataFrame:
         )
 
         for m in query_result:
-            all_rows.append({
-                'query_id': query['query_id'],
-                'icd10_3char': query['icd10_3char'],
-                'stratum': query.get('stratum'),
-                'n_facets': len(mod_to_chunk_ids),
-                **m,
-            })
+            all_rows.append(
+                {
+                    'query_id': query['query_id'],
+                    'icd10_3char': query['icd10_3char'],
+                    'stratum': query.get('stratum'),
+                    'n_facets': len(mod_to_chunk_ids),
+                    **m,
+                }
+            )
 
     return pl.DataFrame(all_rows)
 
@@ -296,8 +300,7 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
                 pl.col('answer_rouge1_f1').mean().alias('ans_rouge1_f1'),
             ]
         summary = (
-            subset
-            .group_by('strategy', 'lam')
+            subset.group_by('strategy', 'lam')
             .agg(
                 pl.col('aspect_recall').mean().alias('AR'),
                 pl.col('weighted_aspect_recall').mean().alias('WAR'),
@@ -325,8 +328,7 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
         for k in sorted(results_df['k'].unique().to_list()):
             subset = results_df.filter(pl.col('k') == k)
             stratum_summaries.append(
-                subset
-                .group_by('strategy', 'lam', 'stratum')
+                subset.group_by('strategy', 'lam', 'stratum')
                 .agg(
                     pl.col('aspect_recall').mean().alias('AR'),
                     pl.col('weighted_aspect_recall').mean().alias('WAR'),
@@ -351,8 +353,7 @@ def store_eval_stats(results_df: pl.DataFrame) -> None:
             for k in sorted(stratum_rows['k'].unique().to_list()):
                 print(f'--- k = {k} ---')
                 print(
-                    stratum_rows
-                    .filter(pl.col('k') == k)
+                    stratum_rows.filter(pl.col('k') == k)
                     .group_by('strategy', 'lam')
                     .agg(
                         pl.col('aspect_recall').mean().alias('AR'),
@@ -410,13 +411,15 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
         for col in metric_cols:
             best_val = group[col].max()
             tied = group.filter(pl.col(col) == best_val)
-            best_rows.append({
-                'k': k,
-                'lam': lam,
-                'best_for': col,
-                'strategy': tied['strategy'].to_list(),
-                **{c: best_val if c == col else tied[c][0] for c in metric_cols},
-            })
+            best_rows.append(
+                {
+                    'k': k,
+                    'lam': lam,
+                    'best_for': col,
+                    'strategy': tied['strategy'].to_list(),
+                    **{c: best_val if c == col else tied[c][0] for c in metric_cols},
+                }
+            )
 
     best_df = pl.DataFrame(best_rows).sort('k', 'lam', 'best_for')
     best_path = get_table_path('evaluation_best_per_metric')
@@ -430,13 +433,15 @@ def store_best_per_metric(results_df: pl.DataFrame) -> None:
         for col in metric_cols:
             best_val = combined[col].max()
             tied = combined.filter(pl.col(col) == best_val)
-            best_fixed_lam_rows.append({
-                'lam': lam,
-                'best_for': col,
-                'strategy': tied['strategy'].to_list(),
-                'k': tied['k'].to_list(),
-                **{c: best_val if c == col else tied[c][0] for c in metric_cols},
-            })
+            best_fixed_lam_rows.append(
+                {
+                    'lam': lam,
+                    'best_for': col,
+                    'strategy': tied['strategy'].to_list(),
+                    'k': tied['k'].to_list(),
+                    **{c: best_val if c == col else tied[c][0] for c in metric_cols},
+                }
+            )
 
     best_fixed_lam_df = pl.DataFrame(best_fixed_lam_rows).sort('lam', 'best_for')
     best_fixed_lam_path = get_table_path('evaluation_best_per_metric_fixed_lam')

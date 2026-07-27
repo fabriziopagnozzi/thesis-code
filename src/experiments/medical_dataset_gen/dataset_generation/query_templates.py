@@ -4,7 +4,7 @@ import re
 
 import yaml
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ClinicalAxis,
     MedicalOntology,
     QueryFocusMode,
@@ -93,10 +93,7 @@ def query_template_ids(
     query_structure: QueryStructure = 'unbalanced',
     focus_mode: QueryFocusMode = 'natural',
 ) -> list[str]:
-    return [
-        spec.id
-        for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]
-    ]
+    return [spec.id for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]]
 
 
 def query_template_spec(
@@ -108,9 +105,7 @@ def query_template_spec(
     for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]:
         if spec.id == template_id:
             return spec
-    raise KeyError(
-        f'unknown query template id for {query_structure}/{focus_mode}: {template_id}'
-    )
+    raise KeyError(f'unknown query template id for {query_structure}/{focus_mode}: {template_id}')
 
 
 def axis_query_label(axis: ClinicalAxis, ontology: MedicalOntology | None = None) -> str:

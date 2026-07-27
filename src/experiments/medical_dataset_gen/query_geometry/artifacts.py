@@ -16,7 +16,7 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
     get_candidate_pool_indices,
     run_topn_cosine_retrieval,
     select_indices,
@@ -26,8 +26,8 @@ from experiments.medical_dataset_gen.query_geometry.dim_reduction import (
     hdbscan_labels,
     reduce_for_plot,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
-from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryArtifact,
     GeometryChunkLike,
     GeometryEmbeddingIdArray,
@@ -38,7 +38,7 @@ from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
     GeometryQueryLike,
     GeometrySelection,
 )
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+from experiments.medical_dataset_gen.retrieval.schemas import (
     RetrievalStrategy,
 )
 
@@ -167,8 +167,7 @@ def ranked_queries_for_query_geometry(
             base = base.with_columns(pl.lit(default).alias(col))
 
     ranked = (
-        base
-        .with_columns(
+        base.with_columns(
             pl.col('passes_filter').fill_null(False),
             pl.col('topk_dominant_count').fill_null(0),
             pl.col('in_minus_cross_similarity').fill_null(0.0),
@@ -199,8 +198,7 @@ def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[s
     n_best, n_mid, n_bad = mixed_group_sizes(min(n_queries, ranked.height))
     best_ids = ranked['query_id'].head(n_best).to_list()
     bad_ids = (
-        ranked
-        .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
+        ranked.sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_WORST_DESC)['query_id']
         .head(n_bad)
         .to_list()
     )
@@ -257,8 +255,7 @@ def evaluation_gain_table(eval_results: pl.DataFrame, k: int) -> pl.DataFrame:
             sort_cols.append('alpha_ndcg')
             descending.append(True)
         best = (
-            sub
-            .group_by('query_id', 'lam')
+            sub.group_by('query_id', 'lam')
             .agg(agg_exprs)
             .sort(sort_cols, descending=descending)
             .group_by('query_id')
@@ -638,8 +635,7 @@ def _first_sorted_lambdas(
         return df
     sort_cols, desc = _available_sort(df, preferred_sort_cols, preferred_sort_desc)
     return (
-        df
-        .sort(
+        df.sort(
             [*group_cols, *sort_cols],
             descending=[False] * len(group_cols) + desc,
         )

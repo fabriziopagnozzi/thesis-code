@@ -13,7 +13,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ExperimentFamilyId,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.exp_naming import (
     child_experiment_names,
     resolve_experiment_name,
@@ -93,12 +93,13 @@ def _is_legacy_all_query_experiment(parts: Sequence[str]) -> bool:
 
 
 def _artifact_experiment_names(results_dir: Path, *, artifact_version: str | None) -> list[str]:
-    return sorted({
-        _artifact_experiment_name(path, results_dir)
-        for path in results_dir.glob('**/evaluation_stats.parquet')
-        if path.is_file()
-        and (artifact_version is None or path.parent.name == artifact_version)
-    })
+    return sorted(
+        {
+            _artifact_experiment_name(path, results_dir)
+            for path in results_dir.glob('**/evaluation_stats.parquet')
+            if path.is_file() and (artifact_version is None or path.parent.name == artifact_version)
+        }
+    )
 
 
 def _artifact_experiment_name(path: Path, results_dir: Path) -> str:

@@ -644,21 +644,23 @@ def embedding_model_summary_rows(
     for experiment, manifest in manifest_by_exp.items():
         geometry = geometry_by_exp.get(experiment, {})
         low_budget = low_budget_by_exp.get(experiment, {})
-        run_rows.append({
-            'EmbeddingModel': manifest.get('EmbeddingModel'),
-            'ExperimentFamily': manifest.get('ExperimentFamily'),
-            'ExperimentFamilyLabel': manifest.get('ExperimentFamilyLabel'),
-            'EmbeddingDimension': manifest.get('EmbeddingDimension'),
-            'GeometryPassRate': geometry.get('GeometryPassRate'),
-            'GeometryQueries': geometry.get('GeometryQueries'),
-            'GeometryPassQueries': geometry.get('GeometryPassQueries'),
-            'TopK_FCP': low_budget.get('TopK_FCP'),
-            'MMR_FCP': low_budget.get('MMR_FCP'),
-            'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
-            'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
-            'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
-            'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
-        })
+        run_rows.append(
+            {
+                'EmbeddingModel': manifest.get('EmbeddingModel'),
+                'ExperimentFamily': manifest.get('ExperimentFamily'),
+                'ExperimentFamilyLabel': manifest.get('ExperimentFamilyLabel'),
+                'EmbeddingDimension': manifest.get('EmbeddingDimension'),
+                'GeometryPassRate': geometry.get('GeometryPassRate'),
+                'GeometryQueries': geometry.get('GeometryQueries'),
+                'GeometryPassQueries': geometry.get('GeometryPassQueries'),
+                'TopK_FCP': low_budget.get('TopK_FCP'),
+                'MMR_FCP': low_budget.get('MMR_FCP'),
+                'FacLoc_FCP': low_budget.get('FacLoc_FCP'),
+                'Delta_FacLoc_MMR_FCP': low_budget.get('Delta_FacLoc_MMR_FCP'),
+                'Delta_FacLoc_TopK_FCP': low_budget.get('Delta_FacLoc_TopK_FCP'),
+                'OnlyPassGeometry': manifest.get('OnlyPassGeometry'),
+            }
+        )
 
     grouped: dict[str, list[Mapping[str, object]]] = {}
     for row in run_rows:

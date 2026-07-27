@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CLINICAL_AXIS_LIST,
     AxisPairConditionOverride,
     ChunkPoolScope,
@@ -293,9 +293,12 @@ class LambdaGridCfg(BasePydanticCfgModel):
         return self
 
     def values(self) -> list[float]:
-        return sorted({
-            float(round(value, 6)) for value in np.linspace(self.start, self.stop, self.num_values)
-        })
+        return sorted(
+            {
+                float(round(value, 6))
+                for value in np.linspace(self.start, self.stop, self.num_values)
+            }
+        )
 
 
 class RetrievalCfg(BasePydanticCfgModel):

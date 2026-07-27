@@ -21,8 +21,7 @@ def add_contextual_prefix_to_df(chunks: pl.DataFrame) -> pl.DataFrame:
     metadata = read_parquet('admissions_metadata').select(meta_cols).unique(subset=['hadm_id'])
     cols_to_drop = [c for c in meta_cols if c != 'hadm_id']
     return (
-        chunks
-        .join(metadata, on='hadm_id', how='left')
+        chunks.join(metadata, on='hadm_id', how='left')
         .with_columns(
             contextual_prefix=pl.struct(pl.all()).map_elements(
                 build_contextual_prefix, return_dtype=pl.Utf8

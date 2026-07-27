@@ -20,7 +20,7 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     resolve_axis_pair_generation_policy,
 )
 from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CLINICAL_AXIS_LIST,
     ClinicalAxis,
     DataSplit,
@@ -32,7 +32,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     QueryType,
     SubgroupOntology,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -122,24 +122,26 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     )
                     specs.append(spec)
                     if len(primary_axes) == 2:
-                        plans.extend((
-                            _materialize_plan(
-                                cfg,
-                                ontology,
-                                spec,
-                                axis_a,
-                                axis_b,
-                                query_id=f'q{next_query_number}',
-                            ),
-                            _materialize_plan(
-                                cfg,
-                                ontology,
-                                spec,
-                                axis_b,
-                                axis_a,
-                                query_id=f'q{next_query_number + 1}',
-                            ),
-                        ))
+                        plans.extend(
+                            (
+                                _materialize_plan(
+                                    cfg,
+                                    ontology,
+                                    spec,
+                                    axis_a,
+                                    axis_b,
+                                    query_id=f'q{next_query_number}',
+                                ),
+                                _materialize_plan(
+                                    cfg,
+                                    ontology,
+                                    spec,
+                                    axis_b,
+                                    axis_a,
+                                    query_id=f'q{next_query_number + 1}',
+                                ),
+                            )
+                        )
                         next_query_number += 2
                         continue
 

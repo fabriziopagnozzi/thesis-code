@@ -6,13 +6,13 @@ from dataclasses import dataclass, field
 
 from rouge_score import rouge_scorer
 
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import harmonic_mean
-from experiments.medical_dataset_gen.schemas.evaluation_schemas import (
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import harmonic_mean
+from experiments.medical_dataset_gen.evaluation.schemas import (
     AnswerReferenceTexts,
     ChunkDocumentRecord,
     LightweightChunkRecord,
 )
-from experiments.medical_dataset_gen.schemas.metrics_schemas import (
+from experiments.medical_dataset_gen.retrieval.metrics_schemas import (
     PreparedAnswerRougeRefs,
     RougeNgramBundle,
 )

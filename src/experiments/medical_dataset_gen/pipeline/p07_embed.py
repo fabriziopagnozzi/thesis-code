@@ -8,7 +8,7 @@ import polars as pl
 import pyarrow.parquet as pq
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.dataset_generation.deterministic_caches import (
+from experiments.medical_dataset_gen.dataset_generation.caches import (
     CHUNK_EMBEDDING_CACHE_VERSION,
     ChunkEmbeddingCacheStats,
     append_chunk_embedding_cache_rows,
@@ -19,7 +19,7 @@ from experiments.medical_dataset_gen.dataset_generation.deterministic_caches imp
     row_payload_sha256,
     text_sha256,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -276,8 +276,7 @@ def _fill_deterministic_chunk_embedding_memmaps(
             how='left',
             validate='m:1',
         ).with_columns(
-            pl
-            .when(pl.col('embedding').is_not_null())
+            pl.when(pl.col('embedding').is_not_null())
             .then(pl.col('text_sha256'))
             .otherwise(None)
             .alias('cached_text_sha256')
@@ -292,14 +291,11 @@ def _fill_deterministic_chunk_embedding_memmaps(
         chunk_id_value = str(invalid_dimensions['chunk_id'][0])
         cached_dimension = invalid_dimensions['dimension'][0]
         raise RuntimeError(
-            f'cached embedding dimension mismatch for {chunk_id_value}: '
-            f'{cached_dimension} != {dim}'
+            f'cached embedding dimension mismatch for {chunk_id_value}: {cached_dimension} != {dim}'
         )
     invalid_hashes = hit_rows.filter(pl.col('cached_text_sha256') != pl.col('text_sha256'))
     if invalid_hashes.height:
-        raise RuntimeError(
-            f'cached text hash mismatch for {invalid_hashes["chunk_id"][0]!s}'
-        )
+        raise RuntimeError(f'cached text hash mismatch for {invalid_hashes["chunk_id"][0]!s}')
 
     # Copy cached vectors in bounded columnar batches. Materializing named Python
     # dictionaries for every document dominates startup time on large cache hits.

@@ -19,7 +19,7 @@ import polars as pl
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
     build_index_maps,
     build_query_to_facet_gold_map,
     compute_retrieval_diagnostics,
@@ -30,14 +30,14 @@ from experiments.medical_dataset_gen.evaluation.retrieval_utils import (
     run_topn_cosine_retrieval,
     select_indices,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
     GeometryFilterCfg,
 )
-from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryFilterStatsRow,
 )
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+from experiments.medical_dataset_gen.retrieval.schemas import (
     BackgroundOutlierDiagnostics,
     FacetIdToGoldChunks,
     QueryIdToQrels,
@@ -241,8 +241,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     queries_with_geometry = _annotate_geometry_outcomes(queries=queries, geometry=df)
     write_parquet(paths, 'queries', queries_with_geometry)
     slice_stats = (
-        df
-        .group_by(
+        df.group_by(
             'condition_id',
             'cohort_dimension_id',
             'cohort_contrast_family',
@@ -307,6 +306,7 @@ def _annotate_geometry_outcomes(*, queries: pl.DataFrame, geometry: pl.DataFrame
 
     return pl.from_dicts(rows, infer_schema_length=None)
 
+
 def _materialize_embedding_vectors(vectors: NDArray[np.float32]) -> NDArray[np.float32]:
     # Geometry filtering does many tiny query-local gathers. Keeping embeddings
     # as np.memmap makes those gathers turn into scattered disk reads on /DATA.
@@ -343,13 +343,15 @@ def _competitive_pool_mass(cfg: ExperimentCfg) -> int:
 
 
 def _diagnostic_k_values(cfg: ExperimentCfg, *, stress_horizon_k: int) -> list[int]:
-    return sorted({
-        int(k)
-        for k in [
-            *cfg.retrieval.k_values,
-            stress_horizon_k,
-        ]
-    })
+    return sorted(
+        {
+            int(k)
+            for k in [
+                *cfg.retrieval.k_values,
+                stress_horizon_k,
+            ]
+        }
+    )
 
 
 def _topk_diagnostics_by_k(

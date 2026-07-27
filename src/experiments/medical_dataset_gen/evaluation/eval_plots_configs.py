@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Literal, get_args
 import polars as pl
 
 from experiments.medical_dataset_gen.evaluation.eval_plot_data import EvaluationResultLookup
-from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
+from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 if TYPE_CHECKING:
-    from experiments.medical_dataset_gen.schemas.global_config_schemas import EvalPlotTheme
+    from experiments.medical_dataset_gen.utils.global_schemas import EvalPlotTheme
 
 DEFAULT_EVAL_PLOT_THEME: EvalPlotTheme = 'light'
 

@@ -85,14 +85,16 @@ def filter_queries(
 
         mean_jaccard = float(np.mean(all_jaccards))
 
-        results.append({
-            filter_col: mean_jaccard < filter_queries_cfg.jaccard_threshold,
-            **{c: row[c] for c in queries_df.columns},
-            'jaccard_div': 1.0 - mean_jaccard,
-            'fac_gap': float(np.mean(all_fac_gaps)),
-            'fac_topk': float(np.mean(all_fac_topks)),
-            'fac_fl': float(np.mean(all_fac_fls)),
-        })
+        results.append(
+            {
+                filter_col: mean_jaccard < filter_queries_cfg.jaccard_threshold,
+                **{c: row[c] for c in queries_df.columns},
+                'jaccard_div': 1.0 - mean_jaccard,
+                'fac_gap': float(np.mean(all_fac_gaps)),
+                'fac_topk': float(np.mean(all_fac_topks)),
+                'fac_fl': float(np.mean(all_fac_fls)),
+            }
+        )
 
     return pl.DataFrame(results)
 

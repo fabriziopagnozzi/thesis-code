@@ -13,7 +13,7 @@ from collections import Counter
 import numpy as np
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.schemas.query_geometry_schemas import (
+from experiments.medical_dataset_gen.query_geometry.schemas import (
     EmbeddingGeometry2DPoint,
     EmbeddingGeometryQueryStats,
     GeometryArtifact,
@@ -118,7 +118,9 @@ def query_stats(artifact: GeometryArtifact) -> EmbeddingGeometryQueryStats:
         ari, nmi = cluster_agreement(hidden_label_codes, cluster_labels)
         non_noise = [int(x) for x in cluster_labels if int(x) != -1]
         row['hdbscan_n_clusters'] = len(set(non_noise))
-        row['hdbscan_noise_rate'] = float(np.mean(cluster_labels == -1)) if len(cluster_labels) else 0.0
+        row['hdbscan_noise_rate'] = (
+            float(np.mean(cluster_labels == -1)) if len(cluster_labels) else 0.0
+        )
         row['hdbscan_ari_hidden'] = ari
         row['hdbscan_nmi_hidden'] = nmi
     for strategy, summary in selected_summaries.items():

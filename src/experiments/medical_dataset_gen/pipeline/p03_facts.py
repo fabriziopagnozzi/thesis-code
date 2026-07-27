@@ -21,7 +21,7 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     other_conditions,
     outlier_subgroups,
 )
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CLINICAL_AXIS_LIST,
     AcuteClinicalCoursePayload,
     AxisFactPayload,
@@ -42,7 +42,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
     TreatmentDurationPayload,
     axis_payload_required_phrase,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     BackgroundDistractorSpec,
     ChunkPoolsCfg,
     DistractorSpec,
@@ -157,13 +157,15 @@ def _assert_query_local_chunk_reuse_keys(query_id: str, facts: list[ClinicalFact
             continue
         duplicate_count += 1
         if len(duplicate_examples) < 5:
-            duplicate_examples.append({
-                'chunk_reuse_key': fact.chunk_reuse_key,
-                'previous_fact_id': previous.fact_id,
-                'previous_cluster_id': previous.cluster_id,
-                'fact_id': fact.fact_id,
-                'cluster_id': fact.cluster_id,
-            })
+            duplicate_examples.append(
+                {
+                    'chunk_reuse_key': fact.chunk_reuse_key,
+                    'previous_fact_id': previous.fact_id,
+                    'previous_cluster_id': previous.cluster_id,
+                    'fact_id': fact.fact_id,
+                    'cluster_id': fact.cluster_id,
+                }
+            )
 
     if duplicate_count:
         raise RuntimeError(

@@ -9,11 +9,13 @@ BUDGET_CATEGORY_LABELS: dict[BudgetCategory, str] = {
     'medium_budget': 'Medium Budget',
     'high_budget': 'High Budget',
 }
-AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset({
-    'Budget sweeps',
-    'Embedding comparison',
-    'Unknown',
-})
+AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset(
+    {
+        'Budget sweeps',
+        'Embedding comparison',
+        'Unknown',
+    }
+)
 EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = (
     'BAAI/bge-m3',
     'Qwen/Qwen3-Embedding-0.6B',

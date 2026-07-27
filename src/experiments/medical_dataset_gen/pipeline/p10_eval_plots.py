@@ -17,7 +17,7 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     EvalPlotFileName,
 )
 from experiments.medical_dataset_gen.pipeline.p09_eval import stats_for_evaluation_mode
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -209,9 +209,7 @@ def _plot_context_for_name(
     )
     effective_stats_df = validation_grid_stats_df if uses_validation_grid else stats_df
     effective_results_df = validation_results_df if uses_validation_grid else results_df
-    effective_result_lookup = (
-        validation_result_lookup if uses_validation_grid else result_lookup
-    )
+    effective_result_lookup = validation_result_lookup if uses_validation_grid else result_lookup
     return {
         'stats_df': effective_stats_df,
         'results_df': effective_results_df,

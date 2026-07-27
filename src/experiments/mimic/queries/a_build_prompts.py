@@ -75,8 +75,7 @@ def build_query_prompts(
     }
     meta_by_hadm_id: dict[int, AdmissionMetaSlimRow] = {
         row['hadm_id']: cast(AdmissionMetaSlimRow, row)
-        for row in metadata
-        .select('hadm_id', 'age', 'gender', 'race')
+        for row in metadata.select('hadm_id', 'age', 'gender', 'race')
         .unique(subset=['hadm_id'])
         .iter_rows(named=True)
     }
@@ -166,25 +165,27 @@ def build_query_prompts(
                 continue
 
             modifier_list = '\n'.join(f'- {text}' for text, _ in modifiers)
-            results.append({
-                'icd10_3char': row['icd10_3char'],
-                'condition_name': row['condition_name'],
-                'stratum': stratum,
-                'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
-                'n_modifiers': len(modifiers),
-                'n_condition_admissions': len(condition_hadm_ids),
-                'n_condition_chunks': n_condition_chunks,
-                'modifier_stats_json': json.dumps({
-                    mod.text: modifier_stats[mod] for mod in modifiers
-                }),
-                'n_grounding_chunks': len(data_samples),
-                'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
-                'full_prompt': query_prompts_cfg.prompt_template.format(
-                    condition=row['condition_name'],
-                    modifier_list=modifier_list,
-                    chunks_block=_format_chunks_block(data_samples),
-                ),
-            })
+            results.append(
+                {
+                    'icd10_3char': row['icd10_3char'],
+                    'condition_name': row['condition_name'],
+                    'stratum': stratum,
+                    'modifiers_json': json.dumps([{'text': t, 'type': ty} for t, ty in modifiers]),
+                    'n_modifiers': len(modifiers),
+                    'n_condition_admissions': len(condition_hadm_ids),
+                    'n_condition_chunks': n_condition_chunks,
+                    'modifier_stats_json': json.dumps(
+                        {mod.text: modifier_stats[mod] for mod in modifiers}
+                    ),
+                    'n_grounding_chunks': len(data_samples),
+                    'grounding_hadm_ids': list({s['hadm_id'] for s in data_samples}),
+                    'full_prompt': query_prompts_cfg.prompt_template.format(
+                        condition=row['condition_name'],
+                        modifier_list=modifier_list,
+                        chunks_block=_format_chunks_block(data_samples),
+                    ),
+                }
+            )
     # end for condition_row in selected_conditions.iter_rows(named=True):
 
     print(
@@ -291,8 +292,7 @@ def _sample_patient(
 ) -> list[GroundingChunkSample]:
     group = chunks_by_hadm[hadm_id]
     bhc_row = (
-        group
-        .filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
+        group.filter(pl.col('section_name') == 'BRIEF HOSPITAL COURSE')
         .sort('approx_tokens', descending=True)
         .row(0, named=True)
     )
@@ -300,8 +300,7 @@ def _sample_patient(
     section_priority = {s: i for i, s in enumerate(query_prompts_cfg.high_value_sections)}
     supp = group.filter(pl.col('section_name') != 'BRIEF HOSPITAL COURSE')
     supp = (
-        supp
-        .with_columns(
+        supp.with_columns(
             pl.col('section_name').replace_strict(section_priority, default=99).alias('_p')
         )
         .sort('_p')

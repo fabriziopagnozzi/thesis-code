@@ -53,9 +53,7 @@ type AxisTemplateFamily = Literal[
     'clinical_assessment',
     'contrast_or_alternative',
 ]
-AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](
-    get_args(AxisTemplateFamily.__value__)
-)
+AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](get_args(AxisTemplateFamily.__value__))
 SEEN_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 HELDOUT_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 type SubgroupAxis = Literal['demographic', 'comorbidity']
@@ -516,11 +514,8 @@ class MedicalOntology(BenchmarkPydanticModel):
                 list(pair.axes) if pair.allowed_primary_axes is None else pair.allowed_primary_axes
             )
             explicitly_suppressed = pair.allowed_primary_axes == []
-            if (
-                not explicitly_suppressed
-                and not any(
-                    self.clinical_axes[axis].allow_as_primary for axis in candidate_primary_axes
-                )
+            if not explicitly_suppressed and not any(
+                self.clinical_axes[axis].allow_as_primary for axis in candidate_primary_axes
             ):
                 raise ValueError(f'axis pair {left!r}/{right!r} has no permitted primary axis')
             profile_ids = [profile.id for profile in pair.profiles]
@@ -539,12 +534,14 @@ class MedicalOntology(BenchmarkPydanticModel):
         return self
 
 
-_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset({
-    'complicated',
-    'metastatic',
-    'mild',
-    'uncomplicated',
-})
+_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset(
+    {
+        'complicated',
+        'metastatic',
+        'mild',
+        'uncomplicated',
+    }
+)
 
 
 def _is_comorbidity_present_absent_contrast(cohorts: list[SubgroupOntology]) -> bool:
@@ -1087,12 +1084,12 @@ class PairedAxisSentenceTemplates(BenchmarkPydanticModel):
         surface_group: ChunkSurfaceGroup,
     ) -> list[tuple[AxisTemplateFamily, TemplateSpec]]:
         templates = self.seen if surface_group == 'seen' else self.heldout
-        families = SEEN_AXIS_TEMPLATE_FAMILIES if surface_group == 'seen' else HELDOUT_AXIS_TEMPLATE_FAMILIES
-        return [
-            (family, spec)
-            for family in families
-            for spec in templates.get(family, [])
-        ]
+        families = (
+            SEEN_AXIS_TEMPLATE_FAMILIES
+            if surface_group == 'seen'
+            else HELDOUT_AXIS_TEMPLATE_FAMILIES
+        )
+        return [(family, spec) for family in families for spec in templates.get(family, [])]
 
 
 class ChunkAxisSentenceTemplates(BenchmarkPydanticModel):

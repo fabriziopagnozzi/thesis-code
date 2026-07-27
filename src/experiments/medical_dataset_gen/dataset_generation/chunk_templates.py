@@ -9,7 +9,7 @@ from string import Formatter
 
 import yaml
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     AcuteClinicalCoursePayload,
     CareIntensityPayload,
     ChunkSurfaceGroup,
@@ -536,14 +536,6 @@ def _sentence_start(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
-def _contains_condition(text: str, fact: ClinicalFact, ontology: MedicalOntology) -> bool:
-    lower = text.lower()
-    if fact.condition_display.lower() in lower:
-        return True
-    condition = ontology.conditions[fact.condition_id]
-    return any(str(term).lower() in lower for term in condition.terms[:3])
-
-
 def _phrase_count(text: str, phrase: str) -> int:
     if not phrase.strip():
         return 0
@@ -589,21 +581,6 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
         str(surface).lower() for surface in (subgroup.surface_phrases if subgroup else [])
     ]
     return any(form in lower for form in lexical_forms)
-
-
-def _contains_axis_evidence(text: str, fact: ClinicalFact, ontology: MedicalOntology) -> bool:
-    lower = text.lower()
-    axis = ontology.clinical_axes[fact.axis]
-    return any(
-        term.lower() in lower
-        for term in [
-            axis.query_label,
-            axis.label,
-            *axis.exact_terms,
-            *axis.synonym_terms,
-            *axis.bin_terms[fact.value_bin],
-        ]
-    )
 
 
 def _has_age_in_range(text: str, low: int, high: int) -> bool:

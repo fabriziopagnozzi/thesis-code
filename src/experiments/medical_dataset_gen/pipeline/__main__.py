@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, cast, get_args
 
-from experiments.medical_dataset_gen.schemas.global_config_schemas import (
+from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.exp_naming import child_experiment_names
@@ -67,8 +67,8 @@ STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
     ('embed', run_embed),
     ('filter_queries', run_filter_queries),
     ('eval', run_evaluate),
-#    ('eval_plots', run_eval_plots),
-#    ('geom_plots', run_query_geom_plots),
+    #    ('eval_plots', run_eval_plots),
+    #    ('geom_plots', run_query_geom_plots),
 ]
 
 SHARED_STAGE_OUTPUTS: dict[PipelineStage, tuple[SharedGenerationTableName, ...]] = {

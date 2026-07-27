@@ -65,8 +65,7 @@ class ChunkPoolBuilder:
             pa.FixedSizeListArray, pyarrow_table.column(self._vec_col_name).combine_chunks()
         )
         vectors = (
-            vec_col.values
-            .to_numpy(zero_copy_only=False)
+            vec_col.values.to_numpy(zero_copy_only=False)
             .reshape(-1, vec_col.type.list_size)
             .astype(np.float32)
         )
@@ -95,8 +94,7 @@ class ChunkPoolBuilder:
             else global_cfg.sections_filter_sql
         )
         result = (
-            self._table
-            .search(vec, vector_column_name=self._vec_col_name)
+            self._table.search(vec, vector_column_name=self._vec_col_name)
             .where(where_clause)
             .limit(k)
             .to_arrow()
@@ -107,8 +105,7 @@ class ChunkPoolBuilder:
         self, vec: NDArray[np.float32], condition_icd10_prefix: str, k: int
     ) -> ChunkPool:
         result = (
-            self._table
-            .search(vec, vector_column_name=self._vec_col_name)
+            self._table.search(vec, vector_column_name=self._vec_col_name)
             .where(
                 f"array_has(icd10_3char_list, '{condition_icd10_prefix}') AND {global_cfg.sections_filter_sql}"
             )
@@ -138,8 +135,7 @@ class ChunkPoolBuilder:
         )
 
         return self.from_arrow(
-            self._table
-            .search(vec, vector_column_name=self._vec_col_name)
+            self._table.search(vec, vector_column_name=self._vec_col_name)
             .where(predicate)
             .limit(k)
             .to_arrow()
@@ -154,8 +150,7 @@ class ChunkPoolBuilder:
 
         hadm_list = ', '.join(str(h) for h in hadm_ids)
         return self.from_arrow(
-            self._table
-            .search(vec, vector_column_name=self._vec_col_name)
+            self._table.search(vec, vector_column_name=self._vec_col_name)
             .where(f'hadm_id IN ({hadm_list}) AND {global_cfg.sections_filter_sql}')
             .limit(k)
             .to_arrow()
@@ -195,8 +190,7 @@ class ChunkPoolBuilder:
             return self._modifier_to_hadm_ids_cache[icd10_3char]
 
         result = set(
-            self._con
-            .execute(f"""--sql
+            self._con.execute(f"""--sql
                 SELECT DISTINCT hadm_id
                 FROM unified_diagnoses
                 WHERE LEFT(unified_icd10, 3) = '{icd10_3char}'

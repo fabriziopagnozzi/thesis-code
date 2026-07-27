@@ -91,7 +91,9 @@ class Embedder:
         self.batch_size = batch_size
         self.profile = profile
         self.query_prompt = query_prompt if query_prompt is not None else profile.query_prompt
-        self.document_prompt = document_prompt if document_prompt is not None else profile.document_prompt
+        self.document_prompt = (
+            document_prompt if document_prompt is not None else profile.document_prompt
+        )
         self.device = device
         self.devices = target_devices
         self._dim: int | None = None
@@ -160,7 +162,9 @@ class Embedder:
                 task='retrieval',
             )
         else:
-            raise ValueError(f'unsupported embedding encode mode for documents: {self.profile.mode}')
+            raise ValueError(
+                f'unsupported embedding encode mode for documents: {self.profile.mode}'
+            )
         return np.asarray(embs, dtype=np.float32)
 
     def embed_query(self, query_text: str, normalize: bool = True) -> NDArray[np.float32]:
@@ -192,7 +196,9 @@ class Embedder:
                 normalize=normalize,
                 show_progress_bar=True,
                 prompt=self.query_prompt,
-                prompt_name=None if self.query_prompt is not None else self.profile.query_prompt_name,
+                prompt_name=None
+                if self.query_prompt is not None
+                else self.profile.query_prompt_name,
             )
         elif self.profile.mode == 'jina_v5':
             embs = self._encode_sentence_transformer(
@@ -200,7 +206,9 @@ class Embedder:
                 normalize=normalize,
                 show_progress_bar=True,
                 prompt=self.query_prompt,
-                prompt_name=None if self.query_prompt is not None else self.profile.query_prompt_name,
+                prompt_name=None
+                if self.query_prompt is not None
+                else self.profile.query_prompt_name,
                 task='retrieval',
             )
         else:

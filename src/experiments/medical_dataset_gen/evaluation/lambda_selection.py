@@ -5,7 +5,7 @@ from typing import NotRequired, TypedDict, cast
 
 import polars as pl
 
-from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
+from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 LAMBDA_SELECTION_MAXIMIZING_METRIC = 'FacetCoveragePurity@k'
 

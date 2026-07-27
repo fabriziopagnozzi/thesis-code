@@ -16,9 +16,9 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightQrelRecord
-from experiments.medical_dataset_gen.schemas.generation_schemas import ChunkPoolScope
-from experiments.medical_dataset_gen.schemas.retrieval_schemas import (
+from experiments.medical_dataset_gen.evaluation.schemas import LightweightQrelRecord
+from experiments.medical_dataset_gen.dataset_generation.schemas import ChunkPoolScope
+from experiments.medical_dataset_gen.retrieval.schemas import (
     ChunkDocumentRecord,
     ChunkMembershipRecord,
     QueryIdToFacetMap,
@@ -184,8 +184,7 @@ def build_query_to_facet_gold_map(qrels: pl.DataFrame) -> QueryIdToFacetMap:
     result: QueryIdToFacetMap = defaultdict(lambda: defaultdict(list))
 
     for query_id, chunk_id, facet_id in (
-        qrels
-        .filter(pl.col('is_gold'))
+        qrels.filter(pl.col('is_gold'))
         .select(
             'query_id',
             'chunk_id',

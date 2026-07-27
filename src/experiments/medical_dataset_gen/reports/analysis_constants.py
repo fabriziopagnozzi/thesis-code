@@ -1,6 +1,6 @@
 from typing import Literal, get_args
 
-from experiments.medical_dataset_gen.schemas.metrics_schemas import METRIC_NAME_TO_FIELD
+from experiments.medical_dataset_gen.retrieval.metrics_schemas import METRIC_NAME_TO_FIELD
 
 type StrategyName = Literal['top_k', 'mmr', 'fac_loc']
 STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')

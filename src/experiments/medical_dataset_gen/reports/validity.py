@@ -34,7 +34,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     lambda_norm,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
-from experiments.medical_dataset_gen.schemas.global_config_schemas import LambdaSelectionCfg
+from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 type LambdaTransferPolicy = Literal['global', 'leave_one_distribution_out']
 type GeometryPopulation = Literal['all_generated', 'geometry_eligible', 'geometry_ineligible']
@@ -297,13 +297,14 @@ def _lambda_grid_signature(
     signature: list[tuple[StrategyName, tuple[float, ...]]] = []
     for strategy in DIVERSIFYING_STRATEGIES:
         lambdas = tuple(
-            sorted({
-                round(float(value), 6)
-                for value in stats
-                .filter(pl.col(_STRATEGY) == strategy)[_LAMBDA]
-                .drop_nulls()
-                .to_list()
-            })
+            sorted(
+                {
+                    round(float(value), 6)
+                    for value in stats.filter(pl.col(_STRATEGY) == strategy)[_LAMBDA]
+                    .drop_nulls()
+                    .to_list()
+                }
+            )
         )
         signature.append((strategy, lambdas))
     return tuple(signature)
@@ -318,11 +319,13 @@ def _lambda_choices_by_strategy_k(
     if not bundles:
         return choices
 
-    k_values = sorted({
-        int(k)
-        for bundle in bundles
-        for k in bundle.selection_stats[_K].drop_nulls().unique().to_list()
-    })
+    k_values = sorted(
+        {
+            int(k)
+            for bundle in bundles
+            for k in bundle.selection_stats[_K].drop_nulls().unique().to_list()
+        }
+    )
     for strategy in DIVERSIFYING_STRATEGIES:
         for k in k_values:
             choice = _select_weighted_lambda_choice(
@@ -362,8 +365,7 @@ def _select_weighted_lambda_choice(
 
     combined = pl.concat(frames)
     grouped = (
-        combined
-        .group_by(_LAMBDA)
+        combined.group_by(_LAMBDA)
         .agg(
             (
                 (pl.col(LAMBDA_SELECTION_MAXIMIZING_METRIC) * pl.col(_N_QUERIES)).sum()
@@ -471,26 +473,28 @@ def _strategy_row_from_stats(
     strategy = cast(StrategyName, row.get(_STRATEGY))
     lam = float_or_none(row.get(_LAMBDA))
     out = base_experiment_row(record)
-    out.update({
-        'SelectionSource': selection_source,
-        'LambdaPolicy': lambda_policy,
-        'strategy': strategy,
-        'k': int_or_none(row.get(_K)),
-        'lam': lam,
-        'lambda_norm': lambda_norm(record, strategy, lam, stats),
-        'LambdaSelectionMetric': LAMBDA_SELECTION_MAXIMIZING_METRIC
-        if lambda_choice is not None
-        else None,
-        'LambdaSelectionValidationValue': lambda_choice.selection_metric_value
-        if lambda_choice is not None
-        else None,
-        'LambdaSelectionTrainingRecords': lambda_choice.training_records
-        if lambda_choice is not None
-        else None,
-        'LambdaSelectionTrainingQueries': lambda_choice.training_queries
-        if lambda_choice is not None
-        else None,
-    })
+    out.update(
+        {
+            'SelectionSource': selection_source,
+            'LambdaPolicy': lambda_policy,
+            'strategy': strategy,
+            'k': int_or_none(row.get(_K)),
+            'lam': lam,
+            'lambda_norm': lambda_norm(record, strategy, lam, stats),
+            'LambdaSelectionMetric': LAMBDA_SELECTION_MAXIMIZING_METRIC
+            if lambda_choice is not None
+            else None,
+            'LambdaSelectionValidationValue': lambda_choice.selection_metric_value
+            if lambda_choice is not None
+            else None,
+            'LambdaSelectionTrainingRecords': lambda_choice.training_records
+            if lambda_choice is not None
+            else None,
+            'LambdaSelectionTrainingQueries': lambda_choice.training_queries
+            if lambda_choice is not None
+            else None,
+        }
+    )
     _copy_metric_values(out, row)
     return out
 
@@ -545,8 +549,7 @@ def _load_population_results(results_path: Path, *, geometry_path: Path) -> pl.D
     if pass_column == 'passes_geometry_filter':
         return results.with_columns(pl.col(pass_column).fill_null(False)).collect()
     return (
-        results
-        .rename({pass_column: 'passes_geometry_filter'})
+        results.rename({pass_column: 'passes_geometry_filter'})
         .with_columns(pl.col('passes_geometry_filter').fill_null(False))
         .collect()
     )
@@ -651,23 +654,25 @@ def _population_row_from_stats(
     strategy = cast(StrategyName, row.get(_STRATEGY))
     lam = float_or_none(row.get(_LAMBDA))
     out = base_experiment_row(record)
-    out.update({
-        'OnlyPassGeometry': population == 'geometry_eligible',
-        'QueryScope': _POPULATION_QUERY_SCOPE_LABELS[population],
-        'GeometrySourceExperiment': record.name,
-        'GeometryPopulation': population,
-        'GeometryPopulationLabel': _POPULATION_LABELS[population],
-        'PopulationPassFilterValue': _POPULATION_PASS_FILTER_VALUE[population],
-        'SelectionSource': 'population_validation',
-        'strategy': strategy,
-        'k': int_or_none(row.get(_K)),
-        'lam': lam,
-        'lambda_norm': lambda_norm(record, strategy, lam, stats),
-        'LambdaSelectionMetric': LAMBDA_SELECTION_MAXIMIZING_METRIC
-        if strategy != 'top_k'
-        else None,
-        'LambdaSelectionValidationValue': selected_validation_value,
-    })
+    out.update(
+        {
+            'OnlyPassGeometry': population == 'geometry_eligible',
+            'QueryScope': _POPULATION_QUERY_SCOPE_LABELS[population],
+            'GeometrySourceExperiment': record.name,
+            'GeometryPopulation': population,
+            'GeometryPopulationLabel': _POPULATION_LABELS[population],
+            'PopulationPassFilterValue': _POPULATION_PASS_FILTER_VALUE[population],
+            'SelectionSource': 'population_validation',
+            'strategy': strategy,
+            'k': int_or_none(row.get(_K)),
+            'lam': lam,
+            'lambda_norm': lambda_norm(record, strategy, lam, stats),
+            'LambdaSelectionMetric': LAMBDA_SELECTION_MAXIMIZING_METRIC
+            if strategy != 'top_k'
+            else None,
+            'LambdaSelectionValidationValue': selected_validation_value,
+        }
+    )
     _copy_metric_values(out, row)
     return out
 
@@ -707,8 +712,7 @@ def _representative_distribution_records(
 def _duplicate_text_stats(chunks: pl.DataFrame) -> dict[str, object]:
     normalized = chunks.select(
         pl.col('chunk_id'),
-        pl
-        .col('text')
+        pl.col('text')
         .fill_null('')
         .str.to_lowercase()
         .str.replace_all(r'\s+', ' ')
@@ -745,8 +749,7 @@ def _lexical_jaccard_stats(*, chunks: pl.DataFrame, qrels: pl.DataFrame) -> dict
     needed_chunk_ids = set(str(value) for value in sampled_gold['chunk_id'].drop_nulls().to_list())
     docs_by_id = {
         str(chunk_id): _word_set(str(text or ''))
-        for chunk_id, text in chunks
-        .filter(pl.col('chunk_id').is_in(needed_chunk_ids))
+        for chunk_id, text in chunks.filter(pl.col('chunk_id').is_in(needed_chunk_ids))
         .select('chunk_id', 'text')
         .iter_rows(named=False)
     }
@@ -799,8 +802,7 @@ def _empty_jaccard_stats() -> dict[str, object]:
 
 def _lexical_classifier_stats(*, chunks: pl.DataFrame, qrels: pl.DataFrame) -> dict[str, object]:
     gold_labels = (
-        qrels
-        .filter(pl.col('is_gold').fill_null(False))
+        qrels.filter(pl.col('is_gold').fill_null(False))
         .select('chunk_id', 'axis', 'cluster_role')
         .drop_nulls(subset=['chunk_id', 'axis', 'cluster_role'])
         .unique(subset=['chunk_id'])

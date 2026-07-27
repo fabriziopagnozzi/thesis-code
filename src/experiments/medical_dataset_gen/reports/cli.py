@@ -143,9 +143,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     )
     parsed = parser.parse_args(argv)
     refresh_report_dir = (
-        parsed.refresh_plots
-        or parsed.refresh_latex_macros
-        or parsed.refresh_output_artifacts
+        parsed.refresh_plots or parsed.refresh_latex_macros or parsed.refresh_output_artifacts
     )
     refresh_mode: RefreshMode | None = None
     if parsed.refresh_latex_macros is not None:
@@ -168,9 +166,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             parser.error(f'invalid --exclude-experiment-regex: {exc}')
     results_dir = parsed.results_dir.expanduser().resolve()
     refresh_report_dir = (
-        refresh_report_dir.expanduser().resolve()
-        if refresh_report_dir is not None
-        else None
+        refresh_report_dir.expanduser().resolve() if refresh_report_dir is not None else None
     )
     output_dir = (
         refresh_report_dir

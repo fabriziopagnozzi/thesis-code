@@ -8,7 +8,7 @@ table without changing the plotted estimators.
 
 import polars as pl
 
-from experiments.medical_dataset_gen.evaluation.retrieval_utils import ci_half_width
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import ci_half_width
 
 type ResultSetting = tuple[str, int, float | None]
 type PairedMetricSetting = tuple[str, int, float | None, str]
@@ -94,8 +94,6 @@ class EvaluationResultLookup:
         cached = self._strategy_k_slices.get(cache_key)
         if cached is not None:
             return cached
-        result = self.results_df.filter(
-            (pl.col('strategy') == strategy) & (pl.col('k') == k)
-        )
+        result = self.results_df.filter((pl.col('strategy') == strategy) & (pl.col('k') == k))
         self._strategy_k_slices[cache_key] = result
         return result

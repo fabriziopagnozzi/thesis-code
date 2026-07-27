@@ -8,7 +8,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DeltaMetricLabel,
     ExperimentFamilyId,
 )
-from experiments.medical_dataset_gen.schemas.global_config_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 type PlotFormat = Literal['png', 'pdf', 'svg']

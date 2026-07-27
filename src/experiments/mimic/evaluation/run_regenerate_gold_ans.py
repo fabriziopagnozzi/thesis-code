@@ -94,11 +94,13 @@ if __name__ == '__main__':
 
         with answers_jsonl.open('a') as f:
             f.write(
-                json.dumps({
-                    'query_id': query_id,
-                    'query_text': query_text,
-                    'answer_text': answer_text,
-                })
+                json.dumps(
+                    {
+                        'query_id': query_id,
+                        'query_text': query_text,
+                        'answer_text': answer_text,
+                    }
+                )
                 + '\n'
             )
 

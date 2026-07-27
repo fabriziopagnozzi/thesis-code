@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 
 from pydantic import ConfigDict
 
-from experiments.medical_dataset_gen.schemas.generation_schemas import (
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
     BenchmarkPydanticModel,
     ClinicalAxis,
     ClusterRole,
@@ -16,7 +16,7 @@ from experiments.medical_dataset_gen.schemas.generation_schemas import (
 )
 
 if TYPE_CHECKING:
-    from experiments.medical_dataset_gen.schemas.evaluation_schemas import LightweightQrelRecord
+    from experiments.medical_dataset_gen.evaluation.schemas import LightweightQrelRecord
 
 
 type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
