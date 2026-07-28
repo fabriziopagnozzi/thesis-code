@@ -1,8 +1,7 @@
-"""Expand schema-v4 plans into deterministic, typed clinical facts."""
+"""Expand schema-v4 plans into clinical facts (document/query metadata)."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Sequence
 from random import Random
@@ -42,6 +41,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     TreatmentDurationPayload,
     axis_payload_required_phrase,
 )
+from experiments.medical_dataset_gen.utils.deterministic_ids import stable_seed, stable_sha256
 from experiments.medical_dataset_gen.utils.global_schemas import (
     BackgroundDistractorSpec,
     ChunkPoolsCfg,
@@ -50,12 +50,11 @@ from experiments.medical_dataset_gen.utils.global_schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
 _FACTS_WRITE_BATCH_ROWS = 131_072
+NOTE_STYLE_IDS = available_note_styles()
 
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
@@ -85,6 +84,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             plan = QueryPlan.model_validate(plan_row)
             rng = Random(plan.plan_seed)
             facts: list[ClinicalFact] = []
+
             for facet in plan.facets:
                 facts.extend(
                     make_gold_fact(
@@ -97,6 +97,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     )
                     for local_idx in range(facet.target_gold_chunks)
                 )
+
             facts.extend(
                 make_distractor_facts(
                     plan,
@@ -118,21 +119,20 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             _assert_query_local_chunk_reuse_keys(plan.query_id, facts)
             pending_facts.extend(facts)
             total += len(facts)
-            # Batching avoids thousands of tiny Parquet row groups while preserving
-            # plan order, which downstream answer construction relies on.
+
             if len(pending_facts) >= _FACTS_WRITE_BATCH_ROWS:
                 flush_pending_facts()
+
         flush_pending_facts()
     finally:
         if writer is not None:
             writer.close()
+
     if total == 0:
         raise ValueError('no query plans available to generate facts')
+
     print(f'[write] clinical_facts: {total:,} rows -> {path}')
     return last
-
-
-NOTE_STYLE_IDS = available_note_styles()
 
 
 def _facts_frame(facts: list[ClinicalFact]) -> pl.DataFrame:
@@ -157,15 +157,13 @@ def _assert_query_local_chunk_reuse_keys(query_id: str, facts: list[ClinicalFact
             continue
         duplicate_count += 1
         if len(duplicate_examples) < 5:
-            duplicate_examples.append(
-                {
-                    'chunk_reuse_key': fact.chunk_reuse_key,
-                    'previous_fact_id': previous.fact_id,
-                    'previous_cluster_id': previous.cluster_id,
-                    'fact_id': fact.fact_id,
-                    'cluster_id': fact.cluster_id,
-                }
-            )
+            duplicate_examples.append({
+                'chunk_reuse_key': fact.chunk_reuse_key,
+                'previous_fact_id': previous.fact_id,
+                'previous_cluster_id': previous.cluster_id,
+                'fact_id': fact.fact_id,
+                'cluster_id': fact.cluster_id,
+            })
 
     if duplicate_count:
         raise RuntimeError(
@@ -396,7 +394,7 @@ def _cycled_other_subgroup(
     alternatives = outlier_subgroups(ontology, excluded_ids)
     if not alternatives:
         raise ValueError('no eligible outlier subgroups are available')
-    offset = _stable_seed(query_id, target_facet_id, scope, 'subgroup') % len(alternatives)
+    offset = stable_seed(query_id, target_facet_id, scope, 'subgroup') % len(alternatives)
     return alternatives[(offset + local_idx) % len(alternatives)]
 
 
@@ -411,7 +409,7 @@ def _cycled_other_condition(
     alternatives = other_conditions(ontology, excluded_condition_id)
     if not alternatives:
         raise ValueError('no eligible outlier conditions are available')
-    offset = _stable_seed(query_id, target_facet_id, scope, 'condition') % len(alternatives)
+    offset = stable_seed(query_id, target_facet_id, scope, 'condition') % len(alternatives)
     return alternatives[(offset + local_idx) % len(alternatives)]
 
 
@@ -427,7 +425,7 @@ def _cycled_non_query_axis(
     if not non_query_axes:
         raise ValueError('different-axis distractors require at least one non-query clinical axis')
     return non_query_axes[
-        _stable_seed(plan.query_id, target_facet_id, scope, 'axis', selection_idx)
+        stable_seed(plan.query_id, target_facet_id, scope, 'axis', selection_idx)
         % len(non_query_axes)
     ]
 
@@ -446,7 +444,7 @@ def _cycled_axis_bin(
     ]
     if not bins:
         raise ValueError(f'no eligible value bins are available for axis {axis!r}')
-    offset = _stable_seed(query_id, target_facet_id, scope, 'value_bin') % len(bins)
+    offset = stable_seed(query_id, target_facet_id, scope, 'value_bin') % len(bins)
     return bins[(offset + local_idx) % len(bins)]
 
 
@@ -539,7 +537,7 @@ def _background_anchor_facet(
     cluster_idx: int,
 ) -> QueryPlanFacet:
     return plan.facets[
-        _stable_seed(plan.query_id, 'background_anchor', spec_idx, cluster_idx) % len(plan.facets)
+        stable_seed(plan.query_id, 'background_anchor', spec_idx, cluster_idx) % len(plan.facets)
     ]
 
 
@@ -583,9 +581,9 @@ def make_base_fact(
         resolved_reuse_scope,
         chunk_surface_group,
     )
-    surface_rng = Random(_stable_seed(reuse_key))
+    surface_rng = Random(stable_seed(reuse_key))
     template_rng = Random(
-        _stable_seed(
+        stable_seed(
             'template',
             condition_id,
             subgroup_id,
@@ -678,7 +676,7 @@ def _axis_payload(
 ) -> AxisFactPayload:
     condition = ontology.conditions[condition_id]
     axis_values = condition.axis_values[axis]
-    seed = _stable_seed(condition_id, axis, value_bin, local_idx)
+    seed = stable_seed(condition_id, axis, value_bin, local_idx)
     rng = Random(seed)
     if axis == 'treatment_duration':
         if not isinstance(axis_values, TreatmentDurationAxisValues):
@@ -750,19 +748,4 @@ def _chunk_reuse_key(
         },
         sort_keys=True,
     )
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def _stable_seed(*values: object) -> int:
-    return int(hashlib.sha256('|'.join(map(str, values)).encode()).hexdigest()[:16], 16)
-
-
-if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging_utils import (
-        setup_logging,
-    )
-
-    config = load_config_from_cli()
-    output_paths = paths_for(config)
-    setup_logging(output_paths)
-    run_make_facts(config, output_paths)
+    return stable_sha256(raw)

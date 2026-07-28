@@ -19,21 +19,15 @@ from experiments.medical_dataset_gen.dataset_generation.caches import (
     row_payload_sha256,
     text_sha256,
 )
+from experiments.medical_dataset_gen.embedding.artifacts import (
+    EMBEDDING_ARRAY_ARTIFACTS,
+    embedding_artifacts_ready,
+)
 from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
-    EmbeddingArtifactName,
     MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
-)
-
-EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
-    'chunk_vectors',
-    'chunk_ids',
-    'query_vectors',
-    'query_ids',
 )
 
 
@@ -58,62 +52,6 @@ def run_embed(
         f'{paths.embeddings_paths("chunk_vectors"), paths.embeddings_paths("query_vectors")}'
     )
     return chunk_vectors, query_vectors
-
-
-def embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
-    missing = [
-        artifact
-        for artifact in EMBEDDING_ARRAY_ARTIFACTS
-        if not paths.embeddings_paths(artifact).exists()
-    ]
-    if missing:
-        return False
-
-    try:
-        chunk_file = pq.ParquetFile(paths.table_path('chunk_documents'))
-        query_file = pq.ParquetFile(paths.table_path('queries'))
-        n_chunks = chunk_file.metadata.num_rows
-        n_queries = query_file.metadata.num_rows
-        chunk_vectors = np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r')
-        query_vectors = np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r')
-        chunk_ids = np.load(paths.embeddings_paths('chunk_ids'), mmap_mode='r')
-        query_ids = np.load(paths.embeddings_paths('query_ids'), mmap_mode='r')
-    except Exception as exc:
-        print(f'[embed] existing embedding artifacts are unreadable; rebuilding ({exc})')
-        return False
-
-    if chunk_vectors.ndim != 2 or query_vectors.ndim != 2:
-        print('[embed] existing embedding vectors have invalid rank; rebuilding')
-        return False
-    if chunk_vectors.shape[1] != query_vectors.shape[1]:
-        print('[embed] existing chunk/query embedding dimensions differ; rebuilding')
-        return False
-    if chunk_vectors.shape[0] != n_chunks or chunk_ids.shape != (n_chunks,):
-        print(
-            '[embed] existing chunk embedding row count does not match '
-            f'chunk_documents ({chunk_vectors.shape[0]}, {chunk_ids.shape[0]} != {n_chunks}); '
-            'rebuilding'
-        )
-        return False
-    if query_vectors.shape[0] != n_queries or query_ids.shape != (n_queries,):
-        print(
-            '[embed] existing query embedding row count does not match '
-            f'queries ({query_vectors.shape[0]}, {query_ids.shape[0]} != {n_queries}); rebuilding'
-        )
-        return False
-
-    expected_query_ids = [
-        str(value)
-        for value in pl.read_parquet(paths.table_path('queries'), columns=['query_id'])[
-            'query_id'
-        ].to_list()
-    ]
-    stored_query_ids = [str(value) for value in query_ids]
-    if stored_query_ids != expected_query_ids:
-        print('[embed] existing query embedding IDs do not match queries.parquet; rebuilding')
-        return False
-
-    return True
 
 
 def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths):
@@ -169,29 +107,16 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
             shape=(n_queries,),
         )
 
-        chunk_cache_stats: ChunkEmbeddingCacheStats | None = None
-        if _uses_global_chunk_embedding_cache(cfg):
-            chunk_written, chunk_cache_stats = _fill_deterministic_chunk_embedding_memmaps(
-                cfg=cfg,
-                paths=paths,
-                vectors=chunk_vectors,
-                ids=chunk_ids,
-                embed_fn=embed_docs_fn,
-                dim=dim,
-                # Misses also become parquet cache rows, so keep this bounded by model batch size.
-                batch_size=max(cfg.embeddings.batch_size * 2048, 1),
-            )
-        else:
-            chunk_written = _fill_embedding_memmaps(
-                file=chunk_file,
-                id_column='chunk_id',
-                text_column='text',
-                vectors=chunk_vectors,
-                ids=chunk_ids,
-                embed_fn=embed_docs_fn,
-                batch_size=bucket_size,
-                desc='Embedding chunks',
-            )
+        chunk_written, _ = _fill_deterministic_chunk_embedding_memmaps(
+            cfg=cfg,
+            paths=paths,
+            vectors=chunk_vectors,
+            ids=chunk_ids,
+            embed_fn=embed_docs_fn,
+            dim=dim,
+            batch_size=max(cfg.embeddings.batch_size * 2048, 1),
+        )
+
         query_written = _fill_embedding_memmaps(
             file=query_file,
             id_column='query_id',
@@ -227,16 +152,9 @@ def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDat
             'chunk_ids_file': str(paths.embeddings_paths('chunk_ids')),
             'query_ids_file': str(paths.embeddings_paths('query_ids')),
         }
-        if chunk_cache_stats is not None:
-            meta['chunk_embedding_cache'] = chunk_cache_stats
         return chunk_vectors, query_vectors, meta
     finally:
         embedder.release()
-
-
-def _uses_global_chunk_embedding_cache(cfg: ExperimentCfg) -> bool:
-    _ = cfg
-    return True
 
 
 def _fill_deterministic_chunk_embedding_memmaps(
@@ -276,7 +194,8 @@ def _fill_deterministic_chunk_embedding_memmaps(
             how='left',
             validate='m:1',
         ).with_columns(
-            pl.when(pl.col('embedding').is_not_null())
+            pl
+            .when(pl.col('embedding').is_not_null())
             .then(pl.col('text_sha256'))
             .otherwise(None)
             .alias('cached_text_sha256')
@@ -297,8 +216,6 @@ def _fill_deterministic_chunk_embedding_memmaps(
     if invalid_hashes.height:
         raise RuntimeError(f'cached text hash mismatch for {invalid_hashes["chunk_id"][0]!s}')
 
-    # Copy cached vectors in bounded columnar batches. Materializing named Python
-    # dictionaries for every document dominates startup time on large cache hits.
     hit_copy_batch_size = max(cfg.embeddings.batch_size * 16, 1)
     for start in range(0, hit_rows.height, hit_copy_batch_size):
         hit_batch = hit_rows.slice(start, hit_copy_batch_size)
@@ -431,14 +348,3 @@ def _fill_embedding_memmaps(
         ids[offset : offset + n_rows] = np.asarray(id_values, dtype=ids.dtype)
         offset += n_rows
     return offset
-
-
-if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging_utils import (
-        setup_logging,
-    )
-
-    cfg = load_config_from_cli()
-    paths = paths_for(cfg)
-    setup_logging(paths)
-    run_embed(cfg, paths)

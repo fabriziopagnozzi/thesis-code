@@ -17,9 +17,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     SubgroupKey,
     SubgroupOntology,
 )
-from experiments.medical_dataset_gen.utils.global_schemas import (
-    ExperimentCfg,
-)
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 
@@ -157,13 +155,11 @@ def get_axis_pair_ontology(
 
 def resolve_axis_pair_generation_policy(
     ontology: MedicalOntology,
-    cfg: ExperimentCfg | None,
     condition_id: ConditionKey,
     left: ClinicalAxis,
     right: ClinicalAxis,
 ) -> ResolvedAxisPairGenerationPolicy:
     pair = get_axis_pair_ontology(ontology, left, right)
-    pair_profiles = get_axis_pair_profiles(ontology, left, right)
     allowed_primary_axes = (
         set(pair.axes) if pair.allowed_primary_axes is None else set(pair.allowed_primary_axes)
     )
@@ -178,38 +174,6 @@ def resolve_axis_pair_generation_policy(
         if override.rationale:
             rationale = override.rationale
         break
-    if cfg is not None:
-        config_override = cfg.generation.axis_pair_policy_override(left, right)
-        if config_override is not None:
-            known_profile_ids = {profile.id for profile in pair_profiles}
-            unknown_blocked = set(config_override.blocked_profile_ids) - known_profile_ids
-            if unknown_blocked:
-                unknown = ', '.join(sorted(unknown_blocked))
-                raise ValueError(
-                    'generation.axis_pair_policy_overrides blocks unknown profiles: '
-                    f'{left}/{right}: {unknown}'
-                )
-            if config_override.allowed_primary_axes is not None:
-                allowed_primary_axes = set(config_override.allowed_primary_axes)
-            blocked_profile_ids.update(config_override.blocked_profile_ids)
-            if config_override.rationale:
-                rationale = config_override.rationale
-            for override in config_override.condition_overrides:
-                if override.condition_id != condition_id:
-                    continue
-                unknown_override_profiles = set(override.blocked_profile_ids) - known_profile_ids
-                if unknown_override_profiles:
-                    unknown = ', '.join(sorted(unknown_override_profiles))
-                    raise ValueError(
-                        'generation.axis_pair_policy_overrides.condition_overrides blocks '
-                        f'unknown profiles: {left}/{right}: {unknown}'
-                    )
-                if override.allowed_primary_axes is not None:
-                    allowed_primary_axes = set(override.allowed_primary_axes)
-                blocked_profile_ids.update(override.blocked_profile_ids)
-                if override.rationale:
-                    rationale = override.rationale
-                break
     return ResolvedAxisPairGenerationPolicy(
         allowed_primary_axes=frozenset(allowed_primary_axes),
         blocked_profile_ids=frozenset(blocked_profile_ids),

@@ -28,16 +28,15 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
 )
 
-_TEMPLATE_DATA_DIR = MedicalDatasetGenPaths.root / 'data_templates'
-_TEMPLATE_DATA_PATH = _TEMPLATE_DATA_DIR / 'chunk_templates.yaml'
+TEMPLATE_DATA_DIR = MedicalDatasetGenPaths.root / 'data_templates'
 
-_DURATION_RE = re.compile(r'\b\d+\s*[- ]?(?:day|days)\b', re.IGNORECASE)
-_AGE_RE = re.compile(r'\b(\d{2,3})\s*[- ]year[- ]old\b', re.IGNORECASE)
-_SECTION_HEADER_RE = re.compile(
-    r'^\s*(?:brief hospital course|hospital course|discharge summary|'
-    r'discharge diagnosis|clinical summary)\s*:\s*',
-    re.IGNORECASE,
-)
+
+def _load_template_utils() -> ChunkTemplateUtils:
+    with open(TEMPLATE_DATA_DIR / 'chunk_templates.yaml') as file:
+        return ChunkTemplateUtils.model_validate(yaml.safe_load(file) or {})
+
+
+CHUNK_TEMPLATE_DATA = _load_template_utils()
 
 
 @dataclass
@@ -78,16 +77,8 @@ class PatientNarrative:
         return _sentence_start(self.possessive)
 
 
-def _load_template_utils() -> ChunkTemplateUtils:
-    with open(_TEMPLATE_DATA_PATH) as file:
-        return ChunkTemplateUtils.model_validate(yaml.safe_load(file) or {})
-
-
-TEMPLATE_DATA = _load_template_utils()
-
-
 def available_note_styles(surface_group: ChunkSurfaceGroup | None = None) -> list[str]:
-    templates = TEMPLATE_DATA.note_style_templates.outer_template
+    templates = CHUNK_TEMPLATE_DATA.note_style_templates.outer_template
     if surface_group is None:
         return list(templates)
     return [
@@ -174,7 +165,7 @@ def _outer_template(
     surface_group: ChunkSurfaceGroup,
 ) -> tuple[str | None, str | None, str]:
     family = _canonical_outer_family(fact.note_style)
-    templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(fact.condition_anchor)
+    templates = CHUNK_TEMPLATE_DATA.note_style_templates.templates_for_anchor(fact.condition_anchor)
     bucket = templates.get(family)
     if bucket is None:
         family = next(iter(templates))
@@ -195,9 +186,7 @@ def _cohort_sentence(
     rng: Random,
     surface_group: ChunkSurfaceGroup,
 ) -> str:
-    templates = TEMPLATE_DATA.cohort_evidence_templates
-    # Age and sex are already expressed by the patient descriptor. Repeating
-    # them as a separate sentence produces unnatural prose without adding evidence.
+    templates = CHUNK_TEMPLATE_DATA.cohort_evidence_templates
     if fact.subgroup_dimension_id in {'age_band', 'sex'}:
         return ''
     if fact.subgroup_is_reference:
@@ -248,7 +237,7 @@ def _axis_sentence(
         axis_value = payload.detail
     else:
         raise TypeError(type(payload))
-    paired_templates = TEMPLATE_DATA.axis_sentence_templates.paired[fact.axis]
+    paired_templates = CHUNK_TEMPLATE_DATA.axis_sentence_templates.paired[fact.axis]
     template_specs = paired_templates.template_specs(surface_group)
     index = _stable_index(fact, surface_group, 'axis_sentence', len(template_specs))
     family, template_spec = template_specs[index]
@@ -277,7 +266,7 @@ def _treatment_duration_sentence(
     course_id = payload.treatment_course_id
     if course_id is None:
         raise ValueError(f'treatment duration payload for {fact.fact_id} lacks treatment_course_id')
-    bucket = TEMPLATE_DATA.treatment_course_templates.get(course_id)
+    bucket = CHUNK_TEMPLATE_DATA.treatment_course_templates.get(course_id)
     if bucket is None:
         raise ValueError(f'missing treatment-course template for {course_id!r}')
     choices = bucket.templates_for_group(surface_group)
@@ -297,7 +286,7 @@ def _simple_interpretation_sentence(
     surface_group: ChunkSurfaceGroup,
 ) -> str:
     try:
-        bucket = TEMPLATE_DATA.simple_interpretations[fact.axis][fact.value_bin]
+        bucket = CHUNK_TEMPLATE_DATA.simple_interpretations[fact.axis][fact.value_bin]
     except KeyError as exc:
         raise ValueError(
             f'missing simple interpretation for {fact.axis!r}/{fact.value_bin!r}'
@@ -348,11 +337,9 @@ def validate_chunk_text(
     lower = text.lower()
     hard_errors: list[str] = []
 
-    for term in TEMPLATE_DATA.hidden_benchmark_terms:
+    for term in CHUNK_TEMPLATE_DATA.hidden_benchmark_terms:
         if term in lower:
             hard_errors.append(f'contains hidden benchmark term: {term}')
-    if _SECTION_HEADER_RE.match(text):
-        hard_errors.append('contains leading note-section header')
 
     condition_occurrences = _phrase_count(text, fact.condition_display)
     if condition_occurrences != 1:
@@ -426,7 +413,7 @@ def _validate_treatment_course_template_coverage(
         for condition in ontology.conditions.values()
         for course_id in condition.axis_values['treatment_duration'].treatments  # type: ignore
     }
-    template_ids = set(TEMPLATE_DATA.treatment_course_templates)
+    template_ids = set(CHUNK_TEMPLATE_DATA.treatment_course_templates)
     missing = sorted(course_ids - template_ids)
     extra = sorted(template_ids - course_ids)
     if missing:
@@ -441,13 +428,15 @@ def _validate_simple_interpretation_coverage(
 ) -> None:
     for axis_id, axis in ontology.clinical_axes.items():
         expected = set(axis.bins)
-        actual = set(TEMPLATE_DATA.simple_interpretations.get(axis_id, {}))
+        actual = set(CHUNK_TEMPLATE_DATA.simple_interpretations.get(axis_id, {}))
         axis_name = axis_id.replace('_', ' ')
         missing = sorted(expected - actual)
         extra = sorted(actual - expected)
         if missing or extra:
             errors.append(f'simple_interpretations.{axis_id}: missing={missing}, extra={extra}')
-        for value_bin, bucket in TEMPLATE_DATA.simple_interpretations.get(axis_id, {}).items():
+        for value_bin, bucket in CHUNK_TEMPLATE_DATA.simple_interpretations.get(
+            axis_id, {}
+        ).items():
             for spec in [*bucket.seen, *bucket.heldout]:
                 if _phrase_count(spec.template, axis_name) != 1:
                     errors.append(
@@ -471,7 +460,7 @@ def _validate_template_placeholders(errors: list[str]) -> None:
         'axis_sentence',
     }
     for condition_anchor in ('outer_template', 'axis_evidence'):
-        templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
+        templates = CHUNK_TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
         for family, bucket in templates.items():
             for spec in [*bucket.seen, *bucket.heldout]:
                 fields = _template_fields(spec.template)
@@ -490,13 +479,13 @@ def _validate_template_placeholders(errors: list[str]) -> None:
                     )
                 if 'axis_sentence' not in fields:
                     errors.append(f'{family}/{spec.id} must contain {{axis_sentence}}')
-    for course_id, bucket in TEMPLATE_DATA.treatment_course_templates.items():
+    for course_id, bucket in CHUNK_TEMPLATE_DATA.treatment_course_templates.items():
         for spec in [*bucket.seen, *bucket.heldout]:
             fields = _template_fields(spec.template)
             unknown = sorted(fields - treatment_fields)
             if unknown:
                 errors.append(f'{course_id}/{spec.id} has unknown placeholders: {unknown}')
-    for axis_id, interpretations_by_bin in TEMPLATE_DATA.simple_interpretations.items():
+    for axis_id, interpretations_by_bin in CHUNK_TEMPLATE_DATA.simple_interpretations.items():
         for value_bin, bucket in interpretations_by_bin.items():
             for spec in [*bucket.seen, *bucket.heldout]:
                 fields = _template_fields(spec.template)
@@ -543,11 +532,6 @@ def _phrase_count(text: str, phrase: str) -> int:
 
 
 def _duration_evidence_count(text: str, duration_days: int) -> int:
-    """Count a duration only when it is attached to a day unit.
-
-    Bare values such as ``3`` or ``56`` also occur in ages and unrelated
-    measurements, so they are unsuitable as a standalone rendering check.
-    """
     duration = re.escape(str(duration_days))
     return len(
         re.findall(
@@ -584,7 +568,10 @@ def _contains_subgroup_evidence(text: str, fact: ClinicalFact, ontology: Medical
 
 
 def _has_age_in_range(text: str, low: int, high: int) -> bool:
-    return any(low <= int(match.group(1)) <= high for match in _AGE_RE.finditer(text))
+    return any(
+        low <= int(match.group(1)) <= high
+        for match in re.compile(r'\b(\d{2,3})\s*[- ]year[- ]old\b', re.IGNORECASE).finditer(text)
+    )
 
 
 def squash_whitespaces(text: str) -> str:

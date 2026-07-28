@@ -442,7 +442,6 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     lambda_grid_delta_rows = _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv')
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
     near_optimal_rows = _read_report_csv_rows(data_dir, 'near_optimal_lambda_width.csv')
-    embedding_summary_rows = _read_report_csv_rows(data_dir, 'embedding_model_summary.csv')
     paired_cell_rows = _read_report_csv_rows(data_dir, 'paired_cell_effect_summary.csv')
     paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
     paired_config_suite_rows = _read_report_csv_rows(

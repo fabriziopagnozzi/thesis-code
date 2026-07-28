@@ -16,17 +16,11 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
-    get_candidate_pool_indices,
-    run_topn_cosine_retrieval,
-    select_indices,
-)
 from experiments.medical_dataset_gen.query_geometry.dim_reduction import (
     cluster_features,
     hdbscan_labels,
     reduce_for_plot,
 )
-from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryArtifact,
     GeometryChunkLike,
@@ -38,9 +32,15 @@ from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryQueryLike,
     GeometrySelection,
 )
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
+    get_candidate_pool_indices,
+    run_topn_cosine_retrieval,
+    select_indices,
+)
 from experiments.medical_dataset_gen.retrieval.schemas import (
     RetrievalStrategy,
 )
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
 _STRATEGY_ORDER = ['top_k', 'mmr', 'fac_loc']
 _STATS_BEST_SORT = [

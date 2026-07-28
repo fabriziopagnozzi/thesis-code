@@ -34,8 +34,6 @@ from experiments.medical_dataset_gen.utils.global_schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
 
@@ -249,14 +247,3 @@ def _summarize_payload(value_bin: str, payload) -> str:
     if isinstance(payload, DiagnosticEvidencePayload):
         return f'{_with_indefinite_article(bin_label)} evidence source: {payload.detail}'
     raise TypeError(type(payload))
-
-
-if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging_utils import (
-        setup_logging,
-    )
-
-    cfg = load_config_from_cli()
-    paths = paths_for(cfg)
-    setup_logging(paths)
-    run_make_queries_answers(cfg, paths)

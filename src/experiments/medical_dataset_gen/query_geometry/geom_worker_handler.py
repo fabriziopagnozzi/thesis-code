@@ -10,14 +10,8 @@ from numpy.typing import NDArray
 from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
     load_selected_parquet_columns,
 )
-from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
-    load_embedding_arrays_mmap_ids,
-)
 from experiments.medical_dataset_gen.query_geometry.artifacts import build_best_lambda_maps
 from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import GeomPlotName
-from experiments.medical_dataset_gen.utils.global_schemas import (
-    ExperimentCfg,
-)
 from experiments.medical_dataset_gen.query_geometry.schemas import (
     EmbeddingGeometryWorkerState,
     GeometryChunkRecord,
@@ -25,6 +19,12 @@ from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryIndexMaps,
     GeometryQrelRecord,
     GeometryQueryRecord,
+)
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
+    load_embedding_arrays_mmap_ids,
+)
+from experiments.medical_dataset_gen.utils.global_schemas import (
+    ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,

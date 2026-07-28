@@ -1,6 +1,5 @@
 import argparse
 import inspect
-import sys
 from collections.abc import Callable
 from importlib import import_module
 from pathlib import Path
@@ -16,17 +15,15 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     EvalPlotCallContext,
     EvalPlotFileName,
 )
-from experiments.medical_dataset_gen.pipeline.p09_eval import stats_for_evaluation_mode
+from experiments.medical_dataset_gen.evaluation.statistics import stats_for_evaluation_mode
+from experiments.medical_dataset_gen.utils.cli_parsing import parse_comma_separated_names
 from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
-from experiments.medical_dataset_gen.utils.logging_utils import setup_logging
 
 _VALIDATION_GRID_PLOT_NAMES: set[EvalPlotFileName] = {
     'metrics_k_curves_for_lambda',
@@ -254,24 +251,17 @@ def _filter_population_results(
 
 
 def parse_plot_names(raw_value: str | None) -> set[EvalPlotFileName] | None:
-    if raw_value is None:
+    parsed = parse_comma_separated_names(
+        raw_value=raw_value,
+        valid_names=EVAL_PLOT_FILE_NAMES,
+        option_name='--plots',
+    )
+    if parsed is None:
         return None
-
-    plot_names: set[str] = {part.strip() for part in raw_value.split(',') if part.strip()}
-    if not plot_names:
-        raise ValueError('--plots was provided but no plot names were specified')
-
-    if plot_names:
-        unknown_plots = sorted(plot_names - EVAL_PLOT_FILE_NAMES)
-        if unknown_plots:
-            available = ', '.join(sorted(EVAL_PLOT_FILE_NAMES))
-            unknown = ', '.join(unknown_plots)
-            raise ValueError(f'Unknown plot name(s): {unknown}. Available plots: {available}')
-
-    return cast(set[EvalPlotFileName] | None, plot_names)
+    return cast(set[EvalPlotFileName], set(parsed))
 
 
-def parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[EvalPlotFileName] | None]:
+def parse_plots_cli_args(argv: list[str]) -> set[EvalPlotFileName] | None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         '--plots',
@@ -279,19 +269,6 @@ def parse_plots_cli_args(argv: list[str]) -> tuple[ExperimentCfg, set[EvalPlotFi
         help='Comma-separated plot names to generate selectively.',
     )
     args, remaining_argv = parser.parse_known_args(argv)
-
-    original_argv = sys.argv[:]
-    try:
-        sys.argv = [sys.argv[0], *remaining_argv]
-        cfg = load_config_from_cli()
-    finally:
-        sys.argv = original_argv
-    return cfg, parse_plot_names(args.plots)
-
-
-if __name__ == '__main__':
-    cli_argv = sys.argv[1:]
-    cfg, selected_plots = parse_plots_cli_args(cli_argv)
-    paths = paths_for(cfg)
-    setup_logging(paths)
-    run_eval_plots(cfg, paths, selected_plots=selected_plots)
+    if remaining_argv:
+        parser.error(f'unknown evaluation-plot argument(s): {" ".join(remaining_argv)}')
+    return parse_plot_names(args.plots)

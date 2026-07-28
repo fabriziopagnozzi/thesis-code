@@ -11,13 +11,13 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.retrieval.retrieval_utils import select_indices
-from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import SETTINGS
 from experiments.medical_dataset_gen.dataset_generation.schemas import ClusterRole
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import SETTINGS
 from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryArtifact,
     GeometrySelection,
 )
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import select_indices
 from experiments.medical_dataset_gen.retrieval.schemas import RetrievalStrategy
 
 

@@ -651,7 +651,7 @@ def _delta_heatmap_specs(*, metric_suffix: str) -> tuple[DeltaHeatmapSpec, ...]:
             raw_value_field='MeanFacLoc',
             pct_field='FacLocBetterPct',
             cmap='RdBu',
-            colorbar_label='Mean improvement delta (positive favors FacLoc)',
+            colorbar_label='Mean improvement delta',
         ),
         DeltaHeatmapSpec(
             title=f'Mean FacLoc - top-k{metric_suffix}',
@@ -659,7 +659,7 @@ def _delta_heatmap_specs(*, metric_suffix: str) -> tuple[DeltaHeatmapSpec, ...]:
             raw_value_field='MeanFacLoc',
             pct_field='FacLocTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean improvement delta (positive favors FacLoc)',
+            colorbar_label='Mean improvement delta',
         ),
         DeltaHeatmapSpec(
             title=f'Mean MMR - top-k{metric_suffix}',
@@ -667,7 +667,7 @@ def _delta_heatmap_specs(*, metric_suffix: str) -> tuple[DeltaHeatmapSpec, ...]:
             raw_value_field='MeanMMR',
             pct_field='MMRTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean improvement delta (positive favors MMR)',
+            colorbar_label='Mean improvement delta',
         ),
     )
 

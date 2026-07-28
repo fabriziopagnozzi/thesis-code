@@ -9,8 +9,7 @@ from __future__ import annotations
 import argparse
 import gc
 import multiprocessing as mp
-import sys
-from collections.abc import Container
+from collections.abc import Container, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from typing import cast
 
@@ -20,9 +19,6 @@ from tqdm import tqdm
 
 from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
     load_selected_parquet_columns,
-)
-from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
-    assert_pool_scope_match,
 )
 from experiments.medical_dataset_gen.query_geometry.artifacts import (
     build_query_artifact,
@@ -49,22 +45,23 @@ from experiments.medical_dataset_gen.query_geometry.geom_worker_handler import (
     load_selected_parquet_columns_if_exists,
     query_geometry_worker_count,
 )
-from experiments.medical_dataset_gen.utils.global_schemas import (
-    ExperimentCfg,
-)
 from experiments.medical_dataset_gen.query_geometry.schemas import (
     EmbeddingGeometry2DPoint,
     EmbeddingGeometryQueryStats,
     EmbeddingGeometryWorkerState,
     RenderedGeometryResult,
 )
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
+    assert_pool_scope_match,
+)
+from experiments.medical_dataset_gen.utils.cli_parsing import parse_comma_separated_names
+from experiments.medical_dataset_gen.utils.global_schemas import (
+    ExperimentCfg,
+)
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
-from experiments.medical_dataset_gen.utils.logging_utils import setup_logging
 
 _PARENT_QUERY_COLUMNS = ['query_id']
 _PARENT_GEOMETRY_COLUMNS = [
@@ -295,32 +292,28 @@ def _should_render_plot(
     return selected_plot_names is None or plot_name in selected_plot_names
 
 
-def _rows_to_dataframe(rows: list[dict[str, object]]) -> pl.DataFrame:
+def _rows_to_dataframe(
+    rows: Sequence[EmbeddingGeometry2DPoint | EmbeddingGeometryQueryStats],
+) -> pl.DataFrame:
     if not rows:
         return pl.DataFrame()
     return pl.DataFrame(rows, infer_schema_length=None)
 
 
 def parse_plot_names(raw_value: str | None) -> set[GeomPlotName] | None:
-    if raw_value is None:
+    parsed = parse_comma_separated_names(
+        raw_value=raw_value,
+        valid_names=GEOM_PLOT_FILE_NAMES,
+        option_name='--plots',
+    )
+    if parsed is None:
         return None
-    plot_names: set[str] = {part.strip() for part in raw_value.split(',') if part.strip()}
-    if not plot_names:
-        raise ValueError('--plots was provided but no plot names were specified')
-
-    if plot_names:
-        unknown_plots = sorted(plot_names - GEOM_PLOT_FILE_NAMES)
-        if unknown_plots:
-            available = ', '.join(sorted(GEOM_PLOT_FILE_NAMES))
-            unknown = ', '.join(unknown_plots)
-            raise ValueError(f'Unknown plot name(s): {unknown}. Available plots: {available}')
-
-    return cast(set[GeomPlotName] | None, plot_names)
+    return cast(set[GeomPlotName], set(parsed))
 
 
 def parse_geom_plots_cli_args(
     argv: list[str],
-) -> tuple[ExperimentCfg, set[GeomPlotName] | None]:
+) -> set[GeomPlotName] | None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         '--plots',
@@ -328,18 +321,6 @@ def parse_geom_plots_cli_args(
         help='Comma-separated plot names to generate selectively.',
     )
     args, remaining_argv = parser.parse_known_args(argv)
-
-    original_argv = sys.argv[:]
-    try:
-        sys.argv = [sys.argv[0], *remaining_argv]
-        cfg = load_config_from_cli()
-    finally:
-        sys.argv = original_argv
-    return cfg, parse_plot_names(args.plots)
-
-
-if __name__ == '__main__':
-    cfg, selected_plots = parse_geom_plots_cli_args(sys.argv[1:])
-    paths = paths_for(cfg)
-    setup_logging(paths)
-    run_query_geom_plots(cfg, paths, selected_plots=selected_plots)
+    if remaining_argv:
+        parser.error(f'unknown geometry-plot argument(s): {" ".join(remaining_argv)}')
+    return parse_plot_names(args.plots)

@@ -16,8 +16,8 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.evaluation.schemas import LightweightQrelRecord
 from experiments.medical_dataset_gen.dataset_generation.schemas import ChunkPoolScope
+from experiments.medical_dataset_gen.evaluation.schemas import LightweightQrelRecord
 from experiments.medical_dataset_gen.retrieval.schemas import (
     ChunkDocumentRecord,
     ChunkMembershipRecord,

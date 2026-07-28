@@ -6,12 +6,6 @@ from typing import Any, cast
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.retrieval.reranker import DenseReranker
-from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
-    build_query_to_facet_gold_map,
-    get_qrels_by_query_chunk,
-    load_embedding_arrays_mmap_ids,
-)
 from experiments.medical_dataset_gen.evaluation.schemas import (
     AnswerReferenceTexts,
     EmbeddingIdArray,
@@ -19,6 +13,12 @@ from experiments.medical_dataset_gen.evaluation.schemas import (
     EvaluationWorkerState,
     LightweightChunkRecord,
     LightweightQueryRecord,
+)
+from experiments.medical_dataset_gen.retrieval.reranker import DenseReranker
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
+    build_query_to_facet_gold_map,
+    get_qrels_by_query_chunk,
+    load_embedding_arrays_mmap_ids,
 )
 from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (

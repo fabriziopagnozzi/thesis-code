@@ -14,11 +14,11 @@ import polars as pl
 from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     render_canonical_chunk,
 )
+from experiments.medical_dataset_gen.dataset_generation.facts import make_gold_fact
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     render_query_template,
 )
-from experiments.medical_dataset_gen.pipeline.p03_facts import make_gold_fact
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
     QUERY_FOCUS_MODE_LIST,

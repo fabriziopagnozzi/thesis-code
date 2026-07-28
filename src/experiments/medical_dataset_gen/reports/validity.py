@@ -20,7 +20,7 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
     select_best_lambda_row,
 )
-from experiments.medical_dataset_gen.pipeline.p09_eval import stats_aggregated_results_df
+from experiments.medical_dataset_gen.evaluation.statistics import stats_aggregated_results_df
 from experiments.medical_dataset_gen.reports.analysis_constants import (
     DIVERSIFYING_STRATEGIES,
     EVALUATION_METRICS,

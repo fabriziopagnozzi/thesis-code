@@ -102,17 +102,18 @@ Chunk and query text is generated deterministically from [medical_ontology.yaml]
 uv run python -m experiments.medical_dataset_gen.scripts.render_v4_language_review
 ```
 
-## Direct Stage Execution
+## Pipeline Execution
 
-Some stages can also be run directly as modules when you want to rerun only one piece of the pipeline:
+Run stages through the orchestrator; individual stage modules are domain implementation files and are not supported as direct entry points.
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline.p04_chunks --exp <experiment_name>
-uv run python -m experiments.medical_dataset_gen.pipeline.p09_evaluate --exp <experiment_name>
-uv run python -m experiments.medical_dataset_gen.pipeline.p10_query_geom_plots --exp <experiment_name>
+uv run python -m experiments.medical_dataset_gen.pipeline --exp <experiment_name> --from chunks --to qrels
+uv run python -m experiments.medical_dataset_gen.pipeline --exp <experiment_name> --stages embed,filter_queries,eval
+uv run python -m experiments.medical_dataset_gen.pipeline --exp <experiment_name> --run "eval --steps evaluation_stats,evaluation_slice_stats"
+uv run python -m experiments.medical_dataset_gen.pipeline --exp <experiment_name> --run "eval_plots --plots metrics_k_curves_for_lambda"
 ```
 
-Evaluation figures are normally generated through the orchestrator, but selective plot generation is supported by [pipeline/p11_eval_plots.py](./src/experiments/medical_dataset_gen/pipeline/p11_eval_plots.py) through its `--plots` parser.
+Selective evaluation, evaluation-plot, and geometry-plot reruns use `--run` so the main pipeline remains the only supported command surface.
 
 ## Documentation
 

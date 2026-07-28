@@ -17,6 +17,7 @@ type ClinicalAxis = Literal[
 ]
 CLINICAL_AXIS_LIST = list[ClinicalAxis](get_args(ClinicalAxis.__value__))
 
+
 type ClusterRole = Literal[
     'dominant_primary_gold',
     'primary_gold',
@@ -174,6 +175,13 @@ def axis_payload_required_phrase(payload: AxisFactPayload) -> str:
     return payload.detail
 
 
+def _validated_axis_payload(axis: ClinicalAxis, axis_payload_json: str) -> AxisFactPayload:
+    payload = parse_axis_payload(axis_payload_json)
+    if payload.axis != axis:
+        raise ValueError(f'axis payload {payload.axis!r} does not match {axis!r}')
+    return payload
+
+
 class AnswerSourceFact(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
@@ -187,9 +195,7 @@ class AnswerSourceFact(BenchmarkPydanticModel):
 
     @model_validator(mode='after')
     def _validate_axis_payload(self) -> AnswerSourceFact:
-        payload = parse_axis_payload(self.axis_payload_json)
-        if payload.axis != self.axis:
-            raise ValueError(f'axis payload {payload.axis!r} does not match {self.axis!r}')
+        _validated_axis_payload(self.axis, self.axis_payload_json)
         return self
 
 
@@ -454,83 +460,17 @@ class MedicalOntology(BenchmarkPydanticModel):
     @model_validator(mode='after')
     def _validate_references(self) -> MedicalOntology:
         declared_axes = set(self.clinical_axes)
-        contrast_by_id: dict[str, CohortContrast] = {}
-        for contrast in self.cohort_contrasts:
-            if contrast.id in contrast_by_id:
-                raise ValueError(f'duplicate cohort contrast id: {contrast.id!r}')
-            contrast_by_id[contrast.id] = contrast
-
-        for condition_id, condition in self.conditions.items():
-            if set(condition.axis_values) != declared_axes:
-                raise ValueError(f'condition {condition_id!r} must define every clinical axis')
-            for axis, values in condition.axis_values.items():
-                if set(values.bins) != set(self.clinical_axes[axis].bins):
-                    raise ValueError(f'condition {condition_id!r} has incomplete bins for {axis!r}')
-            allowed_ids = condition.allowed_comorbidity_contrast_ids
-            if len(allowed_ids) != len(set(allowed_ids)):
-                raise ValueError(
-                    f'condition {condition_id!r} repeats allowed comorbidity contrast ids'
-                )
-            unknown_allowed = set(allowed_ids) - set(contrast_by_id)
-            if unknown_allowed:
-                unknown = ', '.join(sorted(unknown_allowed))
-                raise ValueError(
-                    f'condition {condition_id!r} allows unknown comorbidity contrasts: {unknown}'
-                )
-            for contrast_id in allowed_ids:
-                contrast = contrast_by_id[contrast_id]
-                cohorts = [
-                    self.subgroups[contrast.cohort_a_id],
-                    self.subgroups[contrast.cohort_b_id],
-                ]
-                if not _is_comorbidity_present_absent_contrast(cohorts):
-                    raise ValueError(
-                        f'condition {condition_id!r} allows non-comorbidity present/absent '
-                        f'contrast {contrast_id!r}'
-                    )
-            _validate_distinct_comorbidity_contrasts(
-                condition_id,
-                condition,
-                self.subgroups,
-                contrast_by_id,
-            )
-
-        for contrast in self.cohort_contrasts:
-            cohorts = [self.subgroups[contrast.cohort_a_id], self.subgroups[contrast.cohort_b_id]]
-            if any(cohort.dimension_id != contrast.dimension_id for cohort in cohorts):
-                raise ValueError(f'contrast {contrast.id!r} mixes cohort dimensions')
-
+        contrast_by_id = _cohort_contrasts_by_id(self.cohort_contrasts)
+        _validate_condition_references(
+            self.conditions,
+            self.clinical_axes,
+            self.subgroups,
+            contrast_by_id,
+            declared_axes,
+        )
+        _validate_cohort_contrast_dimensions(self.cohort_contrasts, self.subgroups)
         _validate_absent_subgroup_surface_forms(self.subgroups)
-
-        declared_pairs = {frozenset(pair.axes) for pair in self.axis_pairs}
-        expected_pairs = {frozenset(pair) for pair in combinations(declared_axes, 2)}
-        if declared_pairs != expected_pairs or len(declared_pairs) != len(self.axis_pairs):
-            raise ValueError('axis_pairs must contain each unordered clinical-axis pair once')
-        for pair in self.axis_pairs:
-            if len(pair.profiles) < 2:
-                raise ValueError('each axis pair must define at least two joint profiles')
-            left, right = pair.axes
-            candidate_primary_axes = (
-                list(pair.axes) if pair.allowed_primary_axes is None else pair.allowed_primary_axes
-            )
-            explicitly_suppressed = pair.allowed_primary_axes == []
-            if not explicitly_suppressed and not any(
-                self.clinical_axes[axis].allow_as_primary for axis in candidate_primary_axes
-            ):
-                raise ValueError(f'axis pair {left!r}/{right!r} has no permitted primary axis')
-            profile_ids = [profile.id for profile in pair.profiles]
-            if len(profile_ids) != len(set(profile_ids)):
-                raise ValueError(f'axis pair {left!r}/{right!r} reuses a profile id')
-            for profile in pair.profiles:
-                cohort_pairs = zip(profile.cohort_a_bins, profile.cohort_b_bins, strict=True)
-                if any(a == b for a, b in cohort_pairs):
-                    raise ValueError(f'profile {profile.id!r} must differ on both axes')
-                if not all(
-                    bins[index] in self.clinical_axes[axis].bins
-                    for index, axis in enumerate((left, right))
-                    for bins in (profile.cohort_a_bins, profile.cohort_b_bins)
-                ):
-                    raise ValueError(f'profile {profile.id!r} contains an unknown axis bin')
+        _validate_axis_pair_inventory(self.axis_pairs, self.clinical_axes, declared_axes)
         return self
 
 
@@ -542,6 +482,122 @@ _BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset(
         'uncomplicated',
     }
 )
+
+
+def _cohort_contrasts_by_id(contrasts: list[CohortContrast]) -> dict[str, CohortContrast]:
+    contrast_by_id: dict[str, CohortContrast] = {}
+    for contrast in contrasts:
+        if contrast.id in contrast_by_id:
+            raise ValueError(f'duplicate cohort contrast id: {contrast.id!r}')
+        contrast_by_id[contrast.id] = contrast
+    return contrast_by_id
+
+
+def _validate_condition_references(
+    conditions: dict[ConditionKey, ConditionOntology],
+    clinical_axes: dict[ClinicalAxis, ClinicalAxisOntology],
+    subgroups: dict[SubgroupKey, SubgroupOntology],
+    contrast_by_id: dict[str, CohortContrast],
+    declared_axes: set[ClinicalAxis],
+) -> None:
+    for condition_id, condition in conditions.items():
+        if set(condition.axis_values) != declared_axes:
+            raise ValueError(f'condition {condition_id!r} must define every clinical axis')
+        for axis, values in condition.axis_values.items():
+            if set(values.bins) != set(clinical_axes[axis].bins):
+                raise ValueError(f'condition {condition_id!r} has incomplete bins for {axis!r}')
+
+        allowed_ids = condition.allowed_comorbidity_contrast_ids
+        if len(allowed_ids) != len(set(allowed_ids)):
+            raise ValueError(f'condition {condition_id!r} repeats allowed comorbidity contrast ids')
+        unknown_allowed = set(allowed_ids) - set(contrast_by_id)
+        if unknown_allowed:
+            unknown = ', '.join(sorted(unknown_allowed))
+            raise ValueError(
+                f'condition {condition_id!r} allows unknown comorbidity contrasts: {unknown}'
+            )
+
+        for contrast_id in allowed_ids:
+            contrast = contrast_by_id[contrast_id]
+            cohorts = [subgroups[contrast.cohort_a_id], subgroups[contrast.cohort_b_id]]
+            if not _is_comorbidity_present_absent_contrast(cohorts):
+                raise ValueError(
+                    f'condition {condition_id!r} allows non-comorbidity present/absent '
+                    f'contrast {contrast_id!r}'
+                )
+
+        _validate_distinct_comorbidity_contrasts(
+            condition_id,
+            condition,
+            subgroups,
+            contrast_by_id,
+        )
+
+
+def _validate_cohort_contrast_dimensions(
+    contrasts: list[CohortContrast],
+    subgroups: dict[SubgroupKey, SubgroupOntology],
+) -> None:
+    for contrast in contrasts:
+        cohorts = [subgroups[contrast.cohort_a_id], subgroups[contrast.cohort_b_id]]
+        if any(cohort.dimension_id != contrast.dimension_id for cohort in cohorts):
+            raise ValueError(f'contrast {contrast.id!r} mixes cohort dimensions')
+
+
+def _validate_axis_pair_inventory(
+    axis_pairs: list[AxisPairOntology],
+    clinical_axes: dict[ClinicalAxis, ClinicalAxisOntology],
+    declared_axes: set[ClinicalAxis],
+) -> None:
+    declared_pairs = {frozenset(pair.axes) for pair in axis_pairs}
+    expected_pairs = {frozenset(pair) for pair in combinations(declared_axes, 2)}
+    if declared_pairs != expected_pairs or len(declared_pairs) != len(axis_pairs):
+        raise ValueError('axis_pairs must contain each unordered clinical-axis pair once')
+
+    for pair in axis_pairs:
+        _validate_axis_pair(pair, clinical_axes)
+
+
+def _validate_axis_pair(
+    pair: AxisPairOntology,
+    clinical_axes: dict[ClinicalAxis, ClinicalAxisOntology],
+) -> None:
+    if len(pair.profiles) < 2:
+        raise ValueError('each axis pair must define at least two joint profiles')
+
+    left, right = pair.axes
+    candidate_primary_axes = (
+        list(pair.axes) if pair.allowed_primary_axes is None else pair.allowed_primary_axes
+    )
+    explicitly_suppressed = pair.allowed_primary_axes == []
+    if not explicitly_suppressed and not any(
+        clinical_axes[axis].allow_as_primary for axis in candidate_primary_axes
+    ):
+        raise ValueError(f'axis pair {left!r}/{right!r} has no permitted primary axis')
+
+    profile_ids = [profile.id for profile in pair.profiles]
+    if len(profile_ids) != len(set(profile_ids)):
+        raise ValueError(f'axis pair {left!r}/{right!r} reuses a profile id')
+
+    for profile in pair.profiles:
+        _validate_axis_pair_profile(profile, left, right, clinical_axes)
+
+
+def _validate_axis_pair_profile(
+    profile: AxisPairProfile,
+    left: ClinicalAxis,
+    right: ClinicalAxis,
+    clinical_axes: dict[ClinicalAxis, ClinicalAxisOntology],
+) -> None:
+    cohort_pairs = zip(profile.cohort_a_bins, profile.cohort_b_bins, strict=True)
+    if any(a == b for a, b in cohort_pairs):
+        raise ValueError(f'profile {profile.id!r} must differ on both axes')
+    if not all(
+        bins[index] in clinical_axes[axis].bins
+        for index, axis in enumerate((left, right))
+        for bins in (profile.cohort_a_bins, profile.cohort_b_bins)
+    ):
+        raise ValueError(f'profile {profile.id!r} contains an unknown axis bin')
 
 
 def _is_comorbidity_present_absent_contrast(cohorts: list[SubgroupOntology]) -> bool:
@@ -930,9 +986,7 @@ class ClinicalFact(BenchmarkPydanticModel):
 
     @model_validator(mode='after')
     def _validate_axis_payload(self) -> ClinicalFact:
-        payload = parse_axis_payload(self.axis_payload_json)
-        if payload.axis != self.axis:
-            raise ValueError(f'axis payload {payload.axis!r} does not match {self.axis!r}')
+        payload = _validated_axis_payload(self.axis, self.axis_payload_json)
         if 'condition_anchor' in self.model_fields_set:
             required_phrase = axis_payload_required_phrase(payload)
             expected_anchor: ConditionAnchor = (

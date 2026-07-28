@@ -3,14 +3,14 @@ from collections.abc import Mapping
 
 import numpy as np
 
-from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
-    harmonic_mean,
-)
 from experiments.medical_dataset_gen.evaluation.schemas import (
     ChunkDocumentRecord,
     LightweightChunkRecord,
     LightweightQrelRecord,
     QrelRecord,
+)
+from experiments.medical_dataset_gen.retrieval.retrieval_utils import (
+    harmonic_mean,
 )
 
 ALPHA_NDCG_REDUNDANCY = 0.5

@@ -7,7 +7,6 @@ materializing at all.
 
 from __future__ import annotations
 
-import hashlib
 from itertools import combinations
 
 import polars as pl
@@ -32,13 +31,12 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryType,
     SubgroupOntology,
 )
+from experiments.medical_dataset_gen.utils.deterministic_ids import stable_id, stable_int
 from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    load_config_from_cli,
-    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import write_parquet
 
@@ -64,7 +62,6 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
             for axis_a, axis_b in axis_pairs:
                 policy = resolve_axis_pair_generation_policy(
                     ontology,
-                    cfg,
                     condition_id=condition_key,
                     left=axis_a,
                     right=axis_b,
@@ -87,7 +84,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                 if not primary_axes:
                     continue
                 for profile in profiles:
-                    evidence_profile_id = _stable_id(
+                    evidence_profile_id = stable_id(
                         'epv4',
                         cfg.dataset_schema_version,
                         cfg.global_.seed,
@@ -184,7 +181,7 @@ def _materialize_plan(
     *,
     query_id: str,
 ) -> QueryPlan:
-    query_key = _stable_id(
+    query_key = stable_id(
         'qv4',
         cfg.dataset_schema_version,
         cfg.global_.seed,
@@ -192,7 +189,7 @@ def _materialize_plan(
         primary_axis,
         secondary_axis,
     )
-    pool_id = _stable_id(
+    pool_id = stable_id(
         'poolv4',
         cfg.dataset_schema_version,
         cfg.global_.seed,
@@ -206,7 +203,7 @@ def _materialize_plan(
         (spec.subgroup_b_id, primary_axis),
     ]
     selected_subgroup_id, _ = primary_candidates[
-        _stable_int(cfg.global_.seed, query_key, 'initial_primary') % 2
+        stable_int(cfg.global_.seed, query_key, 'initial_primary') % 2
     ]
 
     bin_by_cohort_axis = {
@@ -228,7 +225,7 @@ def _materialize_plan(
     niche_indices = set(
         sorted(
             secondary_indices,
-            key=lambda index: _stable_int(query_key, 'niche_gold', index),
+            key=lambda index: stable_int(query_key, 'niche_gold', index),
         )[: cfg.generation.chunk_pools.niche.num_clusters_per_query]
     )
     facets: list[QueryPlanFacet] = []
@@ -279,7 +276,7 @@ def _materialize_plan(
         cfg.generation.query_structure,
         cfg.generation.focus_mode,
     )
-    template_id = template_ids[_stable_int(query_key, 'template') % len(template_ids)]
+    template_id = template_ids[stable_int(query_key, 'template') % len(template_ids)]
     logical_form = QueryLogicalForm(
         type=QUERY_TYPE,
         condition=spec.condition_key,
@@ -296,7 +293,7 @@ def _materialize_plan(
         evidence_profile_id=spec.evidence_profile_id,
         pool_id=pool_id,
         outcome_profile_id=spec.profile_id,
-        plan_seed=_stable_int(cfg.global_.seed, query_key) % (2**31 - 1),
+        plan_seed=stable_int(cfg.global_.seed, query_key) % (2**31 - 1),
         split=split,
         query_type=QUERY_TYPE,
         template_id=template_id,
@@ -318,28 +315,7 @@ def _materialize_plan(
     )
 
 
-def _stable_id(prefix: str, *parts: object) -> str:
-    raw = '|'.join(str(part) for part in parts)
-    return f'{prefix}_{hashlib.sha256(raw.encode()).hexdigest()[:16]}'
-
-
-def _stable_int(*parts: object) -> int:
-    raw = '|'.join(str(part) for part in parts)
-    return int(hashlib.sha256(raw.encode()).hexdigest()[:16], 16)
-
-
 def _split_for_profile(evidence_profile_id: str) -> DataSplit:
     """Assign the benchmark's fixed 50/50 profile-level split once in p01."""
-    bucket = _stable_int(evidence_profile_id, 'split') % _PROFILE_SPLIT_BUCKET_COUNT
+    bucket = stable_int(evidence_profile_id, 'split') % _PROFILE_SPLIT_BUCKET_COUNT
     return 'test' if bucket < _TEST_PROFILE_BUCKET_COUNT else 'validation'
-
-
-if __name__ == '__main__':
-    from experiments.medical_dataset_gen.utils.logging_utils import (
-        setup_logging,
-    )
-
-    config = load_config_from_cli()
-    output_paths = paths_for(config)
-    setup_logging(output_paths)
-    run_make_query_plans(config, output_paths)

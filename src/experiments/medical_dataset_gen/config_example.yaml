@@ -12,7 +12,6 @@ generation:
     query_structure: unbalanced # "unbalanced" keeps secondary-axis wording light; "balanced" includes the secondary-axis focus text too.
     chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families.
     excluded_clinical_axes: [] # Example to drop even secondary diagnostic evidence from query/chunk generation: [diagnostic_evidence_type].
-    axis_pair_policy_overrides: [] # Optional config-layer pair gating applied after ontology policies, keyed by unordered axis pair.
 
     chunk_pools:
         dominant_primary:

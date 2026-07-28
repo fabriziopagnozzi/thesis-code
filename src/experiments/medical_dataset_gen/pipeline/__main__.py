@@ -5,51 +5,29 @@ import os
 import shlex
 import subprocess
 import sys
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, cast, get_args
 
-from experiments.medical_dataset_gen.utils.global_schemas import (
-    ExperimentCfg,
+from experiments.medical_dataset_gen.pipeline.stages import (
+    PIPELINE_STAGE_SET,
+    STAGE_BY_NAME,
+    STAGE_SPECS,
+    STANDALONE_SCRIPT_BY_NAME,
+    STANDALONE_SCRIPT_SET,
+    PipelineStage,
+    StandalonePipelineScript,
+    pipeline_stage,
+    stage_index,
+    standalone_script,
 )
+from experiments.medical_dataset_gen.utils.cli_parsing import parse_comma_separated_names
 from experiments.medical_dataset_gen.utils.exp_naming import child_experiment_names
+from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    SharedGenerationTableName,
     load_config,
     paths_for,
 )
 from experiments.medical_dataset_gen.utils.logging_utils import colorprint, setup_logging
-
-from .p01_plans import run_make_query_plans
-from .p03_facts import run_make_facts
-from .p04_chunks import run_make_chunks
-from .p05_queries_answers import run_make_queries_answers
-from .p06_qrels import run_make_qrels
-from .p07_embed import embedding_artifacts_ready, run_embed
-from .p08_filter_queries import run_filter_queries
-from .p09_eval import parse_evaluate_cli_args, run_evaluate
-from .p10_eval_plots import parse_plots_cli_args, run_eval_plots
-from .p11_geom_plots import parse_geom_plots_cli_args, run_query_geom_plots
-
-type PipelineStage = Literal[
-    'plans',
-    'facts',
-    'chunks',
-    'queries_answers',
-    'qrels',
-    'embed',
-    'filter_queries',
-    'eval',
-    'eval_plots',
-    'geom_plots',
-]
-PIPELINE_STAGES_SET = set[PipelineStage](get_args(PipelineStage.__value__))
-type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
-type StandalonePipelineScript = Literal['eval', 'geom_plots', 'eval_plots']
-STANDALONE_PIPELINE_SCRIPTS = set[StandalonePipelineScript](
-    get_args(StandalonePipelineScript.__value__)
-)
 
 
 @dataclass(frozen=True)
@@ -58,39 +36,51 @@ class StandaloneRunSpec:
     script_args: list[str]
 
 
-STAGES_TO_FNS_SORTED: list[tuple[PipelineStage, PipelineStageFn]] = [
-    ('plans', run_make_query_plans),
-    ('facts', run_make_facts),
-    ('chunks', run_make_chunks),
-    ('queries_answers', run_make_queries_answers),
-    ('qrels', run_make_qrels),
-    ('embed', run_embed),
-    ('filter_queries', run_filter_queries),
-    ('eval', run_evaluate),
-    #    ('eval_plots', run_eval_plots),
-    #    ('geom_plots', run_query_geom_plots),
-]
-
-SHARED_STAGE_OUTPUTS: dict[PipelineStage, tuple[SharedGenerationTableName, ...]] = {
-    'plans': ('query_plans',),
-    'facts': ('clinical_facts',),
-    'chunks': ('chunk_documents', 'chunk_memberships'),
-    'queries_answers': ('queries', 'gold_answers'),
-    'qrels': ('qrels',),
-}
-
-
 def main() -> None:
+    parser = _build_parser()
+    args, unknown_args = parser.parse_known_args()
+
+    if args.exp is None:
+        parser.error('missing experiment name; pass --exp or set EXP/EXP_NAME')
+
+    run_specs = _parse_run_specs(parser, args.run) if args.run is not None else None
+    if run_specs is not None:
+        _validate_run_mode_args(parser, args, unknown_args)
+    elif unknown_args:
+        parser.error('unknown argument(s): ' + ' '.join(unknown_args))
+
+    children = [] if args.parent else child_experiment_names(args.exp)
+    if children:
+        _run_child_experiments(children=children, parent_exp=args.exp)
+        return
+
+    cfg = load_config(args.exp)
+    paths = paths_for(cfg)
+
+    if run_specs is not None:
+        _run_standalone_script_sequence(
+            run_specs=run_specs,
+            cfg=cfg,
+            paths=paths,
+            no_log_tee=args.no_log_tee,
+        )
+        return
+
+    stages_to_run = _selected_stage_names(parser, args)
+    _run_pipeline_stages(cfg=cfg, paths=paths, stage_names=stages_to_run)
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
-    parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGES_SET, default=None)
-    parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGES_SET, default=None)
+    parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGE_SET, default=None)
+    parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGE_SET, default=None)
     parser.add_argument('--stages', default=None)
     parser.add_argument(
         '--exclude',
         action='append',
         nargs='+',
-        choices=PIPELINE_STAGES_SET,
+        choices=PIPELINE_STAGE_SET,
         default=None,
         help='Exclude one or more stages from a normal pipeline run. May be repeated.',
     )
@@ -109,74 +99,7 @@ def main() -> None:
         action='store_true',
         help='Run the parent experiment itself even if child subexperiments exist.',
     )
-    args, unknown_args = parser.parse_known_args()
-
-    if args.exp is None:
-        parser.error('missing experiment name; pass --exp or set EXP/EXP_NAME')
-
-    if args.run is not None:
-        _validate_run_mode_args(parser, args, unknown_args)
-        run_specs = _parse_run_specs(parser=parser, raw_runs=args.run)
-    else:
-        run_specs = None
-
-    children = [] if args.parent else child_experiment_names(args.exp)
-    if children:
-        print(f'[pipeline] experiment={args.exp} has children: {children}')
-        for child_exp in children:
-            print(f'\n[pipeline] launching child experiment: {child_exp}')
-            subprocess.run(
-                [
-                    sys.executable,
-                    '-m',
-                    'experiments.medical_dataset_gen.pipeline',
-                    *sys.argv[1:],
-                    '--exp',
-                    child_exp,
-                ],
-                check=True,
-            )
-        return
-
-    if run_specs is not None:
-        _run_standalone_script_sequence(
-            run_specs=run_specs,
-            exp=args.exp,
-            no_log_tee=args.no_log_tee,
-        )
-        return
-
-    cfg = load_config(args.exp)
-
-    paths = paths_for(cfg)
-
-    if args.stages is not None:
-        if args.from_stage or args.to_stage:
-            parser.error('--stages cannot be combined with --from or --to')
-        selected_stages = _parse_stages_arg(parser, args.stages)
-    else:
-        start_idx = _stage_index(args.from_stage) if args.from_stage else 0
-        stop_idx = _stage_index(args.to_stage) if args.to_stage else len(STAGES_TO_FNS_SORTED) - 1
-        if stop_idx < start_idx:
-            raise ValueError('--to must be the same as or later than --from')
-        selected_stages = [name for name, _ in STAGES_TO_FNS_SORTED[start_idx : stop_idx + 1]]
-
-    excluded_stages = {stage for excluded_group in args.exclude or [] for stage in excluded_group}
-    selected_stage_set = set(selected_stages) - excluded_stages
-    stages_to_run: list[tuple[PipelineStage, PipelineStageFn]] = [
-        (name, fn) for name, fn in STAGES_TO_FNS_SORTED if name in selected_stage_set
-    ]
-    selected_stages = [name for name, _ in stages_to_run]
-
-    colorprint('bright_blue', f'\n[pipeline] running experiment: {paths.exp_name}')
-
-    for name, fn in stages_to_run:
-        if _should_skip_shared_stage(paths, name):
-            continue
-        if name == 'embed' and _should_skip_existing_embed_stage(paths):
-            continue
-        colorprint('bright_green', f'\n{"=" * 3} Stage: {name} {"=" * 3}')
-        fn(cfg, paths)
+    return parser
 
 
 def _validate_run_mode_args(
@@ -194,35 +117,24 @@ def _validate_run_mode_args(
         )
 
 
-def _should_skip_shared_stage(paths: MedicalDatasetGenPaths, stage: PipelineStage) -> bool:
-    if not paths.uses_shared_generation():
-        return False
-
-    outputs = SHARED_STAGE_OUTPUTS.get(stage)
-    if outputs is None:
-        return False
-
-    missing = [table for table in outputs if not paths.table_path(table).exists()]
-    if missing:
-        return False
-
-    print(
-        f'[pipeline] skipping shared stage {stage}; existing outputs in '
-        f'{paths.table_path(outputs[0]).parent}'
-    )
-    return True
-
-
-def _should_skip_existing_embed_stage(paths: MedicalDatasetGenPaths) -> bool:
-    if not embedding_artifacts_ready(paths):
-        return False
-
-    print('[pipeline] skipping embed; embedding artifacts already exist')
-    return True
+def _run_child_experiments(*, children: list[str], parent_exp: str) -> None:
+    print(f'[pipeline] experiment={parent_exp} has children: {children}')
+    for child_exp in children:
+        print(f'\n[pipeline] launching child experiment: {child_exp}')
+        subprocess.run(
+            [
+                sys.executable,
+                '-m',
+                'experiments.medical_dataset_gen.pipeline',
+                *sys.argv[1:],
+                '--exp',
+                child_exp,
+            ],
+            check=True,
+        )
 
 
 def _parse_run_specs(
-    *,
     parser: argparse.ArgumentParser,
     raw_runs: list[str],
 ) -> list[StandaloneRunSpec]:
@@ -233,110 +145,113 @@ def _parse_run_specs(
             parser.error('--run value cannot be empty')
 
         script_name = parts[0]
-        if script_name not in STANDALONE_PIPELINE_SCRIPTS:
+        if script_name not in STANDALONE_SCRIPT_SET:
             parser.error(
                 f'unknown standalone script in --run: {script_name}. '
                 + 'Valid scripts: '
-                + ', '.join(sorted(STANDALONE_PIPELINE_SCRIPTS))
+                + ', '.join(sorted(STANDALONE_SCRIPT_SET))
             )
         run_specs.append(
             StandaloneRunSpec(
-                script=cast(StandalonePipelineScript, script_name),
+                script=standalone_script(script_name),
                 script_args=parts[1:],
             )
         )
-
     return run_specs
 
 
 def _run_standalone_script_sequence(
     *,
     run_specs: list[StandaloneRunSpec],
-    exp: str,
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
     no_log_tee: bool,
 ) -> None:
-    cfg = load_config(exp)
-    paths = paths_for(cfg)
     if not no_log_tee:
         setup_logging(paths)
 
     colorprint(
         'bright_blue',
-        f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]})',
+        f'[pipeline] running standalone scripts: {[spec.script for spec in run_specs]}',
     )
     print(f'[pipeline] experiment={paths.exp_name} dir={paths.experiment_dir}')
 
     for run_spec in run_specs:
+        script_spec = STANDALONE_SCRIPT_BY_NAME[run_spec.script]
         print(f'\n=== Script: {run_spec.script} ===')
-        _run_standalone_script(run_spec=run_spec, exp=exp)
-
-
-def _run_standalone_script(*, run_spec: StandaloneRunSpec, exp: str) -> None:
-    script_argv = [
-        *run_spec.script_args,
-        '--exp',
-        exp,
-    ]
-
-    if run_spec.script == 'eval':
-        cfg, selected_steps = parse_evaluate_cli_args(script_argv)
-        paths = paths_for(cfg)
         colorprint(
             'bright_blue',
-            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
+            f'[pipeline] running standalone script: {run_spec.script} '
+            f'experiment={paths.exp_name}',
         )
-        run_evaluate(cfg, paths, selected_steps=selected_steps)
-    elif run_spec.script == 'geom_plots':
-        cfg, selected_plots = parse_geom_plots_cli_args(script_argv)
-        paths = paths_for(cfg)
-        colorprint(
-            'bright_blue',
-            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
-        )
-        run_query_geom_plots(cfg, paths, selected_plots=selected_plots)
-    elif run_spec.script == 'eval_plots':
-        cfg, selected_plots = parse_plots_cli_args(script_argv)
-        paths = paths_for(cfg)
-        colorprint(
-            'bright_blue',
-            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
-        )
-        run_eval_plots(cfg, paths, selected_plots=selected_plots)
+        script_spec.run(cfg, paths, run_spec.script_args)
+
+
+def _selected_stage_names(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> list[PipelineStage]:
+    if args.stages is not None:
+        if args.from_stage or args.to_stage:
+            parser.error('--stages cannot be combined with --from or --to')
+        try:
+            parsed = parse_comma_separated_names(
+                raw_value=args.stages,
+                valid_names=PIPELINE_STAGE_SET,
+                option_name='--stages',
+            )
+        except ValueError as exc:
+            parser.error(str(exc))
+        selected = [pipeline_stage(name) for name in parsed or []]
     else:
-        raise KeyError(run_spec.script)
-
-
-def _stage_index(name: str) -> int:
-    for i, (stage_name, _) in enumerate(STAGES_TO_FNS_SORTED):
-        if stage_name == name:
-            return i
-    raise KeyError(name)
-
-
-def _parse_stages_arg(parser: argparse.ArgumentParser, raw_stages: str) -> list[PipelineStage]:
-    stages = [stage.strip() for stage in raw_stages.split(',')]
-    if not stages or any(not stage for stage in stages):
-        parser.error('--stages must be a comma-separated list of stage names')
-
-    invalid_stages = [stage for stage in stages if stage not in PIPELINE_STAGES_SET]
-    if invalid_stages:
-        parser.error(
-            '--stages contains invalid stage name(s): '
-            + ', '.join(invalid_stages)
-            + '. Valid stages: '
-            + ', '.join(name for name, _ in STAGES_TO_FNS_SORTED)
+        start_idx = stage_index(pipeline_stage(args.from_stage)) if args.from_stage else 0
+        stop_idx = (
+            stage_index(pipeline_stage(args.to_stage)) if args.to_stage else len(STAGE_SPECS) - 1
         )
+        if stop_idx < start_idx:
+            parser.error('--to must be the same as or later than --from')
+        selected = [spec.name for spec in STAGE_SPECS[start_idx : stop_idx + 1]]
 
-    seen: set[str] = set()
-    duplicate_stages: list[str] = []
-    for stage in stages:
-        if stage in seen and stage not in duplicate_stages:
-            duplicate_stages.append(stage)
-        seen.add(stage)
-    if duplicate_stages:
-        parser.error('--stages contains duplicate stage name(s): ' + ', '.join(duplicate_stages))
+    excluded = {pipeline_stage(stage) for group in args.exclude or [] for stage in group}
+    selected_set = set(selected) - excluded
+    return [spec.name for spec in STAGE_SPECS if spec.name in selected_set]
 
-    return [cast(PipelineStage, stage) for stage in stages]
+
+def _run_pipeline_stages(
+    *,
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    stage_names: list[PipelineStage],
+) -> None:
+    colorprint('bright_blue', f'\n[pipeline] running experiment: {paths.exp_name}')
+
+    for stage_name in stage_names:
+        spec = STAGE_BY_NAME[stage_name]
+        if _should_skip_shared_stage(paths, spec):
+            continue
+        if spec.ready is not None and spec.ready(paths):
+            print(f'[pipeline] skipping {stage_name}; artifacts already exist')
+            continue
+        colorprint('bright_green', f'\n{"=" * 3} Stage: {stage_name} {"=" * 3}')
+        spec.run(cfg, paths)
+
+
+def _should_skip_shared_stage(
+    paths: MedicalDatasetGenPaths,
+    spec,
+) -> bool:
+    if not spec.shared_outputs or not paths.uses_shared_generation():
+        return False
+
+    missing = [table for table in spec.shared_outputs if not paths.table_path(table).exists()]
+    if missing:
+        return False
+
+    print(
+        f'[pipeline] skipping shared stage {spec.name}; existing outputs in '
+        f'{paths.table_path(spec.shared_outputs[0]).parent}'
+    )
+    return True
 
 
 if __name__ == '__main__':

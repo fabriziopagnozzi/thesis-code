@@ -1146,7 +1146,7 @@ def _delta_panel_specs() -> tuple[DeltaPanelSpec, ...]:
             raw_value_field='MeanFacLoc',
             pct_field='FacLocBetterPct',
             cmap='RdBu',
-            colorbar_label='Mean improvement delta (positive favors FacLoc)',
+            colorbar_label='Mean improvement delta',
         ),
         DeltaPanelSpec(
             title='Mean FacLoc - top-k',
@@ -1154,7 +1154,7 @@ def _delta_panel_specs() -> tuple[DeltaPanelSpec, ...]:
             raw_value_field='MeanFacLoc',
             pct_field='FacLocTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean improvement delta (positive favors FacLoc)',
+            colorbar_label='Mean improvement delta',
         ),
         DeltaPanelSpec(
             title='Mean MMR - top-k',
@@ -1162,7 +1162,7 @@ def _delta_panel_specs() -> tuple[DeltaPanelSpec, ...]:
             raw_value_field='MeanMMR',
             pct_field='MMRTopKBetterPct',
             cmap='RdYlGn',
-            colorbar_label='Mean improvement delta (positive favors MMR)',
+            colorbar_label='Mean improvement delta',
         ),
     )
 

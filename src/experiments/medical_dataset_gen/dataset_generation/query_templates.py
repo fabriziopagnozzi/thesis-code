@@ -4,6 +4,7 @@ import re
 
 import yaml
 
+from experiments.medical_dataset_gen.dataset_generation.chunk_templates import TEMPLATE_DATA_DIR
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ClinicalAxis,
     MedicalOntology,
@@ -13,17 +14,10 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryTemplateData,
     QueryTemplateSpec,
 )
-from experiments.medical_dataset_gen.utils.global_utils import (
-    MedicalDatasetGenPaths,
-)
-
-_QUERY_TEMPLATE_PATH = (
-    MedicalDatasetGenPaths.root / 'data_templates' / 'query_answer_templates.yaml'
-)
 
 
 def _load_query_template_data() -> QueryTemplateData:
-    with open(_QUERY_TEMPLATE_PATH) as f:
+    with open(TEMPLATE_DATA_DIR / 'query_answer_templates.yaml') as f:
         return QueryTemplateData.model_validate(yaml.safe_load(f) or {})
 
 

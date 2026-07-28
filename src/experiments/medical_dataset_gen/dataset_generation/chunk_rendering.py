@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from random import Random
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
@@ -17,6 +16,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ClinicalFact,
     MedicalOntology,
 )
+from experiments.medical_dataset_gen.utils.deterministic_ids import stable_seed
 from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
 
@@ -37,7 +37,7 @@ def render_canonical_chunk(
     ontology: MedicalOntology,
     text_style: ChunkTextStyle = 'semantic_hardened',
 ) -> RenderedChunkTemplate:
-    rng = Random(_stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
+    rng = Random(stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
     return render_chunk_text_template_result(fact, ontology, rng, text_style=text_style)
 
 
@@ -47,7 +47,7 @@ def render_canonical_chunk_text(
     text_style: ChunkTextStyle = 'semantic_hardened',
     surface_group: ChunkSurfaceGroup | None = None,
 ) -> str:
-    rng = Random(_stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
+    rng = Random(stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
     return render_chunk_text_template_result(
         fact,
         ontology,
@@ -104,7 +104,3 @@ def finalize_chunk_row(
 
 def chunk_id(index: int) -> str:
     return f'chunk_{index + 1:07d}'
-
-
-def _stable_seed(value: str) -> int:
-    return int(hashlib.sha256(value.encode()).hexdigest()[:16], 16)

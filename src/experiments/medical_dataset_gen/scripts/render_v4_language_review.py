@@ -11,21 +11,21 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     render_canonical_chunk,
 )
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
-    TEMPLATE_DATA,
+    CHUNK_TEMPLATE_DATA,
     validate_chunk_template_sources,
     validate_chunk_text,
+)
+from experiments.medical_dataset_gen.dataset_generation.facts import (
+    _payload_required_phrase,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axis_pair_profiles,
     load_ontology,
 )
+from experiments.medical_dataset_gen.dataset_generation.planning import _materialize_plan
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
     query_template_ids,
     render_query_template,
-)
-from experiments.medical_dataset_gen.pipeline.p01_plans import _materialize_plan
-from experiments.medical_dataset_gen.pipeline.p03_facts import (
-    _payload_required_phrase,
 )
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
@@ -83,56 +83,50 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _review_cfg() -> ExperimentCfg:
-    return ExperimentCfg.model_validate(
-        {
-            'dataset_schema_version': 4,
-            'global': {'seed': 42, 'conditions': 22, 'output_experiment': '_v4_language_review'},
-            'generation': {
-                'chunk_pools': {
-                    'dominant_primary': {'size': 24},
-                    'other_primary': {'size': 20},
-                    'secondary': {'size': 14},
-                    'niche': {'size': 4, 'num_clusters_per_query': 0},
-                },
+    return ExperimentCfg.model_validate({
+        'dataset_schema_version': 4,
+        'global': {'seed': 42, 'conditions': 22, 'output_experiment': '_v4_language_review'},
+        'generation': {
+            'chunk_pools': {
+                'dominant_primary': {'size': 24},
+                'other_primary': {'size': 20},
+                'secondary': {'size': 14},
+                'niche': {'size': 4, 'num_clusters_per_query': 0},
             },
-            'retrieval': {'pool_scope': 'query_local'},
-        }
-    )
+        },
+        'retrieval': {'pool_scope': 'query_local'},
+    })
 
 
 def _surface_inventory_rows() -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for condition_anchor in ('outer_template', 'axis_evidence'):
-        templates = TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
+        templates = CHUNK_TEMPLATE_DATA.note_style_templates.templates_for_anchor(condition_anchor)
         for family, bucket in templates.items():
             rows.extend(_bucket_rows('note_style', f'{condition_anchor}:{family}', bucket))
-    for family, bucket in TEMPLATE_DATA.cohort_evidence_templates.model_dump().items():
+    for family, bucket in CHUNK_TEMPLATE_DATA.cohort_evidence_templates.model_dump().items():
         for group, specs in bucket.items():
             for spec in specs:
-                rows.append(
-                    {
-                        'source': 'cohort_evidence',
-                        'family': family,
-                        'surface_group': group,
-                        'template_id': spec['id'],
-                        'template': spec['template'],
-                    }
-                )
-    for course_id, bucket in TEMPLATE_DATA.treatment_course_templates.items():
+                rows.append({
+                    'source': 'cohort_evidence',
+                    'family': family,
+                    'surface_group': group,
+                    'template_id': spec['id'],
+                    'template': spec['template'],
+                })
+    for course_id, bucket in CHUNK_TEMPLATE_DATA.treatment_course_templates.items():
         rows.extend(_bucket_rows('treatment_course', course_id, bucket))
-    for axis, templates in TEMPLATE_DATA.axis_sentence_templates.paired.items():
+    for axis, templates in CHUNK_TEMPLATE_DATA.axis_sentence_templates.paired.items():
         for surface_group in ('seen', 'heldout'):
             for family, spec in templates.template_specs(surface_group):
-                rows.append(
-                    {
-                        'source': 'axis_sentence',
-                        'family': f'{axis}:{family}',
-                        'surface_group': surface_group,
-                        'template_id': spec.id,
-                        'template': spec.template,
-                    }
-                )
-    for axis, interpretations_by_bin in TEMPLATE_DATA.simple_interpretations.items():
+                rows.append({
+                    'source': 'axis_sentence',
+                    'family': f'{axis}:{family}',
+                    'surface_group': surface_group,
+                    'template_id': spec.id,
+                    'template': spec.template,
+                })
+    for axis, interpretations_by_bin in CHUNK_TEMPLATE_DATA.simple_interpretations.items():
         for value_bin, bucket in interpretations_by_bin.items():
             rows.extend(_bucket_rows('simple_interpretation', f'{axis}:{value_bin}', bucket))
     return rows
@@ -155,7 +149,7 @@ def _bucket_rows(source: str, family: str, bucket) -> list[dict[str, object]]:
 def _chunk_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
     ontology = load_ontology(cfg)
     rows: list[dict[str, object]] = []
-    note_styles = list(TEMPLATE_DATA.note_style_templates.outer_template)
+    note_styles = list(CHUNK_TEMPLATE_DATA.note_style_templates.outer_template)
     for condition_id, condition in ontology.conditions.items():
         for axis in CLINICAL_AXIS_LIST:
             for value_bin in ontology.clinical_axes[axis].bins:
@@ -192,23 +186,21 @@ def _chunk_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
                                         f'{condition_id}/{axis}/{value_bin}/{style}: '
                                         + '; '.join(validation.hard_errors)
                                     )
-                                rows.append(
-                                    {
-                                        'condition_id': condition_id,
-                                        'condition_display': condition.display,
-                                        'axis': axis,
-                                        'value_bin': value_bin,
-                                        'axis_payload_json': fact.axis_payload_json,
-                                        'condition_anchor': fact.condition_anchor,
-                                        'note_style': note_style,
-                                        'chunk_text_style': style,
-                                        'surface_group': surface_group,
-                                        'outer_template_id': rendered.provenance.outer_template_id,
-                                        'axis_template_family': rendered.provenance.axis_template_family,
-                                        'axis_template_id': rendered.provenance.axis_template_id,
-                                        'text': rendered.text,
-                                    }
-                                )
+                                rows.append({
+                                    'condition_id': condition_id,
+                                    'condition_display': condition.display,
+                                    'axis': axis,
+                                    'value_bin': value_bin,
+                                    'axis_payload_json': fact.axis_payload_json,
+                                    'condition_anchor': fact.condition_anchor,
+                                    'note_style': note_style,
+                                    'chunk_text_style': style,
+                                    'surface_group': surface_group,
+                                    'outer_template_id': rendered.provenance.outer_template_id,
+                                    'axis_template_family': rendered.provenance.axis_template_family,
+                                    'axis_template_id': rendered.provenance.axis_template_id,
+                                    'text': rendered.text,
+                                })
     return rows
 
 
@@ -365,20 +357,18 @@ def _query_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
     for structure in QUERY_STRUCTURE_LIST:
         for focus_mode in QUERY_FOCUS_MODE_LIST:
             for template_id in query_template_ids(structure, focus_mode):
-                rows.append(
-                    {
-                        'query_structure': structure,
-                        'focus_mode': focus_mode,
-                        'template_id': template_id,
-                        'query_text': render_query_template(
-                            plan,
-                            ontology,
-                            template_id=template_id,
-                            focus_mode=focus_mode,
-                            query_structure=structure,
-                        ),
-                    }
-                )
+                rows.append({
+                    'query_structure': structure,
+                    'focus_mode': focus_mode,
+                    'template_id': template_id,
+                    'query_text': render_query_template(
+                        plan,
+                        ontology,
+                        template_id=template_id,
+                        focus_mode=focus_mode,
+                        query_structure=structure,
+                    ),
+                })
     return rows
 
 
