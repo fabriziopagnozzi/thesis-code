@@ -63,6 +63,7 @@ EMBEDDING_ARTIFACT_FILENAMES: dict[EmbeddingArtifactName, str] = {
 
 type ResultDirOverrides = dict[SyntheticMedicalDatasetTableName | EmbeddingArtifactName, str]
 type SharedEmbeddingArtifactPaths = dict[EmbeddingArtifactName, Path]
+type SharedGenerationArtifactPaths = dict[SharedGenerationTableName, Path]
 type SharedArtifactStoreName = Literal['_shared', '_embeddings']
 
 type YamlMapping = dict[str, object]
@@ -79,7 +80,7 @@ class MedicalDatasetGenPaths:
         self,
         exp_name: str,
         result_dir_overrides: ResultDirOverrides | None = None,
-        shared_generation_dir: Path | str | None = None,
+        shared_generation_artifact_paths: SharedGenerationArtifactPaths | None = None,
         shared_embedding_artifact_paths: SharedEmbeddingArtifactPaths | None = None,
         local_artifact_version: str | None = None,
     ):
@@ -107,9 +108,7 @@ class MedicalDatasetGenPaths:
         self.parent_config_path = self.parent_experiment_dir / '_config.yaml'
         self.subconfig_path = self.config_experiment_dir / '_subconfig.yaml'
         self.result_dir_overrides = dict(result_dir_overrides or {})
-        self.shared_generation_dir = (
-            Path(shared_generation_dir) if shared_generation_dir is not None else None
-        )
+        self.shared_generation_artifact_paths = dict(shared_generation_artifact_paths or {})
         self.shared_embedding_artifact_paths = dict(shared_embedding_artifact_paths or {})
 
     def ensure_dirs(self) -> None:
@@ -121,8 +120,12 @@ class MedicalDatasetGenPaths:
         table: SyntheticMedicalDatasetTableName,
         ext: Literal['parquet', 'json', 'jsonl', 'csv'] = 'parquet',
     ) -> Path:
-        if table in SHARED_GENERATION_TABLE_NAMES and self.shared_generation_dir is not None:
-            return self.shared_generation_dir / f'{table}.{ext}'
+        if table in SHARED_GENERATION_TABLE_NAMES:
+            shared_path = self.shared_generation_artifact_paths.get(
+                cast(SharedGenerationTableName, table)
+            )
+            if shared_path is not None:
+                return shared_path.with_suffix(f'.{ext}')
 
         override = self.result_dir_overrides.get(table)
         if override is None:
@@ -146,7 +149,7 @@ class MedicalDatasetGenPaths:
         return self.experiment_dir / f'{table}.{ext}'
 
     def uses_shared_generation(self) -> bool:
-        return self.shared_generation_dir is not None
+        return bool(self.shared_generation_artifact_paths)
 
     def embeddings_paths(self, name: EmbeddingArtifactName) -> Path:
         shared_path = self.shared_embedding_artifact_paths.get(name)
@@ -269,7 +272,7 @@ def paths_for(
     paths = MedicalDatasetGenPaths(
         cfg.global_.output_experiment,
         result_dir_overrides=cfg.global_.result_dir_overrides,
-        shared_generation_dir=shared_generation_dir_for_config(cfg),
+        shared_generation_artifact_paths=shared_generation_artifact_paths_for_config(cfg),
         shared_embedding_artifact_paths=shared_embedding_artifact_paths_for_config(cfg),
         local_artifact_version=resolved_local_artifact_version,
     )
@@ -281,7 +284,7 @@ def local_artifact_version_for_config(cfg: ExperimentCfg) -> str:
     return f'v{cfg.dataset_schema_version}'
 
 
-def shared_generation_dir_for_config(cfg: ExperimentCfg) -> Path | None:
+def shared_generation_root_for_config(cfg: ExperimentCfg) -> Path | None:
     if not cfg.global_.use_shared:
         return None
 
@@ -294,8 +297,27 @@ def shared_generation_dir_for_config(cfg: ExperimentCfg) -> Path | None:
         MedicalDatasetGenPaths.results_dir
         / parent_name
         / shared_artifact_store_name('_shared', cfg.dataset_schema_version)
-        / shared_generation_mode_key(cfg)
     )
+
+
+def shared_generation_artifact_paths_for_config(
+    cfg: ExperimentCfg,
+) -> SharedGenerationArtifactPaths | None:
+    root = shared_generation_root_for_config(cfg)
+    if root is None:
+        return None
+
+    chunk_dir = root / 'chunks' / chunk_document_mode_key(cfg)
+    query_dir = root / 'queries' / query_document_mode_key(cfg)
+    return {
+        'query_plans': root / 'base' / 'query_plans.parquet',
+        'clinical_facts': root / 'base' / 'clinical_facts.parquet',
+        'chunk_documents': chunk_dir / 'chunk_documents.parquet',
+        'chunk_memberships': chunk_dir / 'chunk_memberships.parquet',
+        'queries': query_dir / 'queries.parquet',
+        'gold_answers': query_dir / 'gold_answers.parquet',
+        'qrels': chunk_dir / 'qrels.parquet',
+    }
 
 
 def shared_embeddings_dir_for_config(cfg: ExperimentCfg) -> Path | None:
@@ -355,10 +377,6 @@ def shared_embedding_artifact_paths_for_config(
         / f'{chunk_key}__{query_key}'
         / 'embedding_metadata.json',
     }
-
-
-def shared_generation_mode_key(cfg: ExperimentCfg) -> str:
-    return f'{query_document_mode_key(cfg)}_{chunk_document_mode_key(cfg)}'
 
 
 def chunk_document_mode_key(cfg: ExperimentCfg) -> str:

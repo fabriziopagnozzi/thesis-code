@@ -7,6 +7,7 @@ import polars as pl
 
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
+    query_template_ids,
     render_answer_template,
     render_query_template,
 )
@@ -29,6 +30,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     TreatmentDurationPayload,
     parse_axis_payload,
 )
+from experiments.medical_dataset_gen.utils.deterministic_ids import stable_id, stable_int
 from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
@@ -52,11 +54,10 @@ def run_make_queries_answers(
 
     query_rows: list[QueryOutputRow] = []
     answer_rows: list[GoldAnswerOutputRow] = []
-
     current_query_id: str | None = None
     current_fact_rows: list[AnswerSourceFact] = []
-    retained_memberships = (
-        read_parquet(paths, 'chunk_memberships')
+    retained_facts = (
+        read_parquet(paths, 'clinical_facts')
         .filter(pl.col('is_gold'))
         .select(
             'query_id',
@@ -68,7 +69,7 @@ def run_make_queries_answers(
             'fact_id',
         )
     )
-    for raw_fact_row in retained_memberships.iter_rows(named=True):
+    for raw_fact_row in retained_facts.iter_rows(named=True):
         fact_row = AnswerSourceFact.model_validate(raw_fact_row)
         query_id = fact_row.query_id
         if current_query_id is None:
@@ -125,9 +126,23 @@ def _finalize_query(
     if plan is None or not fact_rows:
         return
 
+    template_ids = query_template_ids(
+        cfg.generation.query_structure,
+        cfg.generation.focus_mode,
+    )
+    query_key = stable_id(
+        'qv4',
+        cfg.dataset_schema_version,
+        cfg.global_.seed,
+        plan.evidence_profile_id,
+        plan.primary_axis,
+        plan.secondary_axis,
+    )
+    template_id = template_ids[stable_int(query_key, 'template') % len(template_ids)]
     query_text = render_query(
         plan,
         ontology,
+        template_id=template_id,
         focus_mode=cfg.generation.focus_mode,
         query_structure=cfg.generation.query_structure,
     )
@@ -135,7 +150,7 @@ def _finalize_query(
     facet_summaries, facet_answer_objects = _facet_summaries(plan.facets, fact_rows)
     answer_text = _canonical_answer(plan, facet_summaries, ontology)
 
-    query_rows.append(plan.to_query_row(query_text))
+    query_rows.append(plan.to_query_row(query_text, template_id=template_id))
     answer_rows.append(
         plan.to_answer_row(
             answer_text=answer_text,

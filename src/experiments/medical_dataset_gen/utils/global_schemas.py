@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Literal
+from typing import Literal, get_args
 
 import numpy as np
 from pydantic import (
@@ -316,6 +316,9 @@ class LambdaSelectionCfg(BasePydanticCfgModel):
 
 type EvalPlotTheme = Literal['dark', 'light']
 type DatasetSchemaVersion = Literal[2, 3, 4]
+DATASET_SCHEMA_VERSION_LIST = list[DatasetSchemaVersion](
+    get_args(DatasetSchemaVersion.__value__)
+)
 
 
 class EvaluationRerankerCfg(BasePydanticCfgModel):

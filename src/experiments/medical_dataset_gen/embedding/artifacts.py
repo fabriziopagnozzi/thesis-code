@@ -15,6 +15,54 @@ EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
     'query_vectors',
     'query_ids',
 )
+CHUNK_EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
+    'chunk_vectors',
+    'chunk_ids',
+)
+QUERY_EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
+    'query_vectors',
+    'query_ids',
+)
+
+
+def chunk_embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
+    missing = [
+        artifact
+        for artifact in CHUNK_EMBEDDING_ARRAY_ARTIFACTS
+        if not paths.embeddings_paths(artifact).exists()
+    ]
+    if missing:
+        return False
+
+    try:
+        chunk_file = pq.ParquetFile(paths.table_path('chunk_documents'))
+        n_chunks = chunk_file.metadata.num_rows
+        chunk_vectors = np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r')
+        chunk_ids = np.load(paths.embeddings_paths('chunk_ids'), mmap_mode='r')
+    except Exception as exc:
+        print(f'[embed] existing chunk embedding artifacts are unreadable ({exc})')
+        return False
+
+    if chunk_vectors.ndim != 2:
+        print('[embed] existing chunk embedding vectors have invalid rank')
+        return False
+    if chunk_vectors.shape[0] != n_chunks or chunk_ids.shape != (n_chunks,):
+        print(
+            '[embed] existing chunk embedding row count does not match '
+            f'chunk_documents ({chunk_vectors.shape[0]}, {chunk_ids.shape[0]} != {n_chunks})'
+        )
+        return False
+    expected_chunk_ids = [
+        str(value)
+        for value in pl.read_parquet(paths.table_path('chunk_documents'), columns=['chunk_id'])[
+            'chunk_id'
+        ].to_list()
+    ]
+    stored_chunk_ids = [str(value) for value in chunk_ids]
+    if stored_chunk_ids != expected_chunk_ids:
+        print('[embed] existing chunk embedding IDs do not match chunk_documents.parquet')
+        return False
+    return True
 
 
 def embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:

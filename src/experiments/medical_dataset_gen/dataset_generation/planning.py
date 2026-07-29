@@ -18,7 +18,6 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     make_subgroup_pairs_for_condition,
     resolve_axis_pair_generation_policy,
 )
-from experiments.medical_dataset_gen.dataset_generation.query_templates import query_template_ids
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CLINICAL_AXIS_LIST,
     ClinicalAxis,
@@ -272,11 +271,6 @@ def _materialize_plan(
     dominant_id = next(
         facet.facet_id for facet in facets if facet.cluster_role == 'dominant_primary_gold'
     )
-    template_ids = query_template_ids(
-        cfg.generation.query_structure,
-        cfg.generation.focus_mode,
-    )
-    template_id = template_ids[stable_int(query_key, 'template') % len(template_ids)]
     logical_form = QueryLogicalForm(
         type=QUERY_TYPE,
         condition=spec.condition_key,
@@ -296,7 +290,9 @@ def _materialize_plan(
         plan_seed=stable_int(cfg.global_.seed, query_key) % (2**31 - 1),
         split=split,
         query_type=QUERY_TYPE,
-        template_id=template_id,
+        # Surface-template selection belongs to queries_answers so plans can be shared
+        # across query wording modes. The field remains for archived schema compatibility.
+        template_id='deferred',
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
         **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),  # type: ignore[arg-type]

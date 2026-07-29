@@ -234,8 +234,6 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
 
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)
-    queries_with_geometry = _annotate_geometry_outcomes(queries=queries, geometry=df)
-    write_parquet(paths, 'queries', queries_with_geometry)
     slice_stats = (
         df
         .group_by(
@@ -277,31 +275,6 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     )
     print(f'[geometry] {n_pass:,}/{len(df):,} queries pass')
     return df
-
-
-def _annotate_geometry_outcomes(*, queries: pl.DataFrame, geometry: pl.DataFrame) -> pl.DataFrame:
-    """Attach geometry metadata without changing the p01 profile split."""
-    pass_by_query: dict[str, bool] = {}
-    if not geometry.is_empty():
-        pass_by_query = {
-            str(query_id): bool(passes_filter)
-            for query_id, passes_filter in geometry.select('query_id', 'passes_filter').iter_rows(
-                named=False
-            )
-        }
-    rows: list[dict[str, object]] = []
-    for query_row in queries.iter_rows(named=True):
-        row = dict(query_row)
-        query_id = str(row['query_id'])
-        row['passes_geometry_filter'] = bool(pass_by_query.get(query_id, False))
-        rows.append(row)
-
-    if not rows:
-        return queries.head(0).with_columns(
-            pl.lit(None, dtype=pl.Boolean).alias('passes_geometry_filter'),
-        )
-
-    return pl.from_dicts(rows, infer_schema_length=None)
 
 
 def _materialize_embedding_vectors(vectors: NDArray[np.float32]) -> NDArray[np.float32]:

@@ -916,7 +916,7 @@ class QueryPlan(BenchmarkPydanticModel):
         row['facets_json'], row['logical_form_json'] = self._json_columns()
         return row
 
-    def to_query_row(self, query_text: str) -> QueryOutputRow:
+    def to_query_row(self, query_text: str, *, template_id: str | None = None) -> QueryOutputRow:
         facets_json, logical_form_json = self._json_columns()
         return {
             'query_id': self.query_id,
@@ -924,7 +924,7 @@ class QueryPlan(BenchmarkPydanticModel):
             'pool_id': self.pool_id,
             'outcome_profile_id': self.outcome_profile_id,
             'query_type': self.query_type,
-            'template_id': self.template_id,
+            'template_id': template_id or self.template_id,
             'condition_id': self.condition_id,
             'condition_display': self.condition_display,
             'subgroup_a_id': self.subgroup_a_id,

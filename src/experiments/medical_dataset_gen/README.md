@@ -4,6 +4,14 @@ Run the full pipeline with:
 ```bash
 uv run python -m experiments.medical_dataset_gen.pipeline --exp <experiment_name>
 ```
+Pass `--version v2`, `--version v3`, or `--version v4` to override `dataset_schema_version` from the resolved parent/child configuration for that invocation. The override is applied before artifact paths are resolved and is forwarded when a parent invocation launches its child experiments.
+
+```bash
+uv run python -m experiments.medical_dataset_gen.pipeline \
+  --exp <experiment_name> \
+  --version v4
+```
+
 The experiment config must already exist at:
 ```text
 src/experiments/medical_dataset_gen/_results/<experiment_name>/_config.yaml
@@ -13,7 +21,7 @@ Outputs are written under:
 src/experiments/medical_dataset_gen/_results/<experiment_name>/v<dataset-schema-version>/
 ```
 
-For subexperiments, keep `_subconfig.yaml` in the unversioned child directory. Run-local, non-shared artifacts are written below the version leaf, for example `_results/<parent>/<child>/v4/` for schema v4.
+For subexperiments, keep `_subconfig.yaml` in the unversioned child directory. Run-local, non-shared artifacts are written below the version leaf, for example `_results/<parent>/<child>/v4/` for schema v4. Shared generation artifacts are dependency-partitioned below `_results/<parent>/_shared_v4/`: `base/` for plans and facts, `chunks/<mode>/` for rendered documents, memberships, and qrels, and `queries/<mode>/` for queries and answers.
 
 ## Stage Selection
 
@@ -22,6 +30,8 @@ The orchestrator in [pipeline/__main__.py](./src/experiments/medical_dataset_gen
 - `--to <stage>`
 - `--from <stage>`
 - `--stages <stage1,stage2,...>`
+- `--version <v2|v3|v4>`
+- `--queries-only`
 - `--no-log-tee`
 
 Example: rerun only the evaluation and plotting tail of a completed experiment:
@@ -40,6 +50,17 @@ uv run python -m experiments.medical_dataset_gen.pipeline \
   --exp <experiment_name> \
   --stages geom_plots
 ```
+
+When chunk embeddings for the resolved schema version, chunk mode, and embedding model already exist, embed only a new query surface with:
+
+```bash
+uv run python -m experiments.medical_dataset_gen.pipeline \
+  --exp <experiment_name> \
+  --version v4 \
+  --queries-only
+```
+
+The flag affects only the `embed` stage. It fails instead of rebuilding if the resolved chunk vectors or chunk IDs are absent or invalid.
 
 ## Stage Order
 

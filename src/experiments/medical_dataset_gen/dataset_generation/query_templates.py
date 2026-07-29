@@ -34,8 +34,13 @@ def render_query_template(
     query_structure: QueryStructure = 'unbalanced',
 ) -> str:
     focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
+    resolved_template_id = template_id
+    if resolved_template_id is None and plan.template_id != 'deferred':
+        resolved_template_id = plan.template_id
+    if resolved_template_id is None:
+        resolved_template_id = query_template_ids(query_structure, focus_mode)[0]
     template = query_template_spec(
-        template_id or plan.template_id,
+        resolved_template_id,
         query_structure=query_structure,
         focus_mode=focus_mode,
     ).template

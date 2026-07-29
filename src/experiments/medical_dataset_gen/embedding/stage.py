@@ -21,6 +21,8 @@ from experiments.medical_dataset_gen.dataset_generation.caches import (
 )
 from experiments.medical_dataset_gen.embedding.artifacts import (
     EMBEDDING_ARRAY_ARTIFACTS,
+    QUERY_EMBEDDING_ARRAY_ARTIFACTS,
+    chunk_embedding_artifacts_ready,
     embedding_artifacts_ready,
 )
 from experiments.medical_dataset_gen.utils.global_schemas import (
@@ -32,7 +34,10 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 
 
 def run_embed(
-    cfg: ExperimentCfg, paths: MedicalDatasetGenPaths
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+    *,
+    queries_only: bool = False,
 ) -> tuple[NDArray[np.float32], NDArray[np.float32]]:
     if embedding_artifacts_ready(paths):
         print('[embed] skipping; embedding artifacts already exist')
@@ -41,17 +46,113 @@ def run_embed(
             np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r'),
         )
 
-    chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
+    if queries_only:
+        if not chunk_embedding_artifacts_ready(paths):
+            raise RuntimeError(
+                '--queries-only requires valid existing chunk vectors and chunk IDs for the '
+                'resolved embedding model and chunk mode'
+            )
+        chunk_vectors, query_vectors, meta = _embed_queries_only(cfg, paths)
+    else:
+        chunk_vectors, query_vectors, meta = _embed_sentence_transformers_streaming(cfg, paths)
 
     paths.embeddings_paths('metadata').parent.mkdir(parents=True, exist_ok=True)
     with open(paths.embeddings_paths('metadata'), 'w') as f:
         json.dump(meta, f, indent=2)
 
-    print(
-        '[write] embeddings arrays -> '
-        f'{paths.embeddings_paths("chunk_vectors"), paths.embeddings_paths("query_vectors")}'
+    written_paths = (
+        (paths.embeddings_paths('query_vectors'), paths.embeddings_paths('query_ids'))
+        if queries_only
+        else (paths.embeddings_paths('chunk_vectors'), paths.embeddings_paths('query_vectors'))
     )
+    print(f'[write] embeddings arrays -> {written_paths}')
     return chunk_vectors, query_vectors
+
+
+def _embed_queries_only(
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+) -> tuple[NDArray[np.float32], NDArray[np.float32], dict[str, object]]:
+    from helpers.embedder import Embedder
+
+    query_file = pq.ParquetFile(paths.table_path('queries'))
+    n_queries = query_file.metadata.num_rows
+    bucket_size = max(cfg.embeddings.batch_size * 32, 125_000)
+    chunk_vectors = np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r')
+
+    embedder = Embedder(
+        model_name=cfg.embeddings.model_name,
+        batch_size=cfg.embeddings.batch_size,
+        query_prompt=cfg.embeddings.query_prompt,
+        document_prompt=cfg.embeddings.document_prompt,
+        device=cfg.embeddings.device,
+        devices=cfg.embeddings.devices,
+    )
+    try:
+        dim = embedder.dim
+        if chunk_vectors.ndim != 2 or chunk_vectors.shape[1] != dim:
+            raise RuntimeError(
+                'existing chunk embedding dimension does not match the configured model: '
+                f'{chunk_vectors.shape} versus dimension {dim}'
+            )
+        for artifact in QUERY_EMBEDDING_ARRAY_ARTIFACTS:
+            paths.embeddings_paths(artifact).parent.mkdir(parents=True, exist_ok=True)
+
+        query_vectors = np.lib.format.open_memmap(
+            paths.embeddings_paths('query_vectors'),
+            mode='w+',
+            dtype=np.float32,
+            shape=(n_queries, dim),
+        )
+        query_ids = np.lib.format.open_memmap(
+            paths.embeddings_paths('query_ids'),
+            mode='w+',
+            dtype='U32',
+            shape=(n_queries,),
+        )
+        query_written = _fill_embedding_memmaps(
+            file=query_file,
+            id_column='query_id',
+            text_column='query_text',
+            vectors=query_vectors,
+            ids=query_ids,
+            embed_fn=lambda texts: embedder.embed_queries(
+                texts,
+                normalize=cfg.embeddings.normalize,
+            ),
+            batch_size=bucket_size,
+            desc='Embedding queries',
+        )
+        if query_written != n_queries:
+            raise RuntimeError(
+                f'query embedding row count mismatch: {query_written}/{n_queries}'
+            )
+        meta: dict[str, object] = {
+            'dataset_schema_version': cfg.dataset_schema_version,
+            'backend': (
+                'medcpt'
+                if cfg.embeddings.model_name == 'ncbi/MedCPT'
+                else 'sentence_transformers'
+            ),
+            'model_name': cfg.embeddings.model_name,
+            'query_prompt': cfg.embeddings.query_prompt,
+            'document_prompt': cfg.embeddings.document_prompt,
+            'dimension': int(dim),
+            'normalized': cfg.embeddings.normalize,
+            'device': cfg.embeddings.device,
+            'devices': list(cfg.embeddings.devices),
+            'format': 'npy_memmap',
+            'n_chunks': int(chunk_vectors.shape[0]),
+            'n_queries': int(n_queries),
+            'chunk_vectors_file': str(paths.embeddings_paths('chunk_vectors')),
+            'query_vectors_file': str(paths.embeddings_paths('query_vectors')),
+            'chunk_ids_file': str(paths.embeddings_paths('chunk_ids')),
+            'query_ids_file': str(paths.embeddings_paths('query_ids')),
+            'queries_only': True,
+        }
+        return chunk_vectors, query_vectors, meta
+    finally:
+        embedder.release()
 
 
 def _embed_sentence_transformers_streaming(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths):

@@ -32,6 +32,7 @@ from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SharedGenerationTableName,
+    values_for,
 )
 
 type PipelineStage = Literal[
@@ -46,7 +47,7 @@ type PipelineStage = Literal[
     'eval_plots',
     'geom_plots',
 ]
-PIPELINE_STAGE_NAMES = list[PipelineStage](get_args(PipelineStage.__value__))
+PIPELINE_STAGE_NAMES = list[PipelineStage](values_for(PipelineStage))
 PIPELINE_STAGE_SET = set[PipelineStage](PIPELINE_STAGE_NAMES)
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 type StageReadyFn = Callable[[MedicalDatasetGenPaths], bool]
@@ -64,13 +65,15 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
     StageSpec('plans', run_make_query_plans, shared_outputs=('query_plans',)),
     StageSpec('facts', run_make_facts, shared_outputs=('clinical_facts',)),
     StageSpec('chunks', run_make_chunks, shared_outputs=('chunk_documents', 'chunk_memberships')),
-    StageSpec('queries_answers', run_make_queries_answers, shared_outputs=('queries', 'gold_answers')),
+    StageSpec(
+        'queries_answers', run_make_queries_answers, shared_outputs=('queries', 'gold_answers')
+    ),
     StageSpec('qrels', run_make_qrels, shared_outputs=('qrels',)),
     StageSpec('embed', run_embed, ready=embedding_artifacts_ready),
     StageSpec('filter_queries', run_filter_queries),
     StageSpec('eval', run_evaluate),
-    StageSpec('eval_plots', run_eval_plots),
-    StageSpec('geom_plots', run_query_geom_plots),
+    # StageSpec('eval_plots', run_eval_plots),
+    # StageSpec('geom_plots', run_query_geom_plots),
 )
 STAGE_BY_NAME = {spec.name: spec for spec in STAGE_SPECS}
 

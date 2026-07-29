@@ -6,7 +6,9 @@ import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from typing import cast
 
+from experiments.medical_dataset_gen.embedding.stage import run_embed
 from experiments.medical_dataset_gen.pipeline.stages import (
     PIPELINE_STAGE_SET,
     STAGE_BY_NAME,
@@ -14,6 +16,7 @@ from experiments.medical_dataset_gen.pipeline.stages import (
     STANDALONE_SCRIPT_BY_NAME,
     STANDALONE_SCRIPT_SET,
     PipelineStage,
+    StageSpec,
     StandalonePipelineScript,
     pipeline_stage,
     stage_index,
@@ -21,7 +24,11 @@ from experiments.medical_dataset_gen.pipeline.stages import (
 )
 from experiments.medical_dataset_gen.utils.cli_parsing import parse_comma_separated_names
 from experiments.medical_dataset_gen.utils.exp_naming import child_experiment_names
-from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
+from experiments.medical_dataset_gen.utils.global_schemas import (
+    DATASET_SCHEMA_VERSION_LIST,
+    DatasetSchemaVersion,
+    ExperimentCfg,
+)
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     load_config,
@@ -54,7 +61,7 @@ def main() -> None:
         _run_child_experiments(children=children, parent_exp=args.exp)
         return
 
-    cfg = load_config(args.exp)
+    cfg = _with_dataset_schema_version(load_config(args.exp), args.version)
     paths = paths_for(cfg)
 
     if run_specs is not None:
@@ -67,12 +74,26 @@ def main() -> None:
         return
 
     stages_to_run = _selected_stage_names(parser, args)
-    _run_pipeline_stages(cfg=cfg, paths=paths, stage_names=stages_to_run)
+    _run_pipeline_stages(
+        cfg=cfg,
+        paths=paths,
+        stage_names=stages_to_run,
+        queries_only=args.queries_only,
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
+    parser.add_argument(
+        '--version',
+        choices=[f'v{version}' for version in DATASET_SCHEMA_VERSION_LIST],
+        default=None,
+        help=(
+            'Override dataset_schema_version from the resolved experiment config for this run, '
+            'for example --version v4.'
+        ),
+    )
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGE_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGE_SET, default=None)
     parser.add_argument('--stages', default=None)
@@ -95,11 +116,37 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument('--no-log-tee', action='store_true')
     parser.add_argument(
+        '--queries-only',
+        action='store_true',
+        help=(
+            'At the embed stage, require and reuse existing chunk embeddings and write only '
+            'query IDs and query vectors.'
+        ),
+    )
+    parser.add_argument(
         '--parent',
         action='store_true',
         help='Run the parent experiment itself even if child subexperiments exist.',
     )
     return parser
+
+
+def _with_dataset_schema_version(
+    cfg: ExperimentCfg,
+    raw_version: str | None,
+) -> ExperimentCfg:
+    if raw_version is None:
+        return cfg
+
+    version = cast(DatasetSchemaVersion, int(raw_version.removeprefix('v')))
+    if cfg.dataset_schema_version != version:
+        print(
+            '[pipeline] overriding dataset_schema_version: '
+            f'v{cfg.dataset_schema_version} -> v{version}'
+        )
+    raw_cfg = cfg.model_dump(mode='python', by_alias=True)
+    raw_cfg['dataset_schema_version'] = version
+    return ExperimentCfg.model_validate(raw_cfg)
 
 
 def _validate_run_mode_args(
@@ -222,34 +269,44 @@ def _run_pipeline_stages(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
     stage_names: list[PipelineStage],
+    queries_only: bool = False,
 ) -> None:
     colorprint('bright_blue', f'\n[pipeline] running experiment: {paths.exp_name}')
 
     for stage_name in stage_names:
         spec = STAGE_BY_NAME[stage_name]
-        if _should_skip_shared_stage(paths, spec):
+        if _should_skip_shared_stage(cfg, paths, spec):
             continue
         if spec.ready is not None and spec.ready(paths):
             print(f'[pipeline] skipping {stage_name}; artifacts already exist')
             continue
         colorprint('bright_green', f'\n{"=" * 3} Stage: {stage_name} {"=" * 3}')
-        spec.run(cfg, paths)
+        if stage_name == 'embed':
+            run_embed(cfg, paths, queries_only=queries_only)
+        else:
+            spec.run(cfg, paths)
 
 
 def _should_skip_shared_stage(
+    cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
-    spec,
+    spec: StageSpec,
 ) -> bool:
     if not spec.shared_outputs or not paths.uses_shared_generation():
         return False
 
-    missing = [table for table in spec.shared_outputs if not paths.table_path(table).exists()]
+    required_outputs = spec.shared_outputs
+    if spec.name == 'queries_answers' and not cfg.retrieval.compute_answer_rouge:
+        # Retrieval-only runs consume query text but never load answer references.
+        required_outputs = ('queries',)
+
+    missing = [table for table in required_outputs if not paths.table_path(table).exists()]
     if missing:
         return False
 
     print(
         f'[pipeline] skipping shared stage {spec.name}; existing outputs in '
-        f'{paths.table_path(spec.shared_outputs[0]).parent}'
+        f'{paths.table_path(required_outputs[0]).parent}'
     )
     return True
 
