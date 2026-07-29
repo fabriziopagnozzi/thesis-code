@@ -120,7 +120,7 @@ def select_indices(
     sim_to_query: NDArray[np.float32],
     sim_matrix: NDArray[np.float32],
     k: int,
-    lam: float | None,
+    lam: float = 0.5,
     mmr_window: int | None = None,
 ) -> NDArray[np.intp]:
     if strategy == 'top_k':
@@ -130,7 +130,7 @@ def select_indices(
             sim_to_query=sim_to_query,
             sim_matrix=sim_matrix,
             k=k,
-            lam=0.5 if lam is None else lam,
+            lam=lam,
             window=mmr_window,
         )
     if strategy == 'fac_loc':
@@ -138,7 +138,7 @@ def select_indices(
             sim_to_query=sim_to_query,
             sim_matrix=sim_matrix,
             k=k,
-            lam=0.5 if lam is None else lam,
+            lam=lam,
         )
 
     unreachable_code(f'Unsupported strategy: {strategy}')
@@ -184,7 +184,8 @@ def build_query_to_facet_gold_map(qrels: pl.DataFrame) -> QueryIdToFacetMap:
     result: QueryIdToFacetMap = defaultdict(lambda: defaultdict(list))
 
     for query_id, chunk_id, facet_id in (
-        qrels.filter(pl.col('is_gold'))
+        qrels
+        .filter(pl.col('is_gold'))
         .select(
             'query_id',
             'chunk_id',

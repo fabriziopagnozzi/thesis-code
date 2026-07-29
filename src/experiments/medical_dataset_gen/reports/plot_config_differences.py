@@ -19,6 +19,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     family_balanced_mean,
     family_balanced_rate,
     float_or_none,
+    ordered_embedding_models_for_rows,
     short_model_label,
 )
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, PlotFormat
@@ -28,7 +29,6 @@ from experiments.medical_dataset_gen.reports.report_config import (
     BUDGET_CATEGORY_LABELS,
     DELTA_HEATMAP_ABS_SCALE_BY_VALUE_FIELD,
     DELTA_HEATMAP_DEFAULT_ABS_SCALE,
-    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
     REPORT_METRIC_LABEL_SET,
     REPORT_METRIC_LABELS,
     REPORT_METRIC_SPECS,
@@ -92,7 +92,7 @@ def plot_config_fcp_budget_delta_heatmaps(
         title='FCP deltas by wording configuration and retrieval budget',
         footnote=(
             'Each cell gives every represented experiment family equal total weight and includes '
-            'both core embedding models. Cell lines: raw mean for the first strategy; bold FCP '
+            'the report embedding-model set. Cell lines: raw mean for the first strategy; bold FCP '
             'improvement delta; family-balanced win rate. Wording configurations are ordered by mean '
             'FacLoc-vs-MMR improvement across the shown metrics.'
         ),
@@ -190,7 +190,7 @@ def plot_config_metric_delta_heatmap_low_budget(
         title='Low-budget metric deltas by wording configuration',
         footnote=(
             'Each cell gives every represented experiment family equal total weight and includes '
-            'both core embedding models. Cell lines: raw mean for the first strategy; bold '
+            'the report embedding-model set. Cell lines: raw mean for the first strategy; bold '
             'improvement delta; family-balanced win rate.'
         ),
         output_path=output_dir / f'cross_config_metric_delta_heatmap_low_budget.{plot_format}',
@@ -307,7 +307,7 @@ def plot_config_metric_delta_heatmap_low_budget_by_embedding_model(
         panel_rows=panel_rows,
         title='Low-budget metric deltas by wording configuration and embedding model',
         footnote=(
-            'Each row filters to one core embedding model and gives every represented experiment '
+            'Each row filters to one embedding model and gives every represented experiment '
             'family equal total weight. Cell lines: raw mean for the first strategy; bold '
             'improvement delta; family-balanced win rate. Wording configurations are ordered by '
             'mean FacLoc-vs-MMR improvement across the shown metrics.'
@@ -1287,8 +1287,7 @@ def _ordered_metric_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
 
 
 def _ordered_embedding_models(rows: Sequence[Mapping[str, object]]) -> list[str]:
-    available = {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
-    return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
+    return ordered_embedding_models_for_rows(rows)
 
 
 def _budget_labels() -> list[str]:
@@ -1406,7 +1405,7 @@ def _has_multiple_configs(rows: Sequence[Mapping[str, object]]) -> bool:
 
 
 def _is_core_embedding_row(row: Mapping[str, object]) -> bool:
-    return row.get('EmbeddingModel') in EMBEDDING_MODEL_FACETED_PLOT_MODELS
+    return bool(row.get('EmbeddingModel'))
 
 
 def _matrix_with_nan(matrix: Sequence[Sequence[float | None]]) -> list[list[float]]:

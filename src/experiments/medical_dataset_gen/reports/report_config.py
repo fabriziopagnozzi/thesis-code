@@ -16,10 +16,13 @@ AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset(
         'Unknown',
     }
 )
-EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = (
+PREFERRED_EMBEDDING_MODEL_ORDER: tuple[str, ...] = (
     'BAAI/bge-m3',
     'Qwen/Qwen3-Embedding-0.6B',
 )
+# Backward-compatible alias for older imports; model inclusion is controlled by
+# report discovery plus --embedding-models, not by this tuple.
+EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = PREFERRED_EMBEDDING_MODEL_ORDER
 LEGACY_LOW_BUDGET_TOKEN = ''.join(('head', 'line'))
 
 # Fixed color ranges for aggregate heatmaps. The ranges are shared across

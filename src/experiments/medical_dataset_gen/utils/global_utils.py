@@ -4,7 +4,7 @@ import argparse
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NoReturn, cast, get_args
+from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, cast, get_args
 
 import yaml
 
@@ -373,3 +373,7 @@ def query_document_mode_key(cfg: ExperimentCfg) -> str:
 
 def unreachable_code(err: str) -> NoReturn:
     raise RuntimeError(err)
+
+
+def values_for(type: TypeAliasType):
+    return get_args(type.__value__)

@@ -19,6 +19,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     StrategyName,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord, ScalarItem
+from experiments.medical_dataset_gen.reports.report_config import PREFERRED_EMBEDDING_MODEL_ORDER
 from experiments.medical_dataset_gen.utils.exp_naming import (
     is_compact_embedding_child_token,
 )
@@ -131,6 +132,26 @@ def embedding_metadata(record: ExperimentRecord) -> dict[str, object]:
     if not isinstance(raw, dict):
         return {}
     return {str(key): value for key, value in raw.items() if is_jsonish_scalar(value)}
+
+
+def ordered_embedding_models(models: Iterable[str]) -> list[str]:
+    available = {model for model in models if model}
+    preferred = [model for model in PREFERRED_EMBEDDING_MODEL_ORDER if model in available]
+    remaining = sorted(available.difference(preferred))
+    return [*preferred, *remaining]
+
+
+def ordered_embedding_models_for_rows(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    return ordered_embedding_models(
+        str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')
+    )
+
+
+def embedding_model_sort_key(model: str) -> tuple[int, str]:
+    try:
+        return (PREFERRED_EMBEDDING_MODEL_ORDER.index(model), model)
+    except ValueError:
+        return (len(PREFERRED_EMBEDDING_MODEL_ORDER), model)
 
 
 def mean_min_max_for_columns(df: pl.DataFrame, *, columns: Sequence[str]) -> dict[str, object]:

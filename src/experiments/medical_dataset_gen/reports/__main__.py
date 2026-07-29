@@ -21,9 +21,10 @@ from experiments.medical_dataset_gen.reports.discovery import (
     discover_experiments,
     load_experiment_record,
 )
+from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
+from experiments.medical_dataset_gen.reports.latex_macros import render_thesis_result_macros
 from experiments.medical_dataset_gen.reports.latex_tables import (
     render_thesis_aggregate_tables,
-    render_thesis_result_macros,
     thesis_aggregate_tables_path,
     thesis_latex_dir,
     thesis_result_macros_path,
@@ -105,7 +106,17 @@ def run_report(args: CliArgs) -> ReportOutputs:
             artifact_version=args.artifact_version,
             warnings=warnings,
         )
-        _progress(f'discovered {len(records)} completed experiments')
+        discovered_count = len(records)
+        _progress(f'discovered {discovered_count} completed experiments')
+        records, effective_embedding_models = _records_for_embedding_models(
+            records=records,
+            requested_embedding_models=args.embedding_models,
+        )
+        _progress(f'{len(records)} experiments remain after embedding-model filtering')
+        _progress(
+            'using embedding models: '
+            + (', '.join(effective_embedding_models) if effective_embedding_models else 'none')
+        )
         plot_and_recap_records = records
 
         _progress('loading manifest, dataset, and geometry rows')
@@ -203,6 +214,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         paired_suite_rows = suite_effect_summary_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,
+            embedding_models=effective_embedding_models,
             bootstrap_replicates=args.bootstrap_replicates,
             bootstrap_seed=args.bootstrap_seed,
         )
@@ -215,6 +227,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             paired_config_suite_rows = configuration_suite_effect_summary_rows(
                 profile_effects=paired_profile_effects,
                 budget_rows=budget_rows,
+                embedding_models=effective_embedding_models,
                 bootstrap_replicates=args.bootstrap_replicates,
                 bootstrap_seed=args.bootstrap_seed,
             )
@@ -224,6 +237,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         paired_sensitivity_rows = leave_one_out_sensitivity_rows(
             profile_effects=paired_profile_effects,
             budget_rows=budget_rows,
+            embedding_models=effective_embedding_models,
         )
         # The partitioned Parquet artifacts are now complete and all summary
         # rows have been derived. Free the suite-sized profile frame before
@@ -296,6 +310,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_models=effective_embedding_models,
             require_complete_wording_grid=False,
             output_dir=args.output_dir,
         )
@@ -381,9 +396,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'requested_experiments': list(args.experiments),
                     'experiment_regex': args.experiment_regex,
                     'exclude_experiment_regex': args.exclude_experiment_regex,
+                    'requested_embedding_models': list(args.embedding_models),
+                    'effective_embedding_models': list(effective_embedding_models),
                     'artifact_version': args.artifact_version,
                     'main_query_scope': args.main_query_scope,
-                    'experiments_discovered': len(records),
+                    'experiments_discovered': discovered_count,
+                    'experiments_after_embedding_filter': len(records),
                     'cross_query_chunk_modes': args.cross_query_chunk_modes,
                     'wording_configurations': wording_configurations,
                     'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
@@ -412,7 +430,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         _progress('report generation complete')
         return ReportOutputs(
             output_dir=args.output_dir,
-            experiments_discovered=len(records),
+            experiments_discovered=discovered_count,
             experiments_loaded=sum(1 for record in records if record.cfg is not None),
             warnings_count=len(warnings),
             figures_count=len(figures),
@@ -422,6 +440,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
 
 
 def refresh_report_plots(args: CliArgs) -> ReportOutputs:
+    if args.embedding_models:
+        raise ValueError(
+            '--embedding-models requires a full report regeneration; refresh-only commands use '
+            'the already aggregated CSV artifacts.'
+        )
     report_dir = args.refresh_report_dir or args.output_dir
     data_dir = report_dir / 'data'
     if not data_dir.is_dir():
@@ -483,6 +506,11 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
 
 
 def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
+    if args.embedding_models:
+        raise ValueError(
+            '--embedding-models requires a full report regeneration; refresh-only commands use '
+            'the already aggregated CSV artifacts.'
+        )
     report_dir = args.refresh_report_dir or args.output_dir
     data_dir = report_dir / 'data'
     if not data_dir.is_dir():
@@ -512,6 +540,7 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
             metric_family_summary_rows=metric_family_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_models=_effective_embedding_models_for_rows(budget_rows),
             require_complete_wording_grid=args.cross_query_chunk_modes,
         )
     )
@@ -522,6 +551,40 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
         experiments_loaded=len(manifest_rows),
         warnings_count=0,
         figures_count=0,
+    )
+
+
+def _records_for_embedding_models(
+    *,
+    records: Sequence[ExperimentRecord],
+    requested_embedding_models: Sequence[str],
+) -> tuple[list[ExperimentRecord], tuple[str, ...]]:
+    available_models = ordered_embedding_models(record.embedding_model for record in records)
+    if not requested_embedding_models:
+        return list(records), tuple(available_models)
+
+    requested_models = tuple(requested_embedding_models)
+    available_model_set = set(available_models)
+    requested_model_set = set(requested_models)
+    missing_models = [model for model in requested_models if model not in available_model_set]
+    if missing_models:
+        raise ValueError(
+            'Requested embedding models were not found in the discovered experiments: '
+            f'{missing_models}. Available models: {available_models}.'
+        )
+    filtered_records = [
+        record for record in records if record.embedding_model in requested_model_set
+    ]
+    if not filtered_records:
+        raise ValueError('No experiments remain after applying --embedding-models.')
+    return filtered_records, requested_models
+
+
+def _effective_embedding_models_for_rows(rows: Sequence[Mapping[str, object]]) -> tuple[str, ...]:
+    return tuple(
+        ordered_embedding_models(
+            str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')
+        )
     )
 
 
@@ -634,6 +697,7 @@ def _write_thesis_outputs_from_rows(
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
     paired_suite_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
+    embedding_models: Sequence[str],
     require_complete_wording_grid: bool,
     output_dir: Path,
 ) -> None:
@@ -656,6 +720,7 @@ def _write_thesis_outputs_from_rows(
             metric_family_summary_rows=metric_family_summary_rows,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_models=embedding_models,
             require_complete_wording_grid=require_complete_wording_grid,
         )
     )

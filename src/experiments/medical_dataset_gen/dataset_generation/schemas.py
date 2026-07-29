@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Annotated, Literal, TypedDict, get_args
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from experiments.medical_dataset_gen.utils.global_utils import values_for
 
 type ClinicalAxis = Literal[
     'treatment_duration',
@@ -15,7 +17,7 @@ type ClinicalAxis = Literal[
     'care_intensity',
     'diagnostic_evidence_type',
 ]
-CLINICAL_AXIS_LIST = list[ClinicalAxis](get_args(ClinicalAxis.__value__))
+CLINICAL_AXIS_LIST = list[ClinicalAxis](values_for(ClinicalAxis))
 
 
 type ClusterRole = Literal[
@@ -36,16 +38,16 @@ type CohortContrastFamily = Literal[
 
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
-CHUNK_TEXT_STYLE_LIST = list[ChunkTextStyle](get_args(ChunkTextStyle.__value__))
+CHUNK_TEXT_STYLE_LIST = list[ChunkTextStyle](values_for(ChunkTextStyle))
 
 type QueryFocusMode = Literal['list', 'natural']
-QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](get_args(QueryFocusMode.__value__))
+QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](values_for(QueryFocusMode))
 
 type QueryStructure = Literal['unbalanced', 'balanced']
-QUERY_STRUCTURE_LIST = list[QueryStructure](get_args(QueryStructure.__value__))
+QUERY_STRUCTURE_LIST = list[QueryStructure](values_for(QueryStructure))
 
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
-CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_args(ChunkSurfaceGroup.__value__))
+CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](values_for(ChunkSurfaceGroup))
 type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']
 type ConditionAnchor = Literal['outer_template', 'axis_evidence']
 type AxisTemplateFamily = Literal[
@@ -54,7 +56,7 @@ type AxisTemplateFamily = Literal[
     'clinical_assessment',
     'contrast_or_alternative',
 ]
-AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](get_args(AxisTemplateFamily.__value__))
+AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](values_for(AxisTemplateFamily))
 SEEN_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 HELDOUT_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 type SubgroupAxis = Literal['demographic', 'comorbidity']
@@ -474,14 +476,12 @@ class MedicalOntology(BenchmarkPydanticModel):
         return self
 
 
-_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset(
-    {
-        'complicated',
-        'metastatic',
-        'mild',
-        'uncomplicated',
-    }
-)
+_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset({
+    'complicated',
+    'metastatic',
+    'mild',
+    'uncomplicated',
+})
 
 
 def _cohort_contrasts_by_id(contrasts: list[CohortContrast]) -> dict[str, CohortContrast]:

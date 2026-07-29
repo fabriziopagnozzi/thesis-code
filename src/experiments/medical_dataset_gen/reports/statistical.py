@@ -29,15 +29,9 @@ from experiments.medical_dataset_gen.reports.helpers import (
     wording_config_metadata,
 )
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, ExperimentRecord
-from experiments.medical_dataset_gen.reports.report_config import (
-    BUDGET_CATEGORIES,
-    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
-)
+from experiments.medical_dataset_gen.reports.report_config import BUDGET_CATEGORIES
 
 type CellKey = tuple[str, int]
-
-CORE_EMBEDDING_MODELS: tuple[str, ...] = EMBEDDING_MODEL_FACETED_PLOT_MODELS
-CORE_RUN_LABELS: tuple[str, str] = ('bge_m3', 'qwen3_06')
 
 
 @dataclass(frozen=True)
@@ -199,15 +193,17 @@ def suite_effect_summary_rows(
     *,
     profile_effects: pl.DataFrame,
     budget_rows: Sequence[Mapping[str, object]],
+    embedding_models: Sequence[str],
     bootstrap_replicates: int,
     bootstrap_seed: int,
 ) -> list[dict[str, object]]:
-    """Equal-family weighted FCP summaries for the fully crossed core suite."""
+    """Equal-family weighted FCP summaries for the selected embedding suite."""
     if profile_effects.is_empty():
         return []
     budget_by_cell = _budget_by_cell(budget_rows)
-    fcp = profile_effects.filter(
-        (pl.col('MetricLabel') == 'FCP') & pl.col('EmbeddingModel').is_in(CORE_EMBEDDING_MODELS)
+    fcp = _analysis_embedding_frame(
+        profile_effects.filter(pl.col('MetricLabel') == 'FCP'),
+        embedding_models=embedding_models,
     )
     if fcp.is_empty():
         return []
@@ -215,7 +211,10 @@ def suite_effect_summary_rows(
     rows: list[dict[str, object]] = []
     for budget_index, budget in enumerate(BUDGET_CATEGORIES):
         budget_frame = fcp.filter(pl.col('BudgetCategory') == budget)
-        core_frame = _fully_crossed_core_frame(budget_frame)
+        core_frame = _fully_crossed_embedding_frame(
+            budget_frame,
+            embedding_models=embedding_models,
+        )
         if core_frame.is_empty():
             continue
         rows.append(
@@ -247,21 +246,23 @@ def configuration_suite_effect_summary_rows(
     *,
     profile_effects: pl.DataFrame,
     budget_rows: Sequence[Mapping[str, object]],
+    embedding_models: Sequence[str],
     bootstrap_replicates: int,
     bootstrap_seed: int,
 ) -> list[dict[str, object]]:
     """Profile-bootstrap FCP summaries grouped by wording configuration.
 
-    Rows are intentionally equal-family weighted, matching the core suite
-    summary. Configuration-level rows pool the two core embedding models;
+    Rows are intentionally equal-family weighted, matching the selected suite
+    summary. Configuration-level rows pool the selected embedding models;
     configuration-by-model rows expose embedding sensitivity without letting
-    sparsely populated auxiliary models affect the comparison.
+    unselected models affect the comparison.
     """
     if profile_effects.is_empty() or 'WordingConfig' not in profile_effects.columns:
         return []
     budget_by_cell = _budget_by_cell(budget_rows)
-    fcp = profile_effects.filter(
-        (pl.col('MetricLabel') == 'FCP') & pl.col('EmbeddingModel').is_in(CORE_EMBEDDING_MODELS)
+    fcp = _analysis_embedding_frame(
+        profile_effects.filter(pl.col('MetricLabel') == 'FCP'),
+        embedding_models=embedding_models,
     )
     if fcp.is_empty():
         return []
@@ -275,7 +276,10 @@ def configuration_suite_effect_summary_rows(
             config = str(config_key[0] if isinstance(config_key, tuple) else config_key)
             if not config:
                 continue
-            core_frame = _fully_crossed_core_frame(config_frame)
+            core_frame = _fully_crossed_embedding_frame(
+                config_frame,
+                embedding_models=embedding_models,
+            )
             if core_frame.is_empty():
                 continue
             rows.append(
@@ -283,12 +287,12 @@ def configuration_suite_effect_summary_rows(
                     frame=core_frame,
                     budget=budget,
                     scope='Configuration',
-                    embedding_model='core embeddings',
+                    embedding_model='selected embeddings',
                     bootstrap_replicates=bootstrap_replicates,
                     bootstrap_seed=bootstrap_seed + 1_000 + budget_index * 100 + config_index,
                 )
             )
-            for model_index, model in enumerate(CORE_EMBEDDING_MODELS):
+            for model_index, model in enumerate(embedding_models):
                 model_frame = config_frame.filter(pl.col('EmbeddingModel') == model)
                 if model_frame.is_empty():
                     continue
@@ -317,7 +321,7 @@ def configuration_suite_effect_summary_rows(
                         frame=family_frame,
                         budget=budget,
                         scope='Configuration x family',
-                        embedding_model='core embeddings',
+                        embedding_model='selected embeddings',
                         bootstrap_replicates=bootstrap_replicates,
                         bootstrap_seed=(
                             bootstrap_seed
@@ -336,20 +340,25 @@ def leave_one_out_sensitivity_rows(
     *,
     profile_effects: pl.DataFrame,
     budget_rows: Sequence[Mapping[str, object]],
+    embedding_models: Sequence[str],
 ) -> list[dict[str, object]]:
-    """Point-estimate sensitivity for excluding one core distribution or family."""
+    """Point-estimate sensitivity for excluding one selected distribution or family."""
     if profile_effects.is_empty():
         return []
     budget_by_cell = _budget_by_cell(budget_rows)
     fcp = _with_budget_category(
-        profile_effects.filter(
-            (pl.col('MetricLabel') == 'FCP') & pl.col('EmbeddingModel').is_in(CORE_EMBEDDING_MODELS)
+        _analysis_embedding_frame(
+            profile_effects.filter(pl.col('MetricLabel') == 'FCP'),
+            embedding_models=embedding_models,
         ),
         budget_by_cell,
     )
     rows: list[dict[str, object]] = []
     for budget in BUDGET_CATEGORIES:
-        core_frame = _fully_crossed_core_frame(fcp.filter(pl.col('BudgetCategory') == budget))
+        core_frame = _fully_crossed_embedding_frame(
+            fcp.filter(pl.col('BudgetCategory') == budget),
+            embedding_models=embedding_models,
+        )
         if core_frame.is_empty():
             continue
         for distribution in core_frame['Distribution'].unique().sort().to_list():
@@ -370,7 +379,7 @@ def render_statistical_latex_table(rows: Sequence[Mapping[str, object]]) -> str:
         r'\subsection{Paired Statistical Estimates}',
         r'{\small',
         r'\begin{longtable}{@{}p{0.22\linewidth}lrrrlp{0.22\linewidth}@{}}',
-        r'\caption{Profile-cluster bootstrap estimates for the held-out FacLoc--MMR FCP difference in the fully crossed core suite. Families receive equal weight in the Core suite row.}',
+        r'\caption{Profile-cluster bootstrap estimates for the held-out FacLoc--MMR FCP difference in the fully crossed embedding-model suite represented by the report. Families receive equal weight in the Core suite row.}',
         r'\label{tab:paired-fcp-estimates} \\',
         r'\toprule',
         r'\textbf{Scope} & \textbf{Budget} & \textbf{Dist.} & \textbf{Runs} & \textbf{Effect} & \textbf{95\% CI} & \textbf{Interpretation} \\',
@@ -567,9 +576,25 @@ def _with_budget_category(
     )
 
 
-def _fully_crossed_core_frame(frame: pl.DataFrame) -> pl.DataFrame:
-    core_frame = frame.filter(pl.col('EmbeddingModel').is_in(CORE_EMBEDDING_MODELS))
-    required_models = set(CORE_EMBEDDING_MODELS)
+def _analysis_embedding_frame(
+    frame: pl.DataFrame,
+    *,
+    embedding_models: Sequence[str],
+) -> pl.DataFrame:
+    if not embedding_models:
+        return frame
+    return frame.filter(pl.col('EmbeddingModel').is_in(embedding_models))
+
+
+def _fully_crossed_embedding_frame(
+    frame: pl.DataFrame,
+    *,
+    embedding_models: Sequence[str],
+) -> pl.DataFrame:
+    core_frame = _analysis_embedding_frame(frame, embedding_models=embedding_models)
+    required_models = set(embedding_models)
+    if not required_models:
+        required_models = set(cast(list[str], core_frame['EmbeddingModel'].unique().to_list()))
     valid_distributions = [
         str(distribution)
         for distribution, models in (

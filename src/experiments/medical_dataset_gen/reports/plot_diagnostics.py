@@ -20,9 +20,6 @@ from experiments.medical_dataset_gen.reports.helpers import (
     strategy_label,
 )
 from experiments.medical_dataset_gen.reports.models import PlotFormat
-from experiments.medical_dataset_gen.reports.report_config import (
-    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
-)
 
 GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
     ('Dominant primary gold', 'DominantPrimaryGoldCountMean', '#0B5D6E'),
@@ -274,7 +271,7 @@ def _geometry_pass_rate_rows(
             row
             for row in rows
             if float_or_none(row.get('GeometryPassRate')) is not None
-            and row.get('EmbeddingModel') in EMBEDDING_MODEL_FACETED_PLOT_MODELS
+            and row.get('EmbeddingModel')
         ],
         'GeometryPassRate',
     )

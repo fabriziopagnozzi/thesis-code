@@ -39,6 +39,7 @@ class CliArgs:
     experiments: tuple[str, ...]
     experiment_regex: str | None
     exclude_experiment_regex: str | None
+    embedding_models: tuple[str, ...]
     artifact_version: str | None
     max_table_rows: int
     tablefmt: str

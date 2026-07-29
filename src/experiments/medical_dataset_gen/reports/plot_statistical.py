@@ -7,9 +7,13 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from experiments.medical_dataset_gen.reports.helpers import float_or_none, short_experiment_id
+from experiments.medical_dataset_gen.reports.helpers import (
+    embedding_model_sort_key,
+    float_or_none,
+    ordered_embedding_models_for_rows,
+    short_experiment_id,
+)
 from experiments.medical_dataset_gen.reports.models import PlotFormat
-from experiments.medical_dataset_gen.reports.statistical import CORE_EMBEDDING_MODELS
 
 
 def plot_paired_fcp_forest(
@@ -25,7 +29,6 @@ def plot_paired_fcp_forest(
         row
         for row in cell_rows
         if row.get('BudgetCategory') == 'low_budget'
-        and row.get('EmbeddingModel') in CORE_EMBEDDING_MODELS
         and float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
         and float_or_none(row.get('CI95Low')) is not None
         and float_or_none(row.get('CI95High')) is not None
@@ -97,7 +100,7 @@ def plot_paired_fcp_forest(
         ax.set_yticklabels(labels, fontsize=7)
         ax.invert_yaxis()
         ax.set_xlabel('Held-out FacLoc - MMR FCP effect (95% profile-bootstrap CI)')
-        ax.set_title('Low-budget paired FCP effects in the fully crossed core suite')
+        ax.set_title('Low-budget paired FCP effects in the fully crossed embedding suite')
         ax.grid(axis='x', alpha=0.22)
         fig.tight_layout()
         path = output_dir / f'paired_fcp_low_budget_forest.{plot_format}'
@@ -148,13 +151,12 @@ def plot_paired_fcp_config_embedding_forest(
     output_dir: Path,
     plot_format: PlotFormat,
 ) -> list[Path]:
-    """Plot low-budget paired FCP effects by wording configuration and core model."""
+    """Plot low-budget paired FCP effects by wording configuration and embedding model."""
     plot_rows = [
         row
         for row in rows
         if row.get('BudgetCategory') == 'low_budget'
         and row.get('Scope') == 'Configuration x embedding'
-        and row.get('EmbeddingModel') in CORE_EMBEDDING_MODELS
         and float_or_none(row.get('MeanDeltaFacLocMMR')) is not None
         and float_or_none(row.get('CI95Low')) is not None
         and float_or_none(row.get('CI95High')) is not None
@@ -246,7 +248,7 @@ def _draw_errorbar_points(
 def _add_model_legend(ax: Any, rows: Sequence[Mapping[str, object]]) -> None:
     from matplotlib.patches import Patch
 
-    models = [model for model in CORE_EMBEDDING_MODELS if _model_present(rows, model)]
+    models = ordered_embedding_models_for_rows(rows)
     if len(models) <= 1:
         return
     handles = [
@@ -266,7 +268,7 @@ def _model_present(rows: Sequence[Mapping[str, object]], model: str) -> bool:
 
 def _forest_color(row: Mapping[str, object]) -> str:
     model = row.get('EmbeddingModel')
-    if model in CORE_EMBEDDING_MODELS:
+    if isinstance(model, str) and model:
         return _model_color(str(model))
     return '#287C8E'
 
@@ -288,11 +290,11 @@ def _config_forest_sort_key(row: Mapping[str, object]) -> tuple[tuple[int, int, 
 
 def _config_embedding_forest_sort_key(
     row: Mapping[str, object],
-) -> tuple[tuple[int, int, int, str], int, float]:
-    model_order = {model: index for index, model in enumerate(CORE_EMBEDDING_MODELS)}
+) -> tuple[tuple[int, int, int, str], tuple[int, str], float]:
+    model_key = embedding_model_sort_key(str(row.get('EmbeddingModel') or ''))
     return (
         _config_sort_key(str(row.get('WordingConfig') or '')),
-        model_order.get(str(row.get('EmbeddingModel') or ''), 99),
+        model_key,
         -(float_or_none(row.get('MeanDeltaFacLocMMR')) or -math.inf),
     )
 

@@ -9,8 +9,9 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DISTRIBUTION_EXPERIMENT_FAMILIES,
     practical_effect_threshold,
 )
+from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
 from experiments.medical_dataset_gen.reports.report_config import (
-    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
+    PREFERRED_EMBEDDING_MODEL_ORDER,
     REPORT_METRIC_SPECS,
 )
 
@@ -31,21 +32,47 @@ FACTOR_CONTRASTS: tuple[FactorContrast, ...] = (
     FactorContrast('FocusMode', 'list', 'natural'),
     FactorContrast('ChunkTextMode', 'simple', 'hardened'),
 )
-_MODEL_TOKENS = dict(zip(EMBEDDING_MODEL_FACETED_PLOT_MODELS, ('Bge', 'Qwen'), strict=True))
+_PREFERRED_MODEL_TOKENS = dict(zip(PREFERRED_EMBEDDING_MODEL_ORDER, ('Bge', 'Qwen'), strict=True))
+
+
+def _effective_embedding_models(
+    *,
+    rows: Sequence[ReportRow],
+    embedding_models: Sequence[str],
+) -> tuple[str, ...]:
+    if embedding_models:
+        return tuple(embedding_models)
+    return tuple(
+        ordered_embedding_models(
+            str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')
+        )
+    )
+
+
+def _model_token(model: str) -> str:
+    token = _PREFERRED_MODEL_TOKENS.get(model)
+    if token is not None:
+        return token
+    return _macro_token(model.rsplit('/', 1)[-1] or model)
 
 
 def render_wording_result_macros(
     *,
     budget_rows: Sequence[ReportRow],
     geometry_rows: Sequence[ReportRow],
+    embedding_models: Sequence[str] = (),
     require_complete_grid: bool = False,
 ) -> dict[str, str]:
     """Calculate low-budget wording-sweep scalars used by the results preview."""
     low_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'low_budget']
+    effective_embedding_models = _effective_embedding_models(
+        rows=low_rows,
+        embedding_models=embedding_models,
+    )
     core_rows = [
         row
         for row in low_rows
-        if row.get('EmbeddingModel') in EMBEDDING_MODEL_FACETED_PLOT_MODELS
+        if row.get('EmbeddingModel') in effective_embedding_models
         and row.get('ExperimentFamily') in DISTRIBUTION_EXPERIMENT_FAMILIES
         and _wording_key(row) is not None
     ]
@@ -54,27 +81,41 @@ def render_wording_result_macros(
             raise ValueError('No fully typed low-budget wording rows were found in the report.')
         return {}
 
-    grid_error = _wording_grid_error(core_rows)
+    grid_error = _wording_grid_error(core_rows, embedding_models=effective_embedding_models)
     if grid_error is not None:
         if require_complete_grid:
             raise ValueError(grid_error)
         return {}
 
-    macros = _grid_metadata_macros(core_rows=core_rows, all_low_rows=low_rows)
+    macros = _grid_metadata_macros(
+        core_rows=core_rows,
+        all_low_rows=low_rows,
+        embedding_models=effective_embedding_models,
+    )
     macros.update(_fcp_summary_macros('ResultWordingLowOverall', core_rows))
     macros.update(_grouped_fcp_macros(core_rows))
     macros.update(_factor_macros(core_rows))
     macros.update(_family_chunk_macros(core_rows))
     macros.update(_metric_decomposition_macros(core_rows))
-    macros.update(_embedding_contrast_macros(core_rows))
-    macros.update(_geometry_macros(core_rows=core_rows, geometry_rows=geometry_rows))
+    macros.update(_embedding_contrast_macros(core_rows, embedding_models=effective_embedding_models))
+    macros.update(
+        _geometry_macros(
+            core_rows=core_rows,
+            geometry_rows=geometry_rows,
+            embedding_models=effective_embedding_models,
+        )
+    )
     macros['ResultWordingLowOverallPrecisionPositiveCells'] = _integer(
         sum(_numeric(row, 'Delta_FacLoc_MMR_Precision') > 0.0 for row in core_rows)
     )
     return macros
 
 
-def _wording_grid_error(rows: Sequence[ReportRow]) -> str | None:
+def _wording_grid_error(
+    rows: Sequence[ReportRow],
+    *,
+    embedding_models: Sequence[str],
+) -> str | None:
     configurations = {_required_wording_key(row) for row in rows}
     query_modes = sorted({key[0] for key in configurations})
     focus_modes = sorted({key[1] for key in configurations})
@@ -85,7 +126,7 @@ def _wording_grid_error(rows: Sequence[ReportRow]) -> str | None:
             'of the wording factor levels represented in the report.'
         )
 
-    expected_models = set(EMBEDDING_MODEL_FACETED_PLOT_MODELS)
+    expected_models = set(embedding_models)
     models = {str(row.get('EmbeddingModel') or '') for row in rows}
     if models != expected_models:
         return f'The wording macro grid has embedding models {sorted(models)}, expected {sorted(expected_models)}.'
@@ -121,6 +162,7 @@ def _grid_metadata_macros(
     *,
     core_rows: Sequence[ReportRow],
     all_low_rows: Sequence[ReportRow],
+    embedding_models: Sequence[str],
 ) -> dict[str, str]:
     configurations = {_required_wording_key(row) for row in core_rows}
     variants = {
@@ -135,7 +177,7 @@ def _grid_metadata_macros(
     auxiliary_rows = [
         row
         for row in all_low_rows
-        if row.get('EmbeddingModel') not in EMBEDDING_MODEL_FACETED_PLOT_MODELS
+        if row.get('EmbeddingModel') not in embedding_models
         and row.get('ExperimentFamily') in DISTRIBUTION_EXPERIMENT_FAMILIES
         and _wording_key(row) is not None
     ]
@@ -144,7 +186,7 @@ def _grid_metadata_macros(
         'ResultWordingDistributionFamilies': _integer(len(families)),
         'ResultWordingDistributionVariants': _integer(len(variants)),
         'ResultWordingConfigurations': _integer(len(configurations)),
-        'ResultWordingCoreEmbeddingModels': _integer(len(EMBEDDING_MODEL_FACETED_PLOT_MODELS)),
+        'ResultWordingCoreEmbeddingModels': _integer(len(embedding_models)),
         'ResultWordingCoreCells': _integer(len(core_rows)),
         'ResultWordingCellsPerConfiguration': _integer(len(core_rows) // len(configurations)),
         'ResultWordingAuxiliaryCells': _integer(len(auxiliary_rows)),
@@ -158,7 +200,7 @@ def _grouped_fcp_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
     grouping_specs = (
         ('Config', lambda row: _macro_token('_'.join(_required_wording_key(row)))),
         ('Family', lambda row: _macro_token(str(row.get('ExperimentFamily') or ''))),
-        ('Embedding', lambda row: _MODEL_TOKENS[str(row.get('EmbeddingModel') or '')]),
+        ('Embedding', lambda row: _model_token(str(row.get('EmbeddingModel') or ''))),
         ('Distribution', lambda row: _macro_token(str(row.get('ShortDistribution') or ''))),
     )
     for group_name, token_for_row in grouping_specs:
@@ -249,24 +291,30 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
     return macros
 
 
-def _embedding_contrast_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
-    bge_model, qwen_model = EMBEDDING_MODEL_FACETED_PLOT_MODELS
-    bge_rows = [row for row in rows if row.get('EmbeddingModel') == bge_model]
-    qwen_rows = [row for row in rows if row.get('EmbeddingModel') == qwen_model]
+def _embedding_contrast_macros(
+    rows: Sequence[ReportRow],
+    *,
+    embedding_models: Sequence[str],
+) -> dict[str, str]:
     macros: dict[str, str] = {}
-    for column, token in (
-        ('TopK_FCP', 'TopKFcpMeanChange'),
-        ('MMR_FCP', 'MmrFcpMeanChange'),
-        ('FacLoc_FCP', 'FacLocFcpMeanChange'),
-        ('Delta_FacLoc_MMR_FCP', 'FacLocMmrFcpMeanDeltaChange'),
-    ):
-        macros[f'ResultWordingLowQwenMinusBge{token}'] = _signed(
-            _column_mean(qwen_rows, column) - _column_mean(bge_rows, column), digits=3
-        )
+    bge_model = 'BAAI/bge-m3'
+    qwen_model = 'Qwen/Qwen3-Embedding-0.6B'
+    if bge_model in embedding_models and qwen_model in embedding_models:
+        bge_rows = [row for row in rows if row.get('EmbeddingModel') == bge_model]
+        qwen_rows = [row for row in rows if row.get('EmbeddingModel') == qwen_model]
+        for column, token in (
+            ('TopK_FCP', 'TopKFcpMeanChange'),
+            ('MMR_FCP', 'MmrFcpMeanChange'),
+            ('FacLoc_FCP', 'FacLocFcpMeanChange'),
+            ('Delta_FacLoc_MMR_FCP', 'FacLocMmrFcpMeanDeltaChange'),
+        ):
+            macros[f'ResultWordingLowQwenMinusBge{token}'] = _signed(
+                _column_mean(qwen_rows, column) - _column_mean(bge_rows, column), digits=3
+            )
     grouped_rows: dict[tuple[str, str], list[ReportRow]] = {}
     for row in rows:
         config_token = _macro_token('_'.join(_required_wording_key(row)))
-        model_token = _MODEL_TOKENS[str(row.get('EmbeddingModel') or '')]
+        model_token = _model_token(str(row.get('EmbeddingModel') or ''))
         grouped_rows.setdefault((config_token, model_token), []).append(row)
     for (config_token, model_token), matching_rows in grouped_rows.items():
         macro_name = (
@@ -280,13 +328,14 @@ def _geometry_macros(
     *,
     core_rows: Sequence[ReportRow],
     geometry_rows: Sequence[ReportRow],
+    embedding_models: Sequence[str],
 ) -> dict[str, str]:
     core_experiments = {str(row.get('Experiment') or '') for row in core_rows}
     matching_rows = [
         row
         for row in geometry_rows
         if str(row.get('Experiment') or '') in core_experiments
-        and row.get('EmbeddingModel') in EMBEDDING_MODEL_FACETED_PLOT_MODELS
+        and row.get('EmbeddingModel') in embedding_models
     ]
     if len(matching_rows) != len(core_experiments):
         raise ValueError(
@@ -297,7 +346,8 @@ def _geometry_macros(
     if len(total_queries) != 1:
         raise ValueError('The core wording grid has inconsistent total query counts.')
     macros = {'ResultWordingDatasetQueries': next(iter(total_queries))}
-    for model, token in _MODEL_TOKENS.items():
+    for model in embedding_models:
+        token = _model_token(model)
         model_rows = [row for row in matching_rows if row.get('EmbeddingModel') == model]
         macros[f'ResultWordingGeometry{token}PassRateMean'] = _fixed(
             _column_mean(model_rows, 'GeometryPassRate'), digits=3

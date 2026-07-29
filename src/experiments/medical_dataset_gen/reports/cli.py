@@ -78,6 +78,15 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Optional Python regex for resolved completed experiment names to exclude.',
     )
     parser.add_argument(
+        '--embedding-models',
+        nargs='+',
+        default=(),
+        help=(
+            'Optional exact embedding model names to include, for example '
+            'BAAI/bge-m3 Qwen/Qwen3-Embedding-0.6B. Defaults to all discovered models.'
+        ),
+    )
+    parser.add_argument(
         '--artifact-version',
         default=None,
         help='Optional exact local artifact version to report, for example v4.',
@@ -191,6 +200,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             if parsed.exclude_experiment_regex is not None
             else None
         ),
+        embedding_models=tuple(_normalized_embedding_models(parsed.embedding_models)),
         artifact_version=(
             str(parsed.artifact_version).strip() if parsed.artifact_version is not None else None
         ),
@@ -206,3 +216,16 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         bootstrap_seed=int(parsed.bootstrap_seed),
         main_query_scope=cast(MainQueryScope, parsed.main_query_scope),
     )
+
+
+def _normalized_embedding_models(raw_values: Sequence[object]) -> list[str]:
+    models: list[str] = []
+    seen: set[str] = set()
+    for raw_value in raw_values:
+        for part in str(raw_value).split(','):
+            model = part.strip()
+            if not model or model in seen:
+                continue
+            seen.add(model)
+            models.append(model)
+    return models

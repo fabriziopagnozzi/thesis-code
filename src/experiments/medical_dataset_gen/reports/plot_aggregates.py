@@ -15,7 +15,11 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ExperimentFamilyId,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.reports.helpers import float_or_none, short_model_label
+from experiments.medical_dataset_gen.reports.helpers import (
+    float_or_none,
+    ordered_embedding_models_for_rows,
+    short_model_label,
+)
 from experiments.medical_dataset_gen.reports.models import (
     BudgetCategory,
     DeltaMetricPlotSpec,
@@ -31,7 +35,6 @@ from experiments.medical_dataset_gen.reports.report_config import (
     BUDGET_CATEGORY_LABELS,
     DELTA_HEATMAP_ABS_SCALE_BY_VALUE_FIELD,
     DELTA_HEATMAP_DEFAULT_ABS_SCALE,
-    EMBEDDING_MODEL_FACETED_PLOT_MODELS,
     REPORT_METRIC_LABEL_SET,
     REPORT_METRIC_LABELS,
     REPORT_METRIC_SPECS,
@@ -938,8 +941,7 @@ def _fraction_or_none(numerator: int, denominator: int) -> float | None:
 
 
 def _ordered_embedding_models(rows: Sequence[Mapping[str, object]]) -> list[str]:
-    available = {str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')}
-    return [model for model in EMBEDDING_MODEL_FACETED_PLOT_MODELS if model in available]
+    return ordered_embedding_models_for_rows(rows)
 
 
 def _embedding_heatmap_fig_height(*, model_count: int, matrix_row_count: int) -> float:

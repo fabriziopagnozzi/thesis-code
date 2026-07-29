@@ -1,4 +1,4 @@
-dataset_schema_version: 4
+dataset_schema_version: 2
 
 global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
