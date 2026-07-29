@@ -24,17 +24,18 @@ from experiments.medical_dataset_gen.utils.exp_naming import (
     is_compact_embedding_child_token,
 )
 
-type QueryModeToken = Literal['biased', 'unbiased']
+type QueryModeToken = Literal['biased', 'unbiased', 'label_only']
 type ChunkTextModeToken = Literal['simple', 'hardened']
 
 _CHILD_MODE_RE = re.compile(
-    r'^(?P<query_mode>biased|unbiased)_q_'
-    r'(?P<focus_mode>list|natural)_f_'
+    r'^(?P<query_mode>biased|unbiased|label_only)_q_'
+    r'(?P<focus_mode>list|natural|label_only)_f_'
     r'(?P<chunk_text_mode>simple|hardened)_c(?:_.+)?$'
 )
 _QUERY_MODE_BY_STRUCTURE: dict[str, QueryModeToken] = {
     'unbalanced': 'biased',
     'balanced': 'unbiased',
+    'label_only': 'label_only',
 }
 _CHUNK_TEXT_MODE_BY_STYLE: dict[str, ChunkTextModeToken] = {
     'ontology_explicit': 'simple',
@@ -81,6 +82,9 @@ def wording_config_metadata(record: ExperimentRecord) -> dict[str, object]:
         or 'unknown'
     )
     focus_mode = parsed.get('FocusMode') or focus_mode or 'unknown'
+    if query_structure == 'label_only' or query_mode == 'label_only':
+        query_mode = 'label_only'
+        focus_mode = 'label_only'
     config_id = f'{query_mode}_q_{focus_mode}_f_{chunk_text_mode}_c'
     return {
         'QueryMode': query_mode,
@@ -108,6 +112,18 @@ def _parse_child_mode_tokens(run_label: str) -> dict[str, str]:
     }
 
 
+def wording_config_parts(config: str) -> tuple[str, str, str]:
+    """Parse a stable wording ID, including the singleton label-only mode."""
+    parsed = _parse_child_mode_tokens(config)
+    if not parsed:
+        return ('unknown', 'unknown', 'unknown')
+    return (
+        parsed['QueryMode'],
+        parsed['FocusMode'],
+        parsed['ChunkTextMode'],
+    )
+
+
 def _wording_config_label(
     *,
     query_mode: str,
@@ -116,6 +132,8 @@ def _wording_config_label(
 ) -> str:
     if 'unknown' in {query_mode, focus_mode, chunk_text_mode}:
         return 'unknown'
+    if query_mode == 'label_only' and focus_mode == 'label_only':
+        return f'label-only / {chunk_text_mode}'
     return f'{query_mode} / {focus_mode} / {chunk_text_mode}'
 
 

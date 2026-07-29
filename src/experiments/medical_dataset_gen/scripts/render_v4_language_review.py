@@ -30,8 +30,7 @@ from experiments.medical_dataset_gen.dataset_generation.query_templates import (
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
     CLINICAL_AXIS_LIST,
-    QUERY_FOCUS_MODE_LIST,
-    QUERY_STRUCTURE_LIST,
+    QUERY_WORDING_MODE_LIST,
     AcuteClinicalCoursePayload,
     AxisFactPayload,
     CareIntensityPayload,
@@ -354,21 +353,20 @@ def _query_sample_rows(cfg: ExperimentCfg) -> list[dict[str, object]]:
         query_id='review_q1',
     )
     rows: list[dict[str, object]] = []
-    for structure in QUERY_STRUCTURE_LIST:
-        for focus_mode in QUERY_FOCUS_MODE_LIST:
-            for template_id in query_template_ids(structure, focus_mode):
-                rows.append({
-                    'query_structure': structure,
-                    'focus_mode': focus_mode,
-                    'template_id': template_id,
-                    'query_text': render_query_template(
-                        plan,
-                        ontology,
-                        template_id=template_id,
-                        focus_mode=focus_mode,
-                        query_structure=structure,
-                    ),
-                })
+    for structure, focus_mode in QUERY_WORDING_MODE_LIST:
+        for template_id in query_template_ids(structure, focus_mode):
+            rows.append({
+                'query_structure': structure,
+                'focus_mode': 'label_only' if structure == 'label_only' else focus_mode,
+                'template_id': template_id,
+                'query_text': render_query_template(
+                    plan,
+                    ontology,
+                    template_id=template_id,
+                    focus_mode=focus_mode,
+                    query_structure=structure,
+                ),
+            })
     return rows
 
 

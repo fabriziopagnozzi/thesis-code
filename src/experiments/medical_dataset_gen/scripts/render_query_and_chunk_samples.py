@@ -17,12 +17,12 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 from experiments.medical_dataset_gen.dataset_generation.facts import make_gold_fact
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
+    query_template_ids,
     render_query_template,
 )
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
-    QUERY_FOCUS_MODE_LIST,
-    QUERY_STRUCTURE_LIST,
+    QUERY_WORDING_MODE_LIST,
     ChunkSurfacePolicy,
     ChunkTextStyle,
     ClinicalAxis,
@@ -326,7 +326,7 @@ def _render_markdown(
     lines = [
         '# Query and Chunk Mode Samples',
         '',
-        'This file renders one fixed query setup under all eight surface modalities.',
+        f'This file renders one fixed query setup under all {len(_all_modes())} surface modalities.',
         '',
         '## Fixed setup',
         '',
@@ -353,15 +353,26 @@ def _render_markdown(
     lines.extend(['', '## Modalities', ''])
 
     for index, (chunk_text_style, focus_mode, query_structure) in enumerate(_all_modes(), start=1):
+        template_id = (
+            query_template_ids(query_structure, focus_mode)[0]
+            if query_structure == 'label_only'
+            else plan.template_id
+        )
         query_text = render_query_template(
             plan,
             ontology,
+            template_id=template_id,
             focus_mode=focus_mode,
             query_structure=query_structure,
         )
+        query_mode_label = (
+            '`label_only`'
+            if query_structure == 'label_only'
+            else f'`{focus_mode}` / `{query_structure}`'
+        )
         lines.extend(
             [
-                f'### {index}. `{chunk_text_style}` / `{focus_mode}` / `{query_structure}`',
+                f'### {index}. `{chunk_text_style}` / {query_mode_label}',
                 '',
                 '**Query**',
                 '',
@@ -393,8 +404,7 @@ def _all_modes() -> list[QueryChunkMode]:
     return [
         (chunk_text_style, focus_mode, query_structure)
         for chunk_text_style in CHUNK_TEXT_STYLE_LIST
-        for focus_mode in QUERY_FOCUS_MODE_LIST
-        for query_structure in QUERY_STRUCTURE_LIST
+        for query_structure, focus_mode in QUERY_WORDING_MODE_LIST
     ]
 
 

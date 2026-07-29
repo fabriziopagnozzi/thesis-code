@@ -12,6 +12,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     float_or_none,
     ordered_embedding_models_for_rows,
     short_experiment_id,
+    wording_config_parts,
 )
 from experiments.medical_dataset_gen.reports.models import PlotFormat
 
@@ -300,12 +301,9 @@ def _config_embedding_forest_sort_key(
 
 
 def _config_sort_key(config: str) -> tuple[int, int, int, str]:
-    parts = config.split('_')
-    query_mode = parts[0] if len(parts) > 0 else ''
-    focus_mode = parts[2] if len(parts) > 2 else ''
-    chunk_mode = parts[4] if len(parts) > 4 else ''
-    query_order = {'biased': 0, 'unbiased': 1}
-    focus_order = {'list': 0, 'natural': 1}
+    query_mode, focus_mode, chunk_mode = wording_config_parts(config)
+    query_order = {'biased': 0, 'unbiased': 1, 'label_only': 2}
+    focus_order = {'list': 0, 'natural': 1, 'label_only': 0}
     chunk_order = {'simple': 0, 'hardened': 1}
     return (
         query_order.get(query_mode, 99),

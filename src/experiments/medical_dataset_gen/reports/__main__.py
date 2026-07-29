@@ -380,7 +380,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 max_table_rows=args.max_table_rows,
             )
         )
-        (args.output_dir / 'txt_experiments_config_recap.md').write_text(
+        (args.output_dir / 'latex' / 'txt_experiments_config_recap.md').write_text(
             render_experiment_config_recap(plot_and_recap_records)
         )
         (args.output_dir / 'warnings.txt').write_text(

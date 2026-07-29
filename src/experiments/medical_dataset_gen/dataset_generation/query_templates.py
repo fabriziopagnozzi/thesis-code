@@ -13,6 +13,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryStructure,
     QueryTemplateData,
     QueryTemplateSpec,
+    canonical_query_focus_mode,
 )
 
 
@@ -32,6 +33,7 @@ def render_query_template(
     focus_mode: QueryFocusMode = 'natural',
     query_structure: QueryStructure = 'unbalanced',
 ) -> str:
+    focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
     template = query_template_spec(
         template_id or plan.template_id,
         query_structure=query_structure,
@@ -87,6 +89,7 @@ def query_template_ids(
     query_structure: QueryStructure = 'unbalanced',
     focus_mode: QueryFocusMode = 'natural',
 ) -> list[str]:
+    focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
     return [spec.id for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]]
 
 
@@ -96,6 +99,7 @@ def query_template_spec(
     query_structure: QueryStructure = 'unbalanced',
     focus_mode: QueryFocusMode = 'natural',
 ) -> QueryTemplateSpec:
+    focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
     for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]:
         if spec.id == template_id:
             return spec

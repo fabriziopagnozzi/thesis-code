@@ -1,14 +1,14 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
-unit_base="${SYSTEMD_UNIT_NAME:-thesis-$(date +%m%d-%H%M%S)-$$}"
-unit="${unit_base%.service}.service"
+UNIT_BASE="${SYSTEMD_UNIT_NAME:-thesis-$(date +%m%d-%H%M%S)-$$}"
+UNIT="${UNIT_BASE%.service}.service"
 
 cleanup() {
   rc=$?
   trap - EXIT INT TERM HUP
-  systemctl --user stop "$unit" >/dev/null 2>&1 || true
-  systemctl --user kill "$unit" \
+  systemctl --user stop "$UNIT" >/dev/null 2>&1 || true
+  systemctl --user kill "$UNIT" \
     --kill-whom=all \
     --signal=SIGKILL >/dev/null 2>&1 || true
   exit "$rc"
@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT INT TERM HUP
 
 systemd-run --user \
-  --unit="$unit" \
+  --unit="$UNIT" \
   --collect \
   --wait \
   --pipe \
@@ -26,8 +26,8 @@ systemd-run --user \
   --setenv="QUERY_GEOMETRY_WORKERS=${QUERY_GEOMETRY_WORKERS:-9}" \
   --setenv=HF_TOKEN \
   --property=Type=exec \
-  -p MemoryHigh="${MEMORY_HIGH:-53G}" \
-  -p MemoryMax="${MEMORY_MAX:-54G}" \
+  -p MemoryHigh="${MEMORY_HIGH:-48G}" \
+  -p MemoryMax="${MEMORY_MAX:-50G}" \
   -p MemorySwapMax="${MEMORY_SWAP_MAX:-0G}" \
   -p OOMPolicy=kill \
   -p KillMode=control-group \

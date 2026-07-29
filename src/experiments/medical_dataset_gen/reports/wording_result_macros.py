@@ -3,7 +3,6 @@ from __future__ import annotations
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from itertools import product
 
 from experiments.medical_dataset_gen.reports.analysis_constants import (
     DISTRIBUTION_EXPERIMENT_FAMILIES,
@@ -117,13 +116,32 @@ def _wording_grid_error(
     embedding_models: Sequence[str],
 ) -> str | None:
     configurations = {_required_wording_key(row) for row in rows}
-    query_modes = sorted({key[0] for key in configurations})
-    focus_modes = sorted({key[1] for key in configurations})
     chunk_modes = sorted({key[2] for key in configurations})
-    if configurations != set(product(query_modes, focus_modes, chunk_modes)):
+    standard_configurations = {
+        key for key in configurations if key[0] != 'label_only' and key[1] != 'label_only'
+    }
+    malformed_label_only = {
+        key
+        for key in configurations
+        if (key[0] == 'label_only') != (key[1] == 'label_only')
+    }
+    standard_query_modes = sorted({key[0] for key in standard_configurations})
+    standard_focus_modes = sorted({key[1] for key in standard_configurations})
+    expected_configurations = {
+        (query_mode, focus_mode, chunk_mode)
+        for query_mode in standard_query_modes
+        for focus_mode in standard_focus_modes
+        for chunk_mode in chunk_modes
+    }
+    if any(key[0] == 'label_only' for key in configurations):
+        expected_configurations.update(
+            ('label_only', 'label_only', chunk_mode) for chunk_mode in chunk_modes
+        )
+    if malformed_label_only or configurations != expected_configurations:
         return (
-            'The wording macro grid is ragged: it must contain the complete cross-product '
-            'of the wording factor levels represented in the report.'
+            'The wording macro grid is ragged: balanced/unbalanced modes must contain their '
+            'represented query/focus cross-product, while label_only must have exactly one '
+            'query form for every represented chunk mode.'
         )
 
     expected_models = set(embedding_models)

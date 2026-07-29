@@ -43,8 +43,34 @@ CHUNK_TEXT_STYLE_LIST = list[ChunkTextStyle](values_for(ChunkTextStyle))
 type QueryFocusMode = Literal['list', 'natural']
 QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](values_for(QueryFocusMode))
 
-type QueryStructure = Literal['unbalanced', 'balanced']
+type QueryStructure = Literal['unbalanced', 'balanced', 'label_only']
 QUERY_STRUCTURE_LIST = list[QueryStructure](values_for(QueryStructure))
+LABEL_ONLY_CANONICAL_FOCUS_MODE: QueryFocusMode = 'natural'
+
+type QueryWordingMode = tuple[QueryStructure, QueryFocusMode]
+QUERY_WORDING_MODE_LIST: list[QueryWordingMode] = [
+    ('unbalanced', 'list'),
+    ('unbalanced', 'natural'),
+    ('balanced', 'list'),
+    ('balanced', 'natural'),
+    ('label_only', LABEL_ONLY_CANONICAL_FOCUS_MODE),
+]
+
+
+def query_focus_modes_for_structure(structure: QueryStructure) -> list[QueryFocusMode]:
+    """Return the meaningful focus modes without inventing label-only subvariants."""
+    if structure == 'label_only':
+        return [LABEL_ONLY_CANONICAL_FOCUS_MODE]
+    return QUERY_FOCUS_MODE_LIST
+
+
+def canonical_query_focus_mode(
+    structure: QueryStructure,
+    focus_mode: QueryFocusMode,
+) -> QueryFocusMode:
+    if structure == 'label_only':
+        return LABEL_ONLY_CANONICAL_FOCUS_MODE
+    return focus_mode
 
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
 CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](values_for(ChunkSurfaceGroup))
@@ -1248,7 +1274,9 @@ class QueryTemplateData(BenchmarkPydanticModel):
         query_templates = hydrated.get('query_templates')
         if isinstance(query_templates, list):
             hydrated['query_templates'] = {
-                structure: {mode: query_templates for mode in QUERY_FOCUS_MODE_LIST}
+                structure: {
+                    mode: query_templates for mode in query_focus_modes_for_structure(structure)
+                }
                 for structure in QUERY_STRUCTURE_LIST
             }
         elif isinstance(query_templates, dict):
@@ -1275,18 +1303,25 @@ class QueryTemplateData(BenchmarkPydanticModel):
         expected_ids: list[str] | None = None
         for structure in QUERY_STRUCTURE_LIST:
             specs_by_mode = self.query_templates[structure]
-            if set(specs_by_mode) != set(QUERY_FOCUS_MODE_LIST):
+            expected_focus_modes = query_focus_modes_for_structure(structure)
+            if set(specs_by_mode) != set(expected_focus_modes):
                 raise ValueError(
                     f'query_templates.{structure} must define exactly these focus modes: '
-                    f'{QUERY_FOCUS_MODE_LIST}'
+                    f'{expected_focus_modes}'
                 )
-            for focus_mode in QUERY_FOCUS_MODE_LIST:
+            for focus_mode in expected_focus_modes:
                 specs = specs_by_mode[focus_mode]
                 ids = [spec.id for spec in specs]
+                if not ids:
+                    raise ValueError(
+                        f'query_templates.{structure}.{focus_mode} must not be empty'
+                    )
                 if len(ids) != len(set(ids)):
                     raise ValueError(
                         f'duplicate query template ids for {structure}/{focus_mode}: {ids}'
                     )
+                if structure == 'label_only':
+                    continue
                 if expected_ids is None:
                     expected_ids = ids
                 elif ids != expected_ids:

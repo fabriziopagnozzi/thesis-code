@@ -189,6 +189,10 @@ class GenerationCfg(BasePydanticCfgModel):
 
     @model_validator(mode='after')
     def _validate_niche_cluster_size(self) -> GenerationCfg:
+        if self.query_structure == 'label_only':
+            # Label-only has one surface by design; focus mode must not create hidden variants.
+            self.focus_mode = 'natural'
+
         if (
             self.chunk_pools.niche.num_clusters_per_query
             and self.chunk_pools.niche.size >= self.chunk_pools.secondary.size

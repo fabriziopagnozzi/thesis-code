@@ -46,42 +46,42 @@ dev = [
 
 
 [tool.taskipy.tasks]
-# -- Synthetic Medical Dataset Generation ----------------------------------------------------------------------------
-pipeline = "./memlimit.sh python -m src.experiments.medical_dataset_gen.pipeline"
-report = "./memlimit.sh python -m src.experiments.medical_dataset_gen.reports"
-query_diagnose = "./memlimit.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
-add_subexp = './memlimit.sh python -m src.experiments.medical_dataset_gen.utils.add_subexperiments'
+# -- Synthetic Medical Dataset ---
+pipeline = "./setup.sh python -m src.experiments.medical_dataset_gen.pipeline"
+report = "./setup.sh python -m src.experiments.medical_dataset_gen.reports"
+query_diagnose = "./setup.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
+add_subexp = './setup.sh python -m src.experiments.medical_dataset_gen.scripts.add_subexperiments'
 
-# -- MIMIC Experiments ----------------------------------------------------------------------------
+# -- MIMIC Experiments ---
 # Chunking
-mimic_chunking_full = "./memlimit.sh python -m experiments.mimic.chunking.run_chunking_steps"
-mimic_conditions_stats = "./memlimit.sh python -m experiments.mimic.chunking.a_conditions_stats"
-mimic_note_chunking = "./memlimit.sh python -m experiments.mimic.chunking.b_note_chunking"
-mimic_dedup_chunks = "./memlimit.sh python -m experiments.mimic.chunking.c_dedup"
+mimic_chunking_full = "./setup.sh python -m experiments.mimic.chunking.run_chunking_steps"
+mimic_conditions_stats = "./setup.sh python -m experiments.mimic.chunking.a_conditions_stats"
+mimic_note_chunking = "./setup.sh python -m experiments.mimic.chunking.b_note_chunking"
+mimic_dedup_chunks = "./setup.sh python -m experiments.mimic.chunking.c_dedup"
 
 # Embeddings
-mimic_embed_whole = "./memlimit.sh python -m experiments.mimic.embeddings.run_embed_whole_corpus"
-mimic_embed_selective = "./memlimit.sh python -m experiments.mimic.embeddings.run_embed_selective"
+mimic_embed_whole = "./setup.sh python -m experiments.mimic.embeddings.run_embed_whole_corpus"
+mimic_embed_selective = "./setup.sh python -m experiments.mimic.embeddings.run_embed_selective"
 
 # Evaluation
-mimic_gold_annotation = "./memlimit.sh python -m experiments.mimic.evaluation.run_gold_annotation"
-mimic_regenerate_gold_ans = "./memlimit.sh python -m experiments.mimic.evaluation.run_regenerate_gold_ans"
-mimic_evaluation = "./memlimit.sh python -m experiments.mimic.evaluation.run_evaluate"
-mimic_evaluation_plots = "./memlimit.sh python -m experiments.mimic.evaluation.plots"
+mimic_gold_annotation = "./setup.sh python -m experiments.mimic.evaluation.run_gold_annotation"
+mimic_regenerate_gold_ans = "./setup.sh python -m experiments.mimic.evaluation.run_regenerate_gold_ans"
+mimic_evaluation = "./setup.sh python -m experiments.mimic.evaluation.run_evaluate"
+mimic_evaluation_plots = "./setup.sh python -m experiments.mimic.evaluation.plots"
 
 # Pool Analysis
-mimic_pool_analysis = "./memlimit.sh python -m experiments.mimic.pool_analysis.run_pool_analysis"
-mimic_pool_analysis_plots = "./memlimit.sh python -m experiments.mimic.pool_analysis.plots"
+mimic_pool_analysis = "./setup.sh python -m experiments.mimic.pool_analysis.run_pool_analysis"
+mimic_pool_analysis_plots = "./setup.sh python -m experiments.mimic.pool_analysis.plots"
 
 # Queries
-mimic_queries_full = "./memlimit.sh python -m experiments.mimic.queries.run_queries_steps"
-mimic_build_prompts = "./memlimit.sh python -m experiments.mimic.queries.a_build_prompts"
-mimic_gen_queries_llm = "./memlimit.sh python -m experiments.mimic.queries.b_gen_queries_llm"
-mimic_filter_queries = "./memlimit.sh python -m experiments.mimic.queries.c_filter_queries"
+mimic_queries_full = "./setup.sh python -m experiments.mimic.queries.run_queries_steps"
+mimic_build_prompts = "./setup.sh python -m experiments.mimic.queries.a_build_prompts"
+mimic_gen_queries_llm = "./setup.sh python -m experiments.mimic.queries.b_gen_queries_llm"
+mimic_filter_queries = "./setup.sh python -m experiments.mimic.queries.c_filter_queries"
 
 # Utils
 mimic_lance_viewer = "cd ~/thesis/src/thirdparty/lance_data_viewer/backend && DATA_PATH=\"~/thesis/src/experiments/mimic/_results/_vector_db\" python -m uvicorn app:app --host 127.0.0.1 --port 8080"
-# ----------------------------------------------------------------------------
+# ---
 
 [tool.uv]
 environments = ["sys_platform == 'linux'"]

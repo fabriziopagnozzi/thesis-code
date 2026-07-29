@@ -8,8 +8,8 @@ generation:
     query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 6,174 queries with the bundled ontology).
     ontology_path: null # Optional path to a custom ontology YAML.
     chunk_text_style: semantic_hardened # "semantic_hardened" keeps authored chart evidence only; "ontology_explicit" adds one authored interpretation sentence.
-    focus_mode: natural # "natural" uses middle-level clinical evidence requests; "list" restores the older list-like axis focus wording.
-    query_structure: unbalanced # "unbalanced" keeps secondary-axis wording light; "balanced" includes the secondary-axis focus text too.
+    focus_mode: natural # Used by "balanced"/"unbalanced": "natural" requests clinical properties; "list" enumerates alternatives. Ignored and canonicalized for "label_only".
+    query_structure: unbalanced # "unbalanced" prioritizes one axis, "balanced" details both axes, and "label_only" gives one compact query containing only both axis labels.
     chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families.
     excluded_clinical_axes: [] # Example to drop even secondary diagnostic evidence from query/chunk generation: [diagnostic_evidence_type].
 

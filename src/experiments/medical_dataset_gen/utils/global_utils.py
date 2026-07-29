@@ -367,6 +367,8 @@ def chunk_document_mode_key(cfg: ExperimentCfg) -> str:
 
 
 def query_document_mode_key(cfg: ExperimentCfg) -> str:
+    if cfg.generation.query_structure == 'label_only':
+        return 'label_only_q_label_only_f'
     query_surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
     return f'{query_surface}_q_{cfg.generation.focus_mode}_f'
 

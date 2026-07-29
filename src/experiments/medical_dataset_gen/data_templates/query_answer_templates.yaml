@@ -77,5 +77,10 @@ query_templates:
       - id: handoff_question
         template: "I need a handoff-style comparison for patients with {condition}: how do {subgroup_a} and {subgroup_b} differ in {primary_axis_label}? For each cohort, focus on {primary_axis_focus}, then add a concise note on {secondary_axis_label} covering {secondary_axis_focus}."
 
+  label_only:
+    natural:
+      - id: label_only_comparison
+        template: "Among patients with {condition}, compare {primary_axis_label} and {secondary_axis_label} between {subgroup_a} and {subgroup_b}."
+
 answer_template:
   template: "{primary_axis_label}: {subgroup_a}, {subgroup_a_primary}; {subgroup_b}, {subgroup_b_primary}. Context from {secondary_axis_label}: {subgroup_a}, {subgroup_a_secondary}; {subgroup_b}, {subgroup_b_secondary}."

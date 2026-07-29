@@ -21,6 +21,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     float_or_none,
     ordered_embedding_models_for_rows,
     short_model_label,
+    wording_config_parts,
 )
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, PlotFormat
 from experiments.medical_dataset_gen.reports.report_config import (
@@ -1345,8 +1346,8 @@ def _ordered_distribution_family_labels(rows: Sequence[Mapping[str, object]]) ->
 
 def _config_sort_key(config: str) -> tuple[int, int, int, str]:
     parts = _config_parts(config)
-    query_order = {'biased': 0, 'unbiased': 1}
-    focus_order = {'list': 0, 'natural': 1}
+    query_order = {'biased': 0, 'unbiased': 1, 'label_only': 2}
+    focus_order = {'list': 0, 'natural': 1, 'label_only': 0}
     chunk_order = {'simple': 0, 'hardened': 1}
     return (
         query_order.get(parts[0], 99),
@@ -1357,10 +1358,7 @@ def _config_sort_key(config: str) -> tuple[int, int, int, str]:
 
 
 def _config_parts(config: str) -> tuple[str, str, str]:
-    parts = config.split('_')
-    if len(parts) >= 5 and parts[1] == 'q' and parts[3] == 'f':
-        return (parts[0], parts[2], parts[4])
-    return ('unknown', 'unknown', 'unknown')
+    return wording_config_parts(config)
 
 
 def _config_budget_sort_key(row: Mapping[str, object]) -> tuple[tuple[int, int, int, str], int]:
