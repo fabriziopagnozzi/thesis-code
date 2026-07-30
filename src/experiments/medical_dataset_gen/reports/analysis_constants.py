@@ -1,6 +1,7 @@
-from typing import Literal, get_args
+from typing import Literal
 
 from experiments.medical_dataset_gen.retrieval.metrics_schemas import METRIC_NAME_TO_FIELD
+from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
 type StrategyName = Literal['top_k', 'mmr', 'fac_loc']
 STRATEGIES: tuple[StrategyName, ...] = ('top_k', 'mmr', 'fac_loc')
@@ -17,7 +18,7 @@ type DeltaMetricLabel = Literal[
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
 ]
-DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_args(DeltaMetricLabel.__value__))
+DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_literals(DeltaMetricLabel))
 
 # Thresholds to set for each metric to identify when methods are tied
 PRACTICAL_EFFECT_THRESHOLDS: dict[DeltaMetricLabel, float] = {
@@ -47,16 +48,12 @@ type ExperimentFamilyId = Literal[
     'embedding_comparison',
     'unknown',
 ]
-EXPERIMENT_FAMILIES: tuple[ExperimentFamilyId, ...] = tuple[ExperimentFamilyId](
-    get_args(ExperimentFamilyId.__value__)
-)
-NON_DISTRIBUTION_EXPERIMENT_FAMILIES = frozenset[ExperimentFamilyId](
-    {
-        'budget_sweep',
-        'embedding_comparison',
-        'unknown',
-    }
-)
+EXPERIMENT_FAMILIES = tuple[ExperimentFamilyId, ...](get_literals(ExperimentFamilyId))
+NON_DISTRIBUTION_EXPERIMENT_FAMILIES = frozenset[ExperimentFamilyId]({
+    'budget_sweep',
+    'embedding_comparison',
+    'unknown',
+})
 DISTRIBUTION_EXPERIMENT_FAMILIES: tuple[ExperimentFamilyId, ...] = tuple(
     family for family in EXPERIMENT_FAMILIES if family not in NON_DISTRIBUTION_EXPERIMENT_FAMILIES
 )
@@ -81,14 +78,12 @@ EXPERIMENT_FAMILY_COLORS: dict[ExperimentFamilyId, str] = {
     'embedding_comparison': '#4C78A8',
     'unknown': '#808080',
 }
-HELDOUT_SELECTION_COLUMNS = frozenset(
-    {
-        'lambda_selection_split',
-        'report_split',
-        'lambda_selection_metric',
-        'lambda_selection_metric_value',
-    }
-)
+HELDOUT_SELECTION_COLUMNS = frozenset({
+    'lambda_selection_split',
+    'report_split',
+    'lambda_selection_metric',
+    'lambda_selection_metric_value',
+})
 REPORT_FILES = (
     'txt_report.md',
     'txt_report_highlights.md',
@@ -128,15 +123,13 @@ REPORT_FILES = (
     'data/paired_config_suite_effect_summary.csv',
     'data/paired_leave_one_out_sensitivity.csv',
 )
-ANALYSIS_EXCLUDED_METRICS = frozenset(
-    {
-        'MAP@k',
-        'AnswerROUGE1Recall@k',
-        'AnswerROUGE1Precision@k',
-        'AnswerROUGE1F1@k',
-        'AnswerROUGE2Recall@k',
-    }
-)
+ANALYSIS_EXCLUDED_METRICS = frozenset({
+    'MAP@k',
+    'AnswerROUGE1Recall@k',
+    'AnswerROUGE1Precision@k',
+    'AnswerROUGE1F1@k',
+    'AnswerROUGE2Recall@k',
+})
 EVALUATION_METRICS = (
     'n_queries',
     *(
@@ -260,26 +253,24 @@ TABLE_COL_WIDTHS = {
     'strategy': 8,
 }
 DEFAULT_TABLE_COL_WIDTH = 14
-INTEGER_TABLE_COLUMNS = frozenset(
-    {
-        'k',
-        'EmbeddingDimension',
-        'GeometryQueries',
-        'GeometryPassQueries',
-        'Runs',
-        'Distributions',
-        'Profiles',
-        'Rows',
-        'FacLocBetterRows',
-        'FacLocTiedRows',
-        'FacLocWorseRows',
-        'FacLocTopKBetterRows',
-        'MMRTopKBetterRows',
-        'PassFilterRuns',
-        'n_selected',
-        'distinct_lambda_count',
-    }
-)
+INTEGER_TABLE_COLUMNS = frozenset({
+    'k',
+    'EmbeddingDimension',
+    'GeometryQueries',
+    'GeometryPassQueries',
+    'Runs',
+    'Distributions',
+    'Profiles',
+    'Rows',
+    'FacLocBetterRows',
+    'FacLocTiedRows',
+    'FacLocWorseRows',
+    'FacLocTopKBetterRows',
+    'MMRTopKBetterRows',
+    'PassFilterRuns',
+    'n_selected',
+    'distinct_lambda_count',
+})
 ROLE_COUNT_COLUMNS = {
     'dominant_primary_gold': 'DominantPrimaryGoldCount',
     'primary_gold': 'OtherPrimaryGoldCount',

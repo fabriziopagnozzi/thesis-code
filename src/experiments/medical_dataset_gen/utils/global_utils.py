@@ -4,15 +4,18 @@ import argparse
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, cast, get_args
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, cast, get_args
 
 import yaml
 
-from experiments.medical_dataset_gen.utils.exp_naming import resolve_experiment_name
 from helpers.dir_paths import ROOT_DIR
 
 if TYPE_CHECKING:
     from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
+
+
+def get_literals(type: TypeAliasType) -> tuple[Any, ...]:
+    return get_args(type.__value__)
 
 
 type SyntheticMedicalDatasetTableName = Literal[
@@ -34,7 +37,7 @@ type SyntheticMedicalDatasetTableName = Literal[
     'query_geometry_points',
     'query_geometry_stats',
 ]
-SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_args(SyntheticMedicalDatasetTableName.__value__))
+SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_literals(SyntheticMedicalDatasetTableName))
 
 type SharedGenerationTableName = Literal[
     'query_plans',
@@ -46,9 +49,9 @@ type SharedGenerationTableName = Literal[
     'qrels',
 ]
 SHARED_GENERATION_TABLES = tuple[SharedGenerationTableName, ...](
-    get_args(SharedGenerationTableName.__value__)
+    get_literals(SharedGenerationTableName)
 )
-SHARED_GENERATION_TABLE_NAMES = set[str](SHARED_GENERATION_TABLES)
+SHARED_GENERATION_TABLE_NAMES = set[SharedGenerationTableName](SHARED_GENERATION_TABLES)
 
 type EmbeddingArtifactName = Literal[
     'chunk_vectors', 'query_vectors', 'chunk_ids', 'query_ids', 'metadata'
@@ -72,6 +75,7 @@ type YamlMapping = dict[str, object]
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
     results_dir = root / '_results'
+    reports_dir = root / '_reports'
     cache_dir = root / '_cache'
     default_ontology_path = root / 'data_templates' / 'medical_ontology.yaml'
     experiment_aliases_path = results_dir / '_experiment_aliases.json'
@@ -188,6 +192,7 @@ class MedicalDatasetGenPaths:
 
 
 def load_config(exp: str | None = None) -> ExperimentCfg:
+    from experiments.medical_dataset_gen.utils.exp_naming import resolve_experiment_name
     from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 
     exp_name = exp or os.getenv('EXP') or os.getenv('EXP_NAME')
@@ -393,7 +398,3 @@ def query_document_mode_key(cfg: ExperimentCfg) -> str:
 
 def unreachable_code(err: str) -> NoReturn:
     raise RuntimeError(err)
-
-
-def values_for(type: TypeAliasType):
-    return get_args(type.__value__)

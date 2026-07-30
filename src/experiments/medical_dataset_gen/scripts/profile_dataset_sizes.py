@@ -281,7 +281,7 @@ def _parse_args(argv: Sequence[str] | None) -> CliArgs:
         '--output',
         type=Path,
         default=None,
-        help='JSON output path. Defaults to <results-dir>/_reports/experiment_size_mapping.json. Use "-" to print to stdout.',
+        help='JSON output path. Defaults to the sibling _reports/experiment_size_mapping.json. Use "-" to print to stdout.',
     )
     parser.add_argument(
         '--include-scrapped',
@@ -308,7 +308,7 @@ def _parse_args(argv: Sequence[str] | None) -> CliArgs:
     namespace = parser.parse_args(argv)
     results_dir = cast(Path, namespace.results_dir)
     raw_output = cast(Path | None, namespace.output)
-    output = results_dir / DEFAULT_OUTPUT_RELATIVE_PATH if raw_output is None else raw_output
+    output = results_dir.parent / DEFAULT_OUTPUT_RELATIVE_PATH if raw_output is None else raw_output
     return {
         'results_dir': results_dir,
         'output': None if str(output) == '-' else output,

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import gc
-from typing import Literal, cast, get_args
+from typing import Literal, cast
 
 import polars as pl
 
@@ -35,6 +35,7 @@ from experiments.medical_dataset_gen.utils.cli_parsing import parse_comma_separa
 from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
+    get_literals,
 )
 from experiments.medical_dataset_gen.utils.io_utils import (
     read_parquet,
@@ -46,7 +47,7 @@ type EvaluationStep = Literal[
     'evaluation_stats',
     'evaluation_slice_stats',
 ]
-EVALUATION_STEP_NAMES = set[EvaluationStep](get_args(EvaluationStep.__value__))
+EVALUATION_STEP_NAMES = set[EvaluationStep](get_literals(EvaluationStep))
 _PARENT_QUERY_COLUMNS = ['query_id']
 _PARENT_QREL_COLUMNS = ['query_id', 'chunk_id', 'facet_id', 'is_gold']
 _PARENT_GEOMETRY_COLUMNS = [

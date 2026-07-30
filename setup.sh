@@ -1,4 +1,4 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 set -euo pipefail
 
 UNIT_BASE="${SYSTEMD_UNIT_NAME:-thesis-$(date +%m%d-%H%M%S)-$$}"

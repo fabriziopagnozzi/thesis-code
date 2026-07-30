@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Final, Literal, get_args
+from typing import Final, Literal
 
 from experiments.medical_dataset_gen.dataset_generation.schemas import ClusterRole
+from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
 # Canonical geometry-plot names used by the CLI selector and plot dispatch.
 type GeomPlotName = Literal[
@@ -12,7 +13,7 @@ type GeomPlotName = Literal[
     'query_overview_4panel',
     'strategy_overlay',
 ]
-GEOM_PLOT_FILE_NAMES = set[GeomPlotName](get_args(GeomPlotName.__value__))
+GEOM_PLOT_FILE_NAMES = set[GeomPlotName](get_literals(GeomPlotName))
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,14 +62,12 @@ class GeomPlotsSettings:
     background_outlier_legend_color: str = '#4A4A4A'
 
     gold_facet_role_labels: dict[ClusterRole, str] = field(
-        default_factory=lambda: dict(
-            {
-                'dominant_primary_gold': 'Dominant primary',
-                'primary_gold': 'Other primary',
-                'secondary_gold': 'Secondary',
-                'niche_gold': 'Niche',
-            }
-        )
+        default_factory=lambda: dict({
+            'dominant_primary_gold': 'Dominant primary',
+            'primary_gold': 'Other primary',
+            'secondary_gold': 'Secondary',
+            'niche_gold': 'Niche',
+        })
     )
     gold_facet_role_order: dict[ClusterRole, int] = field(init=False)
 

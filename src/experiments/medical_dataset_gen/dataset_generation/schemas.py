@@ -7,7 +7,7 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from experiments.medical_dataset_gen.utils.global_utils import values_for
+from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
 type ClinicalAxis = Literal[
     'treatment_duration',
@@ -17,7 +17,7 @@ type ClinicalAxis = Literal[
     'care_intensity',
     'diagnostic_evidence_type',
 ]
-CLINICAL_AXIS_LIST = list[ClinicalAxis](values_for(ClinicalAxis))
+CLINICAL_AXIS_LIST = list[ClinicalAxis](get_literals(ClinicalAxis))
 
 
 type ClusterRole = Literal[
@@ -38,13 +38,13 @@ type CohortContrastFamily = Literal[
 
 type ChunkPoolScope = Literal['query_local']
 type ChunkTextStyle = Literal['ontology_explicit', 'semantic_hardened']
-CHUNK_TEXT_STYLE_LIST = list[ChunkTextStyle](values_for(ChunkTextStyle))
+CHUNK_TEXT_STYLE_LIST = list[ChunkTextStyle](get_literals(ChunkTextStyle))
 
 type QueryFocusMode = Literal['list', 'natural']
-QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](values_for(QueryFocusMode))
+QUERY_FOCUS_MODE_LIST = list[QueryFocusMode](get_literals(QueryFocusMode))
 
 type QueryStructure = Literal['unbalanced', 'balanced', 'label_only']
-QUERY_STRUCTURE_LIST = list[QueryStructure](values_for(QueryStructure))
+QUERY_STRUCTURE_LIST = list[QueryStructure](get_literals(QueryStructure))
 LABEL_ONLY_CANONICAL_FOCUS_MODE: QueryFocusMode = 'natural'
 
 type QueryWordingMode = tuple[QueryStructure, QueryFocusMode]
@@ -72,8 +72,9 @@ def canonical_query_focus_mode(
         return LABEL_ONLY_CANONICAL_FOCUS_MODE
     return focus_mode
 
+
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
-CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](values_for(ChunkSurfaceGroup))
+CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_literals(ChunkSurfaceGroup))
 type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']
 type ConditionAnchor = Literal['outer_template', 'axis_evidence']
 type AxisTemplateFamily = Literal[
@@ -82,7 +83,7 @@ type AxisTemplateFamily = Literal[
     'clinical_assessment',
     'contrast_or_alternative',
 ]
-AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](values_for(AxisTemplateFamily))
+AXIS_TEMPLATE_FAMILY_LIST = list[AxisTemplateFamily](get_literals(AxisTemplateFamily))
 SEEN_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 HELDOUT_AXIS_TEMPLATE_FAMILIES = AXIS_TEMPLATE_FAMILY_LIST
 type SubgroupAxis = Literal['demographic', 'comorbidity']
@@ -1313,9 +1314,7 @@ class QueryTemplateData(BenchmarkPydanticModel):
                 specs = specs_by_mode[focus_mode]
                 ids = [spec.id for spec in specs]
                 if not ids:
-                    raise ValueError(
-                        f'query_templates.{structure}.{focus_mode} must not be empty'
-                    )
+                    raise ValueError(f'query_templates.{structure}.{focus_mode} must not be empty')
                 if len(ids) != len(set(ids)):
                     raise ValueError(
                         f'duplicate query template ids for {structure}/{focus_mode}: {ids}'

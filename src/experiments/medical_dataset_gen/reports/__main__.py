@@ -90,10 +90,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
         data_dir = args.output_dir / 'data'
         shutil.rmtree(data_dir, ignore_errors=True)
         shutil.rmtree(args.output_dir / '_figures', ignore_errors=True)
-        if not args.cross_query_chunk_modes:
-            shutil.rmtree(
-                args.output_dir / 'figures' / 'aggregates' / 'cross_config', ignore_errors=True
-            )
+        # Optional analyses can disappear between runs; rebuild the figure tree
+        # so disabled-analysis plots cannot survive as stale report artifacts.
+        shutil.rmtree(args.output_dir / 'figures', ignore_errors=True)
         _remove_obsolete_flat_data_files(args.output_dir)
         warnings: list[str] = []
         _progress(f'discovering completed experiments under: {args.results_dir}')
@@ -118,33 +117,46 @@ def run_report(args: CliArgs) -> ReportOutputs:
             + (', '.join(effective_embedding_models) if effective_embedding_models else 'none')
         )
         plot_and_recap_records = records
+        lambda_analysis_enabled = args.run_lambda_analysis
+        global_lambda_analysis_enabled = args.run_global_lambda_analysis
+        lodo_analysis_enabled = args.run_lodo_analysis
+        paired_statistics_enabled = args.run_paired_statistics
+        validity_analysis_enabled = args.run_validity_analysis
+        geometry_population_enabled = (
+            validity_analysis_enabled or args.main_query_scope == 'geometry_eligible'
+        )
 
         _progress('loading manifest, dataset, and geometry rows')
         manifest_rows = [experiment_manifest_row(record) for record in records]
         dataset_rows = [dataset_distribution_row(record, warnings=warnings) for record in records]
         geometry_rows = [geometry_filter_row(record, warnings=warnings) for record in records]
 
-        _progress('computing geometry-population validity summaries')
-        geometry_population_strategy_rows_data = geometry_population_strategy_rows(
-            plot_and_recap_records,
-            warnings=warnings,
-        )
+        geometry_population_strategy_rows_data: list[dict[str, object]] = []
+        if geometry_population_enabled:
+            _progress('computing geometry-population validity summaries')
+            geometry_population_strategy_rows_data = geometry_population_strategy_rows(
+                plot_and_recap_records,
+                warnings=warnings,
+            )
+        else:
+            _progress('skipping geometry-population validity analysis')
         geometry_population_comparison_rows = comparison_by_k_rows(
             geometry_population_strategy_rows_data
         )
 
-        _progress('loading selected strategy rows and near-optimal lambda summaries')
+        _progress('loading selected strategy rows')
         strategy_rows: list[dict[str, object]] = []
         near_optimal_rows: list[dict[str, object]] = []
         for record in records:
             strategy_rows.extend(selected_strategy_rows(record, warnings=warnings))
-            near_optimal_rows.extend(
-                near_optimal_lambda_rows(
-                    record,
-                    epsilon=args.near_optimal_epsilon,
-                    warnings=warnings,
+            if lambda_analysis_enabled:
+                near_optimal_rows.extend(
+                    near_optimal_lambda_rows(
+                        record,
+                        epsilon=args.near_optimal_epsilon,
+                        warnings=warnings,
+                    )
                 )
-            )
         if args.main_query_scope == 'geometry_eligible':
             strategy_rows = [
                 dict(row)
@@ -152,12 +164,23 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 if row.get('GeometryPopulation') == 'geometry_eligible'
             ]
 
-        _progress('computing lambda-grid and main comparison summaries')
-        lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
-        lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
+        lambda_grid_delta_rows: list[dict[str, object]] = []
+        lambda_safety_rows: list[dict[str, object]] = []
+        if lambda_analysis_enabled:
+            _progress('computing lambda-grid diagnostics')
+            lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
+            lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
+        else:
+            _progress('skipping lambda-grid diagnostics')
         comparison_rows = comparison_by_k_rows(strategy_rows)
-        _progress('computing global-lambda validity summaries')
-        global_lambda_strategy_rows_data = global_lambda_strategy_rows(records, warnings=warnings)
+        global_lambda_strategy_rows_data: list[dict[str, object]] = []
+        if global_lambda_analysis_enabled:
+            _progress('computing global-lambda validity summaries')
+            global_lambda_strategy_rows_data = global_lambda_strategy_rows(
+                records, warnings=warnings
+            )
+        else:
+            _progress('skipping global-lambda validity analysis')
         global_lambda_comparison_rows = comparison_by_k_rows(global_lambda_strategy_rows_data)
         global_lambda_budget_rows = budget_category_rows_from_comparisons(
             global_lambda_comparison_rows
@@ -166,19 +189,27 @@ def run_report(args: CliArgs) -> ReportOutputs:
             comparison_rows=global_lambda_comparison_rows,
             budget_rows=global_lambda_budget_rows,
         )
-        _progress('computing leave-one-distribution-out lambda validity summaries')
-        lodo_lambda_strategy_rows_data = lodo_lambda_strategy_rows(records, warnings=warnings)
+        lodo_lambda_strategy_rows_data: list[dict[str, object]] = []
+        if lodo_analysis_enabled:
+            _progress('computing leave-one-distribution-out lambda validity summaries')
+            lodo_lambda_strategy_rows_data = lodo_lambda_strategy_rows(records, warnings=warnings)
+        else:
+            _progress('skipping leave-one-distribution-out analysis')
         lodo_lambda_comparison_rows = comparison_by_k_rows(lodo_lambda_strategy_rows_data)
         lodo_lambda_budget_rows = budget_category_rows_from_comparisons(lodo_lambda_comparison_rows)
         lodo_lambda_metric_summary_rows = metric_aggregate_summary_rows(
             comparison_rows=lodo_lambda_comparison_rows,
             budget_rows=lodo_lambda_budget_rows,
         )
-        _progress('computing synthetic-artifact diagnostics')
-        synthetic_artifact_diagnostic_rows_data = synthetic_artifact_diagnostic_rows(
-            records,
-            warnings=warnings,
-        )
+        synthetic_artifact_diagnostic_rows_data: list[dict[str, object]] = []
+        if validity_analysis_enabled:
+            _progress('computing synthetic-artifact diagnostics')
+            synthetic_artifact_diagnostic_rows_data = synthetic_artifact_diagnostic_rows(
+                records,
+                warnings=warnings,
+            )
+        else:
+            _progress('skipping synthetic-artifact diagnostics')
         _progress('computing aggregate family, budget, metric, and embedding summaries')
         family_summary_rows = experiment_family_summary_rows(comparison_rows)
         budget_rows = budget_category_rows_from_comparisons(comparison_rows)
@@ -190,59 +221,62 @@ def run_report(args: CliArgs) -> ReportOutputs:
             budget_rows=budget_rows,
         )
         low_budget_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'low_budget']
-        lambda_rows = lambda_stability_rows(strategy_rows, near_optimal_rows)
+        lambda_rows = (
+            lambda_stability_rows(strategy_rows, near_optimal_rows)
+            if lambda_analysis_enabled
+            else []
+        )
         embedding_summary_rows = embedding_model_summary_rows(
             manifest_rows=manifest_rows,
             geometry_rows=geometry_rows,
             low_budget_rows=low_budget_rows,
         )
-        _progress('writing paired query/profile effect datasets')
-        paired_profile_effects = write_paired_effect_datasets(
-            records=records,
-            strategy_rows=strategy_rows,
-            output_dir=data_dir,
-            warnings=warnings,
-        )
-        _progress('computing paired cell bootstrap summaries')
-        paired_cell_rows = cell_effect_summary_rows(
-            profile_effects=paired_profile_effects,
-            budget_rows=budget_rows,
-            bootstrap_replicates=args.bootstrap_replicates,
-            bootstrap_seed=args.bootstrap_seed,
-        )
-        _progress('computing paired suite bootstrap summaries')
-        paired_suite_rows = suite_effect_summary_rows(
-            profile_effects=paired_profile_effects,
-            budget_rows=budget_rows,
-            embedding_models=effective_embedding_models,
-            bootstrap_replicates=args.bootstrap_replicates,
-            bootstrap_seed=args.bootstrap_seed,
-        )
         wording_configurations = _wording_configurations_for_rows(budget_rows)
         cross_triplet_analysis_enabled = (
             args.cross_query_chunk_modes and len(wording_configurations) > 1
         )
-        if args.cross_query_chunk_modes:
-            _progress('computing paired cross-triplet bootstrap summaries')
-            paired_config_suite_rows = configuration_suite_effect_summary_rows(
+        paired_cell_rows: list[dict[str, object]] = []
+        paired_suite_rows: list[dict[str, object]] = []
+        paired_config_suite_rows: list[dict[str, object]] = []
+        paired_sensitivity_rows: list[dict[str, object]] = []
+        if paired_statistics_enabled:
+            _progress('writing paired query/profile effect datasets')
+            paired_profile_effects = write_paired_effect_datasets(
+                records=records,
+                strategy_rows=strategy_rows,
+                output_dir=data_dir,
+                warnings=warnings,
+            )
+            _progress('computing paired bootstrap summaries')
+            paired_cell_rows = cell_effect_summary_rows(
+                profile_effects=paired_profile_effects,
+                budget_rows=budget_rows,
+                bootstrap_replicates=args.bootstrap_replicates,
+                bootstrap_seed=args.bootstrap_seed,
+            )
+            paired_suite_rows = suite_effect_summary_rows(
                 profile_effects=paired_profile_effects,
                 budget_rows=budget_rows,
                 embedding_models=effective_embedding_models,
                 bootstrap_replicates=args.bootstrap_replicates,
                 bootstrap_seed=args.bootstrap_seed,
             )
+            if args.cross_query_chunk_modes:
+                paired_config_suite_rows = configuration_suite_effect_summary_rows(
+                    profile_effects=paired_profile_effects,
+                    budget_rows=budget_rows,
+                    embedding_models=effective_embedding_models,
+                    bootstrap_replicates=args.bootstrap_replicates,
+                    bootstrap_seed=args.bootstrap_seed,
+                )
+            paired_sensitivity_rows = leave_one_out_sensitivity_rows(
+                profile_effects=paired_profile_effects,
+                budget_rows=budget_rows,
+                embedding_models=effective_embedding_models,
+            )
+            del paired_profile_effects
         else:
-            _progress('skipping cross-triplet summaries; pass --cross-query-chunk-modes to enable')
-            paired_config_suite_rows = []
-        paired_sensitivity_rows = leave_one_out_sensitivity_rows(
-            profile_effects=paired_profile_effects,
-            budget_rows=budget_rows,
-            embedding_models=effective_embedding_models,
-        )
-        # The partitioned Parquet artifacts are now complete and all summary
-        # rows have been derived. Free the suite-sized profile frame before
-        # matplotlib builds the report figures.
-        del paired_profile_effects
+            _progress('skipping paired statistical analysis')
 
         _progress('writing CSV report artifacts')
         (args.output_dir / f'{LEGACY_LOW_BUDGET_TOKEN}_strategy_summary.csv').unlink(
@@ -253,30 +287,37 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'geometry_filter_summary.csv', geometry_rows)
         write_csv(data_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(data_dir / 'comparison_by_k.csv', comparison_rows)
-        write_csv(
-            data_dir / 'geometry_population_strategy_by_k.csv',
-            geometry_population_strategy_rows_data,
-        )
-        write_csv(
-            data_dir / 'geometry_population_comparison_by_k.csv',
-            geometry_population_comparison_rows,
-        )
-        write_csv(data_dir / 'global_lambda_strategy_by_k.csv', global_lambda_strategy_rows_data)
-        write_csv(data_dir / 'global_lambda_comparison_by_k.csv', global_lambda_comparison_rows)
-        write_csv(
-            data_dir / 'global_lambda_metric_aggregate_summary.csv',
-            global_lambda_metric_summary_rows,
-        )
-        write_csv(data_dir / 'lodo_lambda_strategy_by_k.csv', lodo_lambda_strategy_rows_data)
-        write_csv(data_dir / 'lodo_lambda_comparison_by_k.csv', lodo_lambda_comparison_rows)
-        write_csv(
-            data_dir / 'lodo_lambda_metric_aggregate_summary.csv',
-            lodo_lambda_metric_summary_rows,
-        )
-        write_csv(
-            data_dir / 'synthetic_artifact_diagnostics.csv',
-            synthetic_artifact_diagnostic_rows_data,
-        )
+        if geometry_population_enabled:
+            write_csv(
+                data_dir / 'geometry_population_strategy_by_k.csv',
+                geometry_population_strategy_rows_data,
+            )
+            write_csv(
+                data_dir / 'geometry_population_comparison_by_k.csv',
+                geometry_population_comparison_rows,
+            )
+        if global_lambda_analysis_enabled:
+            write_csv(
+                data_dir / 'global_lambda_strategy_by_k.csv',
+                global_lambda_strategy_rows_data,
+            )
+            write_csv(data_dir / 'global_lambda_comparison_by_k.csv', global_lambda_comparison_rows)
+            write_csv(
+                data_dir / 'global_lambda_metric_aggregate_summary.csv',
+                global_lambda_metric_summary_rows,
+            )
+        if lodo_analysis_enabled:
+            write_csv(data_dir / 'lodo_lambda_strategy_by_k.csv', lodo_lambda_strategy_rows_data)
+            write_csv(data_dir / 'lodo_lambda_comparison_by_k.csv', lodo_lambda_comparison_rows)
+            write_csv(
+                data_dir / 'lodo_lambda_metric_aggregate_summary.csv',
+                lodo_lambda_metric_summary_rows,
+            )
+        if validity_analysis_enabled:
+            write_csv(
+                data_dir / 'synthetic_artifact_diagnostics.csv',
+                synthetic_artifact_diagnostic_rows_data,
+            )
         write_csv(data_dir / 'experiment_family_summary.csv', family_summary_rows)
         write_csv(
             data_dir / 'experiment_family_budget_summary.csv',
@@ -290,15 +331,17 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'metric_aggregate_summary.csv', metric_summary_rows)
         write_csv(data_dir / 'budget_strategy_summary.csv', budget_rows)
         write_csv(data_dir / 'low_budget_strategy_summary.csv', low_budget_rows)
-        write_csv(data_dir / 'lambda_stability.csv', lambda_rows)
-        write_csv(data_dir / 'lambda_grid_fcp_delta.csv', lambda_grid_delta_rows)
-        write_csv(data_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
-        write_csv(data_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
+        if lambda_analysis_enabled:
+            write_csv(data_dir / 'lambda_stability.csv', lambda_rows)
+            write_csv(data_dir / 'lambda_grid_fcp_delta.csv', lambda_grid_delta_rows)
+            write_csv(data_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
+            write_csv(data_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(data_dir / 'embedding_model_summary.csv', embedding_summary_rows)
-        write_csv(data_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
-        write_csv(data_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
-        write_csv(data_dir / 'paired_config_suite_effect_summary.csv', paired_config_suite_rows)
-        write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
+        if paired_statistics_enabled:
+            write_csv(data_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
+            write_csv(data_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
+            write_csv(data_dir / 'paired_config_suite_effect_summary.csv', paired_config_suite_rows)
+            write_csv(data_dir / 'paired_leave_one_out_sensitivity.csv', paired_sensitivity_rows)
         _progress('writing report LaTeX tables and macros')
         _write_thesis_outputs_from_rows(
             geometry_rows=geometry_rows,
@@ -312,6 +355,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
             embedding_summary_rows=embedding_summary_rows,
             embedding_models=effective_embedding_models,
             require_complete_wording_grid=False,
+            warnings=warnings,
+            paired_statistics=paired_statistics_enabled,
             output_dir=args.output_dir,
         )
 
@@ -386,6 +431,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
         (args.output_dir / 'warnings.txt').write_text(
             '\n'.join(warnings) + ('\n' if warnings else '')
         )
+        generated_files = sorted(
+            path.relative_to(args.output_dir).as_posix()
+            for path in args.output_dir.rglob('*')
+            if path.is_file() and path.name != 'manifest.json'
+        )
         (args.output_dir / 'manifest.json').write_text(
             json.dumps(
                 {
@@ -406,9 +456,16 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'wording_configurations': wording_configurations,
                     'cross_triplet_analysis_enabled': cross_triplet_analysis_enabled,
                     'cross_triplet_figures_enabled': args.plots and cross_triplet_analysis_enabled,
+                    'optional_analyses': {
+                        'lambda': lambda_analysis_enabled,
+                        'global_lambda': global_lambda_analysis_enabled,
+                        'lodo': lodo_analysis_enabled,
+                        'paired_statistics': paired_statistics_enabled,
+                        'validity': validity_analysis_enabled,
+                    },
                     'warnings_count': len(warnings),
                     'figures': [str(path.relative_to(args.output_dir)) for path in figures],
-                    'files': list(REPORT_FILES),
+                    'files': [*generated_files, 'manifest.json'],
                     'lambda_selection_metric': LAMBDA_SELECTION_MAXIMIZING_METRIC,
                     'near_optimal_epsilon': args.near_optimal_epsilon,
                     'bootstrap_replicates': args.bootstrap_replicates,
@@ -526,6 +583,18 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
     paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
     embedding_summary_rows = _read_report_csv_rows(data_dir, 'embedding_model_summary.csv')
+    warnings_path = report_dir / 'warnings.txt'
+    wording_warning_prefixes = (
+        'Wording result macros were omitted:',
+        'Wording configurations use different held-out test-query counts:',
+    )
+    warnings = [
+        line
+        for line in (
+            warnings_path.read_text().splitlines() if warnings_path.is_file() else []
+        )
+        if line and not line.startswith(wording_warning_prefixes)
+    ]
 
     output_path = thesis_result_macros_path(report_dir)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -542,14 +611,17 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
             embedding_summary_rows=embedding_summary_rows,
             embedding_models=_effective_embedding_models_for_rows(budget_rows),
             require_complete_wording_grid=args.cross_query_chunk_modes,
+            warnings=warnings,
         )
     )
+    warnings = _dedupe_warnings(warnings)
+    warnings_path.write_text('\n'.join(warnings) + ('\n' if warnings else ''))
     _progress('LaTeX macro refresh complete')
     return ReportOutputs(
         output_dir=report_dir,
         experiments_discovered=len(manifest_rows),
         experiments_loaded=len(manifest_rows),
-        warnings_count=0,
+        warnings_count=len(warnings),
         figures_count=0,
     )
 
@@ -699,6 +771,8 @@ def _write_thesis_outputs_from_rows(
     embedding_summary_rows: Sequence[Mapping[str, object]],
     embedding_models: Sequence[str],
     require_complete_wording_grid: bool,
+    warnings: list[str],
+    paired_statistics: bool,
     output_dir: Path,
 ) -> None:
     latex_dir = thesis_latex_dir(output_dir)
@@ -722,11 +796,14 @@ def _write_thesis_outputs_from_rows(
             embedding_summary_rows=embedding_summary_rows,
             embedding_models=embedding_models,
             require_complete_wording_grid=require_complete_wording_grid,
+            warnings=warnings,
         )
     )
-    thesis_statistical_tables_path(output_dir).write_text(
-        render_statistical_latex_table(paired_suite_rows)
-    )
+    statistical_tables_path = thesis_statistical_tables_path(output_dir)
+    if paired_statistics:
+        statistical_tables_path.write_text(render_statistical_latex_table(paired_suite_rows))
+    else:
+        statistical_tables_path.unlink(missing_ok=True)
 
 
 def main() -> None:

@@ -31,7 +31,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         '--output-dir',
         type=Path,
         default=None,
-        help='Directory where report files are written. Defaults to <results-dir>/_reports/experiment_comparison.',
+        help='Directory where report files are written. Defaults to the sibling _reports/experiment_comparison directory.',
     )
     refresh_group = parser.add_mutually_exclusive_group()
     refresh_group.add_argument(
@@ -151,6 +151,36 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         default=20260712,
         help='Random seed for deterministic paired-inference bootstrap resampling.',
     )
+    parser.add_argument(
+        '--lambda-analysis',
+        action='store_true',
+        help='Generate lambda-grid, stability, safety, and near-optimal-width diagnostics.',
+    )
+    parser.add_argument(
+        '--global-lambda-analysis',
+        action='store_true',
+        help='Generate global-lambda transfer validity outputs.',
+    )
+    parser.add_argument(
+        '--lodo-analysis',
+        action='store_true',
+        help='Generate leave-one-distribution-out lambda-transfer outputs.',
+    )
+    parser.add_argument(
+        '--paired-statistics',
+        action='store_true',
+        help='Generate paired query/profile datasets, bootstrap summaries, and statistical tables.',
+    )
+    parser.add_argument(
+        '--validity-analysis',
+        action='store_true',
+        help='Generate geometry-population and synthetic-artifact validity diagnostics.',
+    )
+    parser.add_argument(
+        '--full-report',
+        action='store_true',
+        help='Enable every optional expensive analysis.',
+    )
     parsed = parser.parse_args(argv)
     refresh_report_dir = (
         parsed.refresh_plots or parsed.refresh_latex_macros or parsed.refresh_output_artifacts
@@ -174,7 +204,9 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             re.compile(str(parsed.exclude_experiment_regex))
         except re.error as exc:
             parser.error(f'invalid --exclude-experiment-regex: {exc}')
-    results_dir = parsed.results_dir.expanduser().resolve()
+    configured_results_dir = parsed.results_dir.expanduser()
+    default_output_dir = configured_results_dir.parent / '_reports' / 'experiment_comparison'
+    results_dir = configured_results_dir.resolve()
     refresh_report_dir = (
         refresh_report_dir.expanduser().resolve() if refresh_report_dir is not None else None
     )
@@ -184,7 +216,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         else (
             parsed.output_dir.expanduser().resolve()
             if parsed.output_dir is not None
-            else results_dir / '_reports' / 'experiment_comparison'
+            else default_output_dir.resolve()
         )
     )
 
@@ -216,6 +248,12 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         bootstrap_replicates=max(100, int(parsed.bootstrap_replicates)),
         bootstrap_seed=int(parsed.bootstrap_seed),
         main_query_scope=cast(MainQueryScope, parsed.main_query_scope),
+        lambda_analysis=bool(parsed.lambda_analysis),
+        global_lambda_analysis=bool(parsed.global_lambda_analysis),
+        lodo_analysis=bool(parsed.lodo_analysis),
+        paired_statistics=bool(parsed.paired_statistics),
+        validity_analysis=bool(parsed.validity_analysis),
+        full_report=bool(parsed.full_report),
     )
 
 

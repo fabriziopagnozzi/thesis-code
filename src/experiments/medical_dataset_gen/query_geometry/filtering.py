@@ -147,9 +147,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             if not ((qrel := query_qrels.get(chunk_id)) and qrel.is_gold)
         )
         n_near_miss_distractors = sum(
-            1
-            for chunk_id in topn_chunk_ids
-            if is_query_near_miss_distractor(query_qrels, chunk_id)
+            1 for chunk_id in topn_chunk_ids if is_query_near_miss_distractor(query_qrels, chunk_id)
         )
         separation = facet_separation(
             query_facets=query_facets,

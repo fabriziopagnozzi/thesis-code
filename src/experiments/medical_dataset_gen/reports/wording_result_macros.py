@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import statistics
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -61,6 +62,7 @@ def render_wording_result_macros(
     geometry_rows: Sequence[ReportRow],
     embedding_models: Sequence[str] = (),
     require_complete_grid: bool = False,
+    warnings: list[str] | None = None,
 ) -> dict[str, str]:
     """Calculate low-budget wording-sweep scalars used by the results preview."""
     low_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'low_budget']
@@ -78,18 +80,26 @@ def render_wording_result_macros(
     if not core_rows:
         if require_complete_grid:
             raise ValueError('No fully typed low-budget wording rows were found in the report.')
+        if warnings is not None:
+            warnings.append(
+                'Wording result macros were omitted: no fully typed low-budget wording rows '
+                'were found in the report.'
+            )
         return {}
 
     grid_error = _wording_grid_error(core_rows, embedding_models=effective_embedding_models)
     if grid_error is not None:
         if require_complete_grid:
             raise ValueError(grid_error)
+        if warnings is not None:
+            warnings.append(f'Wording result macros were omitted: {grid_error}')
         return {}
 
     macros = _grid_metadata_macros(
         core_rows=core_rows,
         all_low_rows=low_rows,
         embedding_models=effective_embedding_models,
+        warnings=warnings,
     )
     macros.update(_fcp_summary_macros('ResultWordingLowOverall', core_rows))
     macros.update(_grouped_fcp_macros(core_rows))
@@ -165,9 +175,34 @@ def _wording_grid_error(
         variants_by_configuration_model.setdefault((wording_key, model), set()).add(variant)
 
     variant_sets = list(variants_by_configuration_model.values())
-    if not variant_sets or any(variants != variant_sets[0] for variants in variant_sets[1:]):
-        return 'The wording macro grid does not contain the same distribution variants in every triplet/model slice.'
-    represented_families = {family for family, _ in variant_sets[0]}
+    if not variant_sets:
+        return 'The wording macro grid contains no triplet/model slices.'
+    variant_set_counts = Counter(frozenset(variants) for variants in variant_sets)
+    reference_variants = set(
+        max(
+            variant_set_counts,
+            key=lambda variants: (variant_set_counts[variants], len(variants)),
+        )
+    )
+    mismatched_slices: list[str] = []
+    for (wording_key, model), variants in sorted(variants_by_configuration_model.items()):
+        if variants == reference_variants:
+            continue
+        missing = sorted(reference_variants - variants)
+        extra = sorted(variants - reference_variants)
+        differences: list[str] = []
+        if missing:
+            differences.append(f'missing {missing}')
+        if extra:
+            differences.append(f'extra {extra}')
+        wording_label = '/'.join(wording_key)
+        mismatched_slices.append(f'{wording_label} @ {model}: {", ".join(differences)}')
+    if mismatched_slices:
+        return (
+            'The wording macro grid does not contain the same distribution variants in every '
+            f'triplet/model slice. Mismatched slices: {"; ".join(mismatched_slices)}.'
+        )
+    represented_families = {family for family, _ in reference_variants}
     if represented_families != set(DISTRIBUTION_EXPERIMENT_FAMILIES):
         return (
             f'The wording macro grid has families {sorted(represented_families)}, '
@@ -181,6 +216,7 @@ def _grid_metadata_macros(
     core_rows: Sequence[ReportRow],
     all_low_rows: Sequence[ReportRow],
     embedding_models: Sequence[str],
+    warnings: list[str] | None,
 ) -> dict[str, str]:
     configurations = {_required_wording_key(row) for row in core_rows}
     variants = {
@@ -189,9 +225,41 @@ def _grid_metadata_macros(
     }
     families = {str(row.get('ExperimentFamily') or '') for row in core_rows}
     budgets = {_integer(_numeric(row, 'k')) for row in core_rows}
-    test_query_counts = {_integer(_numeric(row, 'TopK_n_queries')) for row in core_rows}
-    if len(budgets) != 1 or len(test_query_counts) != 1:
-        raise ValueError('The core wording grid must use one low budget and one test-query count.')
+    standard_test_query_counts = {
+        _integer(_numeric(row, 'TopK_n_queries'))
+        for row in core_rows
+        if row.get('QueryMode') != 'label_only'
+    }
+    label_only_test_query_counts = {
+        _integer(_numeric(row, 'TopK_n_queries'))
+        for row in core_rows
+        if row.get('QueryMode') == 'label_only'
+    }
+    if len(budgets) != 1:
+        raise ValueError('The core wording grid must use one low budget.')
+    if len(standard_test_query_counts) != 1:
+        raise ValueError(
+            'The standard wording configurations must use one common test-query count.'
+        )
+    standard_test_query_count = next(iter(standard_test_query_counts))
+    label_only_test_query_count = (
+        next(iter(label_only_test_query_counts))
+        if len(label_only_test_query_counts) == 1
+        else standard_test_query_count
+    )
+    if len(label_only_test_query_counts) > 1:
+        raise ValueError(
+            'The label-only wording configurations must use one common test-query count.'
+        )
+    if label_only_test_query_counts and label_only_test_query_count != standard_test_query_count:
+        warning = (
+            'Wording configurations use different held-out test-query counts: '
+            f'standard={standard_test_query_count}, label_only={label_only_test_query_count}. '
+            'Cross-wording summaries therefore compare configuration-specific evaluation '
+            'populations.'
+        )
+        if warnings is not None:
+            warnings.append(warning)
     auxiliary_rows = [
         row
         for row in all_low_rows
@@ -208,7 +276,9 @@ def _grid_metadata_macros(
         'ResultWordingCoreCells': _integer(len(core_rows)),
         'ResultWordingCellsPerConfiguration': _integer(len(core_rows) // len(configurations)),
         'ResultWordingAuxiliaryCells': _integer(len(auxiliary_rows)),
-        'ResultWordingEvaluationQueriesPerCell': next(iter(test_query_counts)),
+        'ResultWordingEvaluationQueriesPerCell': standard_test_query_count,
+        'ResultWordingStandardEvaluationQueriesPerCell': standard_test_query_count,
+        'ResultWordingLabelOnlyEvaluationQueriesPerCell': label_only_test_query_count,
         'ResultWordingFcpPracticalMargin': _fixed(practical_effect_threshold('FCP'), digits=2),
     }
 

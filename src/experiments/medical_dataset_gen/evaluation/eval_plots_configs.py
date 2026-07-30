@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
 from experiments.medical_dataset_gen.evaluation.eval_plot_data import EvaluationResultLookup
 from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
+from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
 if TYPE_CHECKING:
     from experiments.medical_dataset_gen.utils.global_schemas import EvalPlotTheme
@@ -40,7 +41,7 @@ type EvalPlotFileName = Literal[
     'profiles_diagnostics_by_k_at_best_lambda',
     # -------------------------------------------
 ]
-EVAL_PLOT_FILE_NAMES = set[EvalPlotFileName](get_args(EvalPlotFileName.__value__))
+EVAL_PLOT_FILE_NAMES = set[EvalPlotFileName](get_literals(EvalPlotFileName))
 
 # Default ordered list of evaluation plots to generate and save in the evaluation stage.
 DEFAULT_ENABLED_EVAL_PLOT_NAMES: list[EvalPlotFileName] = [

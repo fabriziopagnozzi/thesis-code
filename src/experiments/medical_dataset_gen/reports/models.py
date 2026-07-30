@@ -52,6 +52,32 @@ class CliArgs:
     bootstrap_replicates: int = 1000
     bootstrap_seed: int = 20260712
     main_query_scope: MainQueryScope = 'all'
+    lambda_analysis: bool = False
+    global_lambda_analysis: bool = False
+    lodo_analysis: bool = False
+    paired_statistics: bool = False
+    validity_analysis: bool = False
+    full_report: bool = False
+
+    @property
+    def run_lambda_analysis(self) -> bool:
+        return self.lambda_analysis or self.full_report
+
+    @property
+    def run_global_lambda_analysis(self) -> bool:
+        return self.global_lambda_analysis or self.full_report
+
+    @property
+    def run_lodo_analysis(self) -> bool:
+        return self.lodo_analysis or self.full_report
+
+    @property
+    def run_paired_statistics(self) -> bool:
+        return self.paired_statistics or self.full_report
+
+    @property
+    def run_validity_analysis(self) -> bool:
+        return self.validity_analysis or self.full_report
 
 
 @dataclass(frozen=True)

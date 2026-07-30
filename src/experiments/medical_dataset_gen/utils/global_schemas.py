@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Literal, get_args
+from typing import Literal
 
 import numpy as np
 from pydantic import (
@@ -22,7 +22,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryFocusMode,
     QueryStructure,
 )
-from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides
+from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides, get_literals
 from helpers.embedder import EmbeddingModelName
 
 
@@ -38,6 +38,9 @@ class GlobalCfg(BasePydanticCfgModel):
     result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
 
+type EvalPlotTheme = Literal['dark', 'light']
+type DatasetSchemaVersion = Literal[2, 3, 4]
+DATASET_SCHEMA_VERSION_LIST = list[DatasetSchemaVersion](get_literals(DatasetSchemaVersion))
 type DistractorChange = Literal['condition', 'subgroup', 'axis', 'axis_value_bin']
 
 
@@ -239,12 +242,9 @@ class LambdaGridCfg(BasePydanticCfgModel):
         return self
 
     def values(self) -> list[float]:
-        return sorted(
-            {
-                float(round(value, 6))
-                for value in np.linspace(self.start, self.stop, self.num_values)
-            }
-        )
+        return sorted({
+            float(round(value, 6)) for value in np.linspace(self.start, self.stop, self.num_values)
+        })
 
 
 class RetrievalCfg(BasePydanticCfgModel):
@@ -312,13 +312,6 @@ type EvaluationMode = Literal['exploring', 'testing']
 
 class LambdaSelectionCfg(BasePydanticCfgModel):
     tie_break: LambdaSelectionTieBreak = 'lower_lambda'
-
-
-type EvalPlotTheme = Literal['dark', 'light']
-type DatasetSchemaVersion = Literal[2, 3, 4]
-DATASET_SCHEMA_VERSION_LIST = list[DatasetSchemaVersion](
-    get_args(DatasetSchemaVersion.__value__)
-)
 
 
 class EvaluationRerankerCfg(BasePydanticCfgModel):

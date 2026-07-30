@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, cast, get_args
+from typing import Literal, cast
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_materialization import (
     run_make_chunks,
@@ -32,7 +32,7 @@ from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SharedGenerationTableName,
-    values_for,
+    get_literals,
 )
 
 type PipelineStage = Literal[
@@ -47,7 +47,7 @@ type PipelineStage = Literal[
     'eval_plots',
     'geom_plots',
 ]
-PIPELINE_STAGE_NAMES = list[PipelineStage](values_for(PipelineStage))
+PIPELINE_STAGE_NAMES = list[PipelineStage](get_literals(PipelineStage))
 PIPELINE_STAGE_SET = set[PipelineStage](PIPELINE_STAGE_NAMES)
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 type StageReadyFn = Callable[[MedicalDatasetGenPaths], bool]
@@ -78,9 +78,7 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
 STAGE_BY_NAME = {spec.name: spec for spec in STAGE_SPECS}
 
 type StandalonePipelineScript = Literal['eval', 'geom_plots', 'eval_plots']
-STANDALONE_SCRIPT_NAMES = list[StandalonePipelineScript](
-    get_args(StandalonePipelineScript.__value__)
-)
+STANDALONE_SCRIPT_NAMES = list[StandalonePipelineScript](get_literals(StandalonePipelineScript))
 STANDALONE_SCRIPT_SET = set[StandalonePipelineScript](STANDALONE_SCRIPT_NAMES)
 type StandaloneRunner = Callable[[ExperimentCfg, MedicalDatasetGenPaths, list[str]], object]
 

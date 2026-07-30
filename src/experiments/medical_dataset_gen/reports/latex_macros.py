@@ -342,6 +342,7 @@ def render_thesis_result_macros(
     embedding_summary_rows: Sequence[Mapping[str, object]] = (),
     embedding_models: Sequence[str] = (),
     require_complete_wording_grid: bool = False,
+    warnings: list[str] | None = None,
 ) -> str:
     """Render scalar result macros imported by the thesis text."""
     macros = {
@@ -360,6 +361,7 @@ def render_thesis_result_macros(
             geometry_rows=geometry_rows,
             embedding_models=embedding_models,
             require_complete_grid=require_complete_wording_grid,
+            warnings=warnings,
         ),
     }
     lines = [

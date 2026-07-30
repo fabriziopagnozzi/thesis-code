@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Literal, cast, get_args
+from typing import Literal, cast
+
+from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
 type EmbeddingModelName = Literal[
     'BAAI/bge-m3',
@@ -16,7 +18,7 @@ type EmbeddingModelName = Literal[
     'ncbi/MedCPT',
 ]
 
-EMBEDDING_MODEL_NAMES = tuple[EmbeddingModelName, ...](get_args(EmbeddingModelName.__value__))
+EMBEDDING_MODEL_NAMES = tuple[EmbeddingModelName, ...](get_literals(EmbeddingModelName))
 EMBEDDING_CHILD_TOKENS: dict[EmbeddingModelName, str] = {
     'BAAI/bge-m3': 'bge_m3',
     'Qwen/Qwen3-Embedding-0.6B': 'qwen3_06',
