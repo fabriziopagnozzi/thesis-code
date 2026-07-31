@@ -159,7 +159,7 @@ TABLE_HEADERS = {
     'ExperimentFamilyLabel': 'Family',
     'QueryMode': 'Query mode',
     'FocusMode': 'Focus mode',
-    'ChunkTextMode': 'Chunk mode',
+    'ChunkTextMode': 'Category wording',
     'WordingConfig': 'Config ID',
     'WordingConfigLabel': 'Config',
     'BudgetCategoryLabel': 'Budget',

@@ -41,6 +41,10 @@ _CHUNK_TEXT_MODE_BY_STYLE: dict[str, ChunkTextModeToken] = {
     'ontology_explicit': 'simple',
     'semantic_hardened': 'hardened',
 }
+_CHUNK_TEXT_MODE_DISPLAY_LABELS: dict[str, str] = {
+    'simple': 'category-explicit',
+    'hardened': 'category-implicit',
+}
 
 
 def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
@@ -132,9 +136,14 @@ def _wording_config_label(
 ) -> str:
     if 'unknown' in {query_mode, focus_mode, chunk_text_mode}:
         return 'unknown'
+    chunk_text_mode_label = _CHUNK_TEXT_MODE_DISPLAY_LABELS.get(
+        chunk_text_mode, chunk_text_mode
+    )
     if query_mode == 'label_only' and focus_mode == 'label_only':
-        return f'label-only / {chunk_text_mode}'
-    return f'{query_mode} / {focus_mode} / {chunk_text_mode}'
+        return f'label-only / {chunk_text_mode_label}'
+    if focus_mode == 'natural':
+        return f'{query_mode} / {chunk_text_mode_label}'
+    return f'{query_mode} / {focus_mode} / {chunk_text_mode_label}'
 
 
 def embedding_metadata(record: ExperimentRecord) -> dict[str, object]:
@@ -560,6 +569,8 @@ def format_table_value(value: object, *, column: str) -> object:
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, str):
+        if column == 'ChunkTextMode':
+            return _CHUNK_TEXT_MODE_DISPLAY_LABELS.get(value, value)
         return value if len(value) <= 70 else value[:67] + '...'
     numeric = float_or_none(value)
     if numeric is not None:

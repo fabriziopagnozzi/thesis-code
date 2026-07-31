@@ -72,7 +72,7 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
     StageSpec('embed', run_embed, ready=embedding_artifacts_ready),
     StageSpec('filter_queries', run_filter_queries),
     StageSpec('eval', run_evaluate),
-    # StageSpec('eval_plots', run_eval_plots),
+    StageSpec('eval_plots', run_eval_plots),
     # StageSpec('geom_plots', run_query_geom_plots),
 )
 STAGE_BY_NAME = {spec.name: spec for spec in STAGE_SPECS}

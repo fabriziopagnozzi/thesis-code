@@ -242,21 +242,18 @@ def plot_config_metric_delta_heatmap_low_budget_by_distribution(
         )
     if not panel_rows:
         return []
-    return _plot_delta_heatmap_panel_grid(
+    return _plot_delta_heatmap_panel_grid_transposed(
         plt=plt,
         panel_rows=panel_rows,
         title='Low-budget metric deltas by wording configuration within each family',
         footnote=(
-            'Each row filters to one experiment family. Cell lines: raw mean for the first '
+            'Each column filters to one experiment family. Cell lines: raw mean for the first '
             'strategy; bold improvement delta; win rate. Wording configurations are ordered by '
             'mean FacLoc-vs-MMR improvement across the shown metrics.'
         ),
         output_path=output_dir
         / f'cross_config_metric_delta_heatmap_low_budget_by_distribution.{plot_format}',
-        figsize=(
-            16.5,
-            _panel_grid_fig_height(panel_rows, min_cell_height=0.40, min_height=12.0),
-        ),
+        figsize=(max(18.0, 4.0 * len(panel_rows)), 14.5),
     )
 
 
@@ -664,6 +661,101 @@ def _plot_delta_heatmap_panel_grid(
         fig.text(0.5, 0.016, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=180, bbox_inches='tight')
+        return [output_path]
+    finally:
+        plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _plot_delta_heatmap_panel_grid_transposed(
+    *,
+    plt: object,
+    panel_rows: Sequence[HeatmapPanelRow],
+    title: str,
+    footnote: str,
+    output_path: Path,
+    figsize: tuple[float, float],
+) -> list[Path]:
+    """Draw tall metric heatmaps with families as columns to preserve cell height."""
+    specs = _delta_panel_specs()
+    active_panel_rows: list[HeatmapPanelRow] = []
+    panel_matrices: list[list[list[list[float | None]]]] = []
+    for panel_row in panel_rows:
+        matrices, values = _delta_matrices(rows=panel_row.rows, axis=panel_row.axis, specs=specs)
+        if not values:
+            continue
+        active_panel_rows.append(panel_row)
+        panel_matrices.append(matrices)
+    if not active_panel_rows:
+        return []
+
+    fig, axes_obj = plt.subplots(  # type: ignore[attr-defined]
+        nrows=len(specs),
+        ncols=len(active_panel_rows),
+        figsize=figsize,
+        sharex=False,
+        squeeze=False,
+    )
+    axes = cast(Sequence[Sequence[Any]], axes_obj)
+    try:
+        colorbar_images: list[Any] = []
+        for spec_index, spec in enumerate(specs):
+            row_images: list[Any] = []
+            for family_index, (panel_row, matrices) in enumerate(
+                zip(active_panel_rows, panel_matrices, strict=True)
+            ):
+                ax = axes[spec_index][family_index]
+                row_images.append(
+                    _draw_delta_heatmap_axis(
+                        fig=fig,
+                        ax=ax,
+                        rows=panel_row.rows,
+                        axis=panel_row.axis,
+                        spec=spec,
+                        matrix=matrices[spec_index],
+                        show_title=False,
+                        show_x_tick_labels=spec_index == len(specs) - 1,
+                        show_y_tick_labels=family_index == 0,
+                    )
+                )
+                if spec_index == 0:
+                    ax.set_title(panel_row.label, fontsize=10, fontweight='bold', pad=12)
+            colorbar_images.append(row_images[0])
+
+        fig.subplots_adjust(
+            left=0.105,
+            right=0.93,
+            bottom=0.19,
+            top=0.90,
+            hspace=0.16,
+            wspace=0.18,
+        )
+        for spec_index, spec in enumerate(specs):
+            positions = [ax.get_position() for ax in axes[spec_index]]
+            bottom = min(position.y0 for position in positions)
+            top = max(position.y1 for position in positions)
+            center_y = (bottom + top) / 2
+            fig.text(
+                0.018,
+                center_y,
+                spec.title,
+                ha='center',
+                va='center',
+                rotation=90,
+                fontsize=10,
+                fontweight='bold',
+            )
+            colorbar_axis = fig.add_axes((0.945, bottom, 0.008, top - bottom))
+            cbar = fig.colorbar(
+                colorbar_images[spec_index],
+                cax=colorbar_axis,
+                extend='both',
+            )
+            cbar.set_label(spec.colorbar_label, fontsize=8)
+            cbar.ax.tick_params(labelsize=7)
+        fig.suptitle(title, y=0.975)
+        fig.text(0.5, 0.018, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, dpi=300, bbox_inches='tight')
         return [output_path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
