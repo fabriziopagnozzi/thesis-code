@@ -1,16 +1,20 @@
 # Medical Dataset Generator
 
-This package builds a deterministic synthetic clinical benchmark for multi-aspect retrieval. Each query compares two patient cohorts across two clinical axes, so a complete answer requires evidence from four distinct facets. The pipeline renders the evidence, preserves the hidden facet mapping as qrels, and compares standard top-$k$, MMR, and facility-location retrieval on the same query-local pool.
+This directory contains the experiment pipeline for the thesis's medical retrieval benchmark. It builds a controlled synthetic corpus and evaluates retrieval methods on clinical questions that require several pieces of evidence.
 
-The construction is designed to be inspectable. The clinical ontology and language templates are authored YAML resources, experiment choices live in a validated configuration file, and every stage writes a persisted artifact that can be examined independently. The benchmark is intended to test whether coverage-oriented retrieval helps under these controlled conditions; it does not assume that any method will win.
+Each generated question compares two patient cohorts across two clinical axes. The generator creates the four corresponding evidence facets, renders their documents alongside controlled distractors, and persists the mappings needed to inspect relevance and answer coverage. The evaluation then compares top-$k$, MMR, and facility-location selection on the same query-local pool.
+
+The ontology and language templates are authored YAML inputs. A validated configuration fixes the choices for a run, while the persisted stage artifacts make the complete construction auditable afterwards.
 
 ## Setup
 
-Run commands from the repository root. The project requires Python 3.12 or newer, `uv`, and Linux. The reference configuration uses CUDA for embedding, so a GPU is strongly recommended for a complete experiment. A CPU run is useful for a small construction check but is not a practical substitute for a full embedding run.
+Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/) first, then run the following from the repository root:
 
 ```bash
 uv sync
 ```
+
+The project requires Python 3.12 or newer and Linux. The reference configuration uses CUDA for embedding, so a GPU is strongly recommended for a complete experiment. A CPU run is useful for a small construction check but is not a practical substitute for a full embedding run.
 
 The pipeline stores run-time configuration and outputs below `src/experiments/medical_dataset_gen/_results/`. Those files are intentionally excluded from source control: an experiment directory captures one concrete run without changing the package itself.
 
@@ -30,7 +34,7 @@ Edit `_config.yaml` before running it. In particular, set the seed, embedding de
 For a first construction check, reduce `global.conditions`, set a small `generation.query_limit`, and use a modest embedding batch size. Run the structural stages first:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline \
+uv run task pipeline \
   --exp "$EXP" \
   --to qrels
 ```
@@ -38,7 +42,7 @@ uv run python -m experiments.medical_dataset_gen.pipeline \
 This produces plans, clinical facts, chunks, queries, canonical answers, and qrels without downloading or running an embedding model. Inspect these artifacts before starting the computationally heavier stages. Once the configuration and generated text look right, run the complete workflow:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline --exp "$EXP"
+uv run task pipeline --exp "$EXP"
 ```
 
 The complete workflow evaluates the configured retrieval strategies, writes aggregate statistics, and produces the standard evaluation and query-geometry figures.
@@ -67,7 +71,7 @@ The most useful audit path is usually `query_plans` → `clinical_facts` → `ch
 Use a contiguous range when downstream artifacts need to be refreshed:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline \
+uv run task pipeline \
   --exp "$EXP" \
   --from embed \
   --to eval
@@ -76,7 +80,7 @@ uv run python -m experiments.medical_dataset_gen.pipeline \
 Use an explicit list for independent work, including a normal geometry-plot rerun:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline \
+uv run task pipeline \
   --exp "$EXP" \
   --stages geom_plots
 ```
@@ -84,15 +88,15 @@ uv run python -m experiments.medical_dataset_gen.pipeline \
 Selective evaluation or plot work goes through the same entry point with `--run`:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline \
+uv run task pipeline \
   --exp "$EXP" \
   --run "eval --steps evaluation_stats,evaluation_slice_stats"
 
-uv run python -m experiments.medical_dataset_gen.pipeline \
+uv run task pipeline \
   --exp "$EXP" \
   --run "eval_plots --plots metrics_k_curves_for_lambda"
 
-uv run python -m experiments.medical_dataset_gen.pipeline \
+uv run task pipeline \
   --exp "$EXP" \
   --run "geom_plots --plots query_overview_4panel"
 ```
@@ -116,7 +120,7 @@ _results/
 Run the parent name to launch its children sequentially:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.pipeline --exp comparison
+uv run task pipeline --exp comparison
 ```
 
 Keep the dataset-distribution settings in the parent. Children are intended for changes such as the embedding model, query wording, retrieval parameters, or evaluation options. Compatible generation and embedding artifacts are shared automatically; geometry, evaluation, figures, and logs remain local to each child. Pass `--parent` only when the parent itself should run despite having children.
