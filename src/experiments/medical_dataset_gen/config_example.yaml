@@ -1,0 +1,142 @@
+global:
+    seed: 42 # Random seed used by deterministic query/fact/chunk generation.
+    conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
+
+generation:
+    query_limit: null # Optional deterministic prefix for smoke runs; null emits the full ontology-policy-compliant query set (currently 6,174 queries with the bundled ontology).
+    ontology_path: null # Optional path to a custom ontology YAML.
+    chunk_text_style: semantic_hardened # "semantic_hardened" keeps authored chart evidence only; "ontology_explicit" adds one authored interpretation sentence.
+    focus_mode: natural # Used by "balanced"/"unbalanced": "natural" requests clinical properties; "list" enumerates alternatives. Ignored and canonicalized for "label_only".
+    query_structure: unbalanced # "unbalanced" prioritizes one axis, "balanced" details both axes, and "label_only" gives one compact query containing only both axis labels.
+    chunk_surface_policy: split_heldout # Validation chunks use seen template families; test chunks use held-out families.
+    excluded_clinical_axes: [] # Example to drop even secondary diagnostic evidence from query/chunk generation: [diagnostic_evidence_type].
+
+    chunk_pools:
+        dominant_primary:
+            size: 24
+            distractors:
+                - size: 3
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
+                - size: 1
+                  changes: [subgroup, axis_value_bin]
+
+        other_primary:
+            size: 20
+            distractors:
+                - size: 2
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
+
+        secondary:
+            size: 14
+            distractors:
+                - size: 2
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
+
+        niche:
+            size: 4 # Gold documents in each niche facet; must stay below secondary.size.
+            num_clusters_per_query: 1 # Number (0-2) of complementary facets made deliberately sparse.
+            distractors:
+                - size: 2
+                  changes: [subgroup]
+                - size: 2
+                  changes: [condition]
+                - size: 2
+                  changes: [condition, subgroup]
+
+        background_outliers:
+            - size: 8 # Chunks in each coherent non-gold clinical island.
+              num_clusters: 1
+
+        chunk_min_words: 25
+        chunk_max_words: 200
+        chunk_word_tolerance: 5 # Soft tolerance around the target range for concise deterministic prose.
+
+embeddings:
+    model_name: BAAI/bge-m3
+    batch_size: 512
+    device: cuda # Single-device fallback. Use cuda:0/cuda:1 if you want one explicit GPU.
+    devices: [] # Optional data-parallel devices, e.g. [cuda:0, cuda:1] on a 2-GPU Kaggle runtime.
+    query_prompt: null # Optional query prompt passed to the Embedder for models that require one.
+    document_prompt: null # Optional document prompt passed to the Embedder for models that require one.
+    normalize: true
+
+retrieval:
+    strategies: [top_k, mmr, fac_loc]
+    pool_scope: query_local
+    candidate_pool_n: 10_000 # Top-N candidate pool retained before reranking by top-k/MMR/FacLoc.
+    # k_values: [6, 10, 14]
+    lambdas_mmr: # MMR uses lambda on its full relevance-diversity scale.
+        start: 0.02
+        stop: 0.90
+        num_values: 30
+    lambdas_fac_loc: # FacLoc reaches useful coverage behavior on a lower raw-lambda scale.
+        start: 0.01
+        stop: 0.40
+        num_values: 30
+    mmr_window: null # Optional MMR candidate window. null means MMR can choose from the whole top-N pool.
+    compute_answer_rouge: false # If false, skip answer-ROUGE metric computation and omit ROUGE-based plots.
+
+geometry_filter:
+    stress_horizon_basis: competitive_pool_mass # Gold plus near-miss chunks define the relative rank-depth gate.
+    stress_horizon_fraction: 0.12 # Inspect this fraction of the configured competitive pool mass.
+    stress_horizon_min_k: 4
+    stress_horizon_max_k: 24
+    min_primary_axis_fraction: 0.50 # At least half of the stress-horizon results must belong to the primary axis.
+    max_retrieved_facet_fraction: 0.50 # At most half of the required facets may appear by the stress horizon.
+
+evaluation:
+    mode: exploring # "exploring" aggregates all evaluated queries; "testing" tunes lambdas on validation and reports held-out test metrics.
+    use_reranker: false # If true, also evaluate a dense cross-encoder reranker over the semantic candidate pool.
+    reranker:
+        model_name: Qwen/Qwen3-Reranker-0.6B
+        batch_size: 16
+        device: cuda # Default GPU placement. Use cuda:0/cuda:1 for explicit GPUs, or cpu only for debugging.
+        max_length: null # null uses the model default. Chunks are short, so truncation should rarely bind.
+        candidate_pool_n: null # null reranks retrieval.candidate_pool_n candidates; set a smaller N for cheaper curiosity runs.
+        prompt: Given a clinical evidence query, retrieve passages that answer the requested clinical aspects.
+        show_progress_bar: false
+        trust_remote_code: false
+    all_clean_rate_precision_threshold: 0.8 # Minimum Precision@k required, with full facet coverage, for AllFacetCleanRate@k.
+    lambda_selection:
+        tie_break: lower_lambda # Representative lambda always maximizes FacetCoveragePurity@k; use this only to break exact ties.
+
+query_geometry:
+    random_state: 42 # Seed for PCA/UMAP figure reproducibility.
+
+    # Number of query-local embedding maps to generate after evaluation.
+    # Each selected query gets UMAP/PCA plots, query-cosine color maps, rank plots, and HDBSCAN plots.
+    n_queries: 9
+
+    # Optional explicit query IDs. If empty, representative queries are chosen automatically
+    # using query_selection.
+    query_ids: []
+    query_selection: mixed # "mixed" = good/mid/bad ranking slices; "best" = old good-query ranking only.
+
+    # Candidate pool size for embedding-geometry plots.
+    # null means reuse retrieval.candidate_pool_n.
+    candidate_pool_n: null
+
+    # k used when overlaying top-k/MMR/FacLoc selected points on the scatter plot.
+    plot_k: 10
+    reduction: umap # "umap" | "pca"
+    umap_metric: cosine # Use cosine for normalized semantic embeddings. Euclidean is mainly useful for debugging PCA maps.
+    pca_dims: null # null = direct embedding features; integer = PCA to this many dimensions before UMAP.
+    umap_neighbors: 15 # UMAP neighborhood size. Smaller values show local clusters; larger values preserve broader structure.
+    umap_min_dist: 0.08 # UMAP minimum distance. Smaller values create tighter visual clusters.
+
+    compute_clusters: true # If false, skip HDBSCAN computation and cluster-specific query-geometry plots/metrics.
+    hdbscan_umap_dims: 10 # HDBSCAN runs on this many UMAP components; plotting still uses the 2D UMAP/PCA map.
+    hdbscan_min_cluster_size: 5
+    hdbscan_min_samples: null

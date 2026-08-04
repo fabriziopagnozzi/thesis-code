@@ -1,4 +1,0 @@
-embed:
-  batch_size: 256
-  commit_every: 16384
-  device: cuda

@@ -1,0 +1,179 @@
+# Run each command with EXP environment variable to save results under _results/EXP.
+# Copy this config file to _results/EXP/_config.yaml and edit.
+
+global:
+    # result_dir_overrides: # Per-table result directory overrides relative to _results
+    # (if not listed here, their default location is _results/EXP)
+    #     conditions_stats: <dir>
+    #     chunks: <dir>
+    #     queries_prompts: <dir>
+    #     queries: <dir>
+    #     gold_annotations: <dir>
+
+    n_conditions: 350 # number of conditions to sample from conditions_stats
+    chunks_vec_table: chunks_512 # relative to src/experiments/mimic/_results/_vector_db
+
+    prefilter_n: 2_000 # pre-retrieval cosine pool. Shared between query filtering and evaluation
+
+    embedding_model: Qwen/Qwen3-Embedding-0.6B # shared by "chunking" (for tokenizer), "pool_analysis", "queries" and "evaluation"
+# ----------------------------------------------------------------------------
+
+embeddings:
+    models:
+        - multi-qa-mpnet-base-cos-v1
+        - Simonlee711/Clinical_ModernBERT
+        - abhinand/MedEmbed-large-v0.1
+        - Qwen/Qwen3-Embedding-0.6B
+        - Qwen/Qwen3-Embedding-4B
+        - Qwen/Qwen3-Embedding-8B
+    batch_sizes: [2, 4, 8, 16, 32] # for each model
+    commit_every: 16384
+# ----------------------------------------------------------------------------
+pool_analysis:
+    pool_n: 2000
+
+    umap_n_neighbors: 30
+    umap_min_dist: 0.05
+    umap_metric: cosine
+    umap_dim_for_cluster: 10
+    umap_random_state: 42
+
+    hdbscan_min_cluster_size: 30
+
+    lof_n_neighbors: 20
+    lof_contamination: auto
+
+    cv_n_splits: 5
+    n_figures: 30
+
+    output_subdir: pool_analysis
+# ----------------------------------------------------------------------------
+
+evaluation:
+    strategies:
+        - top_k
+        - mmr
+        - fac_loc
+    k_values: [5, 10, 20, 30]
+    lam_values: [0.3, 0.5, 0.7, 0.8]
+
+    gold_annotation:
+        min_per_modifier: 0 # optional per-modifier retrieval floor
+        model: gemma4-31b-text
+        temperature: 0.40
+        top_p: 0.95
+        top_k: 64
+        think: false
+        stream: false
+        num_ctx: 16_000
+        num_predict: -1
+        batch_size: 30
+        # resume_batch_size: 30  # set to OLD batch_size when resuming with a changed batch_size
+
+        # ----------------------------------------------------------------------------
+chunking:
+    conditions_stats:
+        min_admissions: 200
+
+    note_chunking:
+        max_tokens: 512
+        min_tokens: 15
+        stride_tokens: 128
+        keep_sections:
+            - DISCHARGE MEDICATIONS
+            - DISCHARGE DIAGNOSIS
+        skip_sections:
+            - HISTORY OF PRESENT ILLNESS
+            - PERTINENT RESULTS
+            - SEX
+            - SERVICE
+            - ALLERGIES
+            - ATTENDING
+            - SOCIAL HISTORY
+            - FOLLOWUP INSTRUCTIONS
+            - FACILITY
+            - MAJOR SURGICAL OR INVASIVE PROCEDURE
+            - FAMILY HISTORY
+            - MEDICATIONS ON ADMISSION
+            - DISCHARGE DISPOSITION
+            - DISCHARGE CONDITION
+            - DISCHARGE INSTRUCTIONS
+            - PHYSICAL EXAM
+            - PAST MEDICAL HISTORY
+        metadata_only_sections:
+            - CHIEF COMPLAINT
+
+    dedup:
+        boilerplate_sections:
+            - PAST MEDICAL HISTORY
+# ----------------------------------------------------------------------------
+queries:
+    build_prompts:
+        n_grounding_patients: 6
+        max_comorbidity_modifiers: 3
+        min_modifier_admissions: 5 # skip modifier pairs where cond ∩ modifier < this
+
+        # Stratified condition sampling: split [min_condition_admissions, max_condition_admissions]
+        # into n_strata log/linear buckets, sample n_conditions/n_strata uniformly from each.
+        min_condition_admissions: 200
+        max_condition_admissions: null # null = no upper bound
+        n_strata: 3
+        stratify_scale: log # log | linear
+        stratify_seed: 42
+
+        high_value_sections:
+            - BRIEF HOSPITAL COURSE
+            - HISTORY OF PRESENT ILLNESS
+            - DISCHARGE MEDICATIONS
+
+        demographic_modifiers:
+            - text: "the patient is elderly (age > 75)"
+              column: age
+              op: ">"
+              value: 75
+            - text: "the patient is a young adult (age < 40)"
+              column: age
+              op: "<"
+              value: 40
+
+        prompt_template: |
+            Below are excerpts from real discharge summaries of patients admitted for {condition}.
+
+            <START DISCHARGE SUMMARIES EXAMPLES>
+            {chunks_block}
+            <END DISCHARGE SUMMARIES EXAMPLES>
+
+            The examples above are provided ONLY so you understand what kinds of clinical information the dataset contains.
+            Do NOT generate a question about these specific patients or these specific notes.
+            Using the above as background context only, generate ONE generic question about patients with {condition}
+            that asks for clinical patterns across multiple aspects of care.
+            The question must be answerable by reading across many different patients in the dataset - not just the examples above.
+
+            The question must address EXACTLY the following aspects — all of them, no others:
+            {modifier_list}
+
+            Good examples:
+            - "For patients admitted with sepsis, how does antibiotic management differ between those with chronic kidney disease and elderly patients over 75?"
+            - "For patients with acute myocardial infarction, how do discharge medications and follow-up plans differ between those with chronic kidney disease and elderly patients?"
+            - "In patients hospitalized with pneumonia, how does length of stay and treatment intensity compare between those with heart failure and elderly patients?"
+
+            Requirements:
+            - Asks about observable patterns in the data, not what "should" be done
+            - Can be answered by reading across many discharge notes, not from a textbook
+
+            Keep the question to 1-2 sentences. Return ONLY the question, nothing else.
+
+    llm_generation:
+        save_every: 25
+        model: gemma4-31b-text
+        temperature: 1.0
+        top_p: 0.95
+        top_k: 64
+        think: false
+
+    filtering:
+        k_values: [5, 10, 20, 30, 100, 500]
+        lam_values: [0.3, 0.5, 0.7, 0.8]
+        jaccard_threshold: 0.90
+
+# ----------------------------------------------------------------------------

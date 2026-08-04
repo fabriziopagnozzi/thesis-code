@@ -1,0 +1,135 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Literal, TypedDict
+
+from pydantic import ConfigDict
+
+from experiments.medical_dataset_gen.dataset_generation.schemas import (
+    BenchmarkPydanticModel,
+    ClinicalAxis,
+    ClusterRole,
+    CohortContrastFamily,
+    DataSplit,
+    QueryType,
+    SubgroupAxis,
+)
+
+if TYPE_CHECKING:
+    from experiments.medical_dataset_gen.evaluation.schemas import LightweightQrelRecord
+
+
+type RetrievalStrategy = Literal['top_k', 'mmr', 'fac_loc']
+type ChunkSupport = Literal['positive', 'background_outlier', 'hard_negative']
+
+type QueryIdToQrels = Mapping[str, QrelRecord | LightweightQrelRecord]
+type QrelsByQueryChunk = dict[str, QueryIdToQrels]
+
+type FacetIdToGoldChunks = dict[str, list[str]]
+type QueryIdToFacetMap = dict[str, FacetIdToGoldChunks]
+
+type TopKDiagnosticsByK = dict[int, TopKDiagnostics]
+
+
+class QrelRecord(BenchmarkPydanticModel):
+    query_id: str
+    evidence_profile_id: str
+    pool_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    dominant_primary_facet_id: str
+    chunk_id: str
+    fact_id: str | None = None
+    facet_id: str | None = None
+    target_facet_id: str | None = None
+    cluster_id: str | None = None
+    cluster_role: ClusterRole | None = None
+    axis: ClinicalAxis | None = None
+    facet_priority: Literal['primary', 'secondary'] | None = None
+    is_gold: bool = False
+    distractor_type: str | None = None
+    relevance_grade: int | None = None
+    support_type: ChunkSupport | None = None
+
+
+class QueryRecord(BenchmarkPydanticModel):
+    model_config = ConfigDict(extra='ignore')
+
+    query_id: str
+    evidence_profile_id: str
+    pool_id: str
+    query_type: QueryType
+    template_id: str
+    condition_id: str | None
+    condition_display: str | None = None
+    split: DataSplit
+    cohort_contrast_id: str
+    cohort_contrast_family: CohortContrastFamily
+    cohort_dimension_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    dominant_primary_facet_id: str
+    facets_json: str | None = None
+    query_text: str = ''
+
+
+class ChunkDocumentRecord(BenchmarkPydanticModel):
+    model_config = ConfigDict(extra='ignore')
+
+    chunk_id: str
+    text: str = ''
+    condition_id: str | None = None
+    condition_display: str | None = None
+    subgroup_id: str | None = None
+    subgroup_label: str | None = None
+    subgroup_axis: SubgroupAxis | None = None
+    subgroup_field: str | None = None
+    subgroup_value: str | None = None
+    axis: ClinicalAxis | None = None
+    value_bin: str | None = None
+    admission_id: str | int | None = None
+
+
+class ChunkMembershipRecord(BenchmarkPydanticModel):
+    model_config = ConfigDict(extra='ignore')
+
+    chunk_id: str
+    query_id: str
+    pool_id: str
+    primary_axis: ClinicalAxis
+    secondary_axis: ClinicalAxis
+    dominant_primary_facet_id: str
+
+
+class TopKDiagnostics(TypedDict):
+    dominant_count: int
+    dominant_fraction: float
+    primary_axis_count: int
+    primary_axis_fraction: float
+    dominant_primary_count: int
+    dominant_primary_fraction: float
+    n_retrieved_facets: int
+    facet_coverage: float
+    all_facets_covered: bool
+    retrieved_facets: list[str]
+
+
+class BackgroundOutlierDiagnostics(TypedDict):
+    n_background_outliers_in_pool: int
+    n_background_outlier_clusters_in_pool: int
+    background_outlier_complete: bool
+    background_outlier_mean_in_cluster_similarity: float | None
+    query_to_background_outlier_mean: float | None
+    query_to_gold_mean: float | None
+    gold_minus_background_outlier_similarity_margin: float | None
+    background_outlier_first_rank: int | None
+    background_outlier_median_rank: float | None
+
+
+class RetrievalIndexMaps(TypedDict):
+    chunk_id_to_idx: dict[str, int]
+    query_id_to_idx: dict[str, int]
+    chunk_by_id: dict[str, ChunkDocumentRecord]
+    membership_by_query_chunk: dict[tuple[str, str], ChunkMembershipRecord]
+    query_by_id: dict[str, QueryRecord]
+    chunks_by_source_query: dict[str, list[int]]

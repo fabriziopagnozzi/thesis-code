@@ -1,6 +1,5 @@
-lookForAlignDelims:
-  tabular: 0
-  tabularx: 0
-  longtable: 0
-  longtblr: 0
-  tblr: 0
+noIndentBlock:
+    iffalseblock:
+        begin: '\\iffalse'
+        end: '\\fi'
+        lookForThis: 1

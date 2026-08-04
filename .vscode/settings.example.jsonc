@@ -20,7 +20,6 @@
   "python.analysis.extraPaths": [
     "src/experiments/mimic/mimic-code"
   ],
-  "python.analysis.typeCheckingMode": "standard",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.functionReturnTypes": true,
   "python.analysis.inlayHints.variableTypes": false,

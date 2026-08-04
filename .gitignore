@@ -1,20 +1,32 @@
 .vscode/settings.json
 *.code-workspace
-**/_*/
-**/_*.sql
-.cached_embeddings/
+**/_*
+!__main__.py
 datasets/full-data/
 results/
 data/
 **/*_config.yaml
 !**/config_examples/*_config.yaml
 
+# LaTeX
+**/~$*
+**/@pdfs
+**/Images
+*.aux
+*.pdf
+*.fls
+*.fdb_latexmk
+*.out
+*.bbl
+*.blg
+*.synctex.gz
+*.toc
+*.log
+*.lof
+*.lot
+
 # this is a git repo from MIT
 experiments/mimic/mimic_*/
-
-**/@pdfs/*
-!**/@pdfs/*.pdf
-**/~$*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -107,6 +119,7 @@ activemq-data/
 .spyproject
 # Rope project settings
 .ropeproject
+AGENTS.md 
 
 /site
 
