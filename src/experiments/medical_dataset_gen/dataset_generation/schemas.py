@@ -503,12 +503,14 @@ class MedicalOntology(BenchmarkPydanticModel):
         return self
 
 
-_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset({
-    'complicated',
-    'metastatic',
-    'mild',
-    'uncomplicated',
-})
+_BANNED_NEGATIVE_SUBTYPE_MODIFIERS = frozenset(
+    {
+        'complicated',
+        'metastatic',
+        'mild',
+        'uncomplicated',
+    }
+)
 
 
 def _cohort_contrasts_by_id(contrasts: list[CohortContrast]) -> dict[str, CohortContrast]:

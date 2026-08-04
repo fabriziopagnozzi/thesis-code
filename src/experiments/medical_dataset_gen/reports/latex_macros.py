@@ -120,19 +120,21 @@ def _metric_budget_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
         if metric_token is None or budget_token is None:
             continue
         prefix = f'Result{metric_token}{budget_token}'
-        macros.update({
-            f'{prefix}Rows': _integer(row.get('Rows')),
-            f'{prefix}FacLocMmrBetterRows': _integer(row.get('FacLocBetterRows')),
-            f'{prefix}FacLocMmrTiedRows': _integer(row.get('FacLocTiedRows')),
-            f'{prefix}FacLocMmrWorseRows': _integer(row.get('FacLocWorseRows')),
-            f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
-            f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
-            f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
-            f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
-            f'{prefix}FacLocMmrMedianDelta': _signed(row.get('MedianDeltaFacLocMMR')),
-            f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
-            f'{prefix}MmrTopKMeanDelta': _signed(row.get('MeanDeltaMMRTopK')),
-        })
+        macros.update(
+            {
+                f'{prefix}Rows': _integer(row.get('Rows')),
+                f'{prefix}FacLocMmrBetterRows': _integer(row.get('FacLocBetterRows')),
+                f'{prefix}FacLocMmrTiedRows': _integer(row.get('FacLocTiedRows')),
+                f'{prefix}FacLocMmrWorseRows': _integer(row.get('FacLocWorseRows')),
+                f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
+                f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
+                f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
+                f'{prefix}FacLocMmrMedianDelta': _signed(row.get('MedianDeltaFacLocMMR')),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
+                f'{prefix}MmrTopKMeanDelta': _signed(row.get('MeanDeltaMMRTopK')),
+            }
+        )
     return macros
 
 
@@ -144,14 +146,16 @@ def _metric_family_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
         if metric_token is None or not family_token:
             continue
         prefix = f'Result{metric_token}Family{family_token}'
-        macros.update({
-            f'{prefix}Rows': _integer(row.get('Rows')),
-            f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
-            f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
-            f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
-            f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
-            f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
-        })
+        macros.update(
+            {
+                f'{prefix}Rows': _integer(row.get('Rows')),
+                f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
+                f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
+                f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
+            }
+        )
     return macros
 
 
@@ -166,13 +170,15 @@ def _paired_suite_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[st
         if budget_token is None or not scope_token:
             continue
         prefix = f'ResultPaired{scope_token}{budget_token}Fcp'
-        macros.update({
-            f'{prefix}Distributions': _integer(row.get('Distributions')),
-            f'{prefix}Runs': _integer(row.get('Runs')),
-            f'{prefix}MeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
-            f'{prefix}CiLow': _signed(row.get('CI95Low'), digits=3),
-            f'{prefix}CiHigh': _signed(row.get('CI95High'), digits=3),
-        })
+        macros.update(
+            {
+                f'{prefix}Distributions': _integer(row.get('Distributions')),
+                f'{prefix}Runs': _integer(row.get('Runs')),
+                f'{prefix}MeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+                f'{prefix}CiLow': _signed(row.get('CI95Low'), digits=3),
+                f'{prefix}CiHigh': _signed(row.get('CI95High'), digits=3),
+            }
+        )
     return macros
 
 
@@ -183,20 +189,22 @@ def _embedding_model_result_macros(rows: Sequence[Mapping[str, object]]) -> dict
         if token is None:
             continue
         prefix = f'ResultEmbedding{token}'
-        macros.update({
-            f'{prefix}Runs': _integer(row.get('Runs')),
-            f'{prefix}GeometryPassMean': _fixed(
-                _float(row.get('GeometryPassRate_mean')),
-                digits=3,
-            ),
-            f'{prefix}GeometryPassMedian': _fixed(
-                _float(row.get('GeometryPassRate_median')),
-                digits=3,
-            ),
-            f'{prefix}FacLocFcpMean': _fixed(_float(row.get('FacLoc_FCP_mean')), digits=3),
-            f'{prefix}FacLocMmrFcpMeanDelta': _signed(row.get('Delta_FacLoc_MMR_FCP_mean')),
-            f'{prefix}FacLocTopKFcpMeanDelta': _signed(row.get('Delta_FacLoc_TopK_FCP_mean')),
-        })
+        macros.update(
+            {
+                f'{prefix}Runs': _integer(row.get('Runs')),
+                f'{prefix}GeometryPassMean': _fixed(
+                    _float(row.get('GeometryPassRate_mean')),
+                    digits=3,
+                ),
+                f'{prefix}GeometryPassMedian': _fixed(
+                    _float(row.get('GeometryPassRate_median')),
+                    digits=3,
+                ),
+                f'{prefix}FacLocFcpMean': _fixed(_float(row.get('FacLoc_FCP_mean')), digits=3),
+                f'{prefix}FacLocMmrFcpMeanDelta': _signed(row.get('Delta_FacLoc_MMR_FCP_mean')),
+                f'{prefix}FacLocTopKFcpMeanDelta': _signed(row.get('Delta_FacLoc_TopK_FCP_mean')),
+            }
+        )
     return macros
 
 
@@ -225,16 +233,18 @@ def _embedding_low_budget_result_macros(
             deltas = _values(rows, f'Delta_FacLoc_MMR_{metric}')
             threshold = practical_effect_threshold(cast(DeltaMetricLabel, metric))
             prefix = f'ResultEmbedding{model_token}Low{metric_token}FacLocMmr'
-            macros.update({
-                f'{prefix}Rows': _integer(len(deltas)),
-                f'{prefix}BetterRows': _integer(sum(delta > threshold for delta in deltas)),
-                f'{prefix}TiedRows': _integer(sum(abs(delta) <= threshold for delta in deltas)),
-                f'{prefix}WorseRows': _integer(sum(delta < -threshold for delta in deltas)),
-                f'{prefix}MeanDelta': _signed(
-                    family_balanced_mean(rows, f'Delta_FacLoc_MMR_{metric}')
-                ),
-                f'{prefix}MedianDelta': _signed(_median(deltas)),
-            })
+            macros.update(
+                {
+                    f'{prefix}Rows': _integer(len(deltas)),
+                    f'{prefix}BetterRows': _integer(sum(delta > threshold for delta in deltas)),
+                    f'{prefix}TiedRows': _integer(sum(abs(delta) <= threshold for delta in deltas)),
+                    f'{prefix}WorseRows': _integer(sum(delta < -threshold for delta in deltas)),
+                    f'{prefix}MeanDelta': _signed(
+                        family_balanced_mean(rows, f'Delta_FacLoc_MMR_{metric}')
+                    ),
+                    f'{prefix}MedianDelta': _signed(_median(deltas)),
+                }
+            )
     return macros
 
 
@@ -243,12 +253,14 @@ def _embedding_edge_case_result_macros(
 ) -> dict[str, str]:
     """Expose the paired DOM_M03 low-budget reversal used in the thesis claims."""
     target_distribution = 'DOM_M03_dominance_high'
-    matching_budgets = sorted({
-        int(k)
-        for row in rows
-        if row.get('Distribution') == target_distribution
-        and (k := _float(row.get('k'))) is not None
-    })
+    matching_budgets = sorted(
+        {
+            int(k)
+            for row in rows
+            if row.get('Distribution') == target_distribution
+            and (k := _float(row.get('k'))) is not None
+        }
+    )
     target_budget = matching_budgets[0] if matching_budgets else None
     model_prefixes = {
         'Bge': 'BAAI/bge-m3',

@@ -184,8 +184,7 @@ def build_query_to_facet_gold_map(qrels: pl.DataFrame) -> QueryIdToFacetMap:
     result: QueryIdToFacetMap = defaultdict(lambda: defaultdict(list))
 
     for query_id, chunk_id, facet_id in (
-        qrels
-        .filter(pl.col('is_gold'))
+        qrels.filter(pl.col('is_gold'))
         .select(
             'query_id',
             'chunk_id',

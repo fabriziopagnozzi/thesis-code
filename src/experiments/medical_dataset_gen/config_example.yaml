@@ -1,5 +1,3 @@
-dataset_schema_version: 2
-
 global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
     conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.

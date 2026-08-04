@@ -56,13 +56,15 @@ def competitive_pool_mass(cfg: ExperimentCfg) -> int:
 
 
 def diagnostic_k_values(cfg: ExperimentCfg, *, stress_horizon_k: int) -> list[int]:
-    return sorted({
-        int(k)
-        for k in [
-            *cfg.retrieval.k_values,
-            stress_horizon_k,
-        ]
-    })
+    return sorted(
+        {
+            int(k)
+            for k in [
+                *cfg.retrieval.k_values,
+                stress_horizon_k,
+            ]
+        }
+    )
 
 
 def topk_diagnostics_by_k(

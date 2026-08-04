@@ -242,9 +242,12 @@ class LambdaGridCfg(BasePydanticCfgModel):
         return self
 
     def values(self) -> list[float]:
-        return sorted({
-            float(round(value, 6)) for value in np.linspace(self.start, self.stop, self.num_values)
-        })
+        return sorted(
+            {
+                float(round(value, 6))
+                for value in np.linspace(self.start, self.stop, self.num_values)
+            }
+        )
 
 
 class RetrievalCfg(BasePydanticCfgModel):

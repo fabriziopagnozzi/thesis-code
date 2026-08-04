@@ -124,15 +124,11 @@ def _embed_queries_only(
             desc='Embedding queries',
         )
         if query_written != n_queries:
-            raise RuntimeError(
-                f'query embedding row count mismatch: {query_written}/{n_queries}'
-            )
+            raise RuntimeError(f'query embedding row count mismatch: {query_written}/{n_queries}')
         meta: dict[str, object] = {
             'dataset_schema_version': cfg.dataset_schema_version,
             'backend': (
-                'medcpt'
-                if cfg.embeddings.model_name == 'ncbi/MedCPT'
-                else 'sentence_transformers'
+                'medcpt' if cfg.embeddings.model_name == 'ncbi/MedCPT' else 'sentence_transformers'
             ),
             'model_name': cfg.embeddings.model_name,
             'query_prompt': cfg.embeddings.query_prompt,
@@ -295,8 +291,7 @@ def _fill_deterministic_chunk_embedding_memmaps(
             how='left',
             validate='m:1',
         ).with_columns(
-            pl
-            .when(pl.col('embedding').is_not_null())
+            pl.when(pl.col('embedding').is_not_null())
             .then(pl.col('text_sha256'))
             .otherwise(None)
             .alias('cached_text_sha256')

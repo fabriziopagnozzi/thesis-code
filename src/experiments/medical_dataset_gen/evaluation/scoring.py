@@ -143,54 +143,56 @@ def evaluate_query(qid: str) -> list[EvaluationResultRow]:
                 continue
             selected_chunk_ids = [candidate_chunk_ids[int(i)] for i in selected_local]
 
-            eval_result_rows.append({
-                'query_id': qid,
-                'evidence_profile_id': query.evidence_profile_id,
-                'pool_id': query.pool_id,
-                'query_type': query.query_type,
-                'template_id': query.template_id,
-                'condition_id': query.condition_id,
-                'cohort_dimension_id': query.cohort_dimension_id,
-                'cohort_contrast_family': query.cohort_contrast_family,
-                'cohort_contrast_id': query.cohort_contrast_id,
-                'primary_axis': query.primary_axis,
-                'secondary_axis': query.secondary_axis,
-                'dominant_primary_facet_id': query.dominant_primary_facet_id,
-                'split': query.split,
-                'strategy': strategy,
-                'k': k,
-                'lam': lam,
-                'reranker_model_name': (
-                    cfg.evaluation.reranker.model_name
-                    if strategy == DENSE_RERANKER_STRATEGY
-                    else None
-                ),
-                'pool_scope': cfg.retrieval.pool_scope,
-                'pool_size': len(candidate_chunk_ids),
-                **compute_retrieval_metrics(
-                    selected_chunk_ids=selected_chunk_ids,
-                    chunk_by_id=maps['chunk_by_id'],
-                    query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
-                    facet_to_gold=query_facet_gold,
-                    all_gold_ids=query_all_gold,
-                    primary_axis=query.primary_axis,
-                    dominant_primary_facet_id=query.dominant_primary_facet_id,
-                    all_clean_rate_precision_threshold=(
-                        cfg.evaluation.all_clean_rate_precision_threshold
+            eval_result_rows.append(
+                {
+                    'query_id': qid,
+                    'evidence_profile_id': query.evidence_profile_id,
+                    'pool_id': query.pool_id,
+                    'query_type': query.query_type,
+                    'template_id': query.template_id,
+                    'condition_id': query.condition_id,
+                    'cohort_dimension_id': query.cohort_dimension_id,
+                    'cohort_contrast_family': query.cohort_contrast_family,
+                    'cohort_contrast_id': query.cohort_contrast_id,
+                    'primary_axis': query.primary_axis,
+                    'secondary_axis': query.secondary_axis,
+                    'dominant_primary_facet_id': query.dominant_primary_facet_id,
+                    'split': query.split,
+                    'strategy': strategy,
+                    'k': k,
+                    'lam': lam,
+                    'reranker_model_name': (
+                        cfg.evaluation.reranker.model_name
+                        if strategy == DENSE_RERANKER_STRATEGY
+                        else None
                     ),
-                ),
-                **(
-                    answer_rouge_scorer.score(selected_chunk_ids)
-                    if answer_rouge_scorer is not None
-                    else {}
-                ),
-                **compute_retrieval_diagnostics(
-                    selected_local,
-                    sim_to_query,
-                    sim_matrix,
-                    topk_local_indices=(topk_full[:k] if strategy != 'top_k' else None),
-                ),
-            })
+                    'pool_scope': cfg.retrieval.pool_scope,
+                    'pool_size': len(candidate_chunk_ids),
+                    **compute_retrieval_metrics(
+                        selected_chunk_ids=selected_chunk_ids,
+                        chunk_by_id=maps['chunk_by_id'],
+                        query_qrels=worker_state['qrels_by_query_chunk'].get(qid, {}),
+                        facet_to_gold=query_facet_gold,
+                        all_gold_ids=query_all_gold,
+                        primary_axis=query.primary_axis,
+                        dominant_primary_facet_id=query.dominant_primary_facet_id,
+                        all_clean_rate_precision_threshold=(
+                            cfg.evaluation.all_clean_rate_precision_threshold
+                        ),
+                    ),
+                    **(
+                        answer_rouge_scorer.score(selected_chunk_ids)
+                        if answer_rouge_scorer is not None
+                        else {}
+                    ),
+                    **compute_retrieval_diagnostics(
+                        selected_local,
+                        sim_to_query,
+                        sim_matrix,
+                        topk_local_indices=(topk_full[:k] if strategy != 'top_k' else None),
+                    ),
+                }
+            )
 
     for strategy in cfg.retrieval.strategies:
         for lam in cfg.retrieval.lambda_values_for_strategy(strategy):

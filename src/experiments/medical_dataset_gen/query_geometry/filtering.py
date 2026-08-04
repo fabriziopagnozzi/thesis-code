@@ -233,8 +233,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
     df = pl.DataFrame(rows)
     write_parquet(paths, 'geometry_stats', df)
     slice_stats = (
-        df
-        .group_by(
+        df.group_by(
             'condition_id',
             'cohort_dimension_id',
             'cohort_contrast_family',

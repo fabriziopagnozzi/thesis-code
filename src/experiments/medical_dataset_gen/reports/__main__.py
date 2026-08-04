@@ -590,9 +590,7 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     )
     warnings = [
         line
-        for line in (
-            warnings_path.read_text().splitlines() if warnings_path.is_file() else []
-        )
+        for line in (warnings_path.read_text().splitlines() if warnings_path.is_file() else [])
         if line and not line.startswith(wording_warning_prefixes)
     ]
 

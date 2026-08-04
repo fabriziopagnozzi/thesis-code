@@ -136,9 +136,7 @@ def _wording_config_label(
 ) -> str:
     if 'unknown' in {query_mode, focus_mode, chunk_text_mode}:
         return 'unknown'
-    chunk_text_mode_label = _CHUNK_TEXT_MODE_DISPLAY_LABELS.get(
-        chunk_text_mode, chunk_text_mode
-    )
+    chunk_text_mode_label = _CHUNK_TEXT_MODE_DISPLAY_LABELS.get(chunk_text_mode, chunk_text_mode)
     if query_mode == 'label_only' and focus_mode == 'label_only':
         return f'label-only / {chunk_text_mode_label}'
     if focus_mode == 'natural':

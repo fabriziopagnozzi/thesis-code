@@ -315,10 +315,7 @@ def _parent_names(raw_parents: list[str] | None) -> set[str] | None:
 def _artifact_versions(raw_versions: list[str] | None) -> set[str] | None:
     if not raw_versions:
         return None
-    return {
-        version if version.startswith('v') else f'v{version}'
-        for version in raw_versions
-    }
+    return {version if version.startswith('v') else f'v{version}' for version in raw_versions}
 
 
 def _print_plan(plan: MigrationPlan, *, apply: bool, summary_only: bool) -> None:
@@ -336,8 +333,7 @@ def _print_plan(plan: MigrationPlan, *, apply: bool, summary_only: bool) -> None
     for group in plan.groups:
         action = 'consolidate' if group.target_exists else 'migrate'
         print(
-            f'[{action}] {group.table}: {len(group.source_paths)} source(s) '
-            f'-> {group.target_path}'
+            f'[{action}] {group.table}: {len(group.source_paths)} source(s) -> {group.target_path}'
         )
     for regeneration in plan.regenerations:
         print(

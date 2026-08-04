@@ -270,8 +270,7 @@ def _geometry_pass_rate_rows(
         [
             row
             for row in rows
-            if float_or_none(row.get('GeometryPassRate')) is not None
-            and row.get('EmbeddingModel')
+            if float_or_none(row.get('GeometryPassRate')) is not None and row.get('EmbeddingModel')
         ],
         'GeometryPassRate',
     )

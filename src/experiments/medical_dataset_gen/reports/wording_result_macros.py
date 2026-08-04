@@ -106,7 +106,9 @@ def render_wording_result_macros(
     macros.update(_factor_macros(core_rows))
     macros.update(_family_chunk_macros(core_rows))
     macros.update(_metric_decomposition_macros(core_rows))
-    macros.update(_embedding_contrast_macros(core_rows, embedding_models=effective_embedding_models))
+    macros.update(
+        _embedding_contrast_macros(core_rows, embedding_models=effective_embedding_models)
+    )
     macros.update(
         _geometry_macros(
             core_rows=core_rows,
@@ -131,9 +133,7 @@ def _wording_grid_error(
         key for key in configurations if key[0] != 'label_only' and key[1] != 'label_only'
     }
     malformed_label_only = {
-        key
-        for key in configurations
-        if (key[0] == 'label_only') != (key[1] == 'label_only')
+        key for key in configurations if (key[0] == 'label_only') != (key[1] == 'label_only')
     }
     standard_query_modes = sorted({key[0] for key in standard_configurations})
     standard_focus_modes = sorted({key[1] for key in standard_configurations})

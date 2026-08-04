@@ -228,8 +228,7 @@ def _run_standalone_script_sequence(
         print(f'\n=== Script: {run_spec.script} ===')
         colorprint(
             'bright_blue',
-            f'[pipeline] running standalone script: {run_spec.script} '
-            f'experiment={paths.exp_name}',
+            f'[pipeline] running standalone script: {run_spec.script} experiment={paths.exp_name}',
         )
         script_spec.run(cfg, paths, run_spec.script_args)
 

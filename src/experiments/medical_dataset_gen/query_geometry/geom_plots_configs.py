@@ -62,12 +62,14 @@ class GeomPlotsSettings:
     background_outlier_legend_color: str = '#4A4A4A'
 
     gold_facet_role_labels: dict[ClusterRole, str] = field(
-        default_factory=lambda: dict({
-            'dominant_primary_gold': 'Dominant primary',
-            'primary_gold': 'Other primary',
-            'secondary_gold': 'Secondary',
-            'niche_gold': 'Niche',
-        })
+        default_factory=lambda: dict(
+            {
+                'dominant_primary_gold': 'Dominant primary',
+                'primary_gold': 'Other primary',
+                'secondary_gold': 'Secondary',
+                'niche_gold': 'Niche',
+            }
+        )
     )
     gold_facet_role_order: dict[ClusterRole, int] = field(init=False)
 

@@ -165,9 +165,7 @@ def results_for_split(results: pl.DataFrame, split: str) -> pl.DataFrame:
 def _all_facet_coverage_expr(results: pl.DataFrame) -> pl.Expr:
     if 'all_facet_coverage' in results.columns:
         return pl.col('all_facet_coverage').mean().alias('AllFacetCoverageRate@k')
-    return (pl.col('facet_coverage') == 1.0).cast(pl.Float64).mean().alias(
-        'AllFacetCoverageRate@k'
-    )
+    return (pl.col('facet_coverage') == 1.0).cast(pl.Float64).mean().alias('AllFacetCoverageRate@k')
 
 
 def _heldout_report_stats(
