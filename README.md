@@ -80,7 +80,7 @@ The validation/test split is assigned deterministically during planning. There i
 ```text
 .
 ├── README.md
-├── pyproject.toml                 # dependencies, Ruff/Pyright, and task shortcuts
+├── pyproject.toml                # dependencies, Ruff/Pyright, and task shortcuts
 ├── uv.lock                       # reproducible dependency resolution
 ├── setup.sh                      # optional systemd resource-managed command wrapper
 ├── src/
@@ -99,7 +99,7 @@ The validation/test split is assigned deterministically during planning. There i
 │   │   └── mimic/                 # earlier MIMIC-IV experiment pipeline
 │   ├── helpers/                   # shared embedding, retrieval, metrics, and paths
 │   └── thirdparty/                # optional vendored LanceDB viewer
-└── .vscode/                      # editor settings examples
+└── .vscode/                       # editor settings examples
 ```
 
 For the active pipeline, a useful reading order is:
@@ -128,7 +128,7 @@ The complete synthetic pipeline uses `sentence-transformers` and usually needs a
 
 ### Create an experiment
 
-Experiment configurations live under the ignored `_results` directory. Start from the tracked example:
+Experiment configurations live under the ignored `_results` directory:
 
 ```bash
 EXP=demo
@@ -137,11 +137,9 @@ cp src/experiments/medical_dataset_gen/config_example.yaml \
   "src/experiments/medical_dataset_gen/_results/$EXP/_config.yaml"
 ```
 
-Before running, check the values in `_config.yaml`. The most consequential sections are:
+Before running, optionally edit the values in your `_config.yaml`. The most important sections are:
 
-- `global.seed`, `global.conditions`, and `global.use_shared`;
 - `generation.chunk_pools`, which controls gold facet sizes and distractor clusters;
-- `generation.query_limit`, which is intended for smoke runs only;
 - `embeddings`, including model, device, prompts, and normalization;
 - `retrieval`, including the candidate-pool size, `k` values, strategies, and lambda grids;
 - `evaluation.mode`, which controls exploratory versus held-out testing summaries.
@@ -174,27 +172,13 @@ Useful controls are:
 
 ```bash
 # Run a contiguous range.
-uv run task pipeline \
-  --exp "$EXP" --from embed --to eval
+uv run task pipeline --exp "$EXP" --from embed --to eval
 
 # Run selected stages.
-uv run task pipeline \
-  --exp "$EXP" --stages geom_plots
-
-# Recompute selected evaluation outputs.
-uv run task pipeline \
-  --exp "$EXP" \
-  --run "eval --steps evaluation_results,evaluation_stats,evaluation_slice_stats"
-
-# Regenerate only query vectors when compatible document vectors already exist.
-uv run task pipeline \
-  --exp "$EXP" --stages embed --queries-only
+uv run task pipeline --exp "$EXP" --stages geom_plots
 ```
 
-`--version` can override the schema version when reproducing archived configurations. `--parent` runs a parent experiment itself even when child subexperiments are present. `--help` lists the complete CLI.
-
 ## Comparative experiments and artifact reuse
-
 Parent/child experiments allow embedding, wording, or retrieval settings to be compared over the same generated distribution:
 
 ```text
@@ -239,14 +223,12 @@ _results/<experiment>/
     └── _figures/
 ```
 
-The `_results`, `_cache`, and generated report directories are ignored by Git. They are reproducible run products, not source inputs. The embedding cache can reuse deterministic chunk text across experiments with the same embedding signature.
-
 ## Reports and secondary tools
 
 Once several experiments have completed, the report module discovers their persisted artifacts and writes aggregate tables, figures, validity analyses, and optional LaTeX outputs:
 
 ```bash
-uv run python -m experiments.medical_dataset_gen.reports \
+uv run task report \
   --results-dir src/experiments/medical_dataset_gen/_results \
   --output-dir src/experiments/medical_dataset_gen/_reports/experiment_comparison
 ```
@@ -269,17 +251,3 @@ uv run task pipeline --help
 ```
 
 Generation is deterministic when the configuration seed, ontology, templates, and model settings are held fixed. Embedding metadata records the model, prompts, dimensions, normalization, and artifact counts. Evaluation must be interpreted together with the geometry diagnostics and the query construction metadata; a facility-location advantage is an empirical result to test, not a condition used to select the benchmark.
-
-## Further documentation
-
-The companion [`thesis-code-docs`](https://github.com/fabriziopagnozzi/thesis-code-docs/tree/main/code_docs) repository contains the detailed design notes, including:
-
-- [the pipeline overview](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/pipeline_overview.md);
-- [deterministic construction](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/deterministic_construction.md);
-- [generation stages](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/generation_stages.md);
-- [retrieval and geometry](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/retrieval_and_geometry.md);
-- [configuration and artifacts](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/configuration_and_artifacts.md);
-- [evaluation and plots](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/evaluation_and_plots.md);
-- [the advisor-facing code guide](https://github.com/fabriziopagnozzi/thesis-code-docs/blob/main/code_docs/medical_dataset_gen_code_guide.md).
-
-The accompanying research write-up is maintained separately in the [`thesis-documents`](https://github.com/fabriziopagnozzi/thesis-documents) repository.

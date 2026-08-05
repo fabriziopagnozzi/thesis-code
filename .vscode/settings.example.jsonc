@@ -1,68 +1,76 @@
 {
-  "editor.formatOnSave": true,
-  "workbench.editorAssociations": {
-    "*.ipynb": "jupyter-notebook",
-    "*.pdf": "pdf.view",
-    "*.md": "vscode.markdown.preview.editor"
-  },
-  "[python]": {
-    "editor.defaultFormatter": "charliermarsh.ruff",
-    "editor.semanticHighlighting.enabled": true,
     "editor.formatOnSave": true,
-    "editor.codeActionsOnSave": {
-      "source.fixAll": "explicit",
-      "source.organizeImports.ruff": "always"
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.semanticHighlighting.enabled": true,
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports.ruff": "always"
+        }
+    },
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.terminal.activateEnvInCurrentTerminal": false,
+    "python.terminal.activateEnvironment": false,
+    "python.analysis.extraPaths": [
+        "src/experiments/mimic/mimic-code"
+    ],
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.inlayHints.functionReturnTypes": true,
+    "python.analysis.inlayHints.variableTypes": false,
+    "python.analysis.exclude": [
+        "**/datasets/**",
+        "**/.venv/**",
+        "**/build/**",
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*"
+    ],
+    "ruff.path": [
+        "${workspaceFolder}/.venv/bin/ruff"
+    ],
+    "ruff.configurationPreference": "filesystemFirst",
+    "ruff.format.preview": true,
+    "editor.inlayHints.enabled": "on",
+    "editor.parameterHints.enabled": true,
+    "notebook.formatOnSave.enabled": true,
+    "notebook.defaultFormatter": "charliermarsh.ruff",
+    "notebook.codeActionsOnSave": {
+        "notebook.source.fixAll.ruff": "explicit",
+        "notebook.source.organizeImports.ruff": "explicit"
+    },
+    "notebook.output.wordWrap": true,
+    "latex-workshop.formatting.latex": "latexindent",
+    "latex-workshop.formatting.latexindent.args": [
+        "-c",
+        "%DIR%/",
+        "%TMPFILE%",
+        "-l=../latexindent.yaml",
+        "-m"
+    ],
+    "latex-workshop.latex.outDir": "%DIR%/@pdfs",
+    "latex-workshop.latex.autoBuild.run": "onSave",
+    "latex-workshop.message.badbox.show": "none",
+    "latex-workshop.message.warning.show": false,
+    "latex-workshop.synctex.afterBuild.enabled": true,
+    "latex-workshop.view.pdf.viewer": "tab",
+    "latex-workshop.message.latexlog.exclude": [
+        "hyperref"
+    ],
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.ruff_cache": true,
+        "**/@pdfs/*.aux": true,
+        "**/@pdfs/*.fls": true,
+        "**/@pdfs/*.fdb_latexmk": true,
+        "**/@pdfs/*.out": true,
+        "**/@pdfs/*.bbl": true,
+        "**/@pdfs/*.blg": true,
+        "**/@pdfs/*.synctex.gz": true,
+        "**/@pdfs/*.toc": true,
+        "**/@pdfs/*.lof": true,
+        "**/@pdfs/*.lot": true,
+        "**/@pdfs/*.log": true,
+        "**/~$*": true
     }
-  },
-  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-  "python.terminal.activateEnvInCurrentTerminal": false,
-  "python.terminal.activateEnvironment": false,
-  "python.analysis.extraPaths": [
-    "src/experiments/mimic/mimic-code"
-  ],
-  "python.analysis.autoImportCompletions": true,
-  "python.analysis.inlayHints.functionReturnTypes": true,
-  "python.analysis.inlayHints.variableTypes": false,
-  "python.analysis.exclude": [
-    "**/datasets/**",
-    "**/.venv/**",
-    "**/build/**",
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.*"
-  ],
-  "editor.inlayHints.enabled": "on",
-  "editor.parameterHints.enabled": true,
-  "notebook.formatOnSave.enabled": true,
-  "notebook.defaultFormatter": "charliermarsh.ruff",
-  "files.exclude": {
-    "**/__pycache__": true,
-    "**/.ruff_cache": true,
-    "**/@pdfs/*.aux": true,
-    "**/@pdfs/*.fls": true,
-    "**/@pdfs/*.fdb_latexmk": true,
-    "**/@pdfs/*.out": true,
-    "**/@pdfs/*.bbl": true,
-    "**/@pdfs/*.blg": true,
-    "**/@pdfs/*.synctex.gz": true,
-    "**/@pdfs/*.toc": true,
-    "**/@pdfs/*.lof": true,
-    "**/@pdfs/*.lot": true,
-    "**/@pdfs/*.log": true,
-    "**/~$*": true
-  },
-  "latex-workshop.formatting.latex": "latexindent",
-  "latex-workshop.formatting.latexindent.args": [
-    "-c",
-    "%DIR%/",
-    "%TMPFILE%",
-    "-l=../latexindent.yaml",
-    "-m"
-  ],
-  "latex-workshop.latex.outDir": "%DIR%/@pdfs",
-  "latex-workshop.latex.autoBuild.run": "onSave",
-  "latex-workshop.message.badbox.show": "none",
-  "latex-workshop.message.warning.show": false,
-  "latex-workshop.synctex.afterBuild.enabled": true,
-  "latex-workshop.view.pdf.viewer": "tab"
 }
