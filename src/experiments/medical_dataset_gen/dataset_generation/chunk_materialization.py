@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from concurrent.futures import ProcessPoolExecutor
 
 import polars as pl
@@ -14,7 +15,6 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
 )
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     validate_chunk_template_sources,
-    validate_chunk_text,
 )
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
@@ -34,6 +34,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Dat
     ontology = load_ontology(cfg)
     validate_chunk_template_sources(ontology)
     facts = read_parquet(paths, 'clinical_facts')
+
     print(f'[chunks] deterministic v4 rendering for {len(facts):,} facts')
     return _render_chunks_deterministic_parallel(
         cfg=cfg,
@@ -55,13 +56,15 @@ def _render_chunks_deterministic_parallel(
     workers = max(1, os.cpu_count() or 1)
     rows_all: list[dict[str, object]] = []
 
+    # Each worker reconstructs the validated config and ontology once, then
+    # renders one query-local fact batch at a time.
     with ProcessPoolExecutor(
         max_workers=workers,
         initializer=_init_deterministic_worker,
         initargs=(cfg_dump, ontology_dump),
     ) as executor:
         batch_iter = _iter_fact_batches(facts)
-        for _query_id, rows in tqdm(
+        for rows in tqdm(
             executor.map(_render_deterministic_chunk_batch, batch_iter, chunksize=1),
             total=n_batches,
             desc='Rendering chunks',
@@ -69,7 +72,7 @@ def _render_chunks_deterministic_parallel(
         ):
             rows_all.extend(rows)
 
-    chunk_rows = _chunk_rows_frame(rows_all) if rows_all else pl.DataFrame()
+    chunk_rows = pl.from_dicts(rows_all, infer_schema_length=None) if rows_all else pl.DataFrame()
     chunk_documents, chunk_memberships = _write_normalized_chunks(paths, chunk_rows)
 
     print(
@@ -93,12 +96,11 @@ def _init_deterministic_worker(
 
 def _render_deterministic_chunk_batch(
     batch: tuple[int, list[dict[str, object]]],
-) -> tuple[str, list[dict[str, object]]]:
+) -> list[dict[str, object]]:
     if _deterministic_worker_cfg is None or _deterministic_worker_ontology is None:
         raise RuntimeError('deterministic chunk worker was not initialized')
 
     start_index, fact_rows = batch
-    first_fact = ClinicalFact.model_validate(fact_rows[0])
     rows: list[dict[str, object]] = []
 
     for offset, fact_row in enumerate(fact_rows):
@@ -111,14 +113,9 @@ def _render_deterministic_chunk_batch(
         draft_text = rendered_draft.text
         state = new_chunk_state(
             draft_text,
-            validation=validate_chunk_text(
-                draft_text,
-                fact,
-                _deterministic_worker_ontology,
-                text_style=_deterministic_worker_cfg.generation.chunk_text_style,
-            ),
             rendered_template=rendered_draft,
         )
+
         row = finalize_chunk_row(
             cfg=_deterministic_worker_cfg,
             fact=fact,
@@ -129,10 +126,10 @@ def _render_deterministic_chunk_batch(
 
         rows.append(row.model_dump(mode='python'))
 
-    return first_fact.query_id, rows
+    return rows
 
 
-def _iter_fact_batches(facts: pl.DataFrame):
+def _iter_fact_batches(facts: pl.DataFrame) -> Iterator[tuple[int, list[dict[str, object]]]]:
     current_query_id: str | None = None
     current_rows: list[dict[str, object]] = []
     start_index = 0
@@ -153,10 +150,6 @@ def _iter_fact_batches(facts: pl.DataFrame):
         yield start_index, current_rows
 
 
-def _chunk_rows_frame(rows: list[dict[str, object]]) -> pl.DataFrame:
-    return pl.from_dicts(rows, infer_schema_length=None)
-
-
 def _write_normalized_chunks(
     paths: MedicalDatasetGenPaths,
     chunk_rows: pl.DataFrame,
@@ -168,6 +161,7 @@ def _write_normalized_chunks(
         write_parquet(paths, 'chunk_memberships', chunk_memberships)
         return chunk_documents, chunk_memberships
 
+    # A reuse key is allowed to identify only one rendered document surface.
     duplicate_text_keys = (
         chunk_rows.group_by('chunk_reuse_key')
         .agg(pl.col('text').n_unique().alias('n_texts'))
@@ -180,6 +174,8 @@ def _write_normalized_chunks(
             f'found {len(duplicate_text_keys):,} violating key(s), examples={examples}'
         )
 
+    # Deduplicate identical text only within a query. The same document can
+    # remain shared across queries through its reuse key.
     chunk_rows = chunk_rows.with_columns(
         pl.col('text')
         .str.to_lowercase()
@@ -200,8 +196,12 @@ def _write_normalized_chunks(
             'membership row(s) by normalized text'
         )
 
+    # Assign document IDs only after query-local duplicate membership removal so
+    # the IDs are deterministic for the final document surface.
     doc_keys = retained_rows.select('chunk_reuse_key').unique(maintain_order=True)
-    doc_key_to_id = _doc_key_to_chunk_id(doc_keys['chunk_reuse_key'].to_list())
+    doc_key_to_id = {
+        key: chunk_id(index) for index, key in enumerate(doc_keys['chunk_reuse_key'].to_list())
+    }
 
     with_doc_id = retained_rows.with_columns(
         pl.col('chunk_reuse_key')
@@ -262,6 +262,8 @@ def _write_normalized_chunks(
         'split',
     ]
 
+    # Keep document payload and query-local membership metadata in separate
+    # tables; evaluation consumes the latter while embeddings consume the former.
     chunk_documents = (
         with_doc_id.select([col for col in doc_cols if col in with_doc_id.columns])
         .unique(subset=['chunk_id'], keep='first', maintain_order=True)
@@ -271,6 +273,8 @@ def _write_normalized_chunks(
         [col for col in membership_cols if col in with_doc_id.columns]
     )
 
+    # These checks protect the four-facet gold structure from accidental
+    # collapse during text-level deduplication.
     duplicate_memberships = (
         chunk_memberships.group_by('query_id', 'chunk_id')
         .agg(pl.len().alias('n'))
@@ -303,7 +307,3 @@ def _write_normalized_chunks(
         f'{len(chunk_memberships):,} query membership(s)'
     )
     return chunk_documents, chunk_memberships
-
-
-def _doc_key_to_chunk_id(chunk_reuse_keys: list[str]) -> dict[str, str]:
-    return {key: chunk_id(idx) for idx, key in enumerate(chunk_reuse_keys)}

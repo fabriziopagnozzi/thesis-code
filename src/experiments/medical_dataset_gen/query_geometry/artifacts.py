@@ -78,16 +78,6 @@ _QUERY_SELECTION_BEST_DESC = [True, True, True, True, False]
 _QUERY_SELECTION_WORST_DESC = [False, False, False, False, False]
 
 
-def choose_query_ids(
-    cfg: ExperimentCfg,
-    queries: pl.DataFrame,
-    geometry_filter: pl.DataFrame,
-    eval_results: pl.DataFrame,
-) -> list[str]:
-    groups = choose_query_groups(cfg, queries, geometry_filter, eval_results)
-    return [query_id for query_ids in groups.values() for query_id in query_ids]
-
-
 def choose_query_groups(
     cfg: ExperimentCfg,
     queries: pl.DataFrame,
@@ -187,11 +177,6 @@ def ranked_queries_for_query_geometry(
         .sort(_QUERY_SELECTION_SORT, descending=_QUERY_SELECTION_BEST_DESC)
     )
     return ranked
-
-
-def mixed_query_ids(ranked: pl.DataFrame, n_queries: int) -> list[str]:
-    groups = mixed_query_groups(ranked, n_queries)
-    return [query_id for query_ids in groups.values() for query_id in query_ids]
 
 
 def mixed_query_groups(ranked: pl.DataFrame, n_queries: int) -> dict[str, list[str]]:

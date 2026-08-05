@@ -61,6 +61,7 @@ class StageSpec:
     ready: StageReadyFn | None = None
 
 
+# The order here is the dependency order used by the normal pipeline.
 STAGE_SPECS: tuple[StageSpec, ...] = (
     StageSpec('plans', run_make_query_plans, shared_outputs=('query_plans',)),
     StageSpec('facts', run_make_facts, shared_outputs=('clinical_facts',)),
@@ -113,6 +114,8 @@ def _run_geom_plots_with_args(
     return run_query_geom_plots(cfg, paths, selected_plots=parse_geom_plots_cli_args(argv))
 
 
+# These scripts are available through --run and deliberately bypass the
+# normal contiguous stage selection.
 STANDALONE_SCRIPT_SPECS: tuple[StandaloneScriptSpec, ...] = (
     StandaloneScriptSpec('eval', _run_evaluate_with_args),
     StandaloneScriptSpec('geom_plots', _run_geom_plots_with_args),

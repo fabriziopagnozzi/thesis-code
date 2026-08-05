@@ -26,6 +26,7 @@ from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverride
 from helpers.embedder import EmbeddingModelName
 
 
+# Configuration models reject unknown fields so a typo cannot silently change a run.
 class BasePydanticCfgModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
@@ -38,6 +39,7 @@ class GlobalCfg(BasePydanticCfgModel):
     result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
 
+# Dataset construction and distractor-pool settings.
 type EvalPlotTheme = Literal['dark', 'light']
 type DatasetSchemaVersion = Literal[2, 3, 4]
 DATASET_SCHEMA_VERSION_LIST = list[DatasetSchemaVersion](get_literals(DatasetSchemaVersion))
@@ -183,10 +185,7 @@ class GenerationCfg(BasePydanticCfgModel):
     focus_mode: QueryFocusMode = 'list'
     query_structure: QueryStructure = 'unbalanced'
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout'
-    excluded_clinical_axes: list[ClinicalAxis] = Field(
-        # default_factory=lambda: ['diagnostic_evidence_type']
-        default_factory=list
-    )
+    excluded_clinical_axes: list[ClinicalAxis] = Field(default_factory=list)
 
     chunk_pools: ChunkPoolsCfg
 
@@ -220,6 +219,7 @@ class GenerationCfg(BasePydanticCfgModel):
         return self.chunk_pools.total_distractor_chunks()
 
 
+# Embedding and retrieval settings.
 class EmbeddingCfg(BasePydanticCfgModel):
     model_name: EmbeddingModelName = 'multi-qa-mpnet-base-cos-v1'
     batch_size: PositiveInt = 64
@@ -279,6 +279,7 @@ class RetrievalCfg(BasePydanticCfgModel):
         raise ValueError(f'unknown retrieval strategy: {strategy!r}')
 
 
+# Geometry and evaluation settings.
 type GeometryStressHorizonBasis = Literal['competitive_pool_mass']
 
 
@@ -341,6 +342,7 @@ class EvaluationCfg(BasePydanticCfgModel):
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
 
 
+# Query-geometry plotting settings are kept separate from evaluation settings.
 class QueryGeometryCfg(BasePydanticCfgModel):
     n_queries: PositiveInt = 9
     query_ids: list[str] = Field(default_factory=list)

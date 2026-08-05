@@ -57,6 +57,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
 
     for condition_key, condition in conditions:
         contrasts = make_subgroup_pairs_for_condition(ontology, condition_key)
+
         for contrast, (cohort_a_id, cohort_a), (cohort_b_id, cohort_b) in contrasts:
             for axis_a, axis_b in axis_pairs:
                 policy = resolve_axis_pair_generation_policy(
@@ -65,13 +66,16 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     left=axis_a,
                     right=axis_b,
                 )
+
                 profiles = [
                     profile
                     for profile in get_axis_pair_profiles(ontology, axis_a, axis_b)
                     if profile.id not in policy.blocked_profile_ids
                 ]
+
                 if not profiles:
                     continue
+
                 primary_axes: list[ClinicalAxis] = [
                     axis
                     for axis in (axis_a, axis_b)
@@ -117,6 +121,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                         subgroup_b=cohort_b,
                     )
                     specs.append(spec)
+
                     if len(primary_axes) == 2:
                         plans.extend(
                             (
@@ -197,6 +202,7 @@ def _materialize_plan(
         secondary_axis,
     )
     split = _split_for_profile(spec.evidence_profile_id)
+
     primary_candidates = [
         (spec.subgroup_a_id, primary_axis),
         (spec.subgroup_b_id, primary_axis),
@@ -205,6 +211,8 @@ def _materialize_plan(
         stable_int(cfg.global_.seed, query_key, 'initial_primary') % 2
     ]
 
+    # Keep the cohort/axis bins explicit so each facet can be materialized
+    # without relying on positional assumptions later in the function.
     bin_by_cohort_axis = {
         (spec.subgroup_a_id, spec.axis_a): spec.cohort_a_bins[0],
         (spec.subgroup_a_id, spec.axis_b): spec.cohort_a_bins[1],
@@ -227,6 +235,7 @@ def _materialize_plan(
             key=lambda index: stable_int(query_key, 'niche_gold', index),
         )[: cfg.generation.chunk_pools.niche.num_clusters_per_query]
     )
+
     facets: list[QueryPlanFacet] = []
     for index, (cohort_id, cohort, axis) in enumerate(raw_facets, start=1):
         facet_id = f'{query_id}_f{index}'
@@ -268,6 +277,7 @@ def _materialize_plan(
                 priority='primary' if is_primary else 'secondary',
             )
         )
+
     dominant_id = next(
         facet.facet_id for facet in facets if facet.cluster_role == 'dominant_primary_gold'
     )

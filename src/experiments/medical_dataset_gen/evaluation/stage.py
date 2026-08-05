@@ -59,6 +59,7 @@ _PARENT_GEOMETRY_COLUMNS = [
 _REPORT_SPLIT = 'test'
 
 
+# The stage can recompute each persisted evaluation artifact independently.
 def run_evaluate(
     cfg: ExperimentCfg,
     paths: MedicalDatasetGenPaths,
@@ -86,6 +87,7 @@ def run_evaluate(
             pl.col('passes_filter').fill_null(False).alias('passes_geometry_filter'),
             'n_topk_retrieved_facets',
         )
+
         query_ids_to_evaluate = get_query_ids_to_evaluate(
             queries=queries,
             facet_gold=facet_gold,
@@ -94,6 +96,8 @@ def run_evaluate(
         del queries, qrels, geometry, facet_gold, gold_by_query
         gc.collect()
 
+        # The worker stage owns the expensive retrieval loop; this stage only
+        # assembles its rows and joins geometry annotations.
         eval_results_df = pl.DataFrame(
             evaluate_queries(
                 cfg,
@@ -110,6 +114,7 @@ def run_evaluate(
                 how='left',
                 validate='m:1',
             )
+
         write_parquet(paths, 'evaluation_results', eval_results_df)
 
     if 'evaluation_stats' in requested_steps:
@@ -124,6 +129,7 @@ def run_evaluate(
             selection_stats_df,
             report_grid_stats_df,
         ) = stats_for_evaluation_mode(eval_results_df, mode=cfg.evaluation.mode, cfg=cfg)
+
         write_parquet(paths, 'evaluation_stats', aggregated_eval_stats_df)
         if cfg.evaluation.mode == 'testing':
             write_parquet(paths, 'evaluation_selection_stats', selection_stats_df)
@@ -142,6 +148,7 @@ def run_evaluate(
             else eval_results_df
         )
         sliced_eval_stats_df = stats_sliced_results_df(slice_results_df)
+
         write_parquet(paths, 'evaluation_slice_stats', sliced_eval_stats_df)
 
     if aggregated_eval_stats_df is not None:
@@ -160,23 +167,16 @@ def _ensure_eval_results_loaded(
     if eval_results_df is not None:
         return eval_results_df
 
-    loaded_df = _read_required_table(paths, 'evaluation_results', requesting_step)
-    assert_pool_scope_match(loaded_df, cfg.retrieval.pool_scope, table_name='evaluation_results')
-    return loaded_df
-
-
-def _read_required_table(
-    paths: MedicalDatasetGenPaths,
-    table_name: Literal['evaluation_results'],
-    requesting_step: EvaluationStep,
-) -> pl.DataFrame:
-    table_path = paths.table_path(table_name)
+    table_path = paths.table_path('evaluation_results')
     if not table_path.exists():
         raise FileNotFoundError(
-            f'Step "{requesting_step}" requires {table_name}. Run the orchestrator with '
+            f'Step "{requesting_step}" requires evaluation_results. Run the orchestrator with '
             f'--run "eval --steps evaluation_results" first, or omit --steps to run the full stage.'
         )
-    return read_parquet(paths, table_name)
+
+    loaded_df = read_parquet(paths, 'evaluation_results')
+    assert_pool_scope_match(loaded_df, cfg.retrieval.pool_scope, table_name='evaluation_results')
+    return loaded_df
 
 
 def parse_evaluation_steps(raw_value: str | None) -> set[EvaluationStep] | None:

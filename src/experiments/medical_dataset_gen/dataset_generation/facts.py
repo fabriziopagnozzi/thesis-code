@@ -28,8 +28,10 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ChunkSurfacePolicy,
     ClinicalAxis,
     ClinicalFact,
+    ClusterRole,
     ComplicationBurdenPayload,
     ConditionKey,
+    ConditionOntology,
     DiagnosticEvidencePayload,
     MedicalOntology,
     PatientSex,
@@ -37,6 +39,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryPlanFacet,
     RehabOutcomePayload,
     SubgroupAxis,
+    SubgroupOntology,
     TreatmentDurationAxisValues,
     TreatmentDurationPayload,
     axis_payload_required_phrase,
@@ -57,18 +60,17 @@ _FACTS_WRITE_BATCH_ROWS = 131_072
 NOTE_STYLE_IDS = available_note_styles()
 
 
-def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
+def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
     ontology = load_ontology(cfg)
     plans = read_parquet(paths, 'query_plans')
     path = paths.table_path('clinical_facts')
     path.parent.mkdir(parents=True, exist_ok=True)
     writer: pq.ParquetWriter | None = None
     total = 0
-    last = pl.DataFrame()
     pending_facts: list[ClinicalFact] = []
 
     def flush_pending_facts() -> None:
-        nonlocal writer, last
+        nonlocal writer
         if not pending_facts:
             return
         frame = _facts_frame(pending_facts)
@@ -76,7 +78,6 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
         if writer is None:
             writer = pq.ParquetWriter(path, table.schema)
         writer.write_table(table)
-        last = frame
         pending_facts.clear()
 
     try:
@@ -85,6 +86,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
             rng = Random(plan.plan_seed)
             facts: list[ClinicalFact] = []
 
+            # Gold facts establish the four required evidence facets.
             for facet in plan.facets:
                 facts.extend(
                     make_gold_fact(
@@ -98,6 +100,8 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
                     for local_idx in range(facet.target_gold_chunks)
                 )
 
+            # Distractors are generated from the same plan so their metadata
+            # remains query-local and auditable.
             facts.extend(
                 make_distractor_facts(
                     plan,
@@ -128,19 +132,17 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.Data
         if writer is not None:
             writer.close()
 
+    # The stage's durable output is the parquet table; callers do not need a
+    # second in-memory copy of the final batch.
     if total == 0:
         raise ValueError('no query plans available to generate facts')
 
     print(f'[write] clinical_facts: {total:,} rows -> {path}')
-    return last
 
 
 def _facts_frame(facts: list[ClinicalFact]) -> pl.DataFrame:
     return pl.from_dicts(
-        [
-            fact.model_dump(mode='python') if isinstance(fact, ClinicalFact) else fact
-            for fact in facts
-        ],
+        [fact.model_dump(mode='python') for fact in facts],
         infer_schema_length=None,
     )
 
@@ -221,6 +223,7 @@ def make_distractor_facts(
     rows: list[ClinicalFact] = []
     for facet in plan.facets:
         local_cfg = _local_distractor_config_for_facet(chunk_pools, facet)
+
         rows.extend(
             make_local_distractor_facts(
                 plan,
@@ -294,6 +297,7 @@ def make_local_distractor_fact(
         scope=scope,
         selection_idx=local_idx,
     )
+
     condition_id, condition_display, subgroup_id, subgroup, axis, value_bin = resolved
     return make_base_fact(
         plan=plan,
@@ -332,7 +336,7 @@ def _resolve_distractor_fields(
     spec: DistractorSpec,
     scope: str,
     selection_idx: int,
-):
+) -> tuple[ConditionKey, str, str, SubgroupOntology, ClinicalAxis, str]:
     condition_id = target.condition_id
     condition_display = target.condition_display
     if spec.changes_condition():
@@ -346,6 +350,8 @@ def _resolve_distractor_fields(
         )
         condition_display = condition.display
 
+    # Subgroup changes are resolved independently from condition changes so a
+    # distractor can vary exactly the dimensions declared in its config.
     subgroup_id = target.subgroup_id
     subgroup = ontology.subgroups[subgroup_id]
     if spec.changes_subgroup():
@@ -358,6 +364,7 @@ def _resolve_distractor_fields(
             selection_idx,
         )
 
+    # Axis and value-bin changes are mutually exclusive by schema validation.
     axis = target.axis
     value_bin = target.value_bin
     if spec.changes_axis():
@@ -392,7 +399,7 @@ def _cycled_other_subgroup(
     target_facet_id: str,
     scope: str,
     local_idx: int,
-):
+) -> tuple[str, SubgroupOntology]:
     alternatives = outlier_subgroups(ontology, excluded_ids)
     if not alternatives:
         raise ValueError('no eligible outlier subgroups are available')
@@ -407,7 +414,7 @@ def _cycled_other_condition(
     target_facet_id: str,
     scope: str,
     local_idx: int,
-):
+) -> tuple[ConditionKey, ConditionOntology]:
     alternatives = other_conditions(ontology, excluded_condition_id)
     if not alternatives:
         raise ValueError('no eligible outlier conditions are available')
@@ -487,6 +494,7 @@ def make_background_outlier_facts(
     for spec_idx, spec in enumerate(specs):
         distractor_type = _distractor_type_slug(spec)
         scope = _distractor_scope(distractor_type, spec_idx)
+
         for cluster_idx in range(spec.num_clusters):
             target = _background_anchor_facet(plan, spec_idx, cluster_idx)
             resolved = _resolve_distractor_fields(
@@ -499,6 +507,7 @@ def make_background_outlier_facts(
             )
             condition_id, condition_display, subgroup_id, subgroup, axis, value_bin = resolved
             cluster_id = f'{plan.pool_id}_bg_s{spec_idx + 1:02d}_c{cluster_idx + 1:02d}'
+
             for local_idx in range(spec.size):
                 reuse_scope = (
                     f'distractor:background_clinical_cluster:{scope}:cluster_{cluster_idx + 1:02d}'
@@ -565,10 +574,12 @@ def make_base_fact(
     axis: ClinicalAxis,
     value_bin: str,
     cluster_id: str,
-    cluster_role,
+    cluster_role: ClusterRole,
     reuse_scope: str | None = None,
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> ClinicalFact:
+    # Payload and surface choices are deterministic functions of the fact's
+    # semantic identity; the caller-provided RNG only controls the fact ID.
     payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx)
     payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
     resolved_reuse_scope = reuse_scope or ('gold' if is_gold else f'distractor:{distractor_type}')
@@ -608,7 +619,7 @@ def make_base_fact(
     fact_id = (
         f'{plan.query_id}_{"g" if is_gold else "d"}_{local_idx:03d}_{rng.randint(0, 9999):04d}'
     )
-    required_payload = _payload_required_phrase(payload)
+    required_payload = axis_payload_required_phrase(payload)
     condition_anchor = (
         'axis_evidence'
         if condition_display.casefold() in required_payload.casefold()
@@ -622,6 +633,7 @@ def make_base_fact(
     ]
     if subgroup_dimension_id != 'age_band':
         must_mention.insert(1, phrase)
+
     must_not_mention = [
         label for label in (plan.subgroup_a_label, plan.subgroup_b_label) if label != subgroup_label
     ]
@@ -705,10 +717,6 @@ def _axis_payload(
     if axis == 'care_intensity':
         return CareIntensityPayload(axis=axis, detail=detail)
     return DiagnosticEvidencePayload(axis='diagnostic_evidence_type', detail=detail)
-
-
-def _payload_required_phrase(payload: AxisFactPayload) -> str:
-    return axis_payload_required_phrase(payload)
 
 
 def _patient_age(

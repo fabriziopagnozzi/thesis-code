@@ -18,8 +18,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 
 
-def run_make_qrels(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
-    _ = cfg
+def run_make_qrels(_cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     qrels_path = paths.table_path('qrels')
     qrels_path.parent.mkdir(parents=True, exist_ok=True)
     (

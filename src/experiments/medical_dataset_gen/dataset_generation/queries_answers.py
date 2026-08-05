@@ -15,17 +15,16 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     AcuteClinicalCoursePayload,
     AnswerFact,
     AnswerSourceFact,
+    AxisFactPayload,
     CareIntensityPayload,
     ClinicalAxis,
     ComplicationBurdenPayload,
     DiagnosticEvidencePayload,
     GoldAnswerOutputRow,
     MedicalOntology,
-    QueryFocusMode,
     QueryOutputRow,
     QueryPlan,
     QueryPlanFacet,
-    QueryStructure,
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
@@ -52,6 +51,8 @@ def run_make_queries_answers(
         plan = QueryPlan.model_validate(plan_row)
         plans_by_query[plan.query_id] = plan
 
+    # Facts are sorted by query, so each query can be finalized as soon as its
+    # gold evidence block ends without retaining the complete table in memory.
     query_rows: list[QueryOutputRow] = []
     answer_rows: list[GoldAnswerOutputRow] = []
     current_query_id: str | None = None
@@ -84,6 +85,7 @@ def run_make_queries_answers(
                 query_rows=query_rows,
                 answer_rows=answer_rows,
             )
+
             current_fact_rows = []
             current_query_id = query_id
         current_fact_rows.append(fact_row)
@@ -139,7 +141,7 @@ def _finalize_query(
         plan.secondary_axis,
     )
     template_id = template_ids[stable_int(query_key, 'template') % len(template_ids)]
-    query_text = render_query(
+    query_text = render_query_template(
         plan,
         ontology,
         template_id=template_id,
@@ -158,23 +160,6 @@ def _finalize_query(
             facet_answer_objects=facet_answer_objects,
             supporting_fact_ids=[fact.fact_id for fact in fact_rows],
         )
-    )
-
-
-def render_query(
-    plan: QueryPlan,
-    ontology: MedicalOntology,
-    *,
-    template_id: str | None = None,
-    focus_mode: QueryFocusMode = 'natural',
-    query_structure: QueryStructure = 'unbalanced',
-) -> str:
-    return render_query_template(
-        plan,
-        ontology,
-        template_id=template_id,
-        focus_mode=focus_mode,
-        query_structure=query_structure,
     )
 
 
@@ -247,7 +232,7 @@ def _with_indefinite_article(phrase: str) -> str:
     return f'{article} {phrase}'
 
 
-def _summarize_payload(value_bin: str, payload) -> str:
+def _summarize_payload(value_bin: str, payload: AxisFactPayload) -> str:
     bin_label = value_bin.replace('_', ' ')
     if isinstance(payload, TreatmentDurationPayload):
         return f'{_with_indefinite_article(bin_label)} course of {payload.duration_days} days with {payload.treatment}'

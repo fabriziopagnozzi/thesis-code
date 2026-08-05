@@ -97,22 +97,6 @@ def select_chunk_surface_group(
     return 'heldout' if split == 'test' else 'seen'
 
 
-def render_chunk_text_template(
-    fact: ClinicalFact,
-    ontology: MedicalOntology,
-    rng: Random,
-    text_style: ChunkTextStyle = 'semantic_hardened',
-    surface_group: ChunkSurfaceGroup | None = None,
-) -> str:
-    return render_chunk_text_template_result(
-        fact,
-        ontology,
-        rng,
-        text_style=text_style,
-        surface_group=surface_group,
-    ).text
-
-
 def render_chunk_text_template_result(
     fact: ClinicalFact,
     ontology: MedicalOntology,
@@ -503,10 +487,6 @@ def _template_fields(template: str) -> set[str]:
         for _, field_name, _, _ in Formatter().parse(template)
         if field_name is not None and field_name
     }
-
-
-def patient_descriptor(fact: ClinicalFact) -> str:
-    return patient_narrative(fact).subject
 
 
 def patient_narrative(fact: ClinicalFact) -> PatientNarrative:

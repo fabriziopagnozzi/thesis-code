@@ -43,11 +43,3 @@ def read_parquet(
     paths: MedicalDatasetGenPaths, table: SyntheticMedicalDatasetTableName
 ) -> pl.DataFrame:
     return pl.read_parquet(paths.table_path(table))
-
-
-def read_parquet_if_exists_else_empty_df(
-    paths: MedicalDatasetGenPaths, table: SyntheticMedicalDatasetTableName
-) -> pl.DataFrame:
-    if paths.table_path(table).exists():
-        return read_parquet(paths, table)
-    return pl.DataFrame()

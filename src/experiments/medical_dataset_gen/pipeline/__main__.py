@@ -1,3 +1,5 @@
+"""Command-line orchestration for the synthetic medical benchmark pipeline."""
+
 from __future__ import annotations
 
 import argparse
@@ -50,6 +52,8 @@ def main() -> None:
     if args.exp is None:
         parser.error('missing experiment name; pass --exp or set EXP/EXP_NAME')
 
+    # Standalone scripts own their secondary CLI arguments; the orchestrator
+    # validates the outer command before forwarding the quoted arguments.
     run_specs = _parse_run_specs(parser, args.run) if args.run is not None else None
     if run_specs is not None:
         _validate_run_mode_args(parser, args, unknown_args)
@@ -61,6 +65,7 @@ def main() -> None:
         _run_child_experiments(children=children, parent_exp=args.exp)
         return
 
+    # Resolve the effective configuration before constructing any artifact path.
     cfg = _with_dataset_schema_version(load_config(args.exp), args.version)
     paths = paths_for(cfg)
 
@@ -94,6 +99,8 @@ def _build_parser() -> argparse.ArgumentParser:
             'for example --version v4.'
         ),
     )
+
+    # Normal pipeline selection.
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGE_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGE_SET, default=None)
     parser.add_argument('--stages', default=None)
@@ -105,6 +112,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help='Exclude one or more stages from a normal pipeline run. May be repeated.',
     )
+
+    # Secondary stage entrypoints and execution controls.
     parser.add_argument(
         '--run',
         action='append',
@@ -225,6 +234,7 @@ def _run_standalone_script_sequence(
 
     for run_spec in run_specs:
         script_spec = STANDALONE_SCRIPT_BY_NAME[run_spec.script]
+
         print(f'\n=== Script: {run_spec.script} ===')
         colorprint(
             'bright_blue',
@@ -260,6 +270,7 @@ def _selected_stage_names(
 
     excluded = {pipeline_stage(stage) for group in args.exclude or [] for stage in group}
     selected_set = set(selected) - excluded
+
     return [spec.name for spec in STAGE_SPECS if spec.name in selected_set]
 
 
@@ -274,11 +285,14 @@ def _run_pipeline_stages(
 
     for stage_name in stage_names:
         spec = STAGE_BY_NAME[stage_name]
+
         if _should_skip_shared_stage(cfg, paths, spec):
             continue
+
         if spec.ready is not None and spec.ready(paths):
             print(f'[pipeline] skipping {stage_name}; artifacts already exist')
             continue
+
         colorprint('bright_green', f'\n{"=" * 3} Stage: {stage_name} {"=" * 3}')
         if stage_name == 'embed':
             run_embed(cfg, paths, queries_only=queries_only)

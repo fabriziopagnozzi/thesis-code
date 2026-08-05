@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from math import sqrt
 
 import numpy as np
 import polars as pl
@@ -29,7 +28,6 @@ from experiments.medical_dataset_gen.retrieval.schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
-    unreachable_code,
 )
 from helpers.metrics import avg_cos, fac_cov_score, jaccard
 from helpers.query_algorithms import fac_loc_lazy_greedy, mmr, top_k
@@ -45,6 +43,8 @@ def build_index_maps(
     chunk_id_to_idx = {chunk_id: idx for idx, chunk_id in enumerate(chunk_ids)}
     query_id_to_idx = {query_id: idx for idx, query_id in enumerate(query_ids)}
 
+    # Pydantic records keep the downstream worker maps explicit and protect
+    # against silently accepting malformed parquet columns.
     chunk_rows = [ChunkDocumentRecord.model_validate(row) for row in chunk_documents.to_dicts()]
     membership_rows = [
         ChunkMembershipRecord.model_validate(row) for row in chunk_memberships.to_dicts()
@@ -53,6 +53,8 @@ def build_index_maps(
     chunk_by_id = {row.chunk_id: row for row in chunk_rows}
     query_by_id = {row.query_id: row for row in query_rows}
 
+    # Memberships define the query-local candidate pool. Keep the first index
+    # for a repeated query/chunk pair while retaining the latest metadata row.
     chunks_by_source_query: dict[str, list[int]] = defaultdict(list)
     membership_by_query_chunk: dict[tuple[str, str], ChunkMembershipRecord] = {}
     seen_by_query: dict[str, set[int]] = defaultdict(set)
@@ -120,11 +122,15 @@ def select_indices(
     sim_to_query: NDArray[np.float32],
     sim_matrix: NDArray[np.float32],
     k: int,
-    lam: float = 0.5,
+    lam: float | None = 0.5,
     mmr_window: int | None = None,
 ) -> NDArray[np.intp]:
     if strategy == 'top_k':
         return top_k(sim_to_query=sim_to_query, k=k)
+
+    if lam is None:
+        raise ValueError(f'{strategy} retrieval requires a lambda value')
+
     if strategy == 'mmr':
         return mmr(
             sim_to_query=sim_to_query,
@@ -141,10 +147,10 @@ def select_indices(
             lam=lam,
         )
 
-    unreachable_code(f'Unsupported strategy: {strategy}')
+    raise ValueError(f'Unsupported strategy: {strategy}')
 
 
-# Qrels utils
+# Qrel and facet mappings.
 def is_query_gold(query_qrels: QueryIdToQrels, chunk_id: str) -> bool:
     row = query_qrels.get(chunk_id)
     return row is not None and row.is_gold
@@ -199,7 +205,7 @@ def build_query_to_facet_gold_map(qrels: pl.DataFrame) -> QueryIdToFacetMap:
     return result
 
 
-# Useful mathematical functions
+# Metric helpers.
 def ci_half_width(values: list[float], z: float = 1.96) -> float:
     arr = np.asarray(values, dtype=float)
     arr = arr[~np.isnan(arr)]
@@ -213,20 +219,7 @@ def harmonic_mean(left: float, right: float) -> float:
     return 0.0 if denom <= 0 else 2 * left * right / denom
 
 
-def geometric_mean(x: float, y: float) -> float:
-    return sqrt(x * y)
-
-
-def harmonic_mean_many(values: Sequence[float]) -> float:
-    if not values:
-        return 0.0
-    normalized_values = [float(value) for value in values]
-    if any(value <= 0.0 for value in normalized_values):
-        return 0.0
-    return len(normalized_values) / sum(1.0 / value for value in normalized_values)
-
-
-# Miscellaneous utils
+# Artifact and provenance checks.
 def assert_pool_scope_match(
     df: pl.DataFrame,
     expected_pool_scope: ChunkPoolScope,
