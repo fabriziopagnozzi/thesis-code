@@ -3,7 +3,6 @@ from __future__ import annotations
 from random import Random
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
-    ChunkValidation,
     RenderedChunkTemplate,
     render_chunk_text_template_result,
     validate_chunk_text,
@@ -11,7 +10,6 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ChunkRow,
     ChunkState,
-    ChunkSurfaceGroup,
     ChunkTextStyle,
     ClinicalFact,
     MedicalOntology,
@@ -38,31 +36,16 @@ def render_canonical_chunk(
     text_style: ChunkTextStyle = 'semantic_hardened',
 ) -> RenderedChunkTemplate:
     rng = Random(stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
+
     return render_chunk_text_template_result(fact, ontology, rng, text_style=text_style)
-
-
-def render_canonical_chunk_text(
-    fact: ClinicalFact,
-    ontology: MedicalOntology,
-    text_style: ChunkTextStyle = 'semantic_hardened',
-    surface_group: ChunkSurfaceGroup | None = None,
-) -> str:
-    rng = Random(stable_seed(str(fact.chunk_reuse_key or fact.fact_id)))
-    return render_chunk_text_template_result(
-        fact,
-        ontology,
-        rng,
-        text_style=text_style,
-        surface_group=surface_group,
-    ).text
 
 
 def new_chunk_state(
     final_text: str,
-    validation: ChunkValidation,
     rendered_template: RenderedChunkTemplate,
 ) -> ChunkState:
     provenance = rendered_template.provenance
+
     return ChunkState(
         final_text=final_text,
         outer_template_family=provenance.outer_template_family,
@@ -80,6 +63,7 @@ def finalize_chunk_row(
     state: ChunkState,
 ) -> ChunkRow:
     final_text = state.final_text
+
     validation = validate_chunk_text(
         final_text,
         fact,

@@ -181,14 +181,6 @@ def resolve_axis_pair_generation_policy(
     )
 
 
-def other_subgroups(
-    ontology: MedicalOntology, excluded_ids: set[str]
-) -> list[tuple[SubgroupKey, SubgroupOntology]]:
-    return [
-        (sid, subgroup) for sid, subgroup in ontology.subgroups.items() if sid not in excluded_ids
-    ]
-
-
 def outlier_subgroups(
     ontology: MedicalOntology, excluded_ids: set[str]
 ) -> list[tuple[SubgroupKey, SubgroupOntology]]:

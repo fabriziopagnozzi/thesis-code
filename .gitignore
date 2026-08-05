@@ -6,7 +6,6 @@ datasets/full-data/
 results/
 data/
 **/*_config.yaml
-!**/config_examples/*_config.yaml
 
 # LaTeX
 **/~$*

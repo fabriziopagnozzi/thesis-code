@@ -13,7 +13,6 @@ type EmbeddingModelName = Literal[
     'Qwen/Qwen3-Embedding-8B',
     'jinaai/jina-embeddings-v5-text-small',
     'abhinand/MedEmbed-large-v0.1',
-    'ncbi/MedCPT',
 ]
 
 type EncodeMode = Literal[
@@ -21,7 +20,6 @@ type EncodeMode = Literal[
     'plain_encode',
     'query_prompt_name_docs_plain',
     'jina_v5',
-    'medcpt',
 ]
 
 
@@ -35,10 +33,6 @@ class EmbeddingModelProfile:
     document_prompt_name: str | None = None
     model_kwargs: dict[str, Any] = field(default_factory=dict)
     config_kwargs: dict[str, Any] = field(default_factory=dict)
-    query_model_name: str | None = None
-    document_model_name: str | None = None
-    query_max_length: int = 64
-    document_max_length: int = 512
 
 
 MODEL_PROFILES: dict[str, EmbeddingModelProfile] = {
@@ -64,11 +58,6 @@ MODEL_PROFILES: dict[str, EmbeddingModelProfile] = {
         model_kwargs={'default_task': 'retrieval'},
     ),
     'abhinand/MedEmbed-large-v0.1': EmbeddingModelProfile(mode='encode_query_document'),
-    'ncbi/MedCPT': EmbeddingModelProfile(
-        mode='medcpt',
-        query_model_name='ncbi/MedCPT-Query-Encoder',
-        document_model_name='ncbi/MedCPT-Article-Encoder',
-    ),
 }
 
 
@@ -98,29 +87,15 @@ class Embedder:
         self.devices = target_devices
         self._dim: int | None = None
         self._pool = None
-        self._query_tokenizer = None
-        self._query_model = None
-        self._document_tokenizer = None
-        self._document_model = None
-
-        if profile.mode == 'medcpt':
-            if len(target_devices) > 1:
-                raise ValueError('MedCPT backend does not support devices= multi-process encoding')
-            self._load_medcpt()
-        else:
-            self._load_sentence_transformer()
+        self._load_sentence_transformer()
 
     @property
     def dim(self) -> int:
         if self._dim is not None:
             return self._dim
 
-        if self.profile.mode == 'medcpt':
-            dim = getattr(self._query_model.config, 'hidden_size', None)
-        else:
-            dim = self._model.get_embedding_dimension()
-
-        if dim is None and self.profile.mode != 'medcpt':
+        dim = self._model.get_embedding_dimension()
+        if dim is None:
             get_sentence_dim = getattr(self._model, 'get_embedding_dimension', None)
             if get_sentence_dim is not None:
                 dim = get_sentence_dim()
@@ -133,8 +108,6 @@ class Embedder:
         return self._dim
 
     def embed_docs(self, texts: list[str], normalize: bool = True) -> NDArray[np.float32]:
-        if self.profile.mode == 'medcpt':
-            return self._embed_medcpt_docs(texts, normalize=normalize)
         if self.profile.mode == 'encode_query_document':
             embs = self._model.encode_document(
                 texts,
@@ -171,8 +144,6 @@ class Embedder:
         return self.embed_queries([query_text], normalize=normalize)[0]
 
     def embed_queries(self, query_texts: list[str], normalize: bool = True) -> NDArray[np.float32]:
-        if self.profile.mode == 'medcpt':
-            return self._embed_medcpt_queries(query_texts, normalize=normalize)
         if self.profile.mode == 'encode_query_document':
             embs = self._model.encode_query(
                 query_texts,
@@ -226,14 +197,6 @@ class Embedder:
             self._pool = None
         if hasattr(self, '_model'):
             del self._model
-        for attr_name in (
-            '_query_model',
-            '_query_tokenizer',
-            '_document_model',
-            '_document_tokenizer',
-        ):
-            if getattr(self, attr_name, None) is not None:
-                setattr(self, attr_name, None)
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -268,23 +231,6 @@ class Embedder:
             else None
         )
 
-    def _load_medcpt(self) -> None:
-        import torch
-        from transformers import AutoModel, AutoTokenizer
-
-        query_model_name = self.profile.query_model_name
-        document_model_name = self.profile.document_model_name
-        if query_model_name is None or document_model_name is None:
-            raise ValueError('MedCPT profile must define query_model_name and document_model_name')
-
-        self._query_tokenizer = AutoTokenizer.from_pretrained(query_model_name)
-        self._query_model = AutoModel.from_pretrained(query_model_name).to(self.device)
-        self._query_model.eval()
-        self._document_tokenizer = AutoTokenizer.from_pretrained(document_model_name)
-        self._document_model = AutoModel.from_pretrained(document_model_name).to(self.device)
-        self._document_model.eval()
-        self._torch = torch
-
     def _encode_sentence_transformer(
         self,
         texts: list[str],
@@ -310,54 +256,3 @@ class Embedder:
         if task is not None:
             kwargs['task'] = task
         return self._model.encode(texts, **kwargs)
-
-    def _embed_medcpt_queries(
-        self, query_texts: list[str], normalize: bool = True
-    ) -> NDArray[np.float32]:
-        return self._encode_medcpt(
-            self._query_model,
-            self._query_tokenizer,
-            query_texts,
-            max_length=self.profile.query_max_length,
-            normalize=normalize,
-        )
-
-    def _embed_medcpt_docs(self, texts: list[str], normalize: bool = True) -> NDArray[np.float32]:
-        article_inputs = [[text, ''] for text in texts]
-        return self._encode_medcpt(
-            self._document_model,
-            self._document_tokenizer,
-            article_inputs,
-            max_length=self.profile.document_max_length,
-            normalize=normalize,
-        )
-
-    def _encode_medcpt(
-        self,
-        model,
-        tokenizer,
-        texts,
-        *,
-        max_length: int,
-        normalize: bool,
-    ) -> NDArray[np.float32]:
-        torch = self._torch
-        chunks: list[np.ndarray] = []
-        with torch.no_grad():
-            for start in range(0, len(texts), self.batch_size):
-                batch = texts[start : start + self.batch_size]
-                encoded = tokenizer(
-                    batch,
-                    truncation=True,
-                    padding=True,
-                    return_tensors='pt',
-                    max_length=max_length,
-                )
-                encoded = {key: value.to(self.device) for key, value in encoded.items()}
-                embs = model(**encoded).last_hidden_state[:, 0, :]
-                if normalize:
-                    embs = torch.nn.functional.normalize(embs, p=2, dim=1)
-                chunks.append(embs.detach().cpu().numpy())
-        if not chunks:
-            return np.empty((0, self.dim), dtype=np.float32)
-        return np.asarray(np.concatenate(chunks, axis=0), dtype=np.float32)

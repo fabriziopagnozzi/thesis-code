@@ -1,3 +1,5 @@
+"""Validated schemas for ontology inputs and persisted benchmark artifacts."""
+
 from __future__ import annotations
 
 import json
@@ -9,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
+# Closed vocabularies used by configuration, ontology, and artifact rows.
 type ClinicalAxis = Literal[
     'treatment_duration',
     'rehab_outcome',
@@ -94,6 +97,7 @@ type PatientSex = Literal['female', 'male']
 type DataSplit = Literal['validation', 'test']
 
 
+# Shapes written to the query and answer parquet tables.
 class QueryOutputRow(TypedDict):
     query_id: str
     evidence_profile_id: str
@@ -135,6 +139,7 @@ class BenchmarkPydanticModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+# Axis-specific payloads are discriminated by their ``axis`` field.
 class TreatmentDurationPayload(BenchmarkPydanticModel):
     axis: Literal['treatment_duration']
     duration_days: int
@@ -181,6 +186,7 @@ type AxisFactPayload = Annotated[
 def parse_axis_payload(value: str) -> AxisFactPayload:
     payload = json.loads(value)
     axis = payload.get('axis')
+
     model_by_axis = {
         'treatment_duration': TreatmentDurationPayload,
         'rehab_outcome': RehabOutcomePayload,
@@ -211,6 +217,7 @@ def _validated_axis_payload(axis: ClinicalAxis, axis_payload_json: str) -> AxisF
     return payload
 
 
+# Answer records retain structured facet provenance for canonical references.
 class AnswerSourceFact(BenchmarkPydanticModel):
     model_config = ConfigDict(extra='ignore')
 
@@ -236,6 +243,7 @@ class AnswerFact(BenchmarkPydanticModel):
     supporting_fact_ids: list[str]
 
 
+# Ontology models and cross-reference validation.
 class TreatmentDurationCourse(BenchmarkPydanticModel):
     surface_forms: list[str] = Field(min_length=1)
     bins: dict[str, list[int]]
@@ -536,6 +544,7 @@ def _validate_condition_references(
             if set(values.bins) != set(clinical_axes[axis].bins):
                 raise ValueError(f'condition {condition_id!r} has incomplete bins for {axis!r}')
 
+        # The allowlist must refer to known present/absent cohort contrasts.
         allowed_ids = condition.allowed_comorbidity_contrast_ids
         if len(allowed_ids) != len(set(allowed_ids)):
             raise ValueError(f'condition {condition_id!r} repeats allowed comorbidity contrast ids')
@@ -803,6 +812,7 @@ def _normalize_subgroup_text(text: str) -> str:
     return ' '.join(str(text).casefold().replace('-', ' ').split())
 
 
+# Query plans, facet truth, and generated clinical facts.
 class QueryPlanFacet(BenchmarkPydanticModel):
     facet_id: str
     condition_id: ConditionKey
@@ -1087,6 +1097,7 @@ class ChunkRow(ClinicalFact):
         )
 
 
+# Authored chunk and query template schemas.
 class TemplateSpec(BenchmarkPydanticModel):
     id: str
     template: str

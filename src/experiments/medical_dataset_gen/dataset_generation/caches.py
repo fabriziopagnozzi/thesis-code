@@ -40,17 +40,6 @@ class QueryEmbeddingSignaturePayload(TypedDict):
     normalize: bool
 
 
-class ChunkEmbeddingCacheStats(TypedDict):
-    cache_path: str
-    embedding_signature: str
-    hits: int
-    misses: int
-
-
-def embedding_cache_bucket(chunk_embedding_cache_key: str) -> str:
-    return _cache_bucket(chunk_embedding_cache_key)
-
-
 def chunk_embedding_signature_payload(cfg: ExperimentCfg) -> EmbeddingSignaturePayload:
     profile = MODEL_PROFILES[cfg.embeddings.model_name]
     return {
@@ -146,10 +135,7 @@ def append_chunk_embedding_cache_rows(
     bucketed_rows = rows.with_columns(
         pl.Series(
             '_cache_bucket',
-            [
-                embedding_cache_bucket(str(value))
-                for value in rows['chunk_embedding_cache_key'].to_list()
-            ],
+            [_cache_bucket(str(value)) for value in rows['chunk_embedding_cache_key'].to_list()],
         )
     )
     for bucket in sorted(str(value) for value in bucketed_rows['_cache_bucket'].unique().to_list()):

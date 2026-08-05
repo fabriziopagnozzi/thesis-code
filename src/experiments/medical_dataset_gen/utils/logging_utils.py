@@ -59,36 +59,3 @@ def colored(color: ColorLike, text: str) -> str:
 
 def colorprint(color: ColorLike, text: str) -> None:
     print(colored(color, text))
-
-
-def bg_colored(
-    color: ColorLike,
-    text: str,
-    *,
-    fg: ColorLike | None = None,
-    bold: bool = False,
-) -> str:
-    bg_code = _resolve_color(color)
-
-    codes: list[str] = []
-
-    if bold:
-        codes.append('1')
-
-    if fg is not None:
-        fg_code = _resolve_color(fg)
-        codes.append(f'38;5;{fg_code}')
-
-    codes.append(f'48;5;{bg_code}')
-
-    return f'\033[{";".join(codes)}m{text}{RESET}'
-
-
-def bg_colorprint(
-    color: ColorLike,
-    text: str,
-    *,
-    fg: ColorLike | None = None,
-    bold: bool = False,
-) -> None:
-    print(bg_colored(color, text, fg=fg, bold=bold))

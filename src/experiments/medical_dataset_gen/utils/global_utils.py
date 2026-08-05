@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import argparse
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, cast, get_args
+from typing import TYPE_CHECKING, Any, Literal, TypeAliasType, cast, get_args
 
 import yaml
 
@@ -37,7 +36,6 @@ type SyntheticMedicalDatasetTableName = Literal[
     'query_geometry_points',
     'query_geometry_stats',
 ]
-SYNTH_MEDICAL_DATASET_TABLE_NAMES = set[str](get_literals(SyntheticMedicalDatasetTableName))
 
 type SharedGenerationTableName = Literal[
     'query_plans',
@@ -72,6 +70,7 @@ type SharedArtifactStoreName = Literal['_shared', '_embeddings']
 type YamlMapping = dict[str, object]
 
 
+# Resolve local, shared-generation, and shared-embedding artifacts in one place.
 class MedicalDatasetGenPaths:
     root = ROOT_DIR / 'src' / 'experiments' / 'medical_dataset_gen'
     results_dir = root / '_results'
@@ -87,7 +86,7 @@ class MedicalDatasetGenPaths:
         shared_generation_artifact_paths: SharedGenerationArtifactPaths | None = None,
         shared_embedding_artifact_paths: SharedEmbeddingArtifactPaths | None = None,
         local_artifact_version: str | None = None,
-    ):
+    ) -> None:
         self.exp_name = exp_name
         if not exp_name:
             raise ValueError('experiment name cannot be empty')
@@ -165,11 +164,7 @@ class MedicalDatasetGenPaths:
 
         if override is None:
             return self.experiment_dir / artifact_disk_old_name
-        else:
-            return Path(override) / artifact_disk_old_name
-
-    def get_result_dir(self, table: SyntheticMedicalDatasetTableName) -> Path:
-        return self.table_path(table).parent
+        return Path(override) / artifact_disk_old_name
 
     def chunk_embeddings_cache_dir(self, embedding_signature: str) -> Path:
         return self.cache_dir / 'chunk_embeddings' / embedding_signature
@@ -181,11 +176,6 @@ class MedicalDatasetGenPaths:
         return self.chunk_embeddings_bucket_path(embedding_signature, bucket).with_suffix(
             '.parquet.lock'
         )
-
-    def config_source_paths(self) -> tuple[Path, ...]:
-        if self.is_subexperiment():
-            return (self.parent_config_path, self.subconfig_path)
-        return (self.config_path,)
 
     def is_subexperiment(self) -> bool:
         return len(Path(self.exp_name).parts) == 2
@@ -202,6 +192,7 @@ def load_config(exp: str | None = None) -> ExperimentCfg:
             'the config can be loaded from _results/<exp>/_config.yaml'
         )
 
+    # Resolve aliases/prefixes before reading either the parent or child config.
     exp_name = resolve_experiment_name(exp_name)
     paths = MedicalDatasetGenPaths(exp_name)
     raw = load_raw_experiment_config(paths)
@@ -259,18 +250,13 @@ def _deep_merge_config(base: YamlMapping, overrides: YamlMapping) -> YamlMapping
     return merged
 
 
-def load_config_from_cli() -> ExperimentCfg:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--exp', type=str, default=os.getenv('EXP') or os.getenv('EXP_NAME'))
-    (args, _) = parser.parse_known_args()
-    return load_config(exp=args.exp)  # a pydantic validated model
-
-
 def paths_for(
     cfg: ExperimentCfg,
     *,
     local_artifact_version: str | None = None,
 ) -> MedicalDatasetGenPaths:
+    # The artifact version is part of the local namespace, while shared paths
+    # are derived from the effective experiment configuration.
     resolved_local_artifact_version = local_artifact_version or local_artifact_version_for_config(
         cfg
     )
@@ -394,7 +380,3 @@ def query_document_mode_key(cfg: ExperimentCfg) -> str:
         return 'label_only_q_label_only_f'
     query_surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
     return f'{query_surface}_q_{cfg.generation.focus_mode}_f'
-
-
-def unreachable_code(err: str) -> NoReturn:
-    raise RuntimeError(err)
