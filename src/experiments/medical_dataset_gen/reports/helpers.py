@@ -13,6 +13,7 @@ from tabulate import tabulate
 
 from experiments.medical_dataset_gen.reports.analysis_constants import (
     DEFAULT_TABLE_COL_WIDTH,
+    DISTRIBUTION_FAMILY_ABBREVIATIONS,
     INTEGER_TABLE_COLUMNS,
     TABLE_COL_WIDTHS,
     TABLE_HEADERS,
@@ -50,19 +51,36 @@ _CHUNK_TEXT_MODE_DISPLAY_LABELS: dict[str, str] = {
 def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
     metadata = embedding_metadata(record)
     config = wording_config_metadata(record)
+    factor_columns = {
+        f'Factor_{key}': json.dumps(value, sort_keys=True)
+        if isinstance(value, (dict, list))
+        else value
+        for key, value in (record.factors or {}).items()
+    }
     return {
         'Experiment': record.name,
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
+        'DistributionBase': record.distribution_base_id,
         'ShortDistribution': short_token(record.distribution_id),
         'ExperimentFamily': record.family_id,
         'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
+        'ArtifactOrigin': record.origin,
+        'DatasetSchemaVersion': record.dataset_schema_version,
+        'EvaluationSchemaVersion': record.evaluation_schema_version,
+        'IncludeInCausalSummaries': record.include_in_causal_summaries,
+        'IncludeInFamilySummary': record.include_in_family_summary,
+        'SuiteTags': '|'.join(record.tags),
+        'AnalysisBlocks': '|'.join(record.analysis_blocks),
+        'AnalysisTier': record.analysis_tier,
         'IsSubexperiment': record.is_subexperiment,
         'EmbeddingModel': metadata.get('model_name') or record.embedding_model,
         'EmbeddingDimension': metadata.get('dimension'),
         'OnlyPassGeometry': record.only_pass_geometry,
         'QueryScope': query_scope_label(record.only_pass_geometry),
+        **factor_columns,
+        **{f'RunProfile_{key}': value for key, value in (record.run_profile_factors or {}).items()},
         **config,
     }
 
@@ -477,6 +495,38 @@ def short_experiment_label(value: str) -> str:
 
 def short_experiment_id(value: str) -> str:
     return '/'.join(short_token(part) for part in Path(value).parts)
+
+
+def experiment_plot_label(row: Mapping[str, object]) -> str:
+    """Return a concise, self-describing label for an experiment plot row."""
+    distribution = str(row.get('Distribution') or '')
+    if row.get('ExperimentFamily') != 'interaction':
+        return str(row.get('ShortExperiment') or row.get('Experiment') or distribution)
+    configuration = str(row.get('WordingConfigLabel') or row.get('RunLabel') or '')
+    label = interaction_distribution_label(distribution)
+    return f'{label} | {configuration}' if configuration else label
+
+
+def interaction_distribution_label(distribution: str) -> str:
+    """Return compact, shared-family labels for native interaction IDs."""
+    dominance_prefix = 'interaction_dom_'
+    sparse_prefix = 'interaction_sparse_'
+    if distribution.startswith(dominance_prefix):
+        dominance, _shell, topology = distribution.removeprefix(dominance_prefix).split('_', 2)
+        return (
+            f'{DISTRIBUTION_FAMILY_ABBREVIATIONS["dominance"]}-{dominance} '
+            f'\N{MULTIPLICATION SIGN} '
+            f'{DISTRIBUTION_FAMILY_ABBREVIATIONS["background_variant"]}-'
+            f'{topology.replace("x", "\N{MULTIPLICATION SIGN}")}'
+        )
+    if distribution.startswith(sparse_prefix):
+        sparse, near_miss = distribution.removeprefix(sparse_prefix).split('_', 1)
+        return (
+            f'{DISTRIBUTION_FAMILY_ABBREVIATIONS["sparse_niche"]}-{sparse} '
+            f'\N{MULTIPLICATION SIGN} '
+            f'{DISTRIBUTION_FAMILY_ABBREVIATIONS["near_miss_heavy"]}-{near_miss.upper()}'
+        )
+    return distribution.replace('_', ' ')
 
 
 def short_token(value: str) -> str:

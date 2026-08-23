@@ -14,6 +14,7 @@ from experiments.medical_dataset_gen.reports.models import (
     RefreshMode,
 )
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
+from helpers.dir_paths import THESIS_REPORTS_DIR
 
 
 def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
@@ -28,10 +29,31 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Root directory containing experiment result folders.',
     )
     parser.add_argument(
+        '--suite',
+        default=None,
+        help='Materialized v5 suite ID. Uses its manifest instead of legacy directory discovery.',
+    )
+    parser.add_argument(
+        '--where',
+        default=None,
+        help='Suite-only comma-separated equality filters, for example family_id=dominance,scale=medium.',
+    )
+    parser.add_argument(
+        '--strict-suite',
+        action='store_true',
+        help=(
+            'Reject incomplete declared suite contrasts. Without this flag, partial/smoke reports '
+            'omit incomplete strict contrasts while retaining the completed-cell summaries.'
+        ),
+    )
+    parser.add_argument(
         '--output-dir',
         type=Path,
         default=None,
-        help='Directory where report files are written. Defaults to the sibling _reports/experiment_comparison directory.',
+        help=(
+            'Directory where report files are written. Defaults to '
+            '<thesis-documents>/reports/experiment_comparison.'
+        ),
     )
     refresh_group = parser.add_mutually_exclusive_group()
     refresh_group.add_argument(
@@ -182,6 +204,24 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Enable every optional expensive analysis.',
     )
     parsed = parser.parse_args(argv)
+    if parsed.suite is not None:
+        incompatible = [
+            option
+            for option, value in (
+                ('--experiments', parsed.experiments),
+                ('--experiment-regex', parsed.experiment_regex),
+                ('--exclude-experiment-regex', parsed.exclude_experiment_regex),
+                ('--artifact-version', parsed.artifact_version),
+                ('--include-scrapped', parsed.include_scrapped),
+            )
+            if value
+        ]
+        if incompatible:
+            parser.error(
+                '--suite uses manifest selection and cannot combine with ' + ', '.join(incompatible)
+            )
+    elif parsed.where is not None or parsed.strict_suite:
+        parser.error('--where and --strict-suite require --suite')
     refresh_report_dir = (
         parsed.refresh_plots or parsed.refresh_latex_macros or parsed.refresh_output_artifacts
     )
@@ -205,7 +245,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         except re.error as exc:
             parser.error(f'invalid --exclude-experiment-regex: {exc}')
     configured_results_dir = parsed.results_dir.expanduser()
-    default_output_dir = configured_results_dir.parent / '_reports' / 'experiment_comparison'
+    default_output_dir = THESIS_REPORTS_DIR / 'experiment_comparison'
     results_dir = configured_results_dir.resolve()
     refresh_report_dir = (
         refresh_report_dir.expanduser().resolve() if refresh_report_dir is not None else None
@@ -254,6 +294,9 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         paired_statistics=bool(parsed.paired_statistics),
         validity_analysis=bool(parsed.validity_analysis),
         full_report=bool(parsed.full_report),
+        suite_id=str(parsed.suite).strip() if parsed.suite is not None else None,
+        suite_where=str(parsed.where).strip() if parsed.where is not None else None,
+        strict_suite=bool(parsed.strict_suite),
     )
 
 

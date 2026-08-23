@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import subprocess
 
 import ollama
 
@@ -155,37 +154,3 @@ def _salvage_truncated_json(text: str) -> list | dict | None:
         return result
     except json.JSONDecodeError:
         return None
-
-
-def stop_model(model: str | None = None) -> bool:
-    used_model = model or OLLAMA_DEFAULT_MODEL
-    try:
-        running = _client().ps()
-        loaded_models = {
-            getattr(item, 'model', '') or getattr(item, 'name', '')
-            for item in getattr(running, 'models', [])
-        }
-    except Exception as exc:
-        print(f'[ollama] WARNING: failed to inspect loaded models before stop: {exc}')
-        loaded_models = set()
-
-    if loaded_models and used_model not in loaded_models:
-        print(f'[ollama] model not loaded, skip stop: {used_model}')
-        return False
-
-    cmd = ['ollama', 'stop', used_model]
-    try:
-        proc = subprocess.run(cmd, check=False, capture_output=True, text=True)
-    except Exception as exc:
-        print(f'[ollama] WARNING: failed to run {" ".join(cmd)!r}: {exc}')
-        return False
-
-    if proc.returncode == 0:
-        print(f'[ollama] stopped model: {used_model}')
-        return True
-
-    stderr = (proc.stderr or '').strip()
-    stdout = (proc.stdout or '').strip()
-    detail = stderr or stdout or f'exit={proc.returncode}'
-    print(f'[ollama] WARNING: failed to stop model {used_model}: {detail}')
-    return False

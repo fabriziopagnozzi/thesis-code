@@ -5,18 +5,15 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy",
     "polars",
-    "jupyter",
     "tqdm",
-    "huggingface-hub>=1.7.1",
     "sentence-transformers>=4.1",
     "torch",
-    "ijson>=3.5.0",
     "duckdb>=1.5.1",
     "lancedb>=0.30.2",
     "ollama>=0.5",
     "pyyaml>=6.0",
     "pydantic>=2.0",
-    "pylance>=4.0.0",
+    "pyarrow>=24.0.0",
     "fastapi>=0.136.1",
     "uvicorn>=0.46.0",
     "python-multipart>=0.0.26",
@@ -25,11 +22,8 @@ dependencies = [
     "hdbscan>=0.8",
     "matplotlib>=3.9",
     "plotly>=6.7.0",
-    "mteb>=2.12.30",
     "rouge-score>=0.1.2",
-    "pypdf>=6.12.2",
     "tabulate>=0.10.0",
-    "peft>=0.19.1",
     "ruamel-yaml>=0.19.1",
 ]
 [dependency-groups]
@@ -37,6 +31,7 @@ dev = [
     "ruff",
     "pytest",
     "ipykernel",
+    "jupyter",
     "matplotlib-stubs",
     "pandas-stubs",
     "pyarrow-stubs",
@@ -49,8 +44,11 @@ dev = [
 # -- Synthetic Medical Dataset ---
 pipeline = "./setup.sh python -m src.experiments.medical_dataset_gen.pipeline"
 report = "./setup.sh python -m src.experiments.medical_dataset_gen.reports"
-query_diagnose = "./setup.sh python -m src.experiments.medical_dataset_gen.dataset_generation.query_diagnostics_txt"
-add_subexp = './setup.sh python -m src.experiments.medical_dataset_gen.scripts.add_subexperiments'
+query_diagnose = "./setup.sh python -m src.experiments.medical_dataset_gen.scripts.query_diagnostics_txt"
+suite_validate = './setup.sh python -m src.experiments.medical_dataset_gen.suites validate'
+suite_materialize = './setup.sh python -m src.experiments.medical_dataset_gen.suites materialize'
+suite_freeze_geometry = './setup.sh python -m src.experiments.medical_dataset_gen.suites freeze-geometry'
+migrate_v4 = './setup.sh python -m src.experiments.medical_dataset_gen.scripts.migrate_v4_to_v5'
 
 # -- MIMIC Experiments ---
 # Chunking
@@ -97,7 +95,7 @@ only-include = ["src"]
 src = ""
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py312"
 line-length = 100
 indent-width = 4
 extend-include = ["*.ipynb"]

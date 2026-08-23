@@ -24,6 +24,11 @@ from experiments.medical_dataset_gen.reports.helpers import (
     wording_config_parts,
 )
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, PlotFormat
+from experiments.medical_dataset_gen.reports.plot_rendering import (
+    set_axis_title,
+    set_figure_title,
+    title_aware_layout_top,
+)
 from experiments.medical_dataset_gen.reports.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
@@ -583,9 +588,9 @@ def _plot_delta_heatmap_panels(
             )
             cbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, extend='both')
             cbar.set_label(spec.colorbar_label)
-        fig.suptitle(title, y=0.985)
+        set_figure_title(figure=fig, title=title, y=0.985)
         fig.text(0.5, 0.018, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
-        fig.tight_layout(rect=(0, 0.055, 1, 0.955))
+        fig.tight_layout(rect=(0, 0.055, 1, title_aware_layout_top(titled_top=0.955)))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=180, bbox_inches='tight')
         return [output_path]
@@ -651,13 +656,13 @@ def _plot_delta_heatmap_panel_grid(
             left=0.10,
             right=0.985,
             bottom=_panel_grid_bottom_margin(active_panel_rows),
-            top=0.88,
+            top=title_aware_layout_top(titled_top=0.88, untitled_top=0.92),
             hspace=_panel_grid_hspace(nrows),
         )
         _add_panel_column_titles(fig=fig, axes=axes[0], specs=specs)
         for row_index, panel_row in enumerate(active_panel_rows):
             _add_panel_row_title(fig=fig, axes=axes[row_index], title=panel_row.label)
-        fig.suptitle(title, y=0.995)
+        set_figure_title(figure=fig, title=title, y=0.995)
         fig.text(0.5, 0.016, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=180, bbox_inches='tight')
@@ -718,14 +723,20 @@ def _plot_delta_heatmap_panel_grid_transposed(
                     )
                 )
                 if spec_index == 0:
-                    ax.set_title(panel_row.label, fontsize=10, fontweight='bold', pad=12)
+                    set_axis_title(
+                        axis=ax,
+                        title=panel_row.label,
+                        fontsize=10,
+                        fontweight='bold',
+                        pad=12,
+                    )
             colorbar_images.append(row_images[0])
 
         fig.subplots_adjust(
             left=0.105,
             right=0.93,
             bottom=0.19,
-            top=0.90,
+            top=title_aware_layout_top(titled_top=0.90, untitled_top=0.96),
             hspace=0.16,
             wspace=0.18,
         )
@@ -752,7 +763,7 @@ def _plot_delta_heatmap_panel_grid_transposed(
             )
             cbar.set_label(spec.colorbar_label, fontsize=8)
             cbar.ax.tick_params(labelsize=7)
-        fig.suptitle(title, y=0.975)
+        set_figure_title(figure=fig, title=title, y=0.975)
         fig.text(0.5, 0.018, footnote, ha='center', va='bottom', fontsize=8, color='#303030')
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output_path, dpi=300, bbox_inches='tight')
@@ -848,7 +859,7 @@ def _draw_delta_heatmap_axis(
         aspect='auto',
     )
     if show_title:
-        ax.set_title(spec.title)
+        set_axis_title(axis=ax, title=spec.title)
     ax.set_xticks(range(len(axis.column_tick_labels)))
     ax.set_xticklabels(
         axis.column_tick_labels if show_x_tick_labels else [''] * len(axis.column_tick_labels),

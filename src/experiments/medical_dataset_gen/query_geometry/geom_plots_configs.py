@@ -8,8 +8,12 @@ from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
 # Canonical geometry-plot names used by the CLI selector and plot dispatch.
 type GeomPlotName = Literal[
+    'candidate_pool_umap',
+    'candidate_pool_umap_with_legend',
     'cluster_quality_overview',
     'full_strategy_selection_overlay',
+    'pairwise_cosine_heatmap',
+    'query_cosine_heatmap',
     'query_overview_4panel',
     'strategy_overlay',
 ]
@@ -18,7 +22,16 @@ GEOM_PLOT_FILE_NAMES = set[GeomPlotName](get_literals(GeomPlotName))
 
 @dataclass(frozen=True, slots=True)
 class GeomPlotsSettings:
+    use_title: bool = False
     unselected_data_point_color: str = '#a1a1a1'
+
+    candidate_pool_umap_only_figure_size: tuple[float, float] = (6.4, 6.2)
+    candidate_pool_umap_figure_size: tuple[float, float] = (13.0, 5.6)
+    pairwise_cosine_figure_size: tuple[float, float] = (7.6, 6.8)
+    pairwise_cosine_cmap: str = 'coolwarm'
+    pairwise_cosine_vmin: float = -1.0
+    pairwise_cosine_vmax: float = 1.0
+    query_cosine_heatmap_figure_size: tuple[float, float] = (6.9, 6.2)
 
     background_outlier_label_id: str = 'background_clinical_cluster'
     background_outlier_role: str = 'background_outlier'

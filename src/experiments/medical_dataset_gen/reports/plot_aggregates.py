@@ -16,6 +16,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     practical_effect_threshold,
 )
 from experiments.medical_dataset_gen.reports.helpers import (
+    experiment_plot_label,
     float_or_none,
     ordered_embedding_models_for_rows,
     short_model_label,
@@ -28,6 +29,11 @@ from experiments.medical_dataset_gen.reports.models import (
 from experiments.medical_dataset_gen.reports.plot_diagnostics import (
     annotate_horizontal_values,
     family_color_for_row,
+)
+from experiments.medical_dataset_gen.reports.plot_rendering import (
+    set_axis_title,
+    set_figure_title,
+    title_aware_layout_top,
 )
 from experiments.medical_dataset_gen.reports.report_config import (
     AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
@@ -92,7 +98,10 @@ def plot_metric_budget_outcomes(
         ax.barh(positions, tied, left=better, color='#B8BEC8', label='Tie')
         left_worse = [first + second for first, second in zip(better, tied, strict=True)]
         ax.barh(positions, worse, left=left_worse, color='#C44E52', label='FacLoc < MMR')
-        ax.set_title('FacLoc-vs-MMR outcome profile by metric and retrieval budget')
+        set_axis_title(
+            axis=ax,
+            title='FacLoc-vs-MMR outcome profile by metric and retrieval budget',
+        )
         ax.set_xlabel('Share of experiment-k rows')
         ax.set_yticks(positions)
         ax.set_yticklabels(labels)
@@ -188,7 +197,11 @@ def plot_metric_family_delta_heatmap_low_budget(
             values=values,
             show_y_tick_labels=True,
         )
-        fig.suptitle('Low-budget metric deltas by experiment family', y=0.98)
+        set_figure_title(
+            figure=fig,
+            title='Low-budget metric deltas by experiment family',
+            y=0.98,
+        )
         fig.text(
             0.5,
             0.02,
@@ -200,7 +213,7 @@ def plot_metric_family_delta_heatmap_low_budget(
             fontsize=8,
             color='#303030',
         )
-        fig.tight_layout(rect=(0, 0.08, 1, 0.93))
+        fig.tight_layout(rect=(0, 0.08, 1, title_aware_layout_top(titled_top=0.93)))
         path = output_dir / f'metric_family_delta_heatmap_low_budget.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -289,12 +302,16 @@ def plot_metric_family_delta_heatmap_by_embedding_model(
                 show_titles=row_index == 0,
             )
             row_title_axes.append((axes, short_model_label(model)))
-        fig.suptitle('Low-budget metric deltas by experiment family and embedding model', y=1.04)
+        set_figure_title(
+            figure=fig,
+            title='Low-budget metric deltas by experiment family and embedding model',
+            y=1.04,
+        )
         fig.subplots_adjust(
             left=0.08,
             right=0.98,
             bottom=0.22,
-            top=0.82,
+            top=title_aware_layout_top(titled_top=0.82, untitled_top=0.94),
             hspace=0.86,
             wspace=0.38,
         )
@@ -382,8 +399,9 @@ def plot_metric_family_delta_heatmap_low_budget_best_embedding_model(
             values=values,
             show_y_tick_labels=True,
         )
-        fig.suptitle(
-            f'Low-budget metric deltas by experiment family for {short_model_label(best_model)}',
+        set_figure_title(
+            figure=fig,
+            title=f'Low-budget metric deltas by experiment family for {short_model_label(best_model)}',
             y=0.98,
         )
         fig.text(
@@ -397,7 +415,7 @@ def plot_metric_family_delta_heatmap_low_budget_best_embedding_model(
             fontsize=8,
             color='#303030',
         )
-        fig.tight_layout(rect=(0, 0.08, 1, 0.93))
+        fig.tight_layout(rect=(0, 0.08, 1, title_aware_layout_top(titled_top=0.93)))
         path = output_dir / f'metric_family_delta_heatmap_low_budget_best_emb_model.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -456,7 +474,11 @@ def plot_fcp_family_budget_heatmaps(
             values=values,
             show_y_tick_labels=True,
         )
-        fig.suptitle('FCP aggregation by experiment family and retrieval budget', y=0.98)
+        set_figure_title(
+            figure=fig,
+            title='FCP aggregation by experiment family and retrieval budget',
+            y=0.98,
+        )
         fig.text(
             0.5,
             0.02,
@@ -467,7 +489,7 @@ def plot_fcp_family_budget_heatmaps(
             fontsize=8,
             color='#303030',
         )
-        fig.tight_layout(rect=(0, 0.07, 1, 0.95))
+        fig.tight_layout(rect=(0, 0.07, 1, title_aware_layout_top(titled_top=0.95)))
         path = output_dir / f'fcp_family_budget_delta_heatmaps.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -553,15 +575,16 @@ def plot_fcp_family_budget_heatmaps_by_embedding_model(
                 show_titles=row_index == 0,
             )
             row_title_axes.append((axes, short_model_label(model)))
-        fig.suptitle(
-            'FCP aggregation by experiment family, retrieval budget, and embedding model',
+        set_figure_title(
+            figure=fig,
+            title='FCP aggregation by experiment family, retrieval budget, and embedding model',
             y=1.04,
         )
         fig.subplots_adjust(
             left=0.08,
             right=0.98,
             bottom=0.22,
-            top=0.82,
+            top=title_aware_layout_top(titled_top=0.82, untitled_top=0.94),
             hspace=0.86,
             wspace=0.38,
         )
@@ -595,7 +618,7 @@ def plot_budget_delta_columns(
     if not plot_rows:
         return []
     plot_rows = _budget_delta_grouped_rows(plot_rows, value_columns[0])
-    labels = [str(row.get('ShortExperiment') or row.get('Experiment')) for row in plot_rows]
+    labels = [experiment_plot_label(row) for row in plot_rows]
     parent_keys = [_parent_experiment_key(row) for row in plot_rows]
     colors = [family_color_for_row(row) for row in plot_rows]
     category_label = BUDGET_CATEGORY_LABELS[category]
@@ -625,10 +648,14 @@ def plot_budget_delta_columns(
                 colors=colors,
                 parent_keys=parent_keys,
             )
-            ax.set_title(title)
+            set_axis_title(axis=ax, title=title)
             ax.set_xlabel(f'{category_label} delta')
         _add_budget_delta_family_legend(fig=fig, rows=plot_rows)
-        fig.suptitle(f'{category_label} {spec.title_label} deltas by experiment', y=0.995)
+        set_figure_title(
+            figure=fig,
+            title=f'{category_label} {spec.title_label} deltas by experiment',
+            y=0.995,
+        )
         fig.text(
             0.5,
             0.018,
@@ -638,7 +665,10 @@ def plot_budget_delta_columns(
             fontsize=11,
             color='#303030',
         )
-        fig.tight_layout(rect=(0, 0.075, 1, 0.91))
+        fig.tight_layout(
+            # The remaining top margin accommodates the family legend, not a title.
+            rect=(0, 0.075, 1, title_aware_layout_top(titled_top=0.91)),
+        )
         path = output_dir / f'{spec.filename_token}_{category}_deltas_by_experiment.{plot_format}'
         fig.savefig(path, dpi=180)
         return [path]
@@ -725,7 +755,7 @@ def _draw_delta_heatmap_row(
             aspect='auto',
         )
         if show_titles:
-            ax.set_title(spec.title)
+            set_axis_title(axis=ax, title=spec.title)
         ax.set_xticks(range(len(column_tick_labels)))
         ax.set_xticklabels(column_tick_labels, rotation=35, ha='right')
         ax.set_yticks(range(len(row_tick_labels)))

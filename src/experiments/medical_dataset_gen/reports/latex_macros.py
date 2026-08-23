@@ -33,11 +33,17 @@ from experiments.medical_dataset_gen.reports.latex_tables import (
     _values,
     thesis_result_macros_path,
 )
+from experiments.medical_dataset_gen.reports.report_config import LOW_BUDGET_K
 from experiments.medical_dataset_gen.reports.wording_result_macros import (
     render_wording_result_macros,
 )
 
 type ReportRow = dict[str, object]
+
+
+def _mean(rows: Sequence[Mapping[str, object]], column: str) -> float | None:
+    values = _values(rows, column)
+    return sum(values) / len(values) if values else None
 
 
 def _geometry_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
@@ -61,6 +67,25 @@ def _geometry_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, s
         ),
         'ResultGeometryQwenMin': _fixed(min(qwen_rates) if qwen_rates else None, digits=3),
         'ResultGeometryQwenMax': _fixed(max(qwen_rates) if qwen_rates else None, digits=3),
+    }
+
+
+def _synthetic_artifact_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose the synthetic-text validity diagnostics cited in the thesis."""
+    duplicate_rates = _values(rows, 'ExactDuplicateChunkRate')
+    return {
+        'ResultArtifactDiagnosticDistributions': _integer(len(rows)),
+        'ResultArtifactDuplicateChunkRateMin': _tex_percent(
+            min(duplicate_rates) if duplicate_rates else None
+        ),
+        'ResultArtifactDuplicateChunkRateMax': _tex_percent(
+            max(duplicate_rates) if duplicate_rates else None
+        ),
+        'ResultArtifactWithinMinusBetweenJaccard': _fixed(
+            _mean(rows, 'WithinMinusBetweenJaccard'), digits=3
+        ),
     }
 
 
@@ -177,6 +202,92 @@ def _paired_suite_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[st
                 f'{prefix}MeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
                 f'{prefix}CiLow': _signed(row.get('CI95Low'), digits=3),
                 f'{prefix}CiHigh': _signed(row.get('CI95High'), digits=3),
+            }
+        )
+    return macros
+
+
+def _background_topology_endpoint_result_macros(
+    comparison_rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Generate reproducible endpoint values for the fixed-mass topology table."""
+    grouped_rows: dict[tuple[int, str], list[Mapping[str, object]]] = {}
+    for row in comparison_rows:
+        if (
+            row.get('ExperimentFamily') != 'background_variant'
+            or row.get('AnalysisBlocks') != 'background_topology'
+            or _float(row.get('k')) != LOW_BUDGET_K
+        ):
+            continue
+        distribution = str(row.get('Distribution') or '')
+        topology = distribution.rsplit('_', maxsplit=1)[-1]
+        clusters, separator, chunks = topology.partition('x')
+        if not separator or not clusters.isdecimal() or not chunks.isdecimal():
+            continue
+        grouped_rows.setdefault((int(clusters), distribution), []).append(row)
+
+    if len(grouped_rows) < 2:
+        return {}
+
+    endpoints = {
+        'Dispersed': max(grouped_rows),
+        'Compact': min(grouped_rows),
+    }
+    macros: dict[str, str] = {}
+    for endpoint, key in endpoints.items():
+        rows = grouped_rows[key]
+        prefix = f'ResultBackgroundTopology{endpoint}'
+        macros.update(
+            {
+                f'{prefix}MmrBackgroundOutlierRate': _tex_percent(
+                    _mean(rows, 'MMR_BackgroundOutlierRate')
+                ),
+                f'{prefix}FacLocBackgroundOutlierRate': _tex_percent(
+                    _mean(rows, 'FacLoc_BackgroundOutlierRate')
+                ),
+                f'{prefix}FacLocMmrFcpMeanDelta': _signed(
+                    _mean(rows, 'Delta_FacLoc_MMR_FCP'), digits=3
+                ),
+            }
+        )
+    return macros
+
+
+def _distribution_budget_result_macros(
+    comparison_rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose per-distribution results without coupling thesis tables to CSV rows.
+
+    The table values remain model-specific so a later multi-embedding report
+    cannot silently replace the Qwen thesis evidence with a pooled average.
+    """
+    grouped_rows: dict[tuple[str, str, int], list[Mapping[str, object]]] = {}
+    for row in comparison_rows:
+        model_token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        distribution = str(row.get('Distribution') or '')
+        k_value = _float(row.get('k'))
+        if model_token is None or not distribution or k_value is None:
+            continue
+        grouped_rows.setdefault((model_token, distribution, int(k_value)), []).append(row)
+
+    macros: dict[str, str] = {}
+    for (model_token, distribution, k_value), rows in grouped_rows.items():
+        prefix = f'Result{model_token}Distribution{_label_token(distribution)}K{k_value}'
+        mmr_near_miss_rate = _mean(rows, 'MMR_NearMissDistractorRate')
+        facloc_near_miss_rate = _mean(rows, 'FacLoc_NearMissDistractorRate')
+        macros.update(
+            {
+                f'{prefix}FacLocMmrFcpMeanDelta': _signed(
+                    _mean(rows, 'Delta_FacLoc_MMR_FCP'), digits=3
+                ),
+                f'{prefix}MmrNearMissDistractorRate': _tex_percent(mmr_near_miss_rate),
+                f'{prefix}FacLocNearMissDistractorRate': _tex_percent(facloc_near_miss_rate),
+                f'{prefix}NearMissReductionPp': _fixed(
+                    None
+                    if mmr_near_miss_rate is None or facloc_near_miss_rate is None
+                    else (mmr_near_miss_rate - facloc_near_miss_rate) * 100,
+                    digits=1,
+                ),
             }
         )
     return macros
@@ -348,6 +459,7 @@ def render_thesis_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
+    synthetic_artifact_rows: Sequence[Mapping[str, object]] = (),
     metric_summary_rows: Sequence[Mapping[str, object]] = (),
     metric_family_summary_rows: Sequence[Mapping[str, object]] = (),
     paired_suite_rows: Sequence[Mapping[str, object]] = (),
@@ -359,10 +471,13 @@ def render_thesis_result_macros(
     """Render scalar result macros imported by the thesis text."""
     macros = {
         **_geometry_result_macros(geometry_rows),
+        **_synthetic_artifact_result_macros(synthetic_artifact_rows),
         **_comparison_result_macros(comparison_rows, budget_rows),
         **_metric_budget_result_macros(metric_summary_rows),
         **_metric_family_result_macros(metric_family_summary_rows),
         **_paired_suite_result_macros(paired_suite_rows),
+        **_background_topology_endpoint_result_macros(comparison_rows),
+        **_distribution_budget_result_macros(comparison_rows),
         **_embedding_model_result_macros(embedding_summary_rows),
         **_embedding_low_budget_result_macros(comparison_rows, budget_rows),
         **_embedding_edge_case_result_macros(comparison_rows),
@@ -382,7 +497,12 @@ def render_thesis_result_macros(
         '',
     ]
     for name in sorted(macros):
-        lines.append(rf'\newcommand{{\{name}}}{{{macros[name]}}}')
+        if any(character.isdigit() for character in name):
+            # TeX control-word names end at digits. Defining numeric names through
+            # \csname keeps generated identifiers such as ``...K10...`` addressable.
+            lines.append(rf'\expandafter\def\csname {name}\endcsname{{{macros[name]}}}')
+        else:
+            lines.append(rf'\newcommand{{\{name}}}{{{macros[name]}}}')
     return '\n'.join(lines) + '\n'
 
 
@@ -408,7 +528,8 @@ def generate_exp_results_macros(
             geometry_rows=_read_rows(data_dir / 'geometry_filter_summary.csv'),
             comparison_rows=_read_rows(data_dir / 'comparison_by_k.csv'),
             budget_rows=_read_rows(data_dir / 'budget_strategy_summary.csv'),
-            lambda_safety_rows=_read_rows(data_dir / 'lambda_safety_summary.csv'),
+            lambda_safety_rows=_read_rows(data_dir / 'lambda_safety_summary.csv', required=False),
+            synthetic_artifact_rows=_read_rows(data_dir / 'synthetic_artifact_diagnostics.csv'),
             metric_summary_rows=_read_rows(data_dir / 'metric_aggregate_summary.csv'),
             metric_family_summary_rows=_read_rows(data_dir / 'metric_family_summary.csv'),
             paired_suite_rows=_read_rows(

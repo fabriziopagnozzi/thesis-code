@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -46,10 +47,20 @@ def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
         'Experiment': record.name,
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
+        'DistributionBase': record.distribution_base_id,
         'ShortDistribution': short_token(record.distribution_id),
         'ExperimentFamily': record.family_id,
         'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
+        'ArtifactOrigin': record.origin,
+        'DatasetSchemaVersion': record.dataset_schema_version,
+        'EvaluationSchemaVersion': record.evaluation_schema_version,
+        'IncludeInCausalSummaries': record.include_in_causal_summaries,
+        'IncludeInFamilySummary': record.include_in_family_summary,
+        'SuiteTags': '|'.join(record.tags),
+        'AnalysisBlocks': '|'.join(record.analysis_blocks),
+        'AnalysisTier': record.analysis_tier,
+        'RunProfileFactors': json_scalar(record.run_profile_factors),
         'IsSubexperiment': record.is_subexperiment,
         'ConfigLoaded': record.cfg is not None,
         'ConfigError': record.config_error,
@@ -95,7 +106,14 @@ def dataset_distribution_row(
         warnings.append(f'{record.name}: qrels missing at {qrels_path}')
         return base
 
-    required_columns = ['query_id', 'cluster_role', 'facet_id', 'is_gold', 'distractor_type']
+    required_columns = [
+        'query_id',
+        'cluster_id',
+        'cluster_role',
+        'facet_id',
+        'is_gold',
+        'distractor_type',
+    ]
     try:
         qrels = pl.read_parquet(qrels_path, columns=required_columns)
     except Exception as exc:
@@ -147,9 +165,61 @@ def dataset_distribution_row(
             'BackgroundOutlierPercentage': ratio(background_count, pool_size),
             'PrimaryDominanceRatio': primary_dominance_ratio(summary),
             'DistributionCategory': distribution_category(summary),
+            'RealizedPurityMean': ratio(gold_count, pool_size),
+            'RealizedGoldMassVectorJson': json.dumps(
+                [
+                    summary.get('DominantPrimaryGoldCountMean'),
+                    summary.get('OtherPrimaryGoldCountMean'),
+                    summary.get('SecondaryGoldCountMean'),
+                    summary.get('NicheGoldCountMean'),
+                ]
+            ),
+            'RealizedNearMissTypeMassJson': _mean_near_miss_type_masses(qrels),
+            'RealizedClusterTopologyJson': _mean_cluster_topology(qrels),
         }
     )
     return base
+
+
+def _mean_near_miss_type_masses(qrels: pl.DataFrame) -> str:
+    non_gold = qrels.filter(
+        (~pl.col('is_gold').fill_null(False))
+        & (pl.col('cluster_role').fill_null('') != 'background_outlier')
+    )
+    if non_gold.is_empty():
+        return '{}'
+    counts = non_gold.group_by('query_id', 'distractor_type').len()
+    means = counts.group_by('distractor_type').agg(pl.col('len').mean().alias('mean_mass'))
+    payload = {
+        str(row['distractor_type']): float(row['mean_mass'])
+        for row in means.iter_rows(named=True)
+        if row['distractor_type'] is not None
+    }
+    return json.dumps(payload, sort_keys=True)
+
+
+def _mean_cluster_topology(qrels: pl.DataFrame) -> str:
+    clusters = qrels.group_by('query_id', 'cluster_role', 'cluster_id').len()
+    if clusters.is_empty():
+        return '{}'
+    # First aggregate within query.  Averaging directly over clusters would
+    # make query instances with more clusters contribute more weight.
+    per_query = clusters.group_by('query_id', 'cluster_role').agg(
+        pl.len().alias('clusters_per_query'),
+        pl.col('len').mean().alias('chunks_per_cluster'),
+    )
+    summary = per_query.group_by('cluster_role').agg(
+        pl.col('clusters_per_query').mean().alias('clusters_per_query'),
+        pl.col('chunks_per_cluster').mean().alias('chunks_per_cluster'),
+    )
+    payload = {
+        str(row['cluster_role']): {
+            'clusters_per_query': float(row['clusters_per_query']),
+            'chunks_per_cluster': float(row['chunks_per_cluster']),
+        }
+        for row in summary.iter_rows(named=True)
+    }
+    return json.dumps(payload, sort_keys=True)
 
 
 def geometry_filter_row(
@@ -195,6 +265,11 @@ def geometry_filter_row(
         'avg_cos_topk',
         'avg_cos_facloc',
         'jaccard_topk_facloc',
+        'query_to_gold_mean',
+        'query_to_near_miss_mean',
+        'query_to_background_outlier_mean',
+        'gold_minus_near_miss_similarity_margin',
+        'gold_minus_background_outlier_similarity_margin',
     ):
         if column in columns:
             base[f'{title_token(column)}Mean'] = series_mean(geometry[column])
@@ -250,7 +325,16 @@ def selected_strategy_rows(
                 'k': int_or_none(row.get('k')),
                 'lam': lam,
                 'lambda_norm': lambda_norm(record, strategy, lam, stats),
+                'CandidatePoolMass': (
+                    record.factors.get('pool_mass') if record.factors is not None else None
+                ),
             }
+        )
+        pool_mass = out['CandidatePoolMass']
+        out['k_over_pool'] = (
+            float(out['k']) / float(pool_mass)
+            if isinstance(out['k'], int) and isinstance(pool_mass, int | float) and pool_mass
+            else None
         )
         for metric in EVALUATION_METRICS:
             if metric in row:

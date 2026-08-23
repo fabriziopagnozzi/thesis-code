@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 import polars as pl
@@ -79,6 +80,7 @@ def _embed_queries_only(
 
     query_file = pq.ParquetFile(paths.table_path('queries'))
     n_queries = query_file.metadata.num_rows
+    query_id_dtype = _unicode_dtype_for_parquet_id(paths.table_path('queries'), 'query_id')
     bucket_size = max(cfg.embeddings.batch_size * 32, 125_000)
     chunk_vectors = np.load(paths.embeddings_paths('chunk_vectors'), mmap_mode='r')
 
@@ -111,7 +113,7 @@ def _embed_queries_only(
         query_ids = np.lib.format.open_memmap(
             paths.embeddings_paths('query_ids'),
             mode='w+',
-            dtype='U32',
+            dtype=query_id_dtype,
             shape=(n_queries,),
         )
         query_written = _fill_embedding_memmaps(
@@ -164,6 +166,8 @@ def _embed_sentence_transformers_streaming(
     query_file = pq.ParquetFile(paths.table_path('queries'))
     n_chunks = chunk_file.metadata.num_rows
     n_queries = query_file.metadata.num_rows
+    chunk_id_dtype = _unicode_dtype_for_parquet_id(paths.table_path('chunk_documents'), 'chunk_id')
+    query_id_dtype = _unicode_dtype_for_parquet_id(paths.table_path('queries'), 'query_id')
     bucket_size = max(cfg.embeddings.batch_size * 32, 125_000)
 
     embedder = Embedder(
@@ -202,13 +206,13 @@ def _embed_sentence_transformers_streaming(
         chunk_ids = np.lib.format.open_memmap(
             paths.embeddings_paths('chunk_ids'),
             mode='w+',
-            dtype='U32',
+            dtype=chunk_id_dtype,
             shape=(n_chunks,),
         )
         query_ids = np.lib.format.open_memmap(
             paths.embeddings_paths('query_ids'),
             mode='w+',
-            dtype='U32',
+            dtype=query_id_dtype,
             shape=(n_queries,),
         )
 
@@ -420,6 +424,17 @@ def _chunk_documents_for_embedding_cache(paths: MedicalDatasetGenPaths) -> pl.Da
             pl.Series('text_sha256', [text_sha256(str(value)) for value in docs['text'].to_list()])
         )
     return docs.select('chunk_id', 'text', 'text_sha256').with_row_index('_row_idx')
+
+
+def _unicode_dtype_for_parquet_id(path: str | Path, column: str) -> np.dtype[np.str_]:
+    max_len = (
+        pl.scan_parquet(path)
+        .select(pl.col(column).cast(pl.String).str.len_chars().max())
+        .collect()
+        .item()
+    )
+    width = max(1, int(max_len or 1))
+    return np.dtype(f'U{width}')
 
 
 def _fill_embedding_memmaps(

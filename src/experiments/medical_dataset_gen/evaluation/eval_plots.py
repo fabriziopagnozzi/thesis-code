@@ -1771,7 +1771,7 @@ def _is_nonfinite_float(value: float) -> bool:
 def _finite_float_or_none(value: object) -> float | None:
     try:
         numeric_value = float(value)  # type:ignore
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         return None
     return None if _is_nonfinite_float(numeric_value) else numeric_value
 

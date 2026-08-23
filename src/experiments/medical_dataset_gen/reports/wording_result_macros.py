@@ -9,8 +9,13 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DISTRIBUTION_EXPERIMENT_FAMILIES,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
+from experiments.medical_dataset_gen.reports.analysis_scope import INTERACTION_FAMILY_ID
+from experiments.medical_dataset_gen.reports.helpers import (
+    family_balanced_mean,
+    ordered_embedding_models,
+)
 from experiments.medical_dataset_gen.reports.report_config import (
+    LOW_BUDGET_K,
     PREFERRED_EMBEDDING_MODEL_ORDER,
     REPORT_METRIC_SPECS,
 )
@@ -33,6 +38,11 @@ FACTOR_CONTRASTS: tuple[FactorContrast, ...] = (
     FactorContrast('ChunkTextMode', 'simple', 'hardened'),
 )
 _PREFERRED_MODEL_TOKENS = dict(zip(PREFERRED_EMBEDDING_MODEL_ORDER, ('Bge', 'Qwen'), strict=True))
+# Crossed interaction cells answer a separate factorial question. They are
+# reported independently and do not belong to the wording-comparison grid.
+WORDING_EXPERIMENT_FAMILIES = tuple(
+    family for family in DISTRIBUTION_EXPERIMENT_FAMILIES if family != INTERACTION_FAMILY_ID
+)
 
 
 def _effective_embedding_models(
@@ -70,14 +80,14 @@ def render_wording_result_macros(
         rows=low_rows,
         embedding_models=embedding_models,
     )
-    core_rows = [
+    candidate_rows = [
         row
         for row in low_rows
         if row.get('EmbeddingModel') in effective_embedding_models
-        and row.get('ExperimentFamily') in DISTRIBUTION_EXPERIMENT_FAMILIES
+        and row.get('ExperimentFamily') in WORDING_EXPERIMENT_FAMILIES
         and _wording_key(row) is not None
     ]
-    if not core_rows:
+    if not candidate_rows:
         if require_complete_grid:
             raise ValueError('No fully typed low-budget wording rows were found in the report.')
         if warnings is not None:
@@ -87,13 +97,24 @@ def render_wording_result_macros(
             )
         return {}
 
-    grid_error = _wording_grid_error(core_rows, embedding_models=effective_embedding_models)
+    core_rows, grid_error = _global_low_budget_wording_grid(
+        candidate_rows,
+        embedding_models=effective_embedding_models,
+    )
     if grid_error is not None:
         if require_complete_grid:
             raise ValueError(grid_error)
         if warnings is not None:
             warnings.append(f'Wording result macros were omitted: {grid_error}')
         return {}
+
+    excluded_rows = len(candidate_rows) - len(core_rows)
+    if excluded_rows and warnings is not None:
+        warnings.append(
+            'Wording result macros use the global '
+            f'k={LOW_BUDGET_K} low-budget grid and exclude {excluded_rows} row(s) from '
+            'alternative k values.'
+        )
 
     macros = _grid_metadata_macros(
         core_rows=core_rows,
@@ -120,6 +141,29 @@ def render_wording_result_macros(
         sum(_numeric(row, 'Delta_FacLoc_MMR_Precision') > 0.0 for row in core_rows)
     )
     return macros
+
+
+def _global_low_budget_wording_grid(
+    rows: Sequence[ReportRow],
+    *,
+    embedding_models: Sequence[str],
+) -> tuple[list[ReportRow], str | None]:
+    """Return the complete wording grid at the shared low-budget value.
+
+    Some reports retain legacy per-experiment low-budget labels. Restricting the
+    wording macros to ``LOW_BUDGET_K`` keeps their comparison population
+    interpretable and aligned with the global reporting rule.
+    """
+    rows_at_low_budget = [row for row in rows if _integer_value(row.get('k')) == LOW_BUDGET_K]
+    if not rows_at_low_budget:
+        return (
+            [],
+            f'The wording macro grid contains no rows at the global low budget k={LOW_BUDGET_K}.',
+        )
+    return rows_at_low_budget, _wording_grid_error(
+        rows_at_low_budget,
+        embedding_models=embedding_models,
+    )
 
 
 def _wording_grid_error(
@@ -203,10 +247,10 @@ def _wording_grid_error(
             f'triplet/model slice. Mismatched slices: {"; ".join(mismatched_slices)}.'
         )
     represented_families = {family for family, _ in reference_variants}
-    if represented_families != set(DISTRIBUTION_EXPERIMENT_FAMILIES):
+    if represented_families != set(WORDING_EXPERIMENT_FAMILIES):
         return (
             f'The wording macro grid has families {sorted(represented_families)}, '
-            f'expected {sorted(DISTRIBUTION_EXPERIMENT_FAMILIES)}.'
+            f'expected {sorted(WORDING_EXPERIMENT_FAMILIES)}.'
         )
     return None
 
@@ -264,7 +308,7 @@ def _grid_metadata_macros(
         row
         for row in all_low_rows
         if row.get('EmbeddingModel') not in embedding_models
-        and row.get('ExperimentFamily') in DISTRIBUTION_EXPERIMENT_FAMILIES
+        and row.get('ExperimentFamily') in WORDING_EXPERIMENT_FAMILIES
         and _wording_key(row) is not None
     ]
     return {
@@ -334,7 +378,7 @@ def _factor_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
 
 def _family_chunk_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
     macros: dict[str, str] = {}
-    for family in DISTRIBUTION_EXPERIMENT_FAMILIES:
+    for family in WORDING_EXPERIMENT_FAMILIES:
         family_rows = [row for row in rows if row.get('ExperimentFamily') == family]
         if not family_rows:
             continue
@@ -365,7 +409,7 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
             f'Family{_macro_token(family)}': [
                 row for row in rows if row.get('ExperimentFamily') == family
             ]
-            for family in DISTRIBUTION_EXPERIMENT_FAMILIES
+            for family in WORDING_EXPERIMENT_FAMILIES
         }
     )
     for scope_token, scope_rows in scopes.items():
@@ -437,10 +481,63 @@ def _geometry_macros(
     for model in embedding_models:
         token = _model_token(model)
         model_rows = [row for row in matching_rows if row.get('EmbeddingModel') == model]
-        macros[f'ResultWordingGeometry{token}PassRateMean'] = _fixed(
-            _column_mean(model_rows, 'GeometryPassRate'), digits=3
+        prefix = f'ResultWordingGeometry{token}'
+        pass_rates = [_numeric(row, 'GeometryPassRate') for row in model_rows]
+        macros.update(
+            {
+                f'{prefix}PassRateMean': _fixed(
+                    _column_mean(model_rows, 'GeometryPassRate'), digits=3
+                ),
+                f'{prefix}PassRateMin': _fixed(min(pass_rates), digits=3),
+                f'{prefix}PassRateMax': _fixed(max(pass_rates), digits=3),
+                f'{prefix}FacetCompletenessRateMean': _fixed(
+                    1.0 - _column_mean(model_rows, 'FailMissingFacetRate'), digits=3
+                ),
+                f'{prefix}PrimaryAxisStressPassRateMean': _fixed(
+                    1.0 - _column_mean(model_rows, 'FailWeakPrimaryAxisDominanceRate'),
+                    digits=3,
+                ),
+                f'{prefix}EarlyFacetCoverageStressPassRateMean': _fixed(
+                    1.0
+                    - _column_mean(
+                        model_rows,
+                        'FailExcessStressHorizonFacetCoverageRate',
+                    ),
+                    digits=3,
+                ),
+                f'{prefix}QueryToGoldSimilarityMean': _fixed(
+                    _available_geometry_mean(model_rows, 'QueryToGoldMeanMean'), digits=3
+                ),
+                f'{prefix}QueryToNearMissSimilarityMean': _fixed(
+                    _available_geometry_mean(model_rows, 'QueryToNearMissMeanMean'),
+                    digits=3,
+                ),
+                f'{prefix}QueryToBackgroundSimilarityMean': _fixed(
+                    _available_geometry_mean(
+                        model_rows,
+                        'QueryToBackgroundOutlierMeanMean',
+                    ),
+                    digits=3,
+                ),
+            }
         )
+        grouped_by_config: dict[str, list[ReportRow]] = {}
+        for row in model_rows:
+            config_token = _macro_token('_'.join(_required_wording_key(row)))
+            grouped_by_config.setdefault(config_token, []).append(row)
+        for config_token, config_rows in grouped_by_config.items():
+            macros[f'{prefix}Config{config_token}PassRateMean'] = _fixed(
+                _column_mean(config_rows, 'GeometryPassRate'), digits=3
+            )
     return macros
+
+
+def _available_geometry_mean(rows: Sequence[ReportRow], column: str) -> float:
+    """Family-balance a diagnostic while omitting cells where its component is absent."""
+    value = family_balanced_mean(rows, column, family_field='ExperimentFamily')
+    if value is None:
+        raise ValueError(f'Cannot calculate {column} from the core geometry grid.')
+    return value
 
 
 def _fcp_summary_macros(prefix: str, rows: Sequence[ReportRow]) -> dict[str, str]:
@@ -496,6 +593,16 @@ def _numeric(row: ReportRow, column: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise ValueError(f'Expected numeric {column}, got {value!r}.')
     return float(value)
+
+
+def _integer_value(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return None
 
 
 def _integer(value: int | float) -> str:

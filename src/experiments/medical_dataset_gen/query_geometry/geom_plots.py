@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from textwrap import fill
 from typing import Any, cast
@@ -19,6 +21,12 @@ from experiments.medical_dataset_gen.query_geometry.schemas import (
 )
 from experiments.medical_dataset_gen.retrieval.retrieval_utils import select_indices
 from experiments.medical_dataset_gen.retrieval.schemas import RetrievalStrategy
+
+
+@dataclass(frozen=True, slots=True)
+class CosineHeatmapGroup:
+    label: str
+    indices: tuple[int, ...]
 
 
 def plot_strategy_overlay(artifact: GeometryArtifact, out_dir: Path) -> None:
@@ -315,6 +323,251 @@ def plot_query_overview_4panel(
     write_query_chunk_pools_txt(artifact, out_dir)
 
 
+def plot_candidate_pool_umap_with_legend(
+    artifact: GeometryArtifact,
+    out_dir: Path,
+) -> None:
+    """Render the role-coded candidate pool with a dedicated adjacent legend."""
+    import matplotlib.pyplot as plt
+
+    fig, (ax_map, ax_legend) = plt.subplots(  # type: ignore[attr-defined]
+        ncols=2,
+        figsize=SETTINGS.candidate_pool_umap_figure_size,
+        gridspec_kw={'width_ratios': (1.0, 1.35)},
+    )
+    _plot_query_map_ax(
+        ax_map,
+        artifact,
+        include_title_prefix=False,
+        show_title=SETTINGS.use_title,
+    )
+    if artifact.reduction_method in {'umap', 'pca_umap'}:
+        ax_map.set_xlabel('UMAP dimension 1')
+        ax_map.set_ylabel('UMAP dimension 2')
+    ax_map.set_box_aspect(1)
+
+    legend_handles = _selection_legend_handles([ax_map])
+    legend, legend_labels = _draw_selection_legend_panel(
+        ax_legend,
+        artifact,
+        legend_handles,
+        title='Legend' if SETTINGS.use_title else None,
+        fontsize=SETTINGS.query_overview_legend_font_size,
+        include_gold_chunk_counts=True,
+    )
+    fig.tight_layout(pad=0.35, w_pad=0.8)
+    _style_legend_text(
+        legend,
+        artifact,
+        legend_labels,
+        fontsize=SETTINGS.query_overview_legend_font_size,
+    )
+    fig.savefig(
+        out_dir / 'candidate_pool_umap_with_legend.png',
+        dpi=180,
+        bbox_inches='tight',
+        pad_inches=0.03,
+    )
+    plt.close(fig)
+
+
+def plot_candidate_pool_umap(
+    artifact: GeometryArtifact,
+    out_dir: Path,
+) -> None:
+    """Render a tightly cropped role-coded map for an external shared legend."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=SETTINGS.candidate_pool_umap_only_figure_size)  # type: ignore[attr-defined]
+    _plot_query_map_ax(
+        ax,
+        artifact,
+        include_title_prefix=False,
+        show_title=SETTINGS.use_title,
+        hollow_background_markers=True,
+    )
+    if artifact.reduction_method in {'umap', 'pca_umap'}:
+        ax.set_xlabel('UMAP dimension 1')
+        ax.set_ylabel('UMAP dimension 2')
+    ax.set_box_aspect(1)
+    fig.tight_layout(pad=0.25)
+    fig.savefig(
+        out_dir / 'candidate_pool_umap.png',
+        dpi=180,
+        bbox_inches='tight',
+        pad_inches=0.03,
+    )
+    plt.close(fig)
+
+
+def plot_pairwise_cosine_heatmap(
+    artifact: GeometryArtifact,
+    out_dir: Path,
+) -> None:
+    """Render original-space pairwise cosine similarity in semantic block order."""
+    import matplotlib.pyplot as plt
+
+    groups = _pairwise_cosine_heatmap_groups(artifact)
+    order = np.array([index for group in groups for index in group.indices], dtype=np.intp)
+    if not len(order):
+        return
+    ordered_similarity = np.clip(
+        artifact.sim_matrix[np.ix_(order, order)],
+        SETTINGS.pairwise_cosine_vmin,
+        SETTINGS.pairwise_cosine_vmax,
+    )
+
+    fig, ax = plt.subplots(figsize=SETTINGS.pairwise_cosine_figure_size)  # type: ignore[attr-defined]
+    image = ax.imshow(
+        ordered_similarity,
+        cmap=SETTINGS.pairwise_cosine_cmap,
+        vmin=SETTINGS.pairwise_cosine_vmin,
+        vmax=SETTINGS.pairwise_cosine_vmax,
+        interpolation='nearest',
+        aspect='equal',
+    )
+    centers, boundaries = _heatmap_group_centers_and_boundaries(groups)
+    labels = [group.label for group in groups]
+    ax.set_xticks(centers)
+    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=7)
+    ax.set_yticks(centers)
+    ax.set_yticklabels(labels, fontsize=7)
+    for boundary in boundaries:
+        ax.axhline(boundary, color='white', linewidth=0.7, alpha=0.9)
+        ax.axvline(boundary, color='white', linewidth=0.7, alpha=0.9)
+    ax.set_xlabel('Candidate chunks grouped by evidence role')
+    ax.set_ylabel('Candidate chunks grouped by evidence role')
+    colorbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.035)
+    colorbar.set_label('Pairwise cosine similarity')
+    fig.tight_layout(pad=0.35)
+    fig.savefig(
+        out_dir / 'pairwise_cosine_heatmap.png',
+        dpi=180,
+        bbox_inches='tight',
+        pad_inches=0.03,
+    )
+    plt.close(fig)
+
+
+def plot_query_cosine_heatmap(
+    artifact: GeometryArtifact,
+    out_dir: Path,
+) -> None:
+    """Render the overview's query-cosine view as a standalone UMAP panel."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=SETTINGS.query_cosine_heatmap_figure_size)  # type: ignore[attr-defined]
+    similarity_points = _plot_query_similarity_map_ax(
+        ax,
+        artifact,
+        include_title_prefix=False,
+        show_title=SETTINGS.use_title,
+        hollow_background_markers=True,
+    )
+    if artifact.reduction_method in {'umap', 'pca_umap'}:
+        ax.set_xlabel('UMAP dimension 1')
+        ax.set_ylabel('UMAP dimension 2')
+    ax.set_box_aspect(1)
+    fig.colorbar(
+        similarity_points,
+        ax=ax,
+        fraction=0.05,
+        pad=0.025,
+        label='Query--chunk cosine similarity',
+    )
+    fig.tight_layout(pad=0.25)
+    fig.savefig(
+        out_dir / 'query_cosine_heatmap.png',
+        dpi=180,
+        bbox_inches='tight',
+        pad_inches=0.03,
+    )
+    plt.close(fig)
+
+
+def _pairwise_cosine_heatmap_groups(
+    artifact: GeometryArtifact,
+) -> list[CosineHeatmapGroup]:
+    facet_ids = _legend_ordered_facet_ids(artifact)
+    groups: list[CosineHeatmapGroup] = []
+    used_indices: set[int] = set()
+
+    for position, facet_id in enumerate(facet_ids, start=1):
+        indices = _sorted_heatmap_indices(
+            artifact,
+            (
+                index
+                for index in range(len(artifact.candidate_chunk_ids))
+                if artifact.is_gold[index] and artifact.label_ids[index] == facet_id
+            ),
+        )
+        _append_heatmap_group(groups, used_indices, f'G{position}', indices)
+
+    for position, facet_id in enumerate(facet_ids, start=1):
+        indices = _sorted_heatmap_indices(
+            artifact,
+            (
+                index
+                for index in range(len(artifact.candidate_chunk_ids))
+                if not artifact.is_gold[index]
+                and not _is_background_outlier_point(artifact, index)
+                and _target_facet_id_for_index(artifact, index) == facet_id
+            ),
+        )
+        _append_heatmap_group(groups, used_indices, f'NM→G{position}', indices)
+
+    background_by_cluster: dict[str, list[int]] = defaultdict(list)
+    for index in range(len(artifact.candidate_chunk_ids)):
+        if _is_background_outlier_point(artifact, index):
+            cluster_id = _cluster_id_for_index(artifact, index) or 'unassigned'
+            background_by_cluster[cluster_id].append(index)
+    for position, cluster_id in enumerate(sorted(background_by_cluster), start=1):
+        indices = _sorted_heatmap_indices(artifact, background_by_cluster[cluster_id])
+        _append_heatmap_group(groups, used_indices, f'BG{position}', indices)
+
+    remaining = _sorted_heatmap_indices(
+        artifact,
+        (index for index in range(len(artifact.candidate_chunk_ids)) if index not in used_indices),
+    )
+    _append_heatmap_group(groups, used_indices, 'Other', remaining)
+    return groups
+
+
+def _sorted_heatmap_indices(
+    artifact: GeometryArtifact,
+    indices: Iterable[int],
+) -> tuple[int, ...]:
+    return tuple(sorted(indices, key=lambda index: artifact.candidate_chunk_ids[index]))
+
+
+def _append_heatmap_group(
+    groups: list[CosineHeatmapGroup],
+    used_indices: set[int],
+    label: str,
+    indices: tuple[int, ...],
+) -> None:
+    if not indices:
+        return
+    groups.append(CosineHeatmapGroup(label=label, indices=indices))
+    used_indices.update(indices)
+
+
+def _heatmap_group_centers_and_boundaries(
+    groups: list[CosineHeatmapGroup],
+) -> tuple[list[float], list[float]]:
+    total = sum(len(group.indices) for group in groups)
+    centers: list[float] = []
+    boundaries: list[float] = []
+    start = 0
+    for group in groups:
+        stop = start + len(group.indices)
+        centers.append((start + stop - 1) / 2)
+        if stop < total:
+            boundaries.append(stop - 0.5)
+        start = stop
+    return centers, boundaries
+
+
 def write_query_chunk_pools_txt(artifact: GeometryArtifact, out_dir: Path) -> None:
     out_path = out_dir / 'query_chunk_pools.txt'
     out_path.write_text(_query_chunk_pools_text(artifact))
@@ -520,12 +773,13 @@ def _draw_selection_legend_panel(
     artifact: GeometryArtifact,
     legend_handles: dict[str, Any],
     *,
-    title: str = 'Legend',
+    title: str | None = 'Legend',
     fontsize: int = 7,
     include_gold_chunk_counts: bool = False,
 ) -> tuple[Any, list[str]]:
     ax.axis('off')
-    ax.set_title(title, fontsize=9)
+    if title is not None:
+        ax.set_title(title, fontsize=9)
     legend_entries = _display_legend_entries(artifact, legend_handles)
     legend = ax.legend(
         [handle for _, handle in legend_entries],
@@ -1333,7 +1587,12 @@ def _handle_color(handle: Any) -> Any:
 
 
 def _plot_query_map_ax(
-    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
+    ax: Any,
+    artifact: GeometryArtifact,
+    *,
+    include_title_prefix: bool = True,
+    show_title: bool = True,
+    hollow_background_markers: bool = False,
 ) -> None:
     palette = label_palette(artifact)
     label_groups = _label_groups(artifact)
@@ -1363,12 +1622,14 @@ def _plot_query_map_ax(
         artifact,
         palette=palette,
         label_groups=label_groups,
+        hollow_markers=hollow_background_markers,
     )
     draw_query_marker(ax, artifact)
     title = (
         f'Candidate-pool map ({artifact.reduction_method}, n={len(artifact.candidate_chunk_ids)})'
     )
-    ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
+    if show_title:
+        ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
     ax.set_xlabel('dim 1')
     ax.set_ylabel('dim 2')
     _apply_embedding_limits(ax, artifact)
@@ -1376,7 +1637,12 @@ def _plot_query_map_ax(
 
 
 def _plot_query_similarity_map_ax(
-    ax: Any, artifact: GeometryArtifact, *, include_title_prefix: bool = True
+    ax: Any,
+    artifact: GeometryArtifact,
+    *,
+    include_title_prefix: bool = True,
+    show_title: bool = True,
+    hollow_background_markers: bool = False,
 ) -> Any:
     return _plot_query_similarity_points(
         ax=ax,
@@ -1388,6 +1654,8 @@ def _plot_query_similarity_map_ax(
         x_label='dim 1',
         y_label='dim 2',
         include_title_prefix=include_title_prefix,
+        show_title=show_title,
+        hollow_background_markers=hollow_background_markers,
     )
 
 
@@ -1402,7 +1670,12 @@ def _plot_query_similarity_points(
     x_label: str,
     y_label: str,
     include_title_prefix: bool,
+    show_title: bool = True,
+    hollow_background_markers: bool = False,
 ) -> Any:
+    import matplotlib
+    from matplotlib.colors import Normalize
+
     order = np.arange(len(artifact.candidate_chunk_ids))
     plot_coords = coords[order]
     plot_sims = sim_to_query[order]
@@ -1416,6 +1689,22 @@ def _plot_query_similarity_points(
         first_idx = indices[0]
         marker = _label_marker(artifact, first_idx)
         if _is_background_outlier_point(artifact, first_idx):
+            if hollow_background_markers:
+                color_map = cast(Any, matplotlib).colormaps['viridis']
+                normalization = Normalize(vmin=vmin, vmax=vmax)
+                ax.scatter(
+                    plot_coords[idx, 0],
+                    plot_coords[idx, 1],
+                    facecolors='none',
+                    edgecolors=color_map(normalization(plot_sims[idx])),
+                    marker='o',
+                    s=SETTINGS.background_outlier_similarity_map_marker_size,
+                    alpha=0.96,
+                    linewidths=1.1,
+                    zorder=5,
+                    label=label,
+                )
+                continue
             points = _scatter_circled_x(
                 ax,
                 plot_coords[idx, 0],
@@ -1455,7 +1744,8 @@ def _plot_query_similarity_points(
     if points is None:
         points = ax.scatter([], [], c=[], cmap='viridis', vmin=vmin, vmax=vmax)
     _draw_query_marker_at(ax, query_coord)
-    ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
+    if show_title:
+        ax.set_title(_axis_title(artifact, title, include_title_prefix=include_title_prefix))
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     _apply_coord_limits(ax, coords, query_coord)
@@ -1684,23 +1974,42 @@ def _plot_background_outliers(
     palette: dict[str, Any] | None,
     label_groups: dict[str, list[int]],
     fallback_color: str | None = None,
+    hollow_markers: bool = False,
 ) -> None:
     coords = artifact.coords
     for label, indices in label_groups.items():
         first_idx = indices[0]
         if not _is_background_outlier_point(artifact, first_idx):
             continue
-        _scatter_circled_x(
-            ax,
-            coords[indices, 0],
-            coords[indices, 1],
-            color=(palette or {}).get(label, fallback_color or SETTINGS.background_outlier_color),
-            s=SETTINGS.background_outlier_map_marker_size,
-            alpha=0.95,
-            label=label,
-            linewidth=0.75,
-            zorder=5,
+        color = (palette or {}).get(
+            label,
+            fallback_color or SETTINGS.background_outlier_color,
         )
+        if hollow_markers:
+            ax.scatter(
+                coords[indices, 0],
+                coords[indices, 1],
+                s=SETTINGS.background_outlier_map_marker_size,
+                facecolors='none',
+                edgecolors=color,
+                marker='o',
+                alpha=0.95,
+                label=label,
+                linewidths=1.0,
+                zorder=5,
+            )
+        else:
+            _scatter_circled_x(
+                ax,
+                coords[indices, 0],
+                coords[indices, 1],
+                color=color,
+                s=SETTINGS.background_outlier_map_marker_size,
+                alpha=0.95,
+                label=label,
+                linewidth=0.75,
+                zorder=5,
+            )
 
 
 def _plot_background_outliers_for_selection(

@@ -242,14 +242,14 @@ def _materialize_plan(
         is_primary = axis == primary_axis
         is_dominant = is_primary and cohort_id == selected_subgroup_id
         is_niche = index in niche_indices
-        target = (
-            cfg.generation.chunk_pools.dominant_primary.size
+        pool_cfg = (
+            cfg.generation.chunk_pools.dominant_primary
             if is_dominant
-            else cfg.generation.chunk_pools.other_primary.size
+            else cfg.generation.chunk_pools.other_primary
             if is_primary
-            else cfg.generation.chunk_pools.niche.size
+            else cfg.generation.chunk_pools.niche
             if is_niche
-            else cfg.generation.chunk_pools.secondary.size
+            else cfg.generation.chunk_pools.secondary
         )
         facets.append(
             QueryPlanFacet(
@@ -273,7 +273,7 @@ def _materialize_plan(
                     if is_niche
                     else 'secondary_gold'
                 ),
-                target_gold_chunks=target,
+                target_gold_chunks=int(pool_cfg.size or 0),
                 priority='primary' if is_primary else 'secondary',
             )
         )

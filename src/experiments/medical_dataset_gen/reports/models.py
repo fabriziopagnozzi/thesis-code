@@ -58,6 +58,9 @@ class CliArgs:
     paired_statistics: bool = False
     validity_analysis: bool = False
     full_report: bool = False
+    suite_id: str | None = None
+    suite_where: str | None = None
+    strict_suite: bool = False
 
     @property
     def run_lambda_analysis(self) -> bool:
@@ -92,6 +95,17 @@ class ExperimentRecord:
     config_error: str | None
     family_id: ExperimentFamilyId
     family_label: str
+    origin: str = 'legacy'
+    dataset_schema_version: int | None = None
+    evaluation_schema_version: int | None = None
+    include_in_causal_summaries: bool = True
+    include_in_family_summary: bool = True
+    factors: dict[str, object] | None = None
+    distribution_base_id: str | None = None
+    tags: tuple[str, ...] = ()
+    analysis_blocks: tuple[str, ...] = ()
+    analysis_tier: str | None = None
+    run_profile_factors: dict[str, str] | None = None
 
     @property
     def embedding_model(self) -> str:

@@ -28,7 +28,6 @@ class StrictGeometryFailures(TypedDict):
     fail_missing_facet: bool
     fail_weak_primary_axis_dominance: bool
     fail_excess_stress_horizon_facet_coverage: bool
-    fail_missing_or_malformed_background_outlier: bool
 
 
 def strict_gate_failures(
@@ -38,7 +37,6 @@ def strict_gate_failures(
     n_facets: int,
     primary_axis_fraction: float,
     n_topk_retrieved_facets: int,
-    background_outlier_complete: bool,
 ) -> StrictGeometryFailures:
     return {
         'fail_missing_facet': n_facets_present != n_facets,
@@ -46,7 +44,6 @@ def strict_gate_failures(
         'fail_excess_stress_horizon_facet_coverage': (
             n_topk_retrieved_facets / n_facets > cfg.max_retrieved_facet_fraction
         ),
-        'fail_missing_or_malformed_background_outlier': not background_outlier_complete,
     }
 
 
@@ -298,6 +295,48 @@ def background_outlier_diagnostics(
         'gold_minus_background_outlier_similarity_margin': margin,
         'background_outlier_first_rank': min(ranks) if ranks else None,
         'background_outlier_median_rank': float(np.median(ranks)) if ranks else None,
+    }
+
+
+def component_query_similarity_diagnostics(
+    *,
+    topn_chunk_ids: list[str],
+    topn_sims: NDArray[np.float32],
+    query_qrels: QueryIdToQrels,
+) -> dict[str, object]:
+    """Persist realized query similarity by pool component and near-miss type.
+
+    Structural-change labels are design metadata, not a claim about embedding
+    hardness.  These diagnostics make the empirical distance visible to the
+    report without involving a retrieval outcome.
+    """
+    by_type: dict[str, list[float]] = {}
+    component: dict[str, list[float]] = {'gold': [], 'near_miss': [], 'background': []}
+    for chunk_id, similarity in zip(topn_chunk_ids, topn_sims, strict=True):
+        qrel = query_qrels.get(chunk_id)
+        if qrel is None:
+            continue
+        value = float(similarity)
+        if qrel.is_gold:
+            component['gold'].append(value)
+        elif qrel.cluster_role == 'background_outlier':
+            component['background'].append(value)
+        else:
+            component['near_miss'].append(value)
+            if qrel.distractor_type is not None:
+                by_type.setdefault(str(qrel.distractor_type), []).append(value)
+    means = {key: float(np.mean(values)) for key, values in component.items() if values}
+    type_means = {key: float(np.mean(values)) for key, values in sorted(by_type.items()) if values}
+    gold_mean = means.get('gold')
+    return {
+        'query_to_component_similarity_json': json_dumps(means),
+        'query_to_near_miss_type_similarity_json': json_dumps(type_means),
+        'query_to_near_miss_mean': means.get('near_miss'),
+        'gold_minus_near_miss_similarity_margin': (
+            float(gold_mean - means['near_miss'])
+            if gold_mean is not None and 'near_miss' in means
+            else None
+        ),
     }
 
 

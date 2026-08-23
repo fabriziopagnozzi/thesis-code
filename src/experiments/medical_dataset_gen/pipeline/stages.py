@@ -111,7 +111,16 @@ def _run_geom_plots_with_args(
     paths: MedicalDatasetGenPaths,
     argv: list[str],
 ) -> object:
-    return run_query_geom_plots(cfg, paths, selected_plots=parse_geom_plots_cli_args(argv))
+    options = parse_geom_plots_cli_args(argv)
+    return run_query_geom_plots(
+        cfg,
+        paths,
+        selected_plots=options.selected_plots,
+        query_ids=options.query_ids,
+        output_dir=options.output_dir,
+        umap_neighbors=options.umap_neighbors,
+        umap_min_dist=options.umap_min_dist,
+    )
 
 
 # These scripts are available through --run and deliberately bypass the

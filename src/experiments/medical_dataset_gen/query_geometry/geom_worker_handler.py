@@ -29,7 +29,6 @@ from experiments.medical_dataset_gen.utils.global_schemas import (
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SyntheticMedicalDatasetTableName,
-    paths_for,
 )
 
 type MMapEmbeddingIdArray = NDArray[Any]
@@ -118,17 +117,20 @@ def query_geometry_worker_count(n_queries: int) -> int:
 
 def init_query_geometry_worker(
     cfg: ExperimentCfg,
-    exp_name: str,
+    paths: MedicalDatasetGenPaths,
     out_dir: str,
     query_group_by_id: dict[str, str],
     query_dir_name_by_id: dict[str, str],
     selected_plot_names: Container[GeomPlotName] | None,
+    flat_query_dirs: bool = False,
 ) -> None:
+    """Initialize a plot worker from the caller's resolved artifact paths.
+
+    Suite cells carry explicit data and attempt roots.  Reconstructing paths
+    from the distribution name would make spawned workers read the legacy
+    result layout rather than the suite artifacts.
+    """
     os.environ.setdefault('MPLBACKEND', 'Agg')
-    if cfg.global_.output_experiment != exp_name:
-        cfg = cfg.model_copy(deep=True)
-        cfg.global_.output_experiment = exp_name
-    paths = paths_for(cfg)
 
     chunk_documents = load_selected_parquet_columns(paths, 'chunk_documents', _CHUNK_COLUMNS)
     chunk_memberships = load_selected_parquet_columns(
@@ -176,6 +178,7 @@ def init_query_geometry_worker(
         'out_dir': Path(out_dir),
         'query_group_by_id': query_group_by_id,
         'query_dir_name_by_id': query_dir_name_by_id,
+        'flat_query_dirs': flat_query_dirs,
         'k_values': list(dict.fromkeys(cfg.retrieval.k_values)),
         'selected_plot_names': selected_plot_names,
     }

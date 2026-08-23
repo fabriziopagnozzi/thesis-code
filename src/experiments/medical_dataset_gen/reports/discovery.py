@@ -13,6 +13,11 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ExperimentFamilyId,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
+from experiments.medical_dataset_gen.suites.core import load_logical_suite
+from experiments.medical_dataset_gen.suites.runtime import (
+    load_cell_config,
+    suite_paths_for_cell,
+)
 from experiments.medical_dataset_gen.utils.exp_naming import (
     child_experiment_names,
     resolve_experiment_name,
@@ -27,6 +32,134 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 
 _VERSION_DIR_RE = re.compile(r'^v[0-9]+$')
+
+
+def discover_suite_experiments(
+    results_dir: Path,
+    *,
+    suite_id: str,
+    where: str | None,
+    warnings: list[str],
+) -> list[ExperimentRecord]:
+    """Load completed v5-suite cells solely from their manifest.
+
+    No result-path regular expression or directory-name parsing participates in
+    suite discovery.  This keeps the reporting population identical to the
+    declared experiment design.
+    """
+    logical_suite = load_logical_suite(results_dir, suite_id)
+    manifest = logical_suite.manifest
+    filters = _parse_suite_where(where)
+    records: list[ExperimentRecord] = []
+    for cell in manifest.cells:
+        if cell.status != 'completed' or not _suite_cell_matches(cell, filters):
+            continue
+        root = logical_suite.roots_by_cell_id[cell.cell_id]
+        cfg: ExperimentCfg | None = None
+        config_error: str | None = None
+        try:
+            cfg = load_cell_config(root, cell)
+            paths = suite_paths_for_cell(root=root, cell=cell, cfg=cfg)
+        except Exception as exc:
+            config_error = str(exc)
+            warnings.append(f'{cell.cell_id}: could not load suite config ({exc})')
+            # The stats path remains explicit even if a manually edited
+            # snapshot no longer parses.
+            paths = MedicalDatasetGenPaths(cell.name, artifact_root=root / cell.attempt_root)
+        stats_path = paths.table_path('evaluation_stats')
+        if not stats_path.is_file():
+            warnings.append(f'{cell.cell_id}: skipped because evaluation_stats.parquet is missing')
+            continue
+        records.append(
+            ExperimentRecord(
+                name=cell.name,
+                experiment_dir=paths.experiment_dir,
+                distribution_id=cell.distribution_id,
+                distribution_base_id=cell.distribution_base_id,
+                run_label=cell.run_profile_id,
+                is_subexperiment=True,
+                cfg=cfg,
+                paths=paths,
+                config_error=config_error,
+                family_id=cast(ExperimentFamilyId, cell.family_id),
+                family_label=cell.family_label,
+                origin=cell.origin,
+                dataset_schema_version=cell.dataset_schema_version,
+                evaluation_schema_version=cell.evaluation_schema_version,
+                include_in_causal_summaries=cell.include_in_causal_summaries,
+                include_in_family_summary=cell.include_in_family_summary,
+                factors={str(key): value for key, value in cell.factors.items()},
+                tags=tuple(cell.tags),
+                analysis_blocks=tuple(cell.analysis_blocks),
+                analysis_tier=cell.analysis_tier,
+                run_profile_factors=dict(cell.run_profile_factors),
+            )
+        )
+    return sorted(records, key=lambda record: record.name)
+
+
+def suite_cells_matching_where(manifest: object, where: str | None) -> set[str]:
+    """Return manifest cell IDs targeted by a suite ``--where`` expression.
+
+    Reporting uses this separately from completed-artifact discovery: strict
+    contrast validation should reject an absent member of a contrast that the
+    user requested, but should not treat an intentionally out-of-scope member
+    as a failed smoke cross.
+    """
+    from experiments.medical_dataset_gen.suites.core import SuiteManifest
+
+    if not isinstance(manifest, SuiteManifest):
+        raise TypeError('manifest must be a SuiteManifest')
+    filters = _parse_suite_where(where)
+    return {cell.cell_id for cell in manifest.cells if _suite_cell_matches(cell, filters)}
+
+
+def _parse_suite_where(where: str | None) -> dict[str, str]:
+    if where is None or not where.strip():
+        return {}
+    parsed: dict[str, str] = {}
+    for part in where.split(','):
+        if '=' not in part:
+            raise ValueError(f'--where expects key=value clauses, got {part!r}')
+        key, value = (value.strip() for value in part.split('=', 1))
+        if not key or not value:
+            raise ValueError(f'--where expects non-empty key=value clauses, got {part!r}')
+        if key in parsed:
+            raise ValueError(f'--where repeats filter key {key!r}')
+        parsed[key] = value
+    return parsed
+
+
+def _suite_cell_matches(cell: object, filters: Mapping[str, str]) -> bool:
+    from experiments.medical_dataset_gen.suites.core import SuiteManifestCell
+
+    if not isinstance(cell, SuiteManifestCell):
+        return False
+    values: dict[str, object] = {
+        'cell_id': cell.cell_id,
+        'distribution_id': cell.distribution_id,
+        'run_profile_id': cell.run_profile_id,
+        'family_id': cell.family_id,
+        'origin': cell.origin,
+        'dataset_schema_version': cell.dataset_schema_version,
+        'tag': '|'.join(cell.tags),
+        'analysis_block': '|'.join(cell.analysis_blocks),
+        'analysis_tier': cell.analysis_tier,
+        **cell.run_profile_factors,
+        **cell.factors,
+    }
+    for key, expected in filters.items():
+        actual = values.get(key)
+        expected_values = expected.split('|')
+        if key == 'tag':
+            if not set(expected_values) & set(cell.tags):
+                return False
+        elif key == 'analysis_block':
+            if not set(expected_values) & set(cell.analysis_blocks):
+                return False
+        elif str(actual) not in expected_values:
+            return False
+    return True
 
 
 def discover_experiments(

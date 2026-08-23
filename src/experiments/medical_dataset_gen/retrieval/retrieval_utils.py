@@ -164,6 +164,11 @@ def get_qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, Lightwe
         if 'cluster_id' in qrel_columns
         else pl.lit(None, dtype=pl.String).alias('cluster_id')
     )
+    distractor_type_expr = (
+        pl.col('distractor_type').cast(pl.String)
+        if 'distractor_type' in qrel_columns
+        else pl.lit(None, dtype=pl.String).alias('distractor_type')
+    )
 
     for row in qrels.select(
         'query_id',
@@ -172,14 +177,16 @@ def get_qrels_by_query_chunk(qrels: pl.DataFrame) -> dict[str, dict[str, Lightwe
         cluster_id_expr,
         'cluster_role',
         'axis',
+        distractor_type_expr,
         'is_gold',
     ).iter_rows(named=False):
-        query_id, chunk_id, facet_id, cluster_id, cluster_role, axis, is_gold = row
+        query_id, chunk_id, facet_id, cluster_id, cluster_role, axis, distractor_type, is_gold = row
         result[str(query_id)][str(chunk_id)] = LightweightQrelRecord(
             facet_id=None if facet_id is None else str(facet_id),
             cluster_id=None if cluster_id is None else str(cluster_id),
             cluster_role=None if cluster_role is None else str(cluster_role),
             axis=None if axis is None else str(axis),
+            distractor_type=None if distractor_type is None else str(distractor_type),
             is_gold=bool(is_gold),
         )
 

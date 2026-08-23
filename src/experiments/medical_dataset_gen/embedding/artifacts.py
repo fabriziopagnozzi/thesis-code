@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
 import polars as pl
 import pyarrow.parquet as pq
@@ -7,6 +9,7 @@ import pyarrow.parquet as pq
 from experiments.medical_dataset_gen.utils.global_utils import (
     EmbeddingArtifactName,
     MedicalDatasetGenPaths,
+    SyntheticMedicalDatasetTableName,
 )
 
 EMBEDDING_ARRAY_ARTIFACTS: tuple[EmbeddingArtifactName, ...] = (
@@ -52,20 +55,20 @@ def chunk_embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
             f'chunk_documents ({chunk_vectors.shape[0]}, {chunk_ids.shape[0]} != {n_chunks})'
         )
         return False
-    expected_chunk_ids = [
-        str(value)
-        for value in pl.read_parquet(paths.table_path('chunk_documents'), columns=['chunk_id'])[
-            'chunk_id'
-        ].to_list()
-    ]
-    stored_chunk_ids = [str(value) for value in chunk_ids]
-    if stored_chunk_ids != expected_chunk_ids:
+    if not _stored_ids_match_table(
+        paths=paths,
+        artifact='chunk_ids',
+        table='chunk_documents',
+        id_column='chunk_id',
+    ):
         print('[embed] existing chunk embedding IDs do not match chunk_documents.parquet')
         return False
     return True
 
 
 def embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
+    if not _embedding_metadata_is_complete(paths):
+        return False
     missing = [
         artifact
         for artifact in EMBEDDING_ARRAY_ARTIFACTS
@@ -107,15 +110,62 @@ def embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
         )
         return False
 
-    expected_query_ids = [
-        str(value)
-        for value in pl.read_parquet(paths.table_path('queries'), columns=['query_id'])[
-            'query_id'
-        ].to_list()
-    ]
-    stored_query_ids = [str(value) for value in query_ids]
-    if stored_query_ids != expected_query_ids:
+    if not _stored_ids_match_table(
+        paths=paths,
+        artifact='chunk_ids',
+        table='chunk_documents',
+        id_column='chunk_id',
+    ):
+        print(
+            '[embed] existing chunk embedding IDs do not match chunk_documents.parquet; rebuilding'
+        )
+        return False
+
+    if not _stored_ids_match_table(
+        paths=paths,
+        artifact='query_ids',
+        table='queries',
+        id_column='query_id',
+    ):
         print('[embed] existing query embedding IDs do not match queries.parquet; rebuilding')
         return False
 
     return True
+
+
+def _embedding_metadata_is_complete(paths: MedicalDatasetGenPaths) -> bool:
+    """Use the post-write metadata as the embedding transaction commit marker."""
+    path = paths.embeddings_paths('metadata')
+    if not path.is_file():
+        print('[embed] embedding metadata is absent; rebuilding incomplete artifacts')
+        return False
+    try:
+        raw = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f'[embed] embedding metadata is unreadable; rebuilding ({exc})')
+        return False
+    if (
+        not isinstance(raw, dict)
+        or not isinstance(raw.get('n_chunks'), int)
+        or not isinstance(raw.get('n_queries'), int)
+    ):
+        print('[embed] embedding metadata lacks row counts; rebuilding incomplete artifacts')
+        return False
+    return True
+
+
+def _stored_ids_match_table(
+    *,
+    paths: MedicalDatasetGenPaths,
+    artifact: EmbeddingArtifactName,
+    table: SyntheticMedicalDatasetTableName,
+    id_column: str,
+) -> bool:
+    expected_ids = [
+        str(value)
+        for value in pl.read_parquet(paths.table_path(table), columns=[id_column])[
+            id_column
+        ].to_list()
+    ]
+    stored_ids = [str(value) for value in np.load(paths.embeddings_paths(artifact), mmap_mode='r')]
+    return stored_ids == expected_ids

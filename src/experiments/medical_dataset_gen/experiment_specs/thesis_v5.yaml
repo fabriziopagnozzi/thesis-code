@@ -1,0 +1,660 @@
+# Matched native-v5 thesis suite.  Dataset distributions are defined once and
+# crossed with run profiles below; no directory name encodes a scientific
+# factor.  The migrated v4 suite remains an immutable archival record.
+layout_version: 5
+suite_id: thesis_v5
+origin: native
+dataset_schema_version: 5
+description: >-
+  Controlled factorial thesis study of candidate-pool mass, topology, scale,
+  and wording effects on top-k, MMR, and facility location.
+
+distributions:
+  balanced_reference:
+    family_id: balanced_clean
+    family_label: Balanced clean distributions
+    tags: [core, reference, scale, smoke]
+    analysis_blocks: [reference, scale]
+    analysis_tier: core
+    nested_from: scale_balanced_small
+    factors: &balanced_factors
+      scale: medium
+      gold_mass_vector: [24, 24, 24, 24]
+      niche_count: 0
+      near_miss_mass: 16
+      background_mass: 16
+      scale_anchor: balanced
+    config: &reference_config
+      global: {seed: 42, conditions: 22, use_shared: true}
+      generation:
+        chunk_pools:
+          dominant_primary: {num_clusters: 1, chunks_per_cluster: 24, distractors: []}
+          other_primary: {num_clusters: 1, chunks_per_cluster: 24, distractors: []}
+          secondary: {num_clusters: 1, chunks_per_cluster: 24, distractors: []}
+          niche: {num_clusters: 1, chunks_per_cluster: 1, num_clusters_per_query: 0, distractors: []}
+          background_outliers:
+            - {num_clusters: 4, chunks_per_cluster: 4, changes: [condition, subgroup, axis]}
+        near_miss_specs:
+          - {changes: [condition], num_clusters: 1, chunks_per_cluster: 4}
+          - {changes: [subgroup], num_clusters: 1, chunks_per_cluster: 4}
+          - {changes: [condition, axis_value_bin], num_clusters: 1, chunks_per_cluster: 4}
+          - {changes: [subgroup, axis_value_bin], num_clusters: 1, chunks_per_cluster: 4}
+      retrieval:
+        pool_scope: query_local
+        candidate_pool_n: 999999
+        k_values: [4, 6, 10, 14]
+        strategies: [top_k, mmr, fac_loc]
+      evaluation: {mode: testing}
+
+  dominance_mild:
+    family_id: dominance
+    family_label: Dominance distributions
+    tags: [core]
+    analysis_blocks: [dominance]
+    analysis_tier: core
+    factors: {scale: medium, dominance_level: mild, dominance_share: 0.40625, gold_mass_vector: [39, 19, 19, 19], niche_count: 0, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [39, 19, 19, 19], niche_count: 0}]
+  dominance_high:
+    family_id: dominance
+    family_label: Dominance distributions
+    tags: [core, scale]
+    analysis_blocks: [dominance, scale]
+    analysis_tier: core
+    nested_from: scale_dominance_small
+    factors: {scale: medium, scale_multiplier: 1.0, scale_anchor: strong_dominance, dominance_level: high, dominance_share: 0.5625, gold_mass_vector: [54, 14, 14, 14], niche_count: 0, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [54, 14, 14, 14], niche_count: 0}]
+  dominance_extreme:
+    family_id: dominance
+    family_label: Dominance distributions
+    tags: [core]
+    analysis_blocks: [dominance]
+    analysis_tier: core
+    factors: {scale: medium, dominance_level: extreme, dominance_share: 0.71875, gold_mass_vector: [69, 9, 9, 9], niche_count: 0, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [69, 9, 9, 9], niche_count: 0}]
+
+  sparse_one_moderate:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [core, scale]
+    analysis_blocks: [sparse_one, scale]
+    analysis_tier: core
+    nested_from: scale_sparse_one_small
+    factors: {scale: medium, scale_multiplier: 1.0, scale_anchor: one_sparse_facet, sparse_mode: one, sparse_level: moderate, gold_mass_vector: [28, 28, 28, 12], niche_count: 1, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [28, 28, 28, 12], niche_count: 1}]
+  sparse_one_severe:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [core]
+    analysis_blocks: [sparse_one]
+    analysis_tier: core
+    factors: {scale: medium, sparse_mode: one, sparse_level: severe, gold_mass_vector: [30, 30, 30, 6], niche_count: 1, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [30, 30, 30, 6], niche_count: 1}]
+  sparse_one_extreme:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [core]
+    analysis_blocks: [sparse_one]
+    analysis_tier: core
+    factors: {scale: medium, sparse_mode: one, sparse_level: extreme, gold_mass_vector: [31, 31, 31, 3], niche_count: 1, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [31, 31, 31, 3], niche_count: 1}]
+  sparse_two_moderate:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [core]
+    analysis_blocks: [sparse_two]
+    analysis_tier: core
+    factors: {scale: medium, sparse_mode: two, sparse_level: moderate, gold_mass_vector: [32, 32, 16, 16], niche_count: 2, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [32, 32, 16, 16], niche_count: 2}]
+  sparse_two_severe:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [core]
+    analysis_blocks: [sparse_two]
+    analysis_tier: core
+    factors: {scale: medium, sparse_mode: two, sparse_level: severe, gold_mass_vector: [40, 40, 8, 8], niche_count: 2, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [40, 40, 8, 8], niche_count: 2}]
+  sparse_two_extreme:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [core]
+    analysis_blocks: [sparse_two]
+    analysis_tier: core
+    factors: {scale: medium, sparse_mode: two, sparse_level: extreme, gold_mass_vector: [45, 45, 3, 3], niche_count: 2, near_miss_mass: 16, background_mass: 16}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [45, 45, 3, 3], niche_count: 2}]
+
+  near_miss_h0:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_load]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 0, near_miss_load_ratio: 0.0, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 0}]
+  near_miss_h24:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_load, matched_dilution]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 24, near_miss_load_ratio: 0.25, added_mass: 24, added_component: near_miss, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0, one_change_fraction: 0.5}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 24}]
+  near_miss_h48:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_load, near_miss_structure, near_miss_topology, matched_dilution]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 48, near_miss_load_ratio: 0.5, added_mass: 48, added_component: near_miss, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0, one_change_fraction: 0.5, near_miss_topology: 4x12}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 48}]
+  near_miss_h96:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_load, matched_dilution]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 96, near_miss_load_ratio: 1.0, added_mass: 96, added_component: near_miss, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0, one_change_fraction: 0.5}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 96}]
+
+  dilution_far_b40:
+    family_id: background_variant
+    family_label: Background variants
+    tags: [core, control]
+    analysis_blocks: [matched_dilution]
+    analysis_tier: core
+    include_in_family_summary: false
+    factors: {scale: medium, added_mass: 24, added_component: far_background, near_miss_mass: 0, background_mass: 40, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms:
+      - {op: set_near_miss_mass, mass: 0}
+      - op: set_background_components
+        components:
+          - {num_clusters: 4, chunks_per_cluster: 4, changes: [condition, subgroup, axis]}
+          - {num_clusters: 4, chunks_per_cluster: 6, changes: [condition, subgroup, axis]}
+  dilution_far_b64:
+    family_id: background_variant
+    family_label: Background variants
+    tags: [core, control]
+    analysis_blocks: [matched_dilution]
+    analysis_tier: core
+    include_in_family_summary: false
+    factors: {scale: medium, added_mass: 48, added_component: far_background, near_miss_mass: 0, background_mass: 64, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms:
+      - {op: set_near_miss_mass, mass: 0}
+      - op: set_background_components
+        components:
+          - {num_clusters: 4, chunks_per_cluster: 4, changes: [condition, subgroup, axis]}
+          - {num_clusters: 4, chunks_per_cluster: 12, changes: [condition, subgroup, axis]}
+  dilution_far_b112:
+    family_id: background_variant
+    family_label: Background variants
+    tags: [core, control]
+    analysis_blocks: [matched_dilution]
+    analysis_tier: core
+    include_in_family_summary: false
+    factors: {scale: medium, added_mass: 96, added_component: far_background, near_miss_mass: 0, background_mass: 112, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms:
+      - {op: set_near_miss_mass, mass: 0}
+      - op: set_background_components
+        components:
+          - {num_clusters: 4, chunks_per_cluster: 4, changes: [condition, subgroup, axis]}
+          - {num_clusters: 4, chunks_per_cluster: 24, changes: [condition, subgroup, axis]}
+
+  near_miss_h48_two_change:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_structure]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 48, one_change_fraction: 0.0, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 48}, {op: set_near_miss_mix, one_change_fraction: 0.0}]
+  near_miss_h48_one_change:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_structure]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 48, one_change_fraction: 1.0, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 48}, {op: set_near_miss_mix, one_change_fraction: 1.0}]
+  near_miss_h48_singleton:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_topology]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 48, one_change_fraction: 0.5, near_miss_topology: 48x1, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 48}, {op: set_cluster_topology, component: near_miss, num_clusters: 48, chunks_per_cluster: 1}]
+  near_miss_h48_compact:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [core]
+    analysis_blocks: [near_miss_topology]
+    analysis_tier: core
+    factors: {scale: medium, near_miss_mass: 48, one_change_fraction: 0.5, near_miss_topology: 12x4, background_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_near_miss_mass, mass: 48}, {op: set_cluster_topology, component: near_miss, num_clusters: 12, chunks_per_cluster: 4}]
+
+  background_far_32x1: &background_far_32x1
+    family_id: background_variant
+    family_label: Background variants
+    tags: [core]
+    analysis_blocks: [background_topology]
+    analysis_tier: core
+    factors: {scale: medium, background_mass: 32, background_topology: 32x1, near_miss_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_background_mass, mass: 32, num_clusters: 32}]
+  background_far_16x2:
+    <<: *background_far_32x1
+    factors: {scale: medium, background_mass: 32, background_topology: 16x2, near_miss_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    transforms: [{op: set_background_mass, mass: 32, num_clusters: 16}]
+  background_far_8x4:
+    <<: *background_far_32x1
+    factors: {scale: medium, background_mass: 32, background_topology: 8x4, near_miss_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    transforms: [{op: set_background_mass, mass: 32, num_clusters: 8}]
+  background_far_4x8:
+    <<: *background_far_32x1
+    factors: {scale: medium, background_mass: 32, background_topology: 4x8, near_miss_mass: 16, gold_mass_vector: [24, 24, 24, 24], niche_count: 0}
+    transforms: [{op: set_background_mass, mass: 32, num_clusters: 4}]
+
+  scale_balanced_small:
+    family_id: balanced_clean
+    family_label: Balanced clean distributions
+    tags: [scale, smoke]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    factors: {scale: small, scale_multiplier: 0.5, scale_anchor: balanced, gold_mass_vector: [12, 12, 12, 12], near_miss_mass: 8, background_mass: 8, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: scale_support, multiplier: 0.5}]
+  scale_balanced_large:
+    family_id: balanced_clean
+    family_label: Balanced clean distributions
+    tags: [scale, smoke]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: balanced_reference
+    factors: {scale: large, scale_multiplier: 2.0, scale_anchor: balanced, gold_mass_vector: [48, 48, 48, 48], near_miss_mass: 32, background_mass: 32, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: scale_support, multiplier: 2.0}]
+  scale_dominance_small:
+    family_id: dominance
+    family_label: Dominance distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    factors: {scale: small, scale_multiplier: 0.5, scale_anchor: strong_dominance, gold_mass_vector: [27, 7, 7, 7], near_miss_mass: 8, background_mass: 8, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [54, 14, 14, 14], niche_count: 0}, {op: scale_support, multiplier: 0.5}]
+  scale_dominance_large:
+    family_id: dominance
+    family_label: Dominance distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: dominance_high
+    factors: {scale: large, scale_multiplier: 2.0, scale_anchor: strong_dominance, gold_mass_vector: [108, 28, 28, 28], near_miss_mass: 32, background_mass: 32, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [54, 14, 14, 14], niche_count: 0}, {op: scale_support, multiplier: 2.0}]
+  scale_sparse_one_small:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    factors: {scale: small, scale_multiplier: 0.5, scale_anchor: one_sparse_facet, gold_mass_vector: [14, 14, 14, 6], near_miss_mass: 8, background_mass: 8, niche_count: 1}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [28, 28, 28, 12], niche_count: 1}, {op: scale_support, multiplier: 0.5}]
+  scale_sparse_one_large:
+    family_id: sparse_niche
+    family_label: Sparse-niche distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: sparse_one_moderate
+    factors: {scale: large, scale_multiplier: 2.0, scale_anchor: one_sparse_facet, gold_mass_vector: [56, 56, 56, 24], near_miss_mass: 32, background_mass: 32, niche_count: 1}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [28, 28, 28, 12], niche_count: 1}, {op: scale_support, multiplier: 2.0}]
+  scale_near_miss_small:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    factors: {scale: small, scale_multiplier: 0.5, scale_anchor: near_miss_heavy, gold_mass_vector: [6, 6, 6, 6], near_miss_mass: 32, background_mass: 8, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [12, 12, 12, 12], niche_count: 0}, {op: set_near_miss_mass, mass: 64}, {op: scale_support, multiplier: 0.5}]
+  scale_near_miss_medium:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: scale_near_miss_small
+    factors: {scale: medium, scale_multiplier: 1.0, scale_anchor: near_miss_heavy, gold_mass_vector: [12, 12, 12, 12], near_miss_mass: 64, background_mass: 16, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [12, 12, 12, 12], niche_count: 0}, {op: set_near_miss_mass, mass: 64}]
+  scale_near_miss_large:
+    family_id: near_miss_heavy
+    family_label: Near-miss-heavy distributions
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: scale_near_miss_medium
+    factors: {scale: large, scale_multiplier: 2.0, scale_anchor: near_miss_heavy, gold_mass_vector: [24, 24, 24, 24], near_miss_mass: 128, background_mass: 32, niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [12, 12, 12, 12], niche_count: 0}, {op: set_near_miss_mass, mass: 64}, {op: scale_support, multiplier: 2.0}]
+  scale_compact_background_small:
+    family_id: background_variant
+    family_label: Background variants
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    factors: {scale: small, scale_multiplier: 0.5, scale_anchor: compact_background_heavy, gold_mass_vector: [8, 8, 8, 8], near_miss_mass: 8, background_mass: 24, niche_count: 0, background_topology: 4x6}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [16, 16, 16, 16], niche_count: 0}, {op: set_background_mass, mass: 48, num_clusters: 4}, {op: scale_support, multiplier: 0.5}]
+  scale_compact_background_medium:
+    family_id: background_variant
+    family_label: Background variants
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: scale_compact_background_small
+    factors: {scale: medium, scale_multiplier: 1.0, scale_anchor: compact_background_heavy, gold_mass_vector: [16, 16, 16, 16], near_miss_mass: 16, background_mass: 48, niche_count: 0, background_topology: 4x12}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [16, 16, 16, 16], niche_count: 0}, {op: set_background_mass, mass: 48, num_clusters: 4}]
+  scale_compact_background_large:
+    family_id: background_variant
+    family_label: Background variants
+    tags: [scale]
+    analysis_blocks: [scale]
+    analysis_tier: scale
+    include_in_family_summary: false
+    nested_from: scale_compact_background_medium
+    factors: {scale: large, scale_multiplier: 2.0, scale_anchor: compact_background_heavy, gold_mass_vector: [32, 32, 32, 32], near_miss_mass: 32, background_mass: 96, niche_count: 0, background_topology: 4x24}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [16, 16, 16, 16], niche_count: 0}, {op: set_background_mass, mass: 48, num_clusters: 4}, {op: scale_support, multiplier: 2.0}]
+
+  interaction_dom_high_far_32x1:
+    family_id: interaction
+    family_label: Interaction experiments
+    tags: [interaction]
+    analysis_blocks: [dominance_background_interaction]
+    analysis_tier: interaction
+    include_in_family_summary: false
+    factors: {scale: medium, dominance_level: high, background_mass: 32, background_topology: 32x1, near_miss_mass: 16, gold_mass_vector: [54, 14, 14, 14], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [54, 14, 14, 14], niche_count: 0}, {op: set_background_mass, mass: 32, num_clusters: 32}]
+  interaction_dom_high_far_4x8:
+    family_id: interaction
+    family_label: Interaction experiments
+    tags: [interaction]
+    analysis_blocks: [dominance_background_interaction]
+    analysis_tier: interaction
+    include_in_family_summary: false
+    factors: {scale: medium, dominance_level: high, background_mass: 32, background_topology: 4x8, near_miss_mass: 16, gold_mass_vector: [54, 14, 14, 14], niche_count: 0}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [54, 14, 14, 14], niche_count: 0}, {op: set_background_mass, mass: 32, num_clusters: 4}]
+  interaction_sparse_severe_h24:
+    family_id: interaction
+    family_label: Interaction experiments
+    tags: [interaction]
+    analysis_blocks: [sparse_near_miss_interaction]
+    analysis_tier: interaction
+    include_in_family_summary: false
+    factors: {scale: medium, sparse_level: severe, sparse_mode: one, near_miss_mass: 24, background_mass: 16, gold_mass_vector: [30, 30, 30, 6], niche_count: 1, one_change_fraction: 0.5}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [30, 30, 30, 6], niche_count: 1}, {op: set_near_miss_mass, mass: 24}]
+  interaction_sparse_severe_h96:
+    family_id: interaction
+    family_label: Interaction experiments
+    tags: [interaction]
+    analysis_blocks: [sparse_near_miss_interaction]
+    analysis_tier: interaction
+    include_in_family_summary: false
+    factors: {scale: medium, sparse_level: severe, sparse_mode: one, near_miss_mass: 96, background_mass: 16, gold_mass_vector: [30, 30, 30, 6], niche_count: 1, one_change_fraction: 0.5}
+    config: *reference_config
+    transforms: [{op: set_gold_mass_vector, masses: [30, 30, 30, 6], niche_count: 1}, {op: set_near_miss_mass, mass: 96}]
+
+run_profiles:
+  qwen_biased_simple: &qwen_biased_simple
+    factors: {embedding: Qwen3-Embedding-0.6B, query_surface: natural, query_structure: biased, document_surface: category-explicit, budget_schedule: primary}
+    config:
+      generation: {query_structure: unbalanced, focus_mode: natural, chunk_text_style: ontology_explicit}
+      embeddings: {model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256}
+  qwen_biased_hardened:
+    factors: {embedding: Qwen3-Embedding-0.6B, query_surface: natural, query_structure: biased, document_surface: category-implicit, budget_schedule: primary}
+    config:
+      generation: {query_structure: unbalanced, focus_mode: natural, chunk_text_style: semantic_hardened}
+      embeddings: {model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256}
+  qwen_unbiased_simple:
+    factors: {embedding: Qwen3-Embedding-0.6B, query_surface: natural, query_structure: unbiased, document_surface: category-explicit, budget_schedule: primary}
+    config:
+      generation: {query_structure: balanced, focus_mode: natural, chunk_text_style: ontology_explicit}
+      embeddings: {model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256}
+  qwen_unbiased_hardened:
+    factors: {embedding: Qwen3-Embedding-0.6B, query_surface: natural, query_structure: unbiased, document_surface: category-implicit, budget_schedule: primary}
+    config:
+      generation: {query_structure: balanced, focus_mode: natural, chunk_text_style: semantic_hardened}
+      embeddings: {model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256}
+  qwen_unbiased_simple_k12:
+    factors: {embedding: Qwen3-Embedding-0.6B, query_surface: natural, query_structure: unbiased, document_surface: category-explicit, budget_schedule: proportional_6_12_24}
+    config:
+      generation: {query_structure: balanced, focus_mode: natural, chunk_text_style: ontology_explicit}
+      embeddings: {model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256}
+      retrieval: {k_values: [12]}
+  qwen_unbiased_simple_k24:
+    factors: {embedding: Qwen3-Embedding-0.6B, query_surface: natural, query_structure: unbiased, document_surface: category-explicit, budget_schedule: proportional_6_12_24}
+    config:
+      generation: {query_structure: balanced, focus_mode: natural, chunk_text_style: ontology_explicit}
+      embeddings: {model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256}
+      retrieval: {k_values: [24]}
+
+evaluations:
+  - evaluation_id: qwen_natural_primary
+    distribution_ids: &all_distributions
+      - balanced_reference
+      - dominance_mild
+      - dominance_high
+      - dominance_extreme
+      - sparse_one_moderate
+      - sparse_one_severe
+      - sparse_one_extreme
+      - sparse_two_moderate
+      - sparse_two_severe
+      - sparse_two_extreme
+      - near_miss_h0
+      - near_miss_h24
+      - near_miss_h48
+      - near_miss_h96
+      - dilution_far_b40
+      - dilution_far_b64
+      - dilution_far_b112
+      - near_miss_h48_two_change
+      - near_miss_h48_one_change
+      - near_miss_h48_singleton
+      - near_miss_h48_compact
+      - background_far_32x1
+      - background_far_16x2
+      - background_far_8x4
+      - background_far_4x8
+      - scale_balanced_small
+      - scale_balanced_large
+      - scale_dominance_small
+      - scale_dominance_large
+      - scale_sparse_one_small
+      - scale_sparse_one_large
+      - scale_near_miss_small
+      - scale_near_miss_medium
+      - scale_near_miss_large
+      - scale_compact_background_small
+      - scale_compact_background_medium
+      - scale_compact_background_large
+      - interaction_dom_high_far_32x1
+      - interaction_dom_high_far_4x8
+      - interaction_sparse_severe_h24
+      - interaction_sparse_severe_h96
+    run_profile_ids: [qwen_biased_simple, qwen_biased_hardened, qwen_unbiased_simple, qwen_unbiased_hardened]
+  - evaluation_id: proportional_medium
+    distribution_ids: [balanced_reference, sparse_one_moderate]
+    run_profile_ids: [qwen_unbiased_simple_k12]
+  - evaluation_id: proportional_large
+    distribution_ids: [scale_balanced_large, scale_sparse_one_large]
+    run_profile_ids: [qwen_unbiased_simple_k24]
+
+comparison_groups:
+  - comparison_id: dominance_ladder
+    distribution_ids: [balanced_reference, dominance_mild, dominance_high, dominance_extreme]
+    varying_factors: [dominance_level]
+    factor_levels: {dominance_level: [control, mild, high, extreme]}
+    reference_levels: {dominance_level: control}
+    owned_paths: {dominance_level: [generation.chunk_pools.dominant_primary, generation.chunk_pools.other_primary, generation.chunk_pools.secondary, generation.chunk_pools.niche]}
+    analysis_block: dominance
+  - comparison_id: sparse_one_ladder
+    distribution_ids: [balanced_reference, sparse_one_moderate, sparse_one_severe, sparse_one_extreme]
+    varying_factors: [sparse_level]
+    factor_levels: {sparse_level: [control, moderate, severe, extreme]}
+    reference_levels: {sparse_level: control}
+    owned_paths: {sparse_level: [generation.chunk_pools.dominant_primary, generation.chunk_pools.other_primary, generation.chunk_pools.secondary, generation.chunk_pools.niche]}
+    analysis_block: sparse_one
+  - comparison_id: sparse_two_ladder
+    distribution_ids: [balanced_reference, sparse_two_moderate, sparse_two_severe, sparse_two_extreme]
+    varying_factors: [sparse_level]
+    factor_levels: {sparse_level: [control, moderate, severe, extreme]}
+    reference_levels: {sparse_level: control}
+    owned_paths: {sparse_level: [generation.chunk_pools.dominant_primary, generation.chunk_pools.other_primary, generation.chunk_pools.secondary, generation.chunk_pools.niche]}
+    analysis_block: sparse_two
+  - comparison_id: near_miss_load
+    distribution_ids: [near_miss_h0, near_miss_h24, near_miss_h48, near_miss_h96]
+    varying_factors: [near_miss_mass]
+    factor_levels: {near_miss_mass: [0, 24, 48, 96]}
+    reference_levels: {near_miss_mass: 0}
+    owned_paths: {near_miss_mass: [generation.near_miss_specs]}
+    analysis_block: near_miss_load
+  - comparison_id: near_miss_vs_matched_dilution
+    distribution_ids: [near_miss_h24, near_miss_h48, near_miss_h96, dilution_far_b40, dilution_far_b64, dilution_far_b112]
+    varying_factors: [added_component, added_mass]
+    matching_factors: [gold_mass_vector, niche_count]
+    factor_levels: {added_component: [near_miss, far_background], added_mass: [24, 48, 96]}
+    reference_levels: {added_component: near_miss, added_mass: 24}
+    owned_paths: {added_component: [generation.near_miss_specs, generation.chunk_pools.background_outliers], added_mass: [generation.near_miss_specs, generation.chunk_pools.background_outliers]}
+    analysis_block: matched_dilution
+  - comparison_id: near_miss_structure
+    distribution_ids: [near_miss_h48_two_change, near_miss_h48, near_miss_h48_one_change]
+    varying_factors: [one_change_fraction]
+    matching_factors: [near_miss_mass, background_mass]
+    factor_levels: {one_change_fraction: [0.0, 0.5, 1.0]}
+    reference_levels: {one_change_fraction: 0.5}
+    owned_paths: {one_change_fraction: [generation.near_miss_specs]}
+    analysis_block: near_miss_structure
+  - comparison_id: near_miss_topology
+    distribution_ids: [near_miss_h48_singleton, near_miss_h48_compact, near_miss_h48]
+    varying_factors: [near_miss_topology]
+    matching_factors: [near_miss_mass, one_change_fraction, background_mass]
+    factor_levels: {near_miss_topology: [48x1, 12x4, 4x12]}
+    reference_levels: {near_miss_topology: 4x12}
+    owned_paths: {near_miss_topology: [generation.near_miss_specs]}
+    analysis_block: near_miss_topology
+  - comparison_id: background_topology
+    distribution_ids: [background_far_32x1, background_far_16x2, background_far_8x4, background_far_4x8]
+    varying_factors: [background_topology]
+    matching_factors: [background_mass, near_miss_mass]
+    factor_levels: {background_topology: [32x1, 16x2, 8x4, 4x8]}
+    reference_levels: {background_topology: 32x1}
+    owned_paths: {background_topology: [generation.chunk_pools.background_outliers]}
+    analysis_block: background_topology
+  - comparison_id: scale_balanced
+    distribution_ids: [scale_balanced_small, balanced_reference, scale_balanced_large]
+    varying_factors: [scale]
+    factor_levels: {scale: [small, medium, large]}
+    reference_levels: {scale: medium}
+    owned_paths: {scale: [generation.chunk_pools, generation.near_miss_specs]}
+    analysis_block: scale
+  - comparison_id: scale_dominance
+    distribution_ids: [scale_dominance_small, dominance_high, scale_dominance_large]
+    varying_factors: [scale]
+    factor_levels: {scale: [small, medium, large]}
+    reference_levels: {scale: medium}
+    owned_paths: {scale: [generation.chunk_pools, generation.near_miss_specs]}
+    analysis_block: scale
+  - comparison_id: scale_sparse_one
+    distribution_ids: [scale_sparse_one_small, sparse_one_moderate, scale_sparse_one_large]
+    varying_factors: [scale]
+    factor_levels: {scale: [small, medium, large]}
+    reference_levels: {scale: medium}
+    owned_paths: {scale: [generation.chunk_pools, generation.near_miss_specs]}
+    analysis_block: scale
+  - comparison_id: scale_near_miss
+    distribution_ids: [scale_near_miss_small, scale_near_miss_medium, scale_near_miss_large]
+    varying_factors: [scale]
+    factor_levels: {scale: [small, medium, large]}
+    reference_levels: {scale: medium}
+    owned_paths: {scale: [generation.chunk_pools, generation.near_miss_specs]}
+    analysis_block: scale
+  - comparison_id: scale_compact_background
+    distribution_ids: [scale_compact_background_small, scale_compact_background_medium, scale_compact_background_large]
+    varying_factors: [scale]
+    factor_levels: {scale: [small, medium, large]}
+    reference_levels: {scale: medium}
+    owned_paths: {scale: [generation.chunk_pools, generation.near_miss_specs]}
+    analysis_block: scale
+  - comparison_id: interaction_dominance_background
+    distribution_ids: [background_far_32x1, background_far_4x8, interaction_dom_high_far_32x1, interaction_dom_high_far_4x8]
+    varying_factors: [dominance_level, background_topology]
+    matching_factors: [background_mass, near_miss_mass]
+    factor_levels: {dominance_level: [control, high], background_topology: [32x1, 4x8]}
+    reference_levels: {dominance_level: control, background_topology: 32x1}
+    owned_paths: {dominance_level: [generation.chunk_pools.dominant_primary, generation.chunk_pools.other_primary, generation.chunk_pools.secondary, generation.chunk_pools.niche], background_topology: [generation.chunk_pools.background_outliers]}
+    analysis_block: dominance_background_interaction
+  - comparison_id: interaction_sparse_near_miss
+    distribution_ids: [near_miss_h24, near_miss_h96, interaction_sparse_severe_h24, interaction_sparse_severe_h96]
+    varying_factors: [sparse_level, near_miss_mass]
+    matching_factors: [background_mass, one_change_fraction]
+    factor_levels: {sparse_level: [control, severe], near_miss_mass: [24, 96]}
+    reference_levels: {sparse_level: control, near_miss_mass: 24}
+    owned_paths: {sparse_level: [generation.chunk_pools.dominant_primary, generation.chunk_pools.other_primary, generation.chunk_pools.secondary, generation.chunk_pools.niche], near_miss_mass: [generation.near_miss_specs]}
+    analysis_block: sparse_near_miss_interaction
+
+analysis_series:
+  - series_id: proportional_budget_balanced
+    analysis_block: scale_proportional_budget
+    reference_point_id: medium
+    lambda_source_k: 12
+    points:
+      - {point_id: small, distribution_id: scale_balanced_small, run_profile_id: qwen_unbiased_simple, k: 6, factors: {scale: small, pool_mass: 64}}
+      - {point_id: medium, distribution_id: balanced_reference, run_profile_id: qwen_unbiased_simple_k12, k: 12, factors: {scale: medium, pool_mass: 128}}
+      - {point_id: large, distribution_id: scale_balanced_large, run_profile_id: qwen_unbiased_simple_k24, k: 24, factors: {scale: large, pool_mass: 256}}
+  - series_id: proportional_budget_sparse_one
+    analysis_block: scale_proportional_budget
+    reference_point_id: medium
+    lambda_source_k: 12
+    points:
+      - {point_id: small, distribution_id: scale_sparse_one_small, run_profile_id: qwen_unbiased_simple, k: 6, factors: {scale: small, pool_mass: 64}}
+      - {point_id: medium, distribution_id: sparse_one_moderate, run_profile_id: qwen_unbiased_simple_k12, k: 12, factors: {scale: medium, pool_mass: 128}}
+      - {point_id: large, distribution_id: scale_sparse_one_large, run_profile_id: qwen_unbiased_simple_k24, k: 24, factors: {scale: large, pool_mass: 256}}

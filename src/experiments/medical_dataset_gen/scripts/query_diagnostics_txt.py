@@ -694,7 +694,6 @@ def _geometry_items(row: dict[str, Any], *, compact: bool) -> list[tuple[str, An
         'fail_missing_facet',
         'fail_weak_primary_axis_dominance',
         'fail_excess_stress_horizon_facet_coverage',
-        'fail_missing_or_malformed_background_outlier',
         'facets_present_json',
         'topk_retrieved_facets_json',
         'n_background_outliers_in_pool',

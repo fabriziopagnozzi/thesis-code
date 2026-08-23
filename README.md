@@ -50,7 +50,7 @@ The construction graph and rendered language are kept separate. Structured facts
 | `eval` | [`evaluation/stage.py`](src/experiments/medical_dataset_gen/evaluation/stage.py) | Compare top-k, MMR, and facility-location retrieval over the configured local pools. | evaluation results, aggregate statistics, and slices |
 | `eval_plots`, `geom_plots` | `evaluation/plot_stage.py`, `query_geometry/plot_stage.py` | Produce secondary figures and query-level embedding diagnostics. | figures and plot data |
 
-The geometry filter is a only diagnostic annotation. Evaluation retains the full generated query population and reports geometry-eligible and geometry-ineligible slices separately.
+The geometry filter is only a diagnostic annotation. Evaluation retains the full generated query population and reports geometry-eligible and geometry-ineligible slices separately.
 
 ## What is generated
 
@@ -64,7 +64,7 @@ The ontology defines:
 - joint axis-pair profiles and policies that decide which axis can be primary;
 - wording and surface terms used by the query and chunk templates.
 
-The current schema construction uses query-local pools and normally gives every query four relevant facets. With the bundled ontology and full configuration, the generated count is currently 6,174 evidence profiles and 6,174 queries; the count changes when the ontology, condition limit, excluded axes, or query limit changes.
+The current schema construction uses query-local pools and normally gives every query four relevant facets. The frozen `thesis_v5` paper suite defines 41 evidence-space distributions crossed with four primary wording profiles, plus four proportional-budget cells, for 168 cells in total. Each distribution contains 5,304 deterministically generated queries, including 2,636 held-out test queries. Counts for standalone configurations can differ when the ontology, condition limit, excluded axes, or query limit changes.
 
 The key structured identifiers are defined in [`dataset_generation/schemas.py`](src/experiments/medical_dataset_gen/dataset_generation/schemas.py):
 
@@ -230,10 +230,10 @@ Once several experiments have completed, the report module discovers their persi
 ```bash
 uv run task report \
   --results-dir src/experiments/medical_dataset_gen/_results \
-  --output-dir src/experiments/medical_dataset_gen/_reports/experiment_comparison
+  --output-dir ../thesis-documents/reports/experiment_comparison
 ```
 
-The `reports/` CLI also supports filtering experiments, selecting embedding models, refreshing only plots or LaTeX macros, and enabling optional lambda-transfer, paired-statistics, or validity analyses. The scripts under [`medical_dataset_gen/scripts`](src/experiments/medical_dataset_gen/scripts) provide smaller diagnostics and sample renderers.
+By default, report output is written to `../thesis-documents/reports/experiment_comparison`. The thesis repository ignores everything under `reports/` except each report's `figures/` and `latex/` trees, so data, manifests, markdown, and warnings stay available locally without being committed. The `reports/` CLI also supports filtering experiments, selecting embedding models, refreshing only plots or LaTeX macros, and enabling optional lambda-transfer, paired-statistics, or validity analyses. The scripts under [`medical_dataset_gen/scripts`](src/experiments/medical_dataset_gen/scripts) provide smaller diagnostics and sample renderers.
 
 ## The earlier MIMIC-IV pipeline
 

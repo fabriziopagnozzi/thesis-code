@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel
 
 from experiments.mimic.chunking.schemas_chunking import ChunkRow

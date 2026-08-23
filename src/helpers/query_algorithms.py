@@ -70,41 +70,6 @@ def mmr(
     return np.array(selected, dtype=np.intp)
 
 
-def fac_loc_greedy(
-    sim_to_query: NDArray[np.float32],
-    k: int,
-    sim_matrix: NDArray[np.float32],
-    lam: float = 0.5,
-    **_kwargs: object,
-) -> NDArray[np.intp]:
-    n = len(sim_to_query)
-    k = min(k, n)
-
-    selected: list[int] = []
-
-    # To identify which indices have already been picked from sim_to_query
-    mask = np.ones(n, dtype=bool)
-
-    # m[i] == max over j in selected of sim_to_query[i, j]
-    m = np.zeros(n, dtype=np.float64)
-
-    for _ in range(k):
-        # Marginal coverage gain for each candidate j:
-        # new_cov[j] = (1/n) * sum_i max(0, sim_matrix[i,j] - m[i])
-        gains = np.maximum(0, sim_matrix - m[:, None])  # (n, n)
-        marginal_cov = gains.sum(axis=0) / n  # (n,)
-
-        scores = lam * sim_to_query + (1 - lam) * marginal_cov
-        scores[~mask] = -np.inf
-        best = int(np.argmax(scores))
-
-        selected.append(best)
-        mask[best] = False
-        m = np.maximum(m, sim_matrix[:, best])
-
-    return np.array(selected, dtype=np.intp)
-
-
 def fac_loc_lazy_greedy(
     sim_to_query: NDArray[np.float32],
     k: int,

@@ -9,10 +9,14 @@ BUDGET_CATEGORY_LABELS: dict[BudgetCategory, str] = {
     'medium_budget': 'Medium Budget',
     'high_budget': 'High Budget',
 }
+# The thesis-level low-budget comparison is fixed across experiments so its
+# aggregates and wording contrasts share one retrieval budget.
+LOW_BUDGET_K = 6
 AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset(
     {
         'Budget sweeps',
         'Embedding comparison',
+        'Interaction experiments',
         'Unknown',
     }
 )

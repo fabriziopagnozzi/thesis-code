@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-from experiments.medical_dataset_gen.embedding_geometry.plots import (
+from experiments.medical_dataset_gen.query_geometry.geom_plots import (
     plot_cluster_quality_overview,
     plot_full_strategy_selection_overlay,
     plot_query_overview_4panel,

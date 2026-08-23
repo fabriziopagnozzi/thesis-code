@@ -58,6 +58,11 @@ from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
 _FACTS_WRITE_BATCH_ROWS = 131_072
 NOTE_STYLE_IDS = available_note_styles()
+# A cluster-local index must not be renumbered when the support multiplier
+# changes.  Keeping a generous, fixed namespace per cluster makes v5 scale
+# pools deterministic nested sets while still allowing the six near-miss
+# subtypes to retain their independent identities.
+_V5_NEAR_MISS_CLUSTER_INDEX_STRIDE = 10_000
 
 
 def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
@@ -102,15 +107,26 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
 
             # Distractors are generated from the same plan so their metadata
             # remains query-local and auditable.
-            facts.extend(
-                make_distractor_facts(
-                    plan,
-                    ontology,
-                    rng,
-                    cfg.generation.chunk_pools,
-                    chunk_surface_policy=cfg.generation.chunk_surface_policy,
+            if cfg.generation.near_miss_specs is None:
+                facts.extend(
+                    make_distractor_facts(
+                        plan,
+                        ontology,
+                        rng,
+                        cfg.generation.chunk_pools,
+                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
+                    )
                 )
-            )
+            else:
+                facts.extend(
+                    make_global_near_miss_facts(
+                        plan,
+                        ontology,
+                        rng,
+                        cfg.generation.near_miss_specs,
+                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
+                    )
+                )
             facts.extend(
                 make_background_outlier_facts(
                     plan,
@@ -237,6 +253,54 @@ def make_distractor_facts(
     return rows
 
 
+def make_global_near_miss_facts(
+    plan: QueryPlan,
+    ontology: MedicalOntology,
+    rng: Random,
+    specs: list[DistractorSpec],
+    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
+) -> list[ClinicalFact]:
+    """Materialize schema-v5 near misses with independently controlled mass.
+
+    Archived distributions keep their per-facet local distractors.  New v5
+    suites instead declare global near-miss components so changing H or its
+    topology cannot silently change a gold facet's local pressure.
+    """
+    rows: list[ClinicalFact] = []
+    for spec_idx, spec in enumerate(specs):
+        chunks_per_cluster = int(spec.chunks_per_cluster or 0)
+        for cluster_idx in range(spec.num_clusters):
+            target = plan.facets[
+                stable_seed(plan.query_id, 'v5_near_miss_target', spec_idx, cluster_idx)
+                % len(plan.facets)
+            ]
+            for local_idx in range(chunks_per_cluster):
+                # Do not use ``chunks_per_cluster`` in this identity: scale
+                # levels deliberately change it, and every existing chunk
+                # must retain the same semantic/document ID at larger levels.
+                global_idx = cluster_idx * _V5_NEAR_MISS_CLUSTER_INDEX_STRIDE + local_idx
+                fact = make_local_distractor_fact(
+                    plan=plan,
+                    target=target,
+                    ontology=ontology,
+                    rng=rng,
+                    spec=spec,
+                    spec_idx=spec_idx,
+                    local_idx=global_idx,
+                    chunk_surface_policy=chunk_surface_policy,
+                )
+                rows.append(
+                    fact.model_copy(
+                        update={
+                            'cluster_id': (
+                                f'{plan.pool_id}_v5_nm_s{spec_idx + 1:02d}_c{cluster_idx + 1:02d}'
+                            )
+                        }
+                    )
+                )
+    return rows
+
+
 def _local_distractor_config_for_facet(
     chunk_pools: ChunkPoolsCfg,
     facet: QueryPlanFacet,
@@ -260,7 +324,7 @@ def make_local_distractor_facts(
 ) -> list[ClinicalFact]:
     rows: list[ClinicalFact] = []
     for spec_idx, spec in enumerate(distractor_config):
-        for local_idx in range(spec.size):
+        for local_idx in range(cast(int, spec.size)):
             rows.append(
                 make_local_distractor_fact(
                     plan=plan,
@@ -508,7 +572,7 @@ def make_background_outlier_facts(
             condition_id, condition_display, subgroup_id, subgroup, axis, value_bin = resolved
             cluster_id = f'{plan.pool_id}_bg_s{spec_idx + 1:02d}_c{cluster_idx + 1:02d}'
 
-            for local_idx in range(spec.size):
+            for local_idx in range(cast(int, spec.size)):
                 reuse_scope = (
                     f'distractor:background_clinical_cluster:{scope}:cluster_{cluster_idx + 1:02d}'
                 )

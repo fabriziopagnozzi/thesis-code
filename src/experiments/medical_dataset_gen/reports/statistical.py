@@ -23,6 +23,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     StrategyName,
     practical_effect_threshold,
 )
+from experiments.medical_dataset_gen.reports.analysis_scope import INTERACTION_FAMILY_ID
 from experiments.medical_dataset_gen.reports.helpers import (
     float_or_none,
     int_or_none,
@@ -205,6 +206,7 @@ def suite_effect_summary_rows(
         profile_effects.filter(pl.col('MetricLabel') == 'FCP'),
         embedding_models=embedding_models,
     )
+    fcp = fcp.filter(pl.col('ExperimentFamily') != INTERACTION_FAMILY_ID)
     if fcp.is_empty():
         return []
     fcp = _with_budget_category(fcp, budget_by_cell)
@@ -264,6 +266,7 @@ def configuration_suite_effect_summary_rows(
         profile_effects.filter(pl.col('MetricLabel') == 'FCP'),
         embedding_models=embedding_models,
     )
+    fcp = fcp.filter(pl.col('ExperimentFamily') != INTERACTION_FAMILY_ID)
     if fcp.is_empty():
         return []
     fcp = _with_budget_category(fcp, budget_by_cell)
@@ -353,6 +356,7 @@ def leave_one_out_sensitivity_rows(
         ),
         budget_by_cell,
     )
+    fcp = fcp.filter(pl.col('ExperimentFamily') != INTERACTION_FAMILY_ID)
     rows: list[dict[str, object]] = []
     for budget in BUDGET_CATEGORIES:
         core_frame = _fully_crossed_embedding_frame(

@@ -46,7 +46,7 @@ def evaluate_queries(
     chunksize = get_evaluation_chunksize(len(query_ids), worker_count)
 
     if worker_count == 1:
-        init_evaluation_worker(cfg, paths.exp_name)
+        init_evaluation_worker(cfg, paths)
         iterator = map(evaluate_query, query_ids)
     else:
         print(f'[evaluate] scoring {len(query_ids):,} queries with {worker_count} workers')
@@ -55,7 +55,7 @@ def evaluate_queries(
             max_workers=worker_count,
             mp_context=worker_context,
             initializer=init_evaluation_worker,
-            initargs=(cfg, paths.exp_name),
+            initargs=(cfg, paths),
         )
         iterator = executor.map(evaluate_query, query_ids, chunksize=chunksize)
 

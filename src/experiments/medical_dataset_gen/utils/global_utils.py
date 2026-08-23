@@ -86,6 +86,8 @@ class MedicalDatasetGenPaths:
         shared_generation_artifact_paths: SharedGenerationArtifactPaths | None = None,
         shared_embedding_artifact_paths: SharedEmbeddingArtifactPaths | None = None,
         local_artifact_version: str | None = None,
+        artifact_root: Path | None = None,
+        cache_namespace: str | None = None,
     ) -> None:
         self.exp_name = exp_name
         if not exp_name:
@@ -93,18 +95,27 @@ class MedicalDatasetGenPaths:
 
         exp_path = Path(exp_name)
         exp_parts = exp_path.parts
-        if len(exp_parts) > 2:
+        if artifact_root is None and len(exp_parts) > 2:
             raise ValueError(f'subexperiments support only one nesting level: {exp_name!r}')
 
-        self.config_experiment_dir = self.results_dir / exp_name
+        # Suite cells live deeper than the historic parent/child layout.  An
+        # explicit root lets them reuse this path interface without faking a
+        # legacy experiment name.
+        self.config_experiment_dir = (
+            artifact_root if artifact_root is not None else self.results_dir / exp_name
+        )
         self.local_artifact_version = local_artifact_version
         self.experiment_dir = (
             self.config_experiment_dir / local_artifact_version
-            if local_artifact_version is not None
+            if artifact_root is None and local_artifact_version is not None
             else self.config_experiment_dir
         )
         parent_exp_name = exp_parts[0] if len(exp_parts) == 2 else exp_path.name
-        self.parent_experiment_dir = self.results_dir / parent_exp_name
+        self.parent_experiment_dir = (
+            artifact_root.parent
+            if artifact_root is not None
+            else self.results_dir / parent_exp_name
+        )
         self.logs_dir = self.experiment_dir / '_logs'
         self.figures_dir = self.experiment_dir / '_figures'
         self.config_path = self.config_experiment_dir / '_config.yaml'
@@ -113,6 +124,7 @@ class MedicalDatasetGenPaths:
         self.result_dir_overrides = dict(result_dir_overrides or {})
         self.shared_generation_artifact_paths = dict(shared_generation_artifact_paths or {})
         self.shared_embedding_artifact_paths = dict(shared_embedding_artifact_paths or {})
+        self.cache_namespace = cache_namespace
 
     def ensure_dirs(self) -> None:
         for path in [self.results_dir, self.experiment_dir, self.logs_dir, self.figures_dir]:
@@ -167,7 +179,12 @@ class MedicalDatasetGenPaths:
         return Path(override) / artifact_disk_old_name
 
     def chunk_embeddings_cache_dir(self, embedding_signature: str) -> Path:
-        return self.cache_dir / 'chunk_embeddings' / embedding_signature
+        root = (
+            self.cache_dir / self.cache_namespace
+            if self.cache_namespace is not None
+            else self.cache_dir
+        )
+        return root / 'chunk_embeddings' / embedding_signature
 
     def chunk_embeddings_bucket_path(self, embedding_signature: str, bucket: str) -> Path:
         return self.chunk_embeddings_cache_dir(embedding_signature) / f'{bucket}.parquet'

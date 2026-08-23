@@ -15,6 +15,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     wording_config_parts,
 )
 from experiments.medical_dataset_gen.reports.models import PlotFormat
+from experiments.medical_dataset_gen.reports.plot_rendering import set_axis_title
 
 
 def plot_paired_fcp_forest(
@@ -101,7 +102,10 @@ def plot_paired_fcp_forest(
         ax.set_yticklabels(labels, fontsize=7)
         ax.invert_yaxis()
         ax.set_xlabel('Held-out FacLoc - MMR FCP effect (95% profile-bootstrap CI)')
-        ax.set_title('Low-budget paired FCP effects in the fully crossed embedding suite')
+        set_axis_title(
+            axis=ax,
+            title='Low-budget paired FCP effects in the fully crossed embedding suite',
+        )
         ax.grid(axis='x', alpha=0.22)
         fig.tight_layout()
         path = output_dir / f'paired_fcp_low_budget_forest.{plot_format}'
@@ -207,7 +211,7 @@ def _plot_forest(
         ax.set_yticklabels(labels, fontsize=7)
         ax.invert_yaxis()
         ax.set_xlabel(xlabel)
-        ax.set_title(title)
+        set_axis_title(axis=ax, title=title)
         ax.grid(axis='x', alpha=0.22)
         _add_model_legend(ax, rows)
         fig.tight_layout()

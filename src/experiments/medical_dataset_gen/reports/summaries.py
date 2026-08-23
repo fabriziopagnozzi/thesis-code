@@ -29,6 +29,7 @@ from experiments.medical_dataset_gen.reports.models import BudgetCategory
 from experiments.medical_dataset_gen.reports.report_config import (
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
+    LOW_BUDGET_K,
     REPORT_METRIC_LABEL_TO_SPEC,
     REPORT_METRIC_LABELS,
     REPORT_METRIC_NAME_TO_LABEL,
@@ -63,6 +64,15 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             'ExperimentFamily': first.get('ExperimentFamily'),
             'ExperimentFamilyLabel': first.get('ExperimentFamilyLabel'),
             'RunLabel': first.get('RunLabel'),
+            'ArtifactOrigin': first.get('ArtifactOrigin'),
+            'DatasetSchemaVersion': first.get('DatasetSchemaVersion'),
+            'EvaluationSchemaVersion': first.get('EvaluationSchemaVersion'),
+            'IncludeInCausalSummaries': first.get('IncludeInCausalSummaries'),
+            'IncludeInFamilySummary': first.get('IncludeInFamilySummary'),
+            'SuiteTags': first.get('SuiteTags'),
+            'AnalysisBlocks': first.get('AnalysisBlocks'),
+            'AnalysisTier': first.get('AnalysisTier'),
+            'RunProfileFactors': first.get('RunProfileFactors'),
             'QueryMode': first.get('QueryMode'),
             'FocusMode': first.get('FocusMode'),
             'ChunkTextMode': first.get('ChunkTextMode'),
@@ -72,6 +82,8 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             'WordingConfigLabel': first.get('WordingConfigLabel'),
             'EmbeddingModel': first.get('EmbeddingModel'),
             'EmbeddingDimension': first.get('EmbeddingDimension'),
+            'CandidatePoolMass': first.get('CandidatePoolMass'),
+            'k_over_pool': first.get('k_over_pool'),
             'OnlyPassGeometry': first.get('OnlyPassGeometry'),
             'QueryScope': first.get('QueryScope'),
             'k': k,
@@ -561,13 +573,20 @@ def budget_category_rows_from_comparisons(
         if not candidates:
             continue
         selected_by_category: dict[BudgetCategory, Mapping[str, object]] = {
-            'low_budget': candidates[0],
             'medium_budget': candidates[len(candidates) // 2],
             'high_budget': candidates[-1],
         }
+        low_budget_row = next(
+            (row for row in candidates if int(cast(int, row.get('k') or 0)) == LOW_BUDGET_K),
+            None,
+        )
+        if low_budget_row is not None:
+            selected_by_category['low_budget'] = low_budget_row
         completeness = 'complete strategies' if complete_rows else 'available rows'
         for category in BUDGET_CATEGORIES:
-            selected = selected_by_category[category]
+            selected = selected_by_category.get(category)
+            if selected is None:
+                continue
             out = dict(selected)
             out['BudgetCategory'] = category
             out['BudgetCategoryLabel'] = BUDGET_CATEGORY_LABELS[category]
@@ -575,9 +594,7 @@ def budget_category_rows_from_comparisons(
                 category, len(candidates), completeness
             )
             if category == 'low_budget':
-                out['LowBudgetRule'] = (
-                    'smallest k with all strategies' if complete_rows else 'smallest k'
-                )
+                out['LowBudgetRule'] = f'fixed global k={LOW_BUDGET_K}'
             rows.append(out)
     return rows
 
@@ -588,7 +605,7 @@ def _budget_category_rule(
     completeness: str,
 ) -> str:
     if category == 'low_budget':
-        return f'lowest k among {completeness}'
+        return f'fixed global k={LOW_BUDGET_K}'
     if category == 'medium_budget':
         return f'k at index floor({k_count}/2) among {completeness}'
     return f'highest k among {completeness}'

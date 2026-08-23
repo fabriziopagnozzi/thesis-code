@@ -199,7 +199,7 @@ async def list_datasets():
         return {'datasets': valid_tables}
     except Exception as e:
         logger.error(f'Error listing datasets: {e}')
-        raise HTTPException(status_code=500, detail='Failed to list datasets')
+        raise HTTPException(status_code=500, detail='Failed to list datasets') from e
 
 
 @app.get('/datasets/{dataset_name}/schema')
@@ -228,7 +228,7 @@ async def get_dataset_schema(dataset_name: str):
 
     except Exception as e:
         logger.error(f'Error getting schema for {dataset_name}: {e}')
-        raise HTTPException(status_code=500, detail='Failed to get dataset schema')
+        raise HTTPException(status_code=500, detail='Failed to get dataset schema') from e
 
 
 @app.get('/datasets/{dataset_name}/columns')
@@ -259,7 +259,7 @@ async def get_dataset_columns(dataset_name: str):
 
     except Exception as e:
         logger.error(f'Error getting columns for {dataset_name}: {e}')
-        raise HTTPException(status_code=500, detail='Failed to get dataset columns')
+        raise HTTPException(status_code=500, detail='Failed to get dataset columns') from e
 
 
 @app.get('/datasets/{dataset_name}/rows')
@@ -314,7 +314,7 @@ async def get_dataset_rows(
                     f'Read {result_table.num_rows} rows (offset={offset}, limit={limit}) from {dataset_name} ({total_count} total)'
                 )
 
-            except AttributeError, TypeError:
+            except (AttributeError, TypeError):
                 # Fallback for older Lance versions without take_offsets/count_rows
                 logger.info(f'Native pagination unavailable, using Arrow slice for {dataset_name}')
                 arrow_table = table.to_arrow()
@@ -370,7 +370,7 @@ async def get_dataset_rows(
 
     except Exception as e:
         logger.error(f'Error getting rows for {dataset_name}: {e}')
-        raise HTTPException(status_code=500, detail='Failed to get dataset rows')
+        raise HTTPException(status_code=500, detail='Failed to get dataset rows') from e
 
 
 @app.get('/datasets/{dataset_name}/vector/preview')
@@ -420,7 +420,7 @@ async def get_vector_preview(
 
     except Exception as e:
         logger.error(f'Error getting vector preview for {dataset_name}.{column}: {e}')
-        raise HTTPException(status_code=500, detail='Failed to get vector preview')
+        raise HTTPException(status_code=500, detail='Failed to get vector preview') from e
 
 
 # Mount static files - use vanilla version by default

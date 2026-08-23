@@ -243,7 +243,7 @@ PLOTTED_DIAGNOSTIC_METRIC_NAMES = [
 PLOTTED_ANSWER_ROUGE_METRIC_NAMES = [
     'AnswerROUGE1Recall@k',
     'AnswerROUGE2Recall@k',
-    'AnswerROUGE1Precision@k',  # this is too low like emilia said in the 30/06 call, see how to treat it better
+    'AnswerROUGE1Precision@k',
 ]
 
 type PlotMetricSpec = tuple[str, str, str, bool]

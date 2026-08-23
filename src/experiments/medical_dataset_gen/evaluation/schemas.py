@@ -64,6 +64,7 @@ class LightweightQrelRecord:
     cluster_id: str | None
     cluster_role: str | None
     axis: str | None
+    distractor_type: str | None
     is_gold: bool
 
 

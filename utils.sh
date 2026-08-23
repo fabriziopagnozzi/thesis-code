@@ -1,5 +1,5 @@
-export RESULTS_DIR="${HOME}/thesis/src/experiments/medical_dataset_gen/_results"
-export REPORTS_DIR="${HOME}/thesis/src/experiments/medical_dataset_gen/_reports"
+export RESULTS_DIR="${HOME}/thesis-code/src/experiments/medical_dataset_gen/_results"
+export REPORTS_DIR="${HOME}/thesis-documents/reports"
 
 run() {
     uv run task pipeline "$@"

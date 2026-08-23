@@ -13,6 +13,8 @@ Columns: query_id, icd10_3char, condition_name, modifiers_json, query_text,
          facets_json, answer_text, n_facets, n_gold_chunks
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any, cast

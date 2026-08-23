@@ -148,7 +148,6 @@ class GeometryFilterStatsRow(BenchmarkPydanticModel):
     fail_missing_facet: bool
     fail_weak_primary_axis_dominance: bool
     fail_excess_stress_horizon_facet_coverage: bool
-    fail_missing_or_malformed_background_outlier: bool
     facets_present_json: str
     topk_retrieved_facets_json: str
     n_background_outliers_in_pool: int
@@ -238,5 +237,6 @@ class EmbeddingGeometryWorkerState(TypedDict):
     out_dir: Path
     query_group_by_id: dict[str, str]
     query_dir_name_by_id: dict[str, str]
+    flat_query_dirs: bool
     k_values: list[int]
     selected_plot_names: Container[GeomPlotName] | None

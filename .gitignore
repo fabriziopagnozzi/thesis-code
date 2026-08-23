@@ -26,6 +26,7 @@ data/
 
 # this is a git repo from MIT
 experiments/mimic/mimic_*/
+src/thirdparty/mimic_code/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -10,11 +10,6 @@ from pathlib import Path
 from typing import Literal, cast
 
 import polars as pl
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import make_pipeline
 
 from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
@@ -48,7 +43,6 @@ _N_QUERIES = 'n_queries'
 _VALIDATION_SPLIT = 'validation'
 _TEST_SPLIT = 'test'
 _WORD_RE = re.compile(r'[A-Za-z0-9]+')
-_TEXT_SAMPLE_SIZE = 5_000
 _JACCARD_QUERY_LIMIT = 128
 _MAX_CHUNKS_PER_FACET_FOR_JACCARD = 2
 
@@ -171,7 +165,6 @@ def synthetic_artifact_diagnostic_rows(
         out = base_experiment_row(record)
         out.update(_duplicate_text_stats(chunks))
         out.update(_lexical_jaccard_stats(chunks=chunks, qrels=qrels))
-        out.update(_lexical_classifier_stats(chunks=chunks, qrels=qrels))
         rows.append(out)
     return rows
 
@@ -798,58 +791,6 @@ def _empty_jaccard_stats() -> dict[str, object]:
         'BetweenFacetJaccardMean': None,
         'WithinMinusBetweenJaccard': None,
     }
-
-
-def _lexical_classifier_stats(*, chunks: pl.DataFrame, qrels: pl.DataFrame) -> dict[str, object]:
-    gold_labels = (
-        qrels.filter(pl.col('is_gold').fill_null(False))
-        .select('chunk_id', 'axis', 'cluster_role')
-        .drop_nulls(subset=['chunk_id', 'axis', 'cluster_role'])
-        .unique(subset=['chunk_id'])
-    )
-    labeled = gold_labels.join(chunks.select('chunk_id', 'text'), on='chunk_id', how='inner')
-    if labeled.height > _TEXT_SAMPLE_SIZE:
-        labeled = labeled.sample(n=_TEXT_SAMPLE_SIZE, seed=42, shuffle=True)
-
-    texts = [str(text or '') for text in labeled['text'].to_list()]
-    axis_labels = [str(label) for label in labeled['axis'].to_list()]
-    role_labels = [str(label) for label in labeled['cluster_role'].to_list()]
-    return {
-        'LexicalClassifierRows': labeled.height,
-        'AxisLabelCount': len(set(axis_labels)),
-        'ClusterRoleLabelCount': len(set(role_labels)),
-        'AxisBowAccuracy': _bag_of_words_accuracy(texts, axis_labels),
-        'ClusterRoleBowAccuracy': _bag_of_words_accuracy(texts, role_labels),
-    }
-
-
-def _bag_of_words_accuracy(texts: Sequence[str], labels: Sequence[str]) -> float | None:
-    if len(texts) < 100 or len(set(labels)) < 2:
-        return None
-    label_counts = Counter(labels)
-    stratify = labels if min(label_counts.values()) >= 2 else None
-    try:
-        x_train, x_test, y_train, y_test = train_test_split(
-            list(texts),
-            list(labels),
-            test_size=0.30,
-            random_state=42,
-            stratify=stratify,
-        )
-        model = make_pipeline(
-            TfidfVectorizer(
-                lowercase=True,
-                ngram_range=(1, 2),
-                min_df=2,
-                max_features=20_000,
-            ),
-            MultinomialNB(),
-        )
-        model.fit(x_train, y_train)
-        predictions = model.predict(x_test)
-    except Exception:
-        return None
-    return float(accuracy_score(y_test, predictions))
 
 
 def _word_set(text: str) -> set[str]:

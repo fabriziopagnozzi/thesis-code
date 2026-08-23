@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from experiments.medical_dataset_gen.query_geometry.filter_diagnostics import (
     background_outlier_diagnostics,
+    component_query_similarity_diagnostics,
     facet_separation,
     flatten_topk_diagnostics,
     is_query_near_miss_distractor,
@@ -163,6 +164,11 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             chunk_vectors=chunk_vectors,
             expected_background_chunks=cfg.generation.chunk_pools.background_outliers_per_query(),
         )
+        component_similarity = component_query_similarity_diagnostics(
+            topn_chunk_ids=topn_chunk_ids,
+            topn_sims=topn_sims,
+            query_qrels=query_qrels,
+        )
 
         diagnostics = topk_vs_facloc_diagnostics(
             topn_global=topn_global,
@@ -177,7 +183,6 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             n_facets=len(query_facets),
             primary_axis_fraction=float(primary_topk['primary_axis_fraction']),
             n_topk_retrieved_facets=n_topk_retrieved_facets,
-            background_outlier_complete=bool(background_diagnostics['background_outlier_complete']),
         )
         passes = not any(failures.values())
 
@@ -225,6 +230,7 @@ def run_filter_queries(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.
             }
             | flatten_topk_diagnostics(topk_by_k)
             | background_diagnostics
+            | component_similarity
             | diagnostics
         )
         geometry_row = GeometryFilterStatsRow.model_validate(geometry_row_data)

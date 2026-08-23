@@ -24,7 +24,6 @@ from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
     SyntheticMedicalDatasetTableName,
-    paths_for,
 )
 from experiments.medical_dataset_gen.utils.io_utils import json_loads
 
@@ -77,11 +76,14 @@ def get_evaluation_worker_state() -> EvaluationWorkerState | None:
     return _eval_worker_state
 
 
-def init_evaluation_worker(cfg: ExperimentCfg, exp_name: str) -> None:
-    if cfg.global_.output_experiment != exp_name:
-        cfg = cfg.model_copy(deep=True)
-        cfg.global_.output_experiment = exp_name
-    paths = paths_for(cfg)
+def init_evaluation_worker(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
+    """Initialize a worker from the caller's resolved artifact paths.
+
+    Native-v5 suite cells use explicit shared-data and attempt roots.  Rebuilding
+    paths from ``cfg.global_.output_experiment`` would discard those roots and
+    incorrectly fall back to the legacy ``_results/<experiment>/v5`` layout in
+    spawned worker processes.
+    """
 
     compute_answer_rouge = cfg.retrieval.compute_answer_rouge
     requires_chunk_text = compute_answer_rouge or cfg.evaluation.use_reranker

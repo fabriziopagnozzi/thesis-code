@@ -11,6 +11,8 @@ def find_project_root() -> Path:
 
 
 ROOT_DIR = find_project_root()
+THESIS_DOCUMENTS_DIR = ROOT_DIR.parent / 'thesis-documents'
+THESIS_REPORTS_DIR = THESIS_DOCUMENTS_DIR / 'reports'
 
 DATASETS_DIR = (
     ROOT_DIR / 'data' / 'full-data'

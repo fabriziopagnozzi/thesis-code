@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+import re
 import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
 from experiments.medical_dataset_gen.reports.analysis_constants import (
+    DISTRIBUTION_FAMILY_ABBREVIATIONS,
     DIVERSIFYING_STRATEGIES,
     EXPERIMENT_FAMILIES,
     EXPERIMENT_FAMILY_COLORS,
@@ -13,20 +16,51 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ExperimentFamilyId,
 )
 from experiments.medical_dataset_gen.reports.helpers import (
+    experiment_plot_label,
     float_or_none,
+    interaction_distribution_label,
     quantile,
-    short_experiment_label,
     short_model_label,
     strategy_label,
 )
 from experiments.medical_dataset_gen.reports.models import PlotFormat
+from experiments.medical_dataset_gen.reports.plot_rendering import set_axis_title
 
-GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
+PRIMARY_GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
     ('Dominant primary gold', 'DominantPrimaryGoldCountMean', '#0B5D6E'),
     ('Other primary gold', 'OtherPrimaryGoldCountMean', '#287C8E'),
-    ('Secondary gold', 'SecondaryGoldCountMean', '#58A6B1'),
-    ('Niche gold', 'NicheGoldCountMean', '#9AD0D3'),
 )
+
+# Secondary and niche evidence is generated as one cluster per facet.  Keeping
+# individual facets separate in this audit makes the intended multi-aspect
+# composition visible instead of merging them into one broad gold segment.
+FACET_GOLD_ROLE_STACKS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
+    (
+        'Secondary',
+        'SecondaryGoldCountMean',
+        'secondary_gold',
+        ('#4C78A8', '#7EAED3', '#B6D1E8'),
+    ),
+    (
+        'Niche',
+        'NicheGoldCountMean',
+        'niche_gold',
+        ('#B279A2', '#D4A6C8', '#E7CDE0'),
+    ),
+)
+
+# Composition figures reserve a fixed vertical budget for each distribution.
+# This keeps bar thickness comparable between the complete audit and small
+# subsets such as the four interaction pools.
+COMPOSITION_ROW_HEIGHT_IN = 0.28
+COMPOSITION_FAMILY_GAP_HEIGHT_IN = 0.18
+COMPOSITION_FIXED_HEIGHT_IN = 1.9
+COMPOSITION_BAR_HEIGHT = 0.60
+SCALE_LABEL_ABBREVIATIONS: dict[str, str] = {
+    'small': 'S',
+    'medium': 'M',
+    'large': 'L',
+}
 
 
 def annotate_horizontal_values(*, ax: Any, values: Sequence[float]) -> None:
@@ -175,7 +209,61 @@ def _representative_distribution_rows(
                 ),
             )[0]
         )
-    return _family_grouped_rows(representatives, 'GoldPercentage')
+    # Composition is a design audit: order conditions by their controlled
+    # factors, not by the realized share that the bars happen to display.
+    return sorted(representatives, key=_composition_row_sort_key)
+
+
+def _composition_row_sort_key(row: Mapping[str, object]) -> tuple[int, int, int, int, str]:
+    family_rank = {family_id: index for index, family_id in enumerate(EXPERIMENT_FAMILIES)}
+    family = _family_id_for_row(row)
+    distribution = str(row.get('Distribution') or '')
+    scale = str(row.get('Factor_scale') or '')
+    scale_rank = {'small': 0, 'medium': 1, 'large': 2}.get(scale, 3)
+
+    if family == 'background_variant':
+        if distribution.startswith('dilution_far_b'):
+            mass = int(distribution.removeprefix('dilution_far_b') or 0)
+            return family_rank[family], 0, mass, 0, distribution
+        if distribution.startswith('background_'):
+            topology = str(row.get('Factor_background_topology') or '')
+            clusters = int(topology.split('x', 1)[0]) if 'x' in topology else 0
+            return family_rank[family], 1, 0, -clusters, distribution
+        return family_rank[family], 2, scale_rank, 0, distribution
+
+    if family == 'dominance':
+        if distribution.startswith('dominance_'):
+            level = str(row.get('Factor_dominance_level') or '')
+            level_rank = {'mild': 0, 'high': 1, 'extreme': 2}.get(level, 3)
+            return family_rank[family], 0, level_rank, 0, distribution
+        return family_rank[family], 1, scale_rank, 0, distribution
+
+    if family == 'sparse_niche':
+        if distribution.startswith('sparse_'):
+            mode = str(row.get('Factor_sparse_mode') or '')
+            level = str(row.get('Factor_sparse_level') or '')
+            mode_rank = {'one': 0, 'two': 1}.get(mode, 2)
+            level_rank = {'moderate': 0, 'severe': 1, 'extreme': 2}.get(level, 3)
+            return family_rank[family], 0, mode_rank, level_rank, distribution
+        return family_rank[family], 1, scale_rank, 0, distribution
+
+    if family == 'near_miss_heavy':
+        if distribution.startswith('near_miss_h'):
+            suffix = distribution.removeprefix('near_miss_h')
+            mass_token = suffix.split('_', 1)[0]
+            mass = int(mass_token) if mass_token.isdigit() else 0
+            return family_rank[family], 0, mass, 0, distribution
+        return family_rank[family], 1, scale_rank, 0, distribution
+
+    if family == 'balanced_clean':
+        balanced_rank = {
+            'scale_balanced_small': 0,
+            'balanced_reference': 1,
+            'scale_balanced_large': 2,
+        }.get(distribution, 3)
+        return family_rank[family], 0, balanced_rank, 0, distribution
+
+    return family_rank[family], 0, 0, 0, distribution
 
 
 def family_color_for_row(row: Mapping[str, object]) -> str:
@@ -235,8 +323,7 @@ def plot_geometry_pass_rate(
     if not plot_rows:
         return []
     labels = [
-        f'{row.get("ShortExperiment") or short_experiment_label(str(row.get("Experiment")))}/'
-        f'{short_model_label(str(row.get("EmbeddingModel")))}'
+        f'{experiment_plot_label(row)}/{short_model_label(str(row.get("EmbeddingModel")))}'
         for row in plot_rows
     ]
     values = [float_or_none(row.get('GeometryPassRate')) or 0.0 for row in plot_rows]
@@ -245,7 +332,7 @@ def plot_geometry_pass_rate(
     fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
         ax.barh(range(len(labels)), values, color=colors)
-        ax.set_title('Geometry filter pass rate by experiment and embedding')
+        set_axis_title(axis=ax, title='Geometry filter pass rate by experiment and embedding')
         ax.set_xlabel('Pass rate')
         ax.set_yticks(range(len(labels)))
         ax.set_yticklabels(labels)
@@ -292,7 +379,7 @@ def plot_lambda_stability(
     fig, ax = plt.subplots(figsize=(6.5, 4.5))  # type: ignore[attr-defined]
     try:
         ax.bar(labels, means, yerr=stds, color=['#C47A3A', '#287C8E'], capsize=5)
-        ax.set_title('Selected lambda stability')
+        set_axis_title(axis=ax, title='Selected lambda stability')
         ax.set_ylabel('Normalized lambda mean ± std')
         ax.set_ylim(0, min(1.0, max(means + stds + [0.1]) + 0.15))
         ax.grid(axis='y', alpha=0.25)
@@ -337,7 +424,7 @@ def plot_lambda_safety_worst_delta(
             patch.set_facecolor(color)
             patch.set_alpha(0.55)
         ax.axhline(0.0, color='#202020', linewidth=0.9)
-        ax.set_title('Validation lambda safety: worst FCP delta vs top-k')
+        set_axis_title(axis=ax, title='Validation lambda safety: worst FCP delta vs top-k')
         ax.set_ylabel('Worst FacetCoveragePurity@k delta over lambda')
         ax.grid(axis='y', alpha=0.25)
         fig.tight_layout()
@@ -382,7 +469,7 @@ def plot_lambda_delta_curve(
             plt.close(fig)  # type: ignore[attr-defined]
             return []
         ax.axhline(0.0, color='#202020', linewidth=0.9)
-        ax.set_title('Validation FCP delta vs top-k across lambda')
+        set_axis_title(axis=ax, title='Validation FCP delta vs top-k across lambda')
         ax.set_xlabel('Normalized lambda within each strategy grid')
         ax.set_ylabel('Mean FacetCoveragePurity@k delta')
         ax.set_xlim(0, 1)
@@ -452,7 +539,7 @@ def plot_near_optimal_width(
     fig, ax = plt.subplots(figsize=(6.5, 4.5))  # type: ignore[attr-defined]
     try:
         ax.boxplot(data, tick_labels=labels, patch_artist=True)
-        ax.set_title('Near-optimal lambda width')
+        set_axis_title(axis=ax, title='Near-optimal lambda width')
         ax.set_ylabel('Normalized lambda span within epsilon of best FCP')
         ax.set_ylim(0, 1)
         ax.grid(axis='y', alpha=0.25)
@@ -486,28 +573,50 @@ def plot_dataset_composition(
     plot_rows = _representative_distribution_rows(plot_rows)
     if not plot_rows:
         return []
-    labels = [str(row.get('ShortDistribution') or row.get('Distribution')) for row in plot_rows]
+    # ``ShortDistribution`` is intentionally compact for tables, but collapses
+    # native-v5 IDs such as ``dominance_high`` and ``dominance_extreme`` to the
+    # same token.  Composition is an audit plot, so every row needs its full,
+    # human-readable distribution identifier.
+    labels = [_distribution_composition_label(row) for row in plot_rows]
     gold = [float_or_none(row.get('GoldPercentage')) or 0.0 for row in plot_rows]
     near = [float_or_none(row.get('NearMissDistractorPercentage')) or 0.0 for row in plot_rows]
     background = [float_or_none(row.get('BackgroundOutlierPercentage')) or 0.0 for row in plot_rows]
     positions = _family_spaced_positions(plot_rows)
     family_gap_count = max(0, len(set(_family_id_for_row(row) for row in plot_rows)) - 1)
-    fig_height = max(5.0, 0.28 * len(labels) + 0.18 * family_gap_count + 1.9)
-    fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
+    fig_height = (
+        COMPOSITION_ROW_HEIGHT_IN * len(labels)
+        + COMPOSITION_FAMILY_GAP_HEIGHT_IN * family_gap_count
+        + COMPOSITION_FIXED_HEIGHT_IN
+    )
+    fig, ax = plt.subplots(figsize=(13.5, fig_height))  # type: ignore[attr-defined]
     try:
         granular_gold = _gold_role_share_series(plot_rows)
         if granular_gold is None:
             displayed_gold = gold
-            ax.barh(positions, gold, label='Gold', color='#287C8E')
+            ax.barh(
+                positions,
+                gold,
+                height=COMPOSITION_BAR_HEIGHT,
+                label='Gold',
+                color='#287C8E',
+            )
         else:
             left = [0.0 for _row in plot_rows]
             for label, _column, color, values in granular_gold:
-                ax.barh(positions, values, left=left, label=label, color=color)
+                ax.barh(
+                    positions,
+                    values,
+                    height=COMPOSITION_BAR_HEIGHT,
+                    left=left,
+                    label=label,
+                    color=color,
+                )
                 left = [old + value for old, value in zip(left, values, strict=True)]
             displayed_gold = left
         ax.barh(
             positions,
             near,
+            height=COMPOSITION_BAR_HEIGHT,
             left=displayed_gold,
             label='Near-miss distractors',
             color='#C47A3A',
@@ -516,30 +625,101 @@ def plot_dataset_composition(
         ax.barh(
             positions,
             background,
+            height=COMPOSITION_BAR_HEIGHT,
             left=bottoms,
-            label='Background outliers',
+            label='Background outliers (clusters x chunks)',
             color='#6F7890',
         )
-        ax.set_title('Candidate-pool composition')
+        _annotate_background_topologies(
+            ax=ax,
+            positions=positions,
+            lefts=bottoms,
+            widths=background,
+            rows=plot_rows,
+        )
+        set_axis_title(axis=ax, title='Candidate-pool composition')
         ax.set_xlabel('Share of qrel pool')
         ax.set_yticks(positions)
-        ax.set_yticklabels(labels)
+        ax.set_yticklabels(labels, fontsize=8)
         ax.invert_yaxis()
         ax.set_xlim(0, 1)
         ax.grid(axis='x', alpha=0.25)
+        legend_handles, legend_labels = ax.get_legend_handles_labels()
+        legend_ncol = min(4, len(legend_handles))
+        legend_rows = (len(legend_handles) + legend_ncol - 1) // legend_ncol
         fig.legend(
-            *ax.get_legend_handles_labels(),
+            legend_handles,
+            legend_labels,
             loc='lower center',
-            ncol=3,
+            ncol=legend_ncol,
             frameon=False,
             fontsize=8,
+            bbox_to_anchor=(0.5, 0.0),
+            borderaxespad=0.2,
         )
-        fig.tight_layout(rect=(0, 0.12, 1, 1))
+        # Reserve only the measured number of legend rows; a fixed fraction
+        # becomes conspicuous empty space for tall audit plots.
+        legend_height = (0.16 + 0.18 * legend_rows) / fig_height
+        fig.tight_layout(rect=(0, legend_height, 1, 1))
         path = output_dir / f'dataset_composition_stacked.{plot_format}'
         fig.savefig(path, dpi=180, bbox_inches='tight')
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
+
+
+def _distribution_composition_label(row: Mapping[str, object]) -> str:
+    """Return an unambiguous, compact display label for a pool distribution."""
+    distribution = str(row.get('Distribution') or row.get('ShortDistribution') or '')
+    family = _family_id_for_row(row)
+    label = _compact_distribution_composition_label(
+        distribution=distribution,
+        family=family,
+    )
+    pool_size = float_or_none(row.get('PoolSizeMean'))
+    if pool_size is None:
+        return label
+    return f'{label} (N={pool_size:.0f})'
+
+
+def _compact_distribution_composition_label(
+    *,
+    distribution: str,
+    family: ExperimentFamilyId,
+) -> str:
+    """Render composition rows with the shared distribution-family abbreviations."""
+    if family == 'interaction':
+        return interaction_distribution_label(distribution)
+
+    is_scale = distribution.startswith('scale_')
+    token = distribution.removeprefix('scale_')
+    abbreviation = DISTRIBUTION_FAMILY_ABBREVIATIONS[family]
+    if family == 'balanced_clean':
+        token = token.removeprefix('balanced_').replace('reference', 'ref')
+    elif family == 'dominance':
+        token = token.removeprefix('dominance_')
+    elif family == 'sparse_niche':
+        token = token.removeprefix('sparse_')
+    elif family == 'near_miss_heavy':
+        token = token.removeprefix('near_miss_')
+    elif family == 'background_variant':
+        token = token.removeprefix('background_').removeprefix('dilution_')
+        token = token.removeprefix('compact_background_')
+
+    if is_scale:
+        for scale_label, abbreviation_label in SCALE_LABEL_ABBREVIATIONS.items():
+            if token == scale_label:
+                token = abbreviation_label
+                break
+            if token.endswith(f'_{scale_label}'):
+                token = f'{token.removesuffix(scale_label)}{abbreviation_label}'
+                break
+    token = re.sub(r'(?<=\d)x(?=\d)', '\N{MULTIPLICATION SIGN}', token)
+    token = re.sub(r'^h(?=\d)', 'H', token)
+    token = re.sub(r'^b(?=\d)', 'B', token)
+    token = token.replace('_b', '_B')
+    token = token.replace('_', '-')
+    return f'{abbreviation}-scale-{token}' if is_scale else f'{abbreviation}-{token}'
 
 
 def _family_spaced_positions(rows: Sequence[Mapping[str, object]]) -> list[float]:
@@ -560,7 +740,7 @@ def _gold_role_share_series(
     rows: Sequence[Mapping[str, object]],
 ) -> list[tuple[str, str, str, list[float]]] | None:
     series: list[tuple[str, str, str, list[float]]] = []
-    for label, column, color in GOLD_ROLE_STACKS:
+    for label, column, color in PRIMARY_GOLD_ROLE_STACKS:
         values: list[float] = []
         for row in rows:
             pool_size = float_or_none(row.get('PoolSizeMean'))
@@ -569,4 +749,102 @@ def _gold_role_share_series(
                 return None
             values.append(count / pool_size)
         series.append((label, column, color, values))
+
+    for role_label, column, topology_key, colors in FACET_GOLD_ROLE_STACKS:
+        facet_counts = [_facet_count_for_role(row, column, topology_key) for row in rows]
+        max_facet_count = max(facet_counts, default=0)
+        if max_facet_count == 0:
+            continue
+        for facet_index in range(max_facet_count):
+            values = []
+            for row, facet_count in zip(rows, facet_counts, strict=True):
+                pool_size = float_or_none(row.get('PoolSizeMean'))
+                count = float_or_none(row.get(column))
+                if pool_size is None or pool_size <= 0.0 or count is None:
+                    return None
+                values.append(count / pool_size / facet_count if facet_index < facet_count else 0.0)
+            label = (
+                f'{role_label} facet {facet_index + 1}'
+                if max_facet_count > 1
+                else f'{role_label} gold'
+            )
+            series.append((label, column, colors[facet_index % len(colors)], values))
     return series
+
+
+def _facet_count_for_role(
+    row: Mapping[str, object],
+    count_column: str,
+    topology_key: str,
+) -> int:
+    """Return the number of evidence facets from the realized cluster audit."""
+    total_count = float_or_none(row.get(count_column))
+    if total_count is None or total_count <= 0.0:
+        return 0
+    topology = _realized_cluster_topology(row)
+    role_topology = topology.get(topology_key)
+    if not isinstance(role_topology, Mapping):
+        return 1
+    clusters = float_or_none(role_topology.get('clusters_per_query'))
+    if clusters is None or clusters < 1.0:
+        return 1
+    return max(1, round(clusters))
+
+
+def _annotate_background_topologies(
+    *,
+    ax: Any,
+    positions: Sequence[float],
+    lefts: Sequence[float],
+    widths: Sequence[float],
+    rows: Sequence[Mapping[str, object]],
+) -> None:
+    """Label background shares by realized ``clusters x chunks-per-cluster``."""
+    for position, left, width, row in zip(positions, lefts, widths, rows, strict=True):
+        label = _background_topology_label(row)
+        if label is None or width <= 0.0:
+            continue
+        if width >= 0.06:
+            ax.text(
+                left + width / 2.0,
+                position,
+                label,
+                ha='center',
+                va='center',
+                fontsize=6.5,
+                color='white',
+                fontweight='bold',
+            )
+        else:
+            ax.text(
+                left + width + 0.006,
+                position,
+                label,
+                ha='left',
+                va='center',
+                fontsize=6.5,
+                color='#455064',
+            )
+
+
+def _background_topology_label(row: Mapping[str, object]) -> str | None:
+    topology = _realized_cluster_topology(row)
+    background = topology.get('background_outlier')
+    if not isinstance(background, Mapping):
+        return None
+    clusters = float_or_none(background.get('clusters_per_query'))
+    chunks = float_or_none(background.get('chunks_per_cluster'))
+    if clusters is None or chunks is None or clusters <= 0.0 or chunks <= 0.0:
+        return None
+    return f'{clusters:.0f}x{chunks:.0f}'
+
+
+def _realized_cluster_topology(row: Mapping[str, object]) -> Mapping[str, object]:
+    raw_topology = row.get('RealizedClusterTopologyJson')
+    if not isinstance(raw_topology, str):
+        return {}
+    try:
+        topology = json.loads(raw_topology)
+    except json.JSONDecodeError:
+        return {}
+    return topology if isinstance(topology, dict) else {}

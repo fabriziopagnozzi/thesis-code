@@ -22,12 +22,12 @@ systemd-run --user \
   --wait \
   --pipe \
   --same-dir \
-  --setenv="EVALUATION_WORKERS=${EVALUATION_WORKERS:-25}" \
+  --setenv="EVALUATION_WORKERS=${EVALUATION_WORKERS:-18}" \
   --setenv="QUERY_GEOMETRY_WORKERS=${QUERY_GEOMETRY_WORKERS:-9}" \
   --setenv=HF_TOKEN \
   --property=Type=exec \
-  -p MemoryHigh="${MEMORY_HIGH:-48G}" \
-  -p MemoryMax="${MEMORY_MAX:-50G}" \
+  -p MemoryHigh="${MEMORY_HIGH:-58G}" \
+  -p MemoryMax="${MEMORY_MAX:-59G}" \
   -p MemorySwapMax="${MEMORY_SWAP_MAX:-0G}" \
   -p OOMPolicy=kill \
   -p KillMode=control-group \

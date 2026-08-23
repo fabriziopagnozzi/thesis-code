@@ -12,6 +12,7 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
 )
 from experiments.medical_dataset_gen.reports.analysis_constants import REPORT_FILES
+from experiments.medical_dataset_gen.reports.analysis_scope import interaction_rows, primary_rows
 from experiments.medical_dataset_gen.reports.artifacts import (
     render_experiment_config_recap,
     write_csv,
@@ -19,7 +20,9 @@ from experiments.medical_dataset_gen.reports.artifacts import (
 from experiments.medical_dataset_gen.reports.cli import parse_args
 from experiments.medical_dataset_gen.reports.discovery import (
     discover_experiments,
+    discover_suite_experiments,
     load_experiment_record,
+    suite_cells_matching_where,
 )
 from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
 from experiments.medical_dataset_gen.reports.latex_macros import render_thesis_result_macros
@@ -54,6 +57,15 @@ from experiments.medical_dataset_gen.reports.statistical import (
     suite_effect_summary_rows,
     write_paired_effect_datasets,
 )
+from experiments.medical_dataset_gen.reports.suite_analysis import (
+    analysis_series_rows,
+    crossing_rows,
+    factor_interaction_rows,
+    matched_contrast_rows,
+    report_eligible_manifest,
+    suite_distribution_and_family_rows,
+    write_suite_factor_figures,
+)
 from experiments.medical_dataset_gen.reports.summaries import (
     budget_category_rows_from_comparisons,
     comparison_by_k_rows,
@@ -71,6 +83,8 @@ from experiments.medical_dataset_gen.reports.validity import (
     lodo_lambda_strategy_rows,
     synthetic_artifact_diagnostic_rows,
 )
+from experiments.medical_dataset_gen.suites.core import load_logical_suite
+from experiments.medical_dataset_gen.suites.geometry import apply_frozen_separability_strata
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 
@@ -96,14 +110,23 @@ def run_report(args: CliArgs) -> ReportOutputs:
         _remove_obsolete_flat_data_files(args.output_dir)
         warnings: list[str] = []
         _progress(f'discovering completed experiments under: {args.results_dir}')
-        records = discover_experiments(
-            args.results_dir,
-            include_scrapped=args.include_scrapped,
-            requested_experiments=args.experiments,
-            experiment_regex=args.experiment_regex,
-            exclude_experiment_regex=args.exclude_experiment_regex,
-            artifact_version=args.artifact_version,
-            warnings=warnings,
+        records = (
+            discover_suite_experiments(
+                args.results_dir,
+                suite_id=args.suite_id,
+                where=args.suite_where,
+                warnings=warnings,
+            )
+            if args.suite_id is not None
+            else discover_experiments(
+                args.results_dir,
+                include_scrapped=args.include_scrapped,
+                requested_experiments=args.experiments,
+                experiment_regex=args.experiment_regex,
+                exclude_experiment_regex=args.exclude_experiment_regex,
+                artifact_version=args.artifact_version,
+                warnings=warnings,
+            )
         )
         discovered_count = len(records)
         _progress(f'discovered {discovered_count} completed experiments')
@@ -111,6 +134,21 @@ def run_report(args: CliArgs) -> ReportOutputs:
             records=records,
             requested_embedding_models=args.embedding_models,
         )
+        suite_manifest = None
+        if args.suite_id is not None:
+            materialized_manifest = load_logical_suite(args.results_dir, args.suite_id).manifest
+            suite_manifest, excluded_distributions = report_eligible_manifest(materialized_manifest)
+            if excluded_distributions:
+                eligible_names = {cell.name for cell in suite_manifest.cells}
+                excluded_records = len(records) - sum(
+                    record.name in eligible_names for record in records
+                )
+                records = [record for record in records if record.name in eligible_names]
+                warnings.append(
+                    'excluded legacy background variants that do not satisfy the background-outlier '
+                    f'definition: {", ".join(sorted(excluded_distributions))} '
+                    f'({excluded_records} completed run-profile cells)'
+                )
         _progress(f'{len(records)} experiments remain after embedding-model filtering')
         _progress(
             'using embedding models: '
@@ -173,6 +211,56 @@ def run_report(args: CliArgs) -> ReportOutputs:
         else:
             _progress('skipping lambda-grid diagnostics')
         comparison_rows = comparison_by_k_rows(strategy_rows)
+        suite_distribution_rows: list[dict[str, object]] = []
+        suite_family_rows: list[dict[str, object]] = []
+        suite_contrast_rows: list[dict[str, object]] = []
+        suite_analysis_series_rows: list[dict[str, object]] = []
+        suite_interaction_rows: list[dict[str, object]] = []
+        suite_crossing_rows: list[dict[str, object]] = []
+        suite_separability_rows: list[dict[str, object]] = []
+        if args.suite_id is not None:
+            assert suite_manifest is not None
+            suite_scope = (
+                suite_cells_matching_where(suite_manifest, args.suite_where)
+                if args.suite_where is not None
+                else None
+            )
+            suite_distribution_rows, suite_family_rows = suite_distribution_and_family_rows(
+                comparison_rows
+            )
+            suite_contrast_rows = matched_contrast_rows(
+                manifest=suite_manifest,
+                comparison_rows=comparison_rows,
+                enforce_strict=args.strict_suite,
+                scope_cell_ids=suite_scope,
+            )
+            suite_analysis_series_rows = analysis_series_rows(
+                manifest=suite_manifest,
+                comparison_rows=comparison_rows,
+                enforce_strict=args.strict_suite,
+                scope_cell_ids=suite_scope,
+            )
+            suite_interaction_rows = factor_interaction_rows(
+                manifest=suite_manifest,
+                comparison_rows=comparison_rows,
+            )
+            suite_crossing_rows = crossing_rows(suite_contrast_rows)
+            write_suite_factor_figures(
+                output_dir=args.output_dir,
+                contrast_rows=suite_contrast_rows,
+            )
+            suite_separability_rows = apply_frozen_separability_strata(
+                results_dir=args.results_dir,
+                suite_id=args.suite_id,
+            )
+            eligible_distributions = {
+                distribution.distribution_id for distribution in suite_manifest.distributions
+            }
+            suite_separability_rows = [
+                row
+                for row in suite_separability_rows
+                if row.get('Distribution') in eligible_distributions
+            ]
         global_lambda_strategy_rows_data: list[dict[str, object]] = []
         if global_lambda_analysis_enabled:
             _progress('computing global-lambda validity summaries')
@@ -211,13 +299,26 @@ def run_report(args: CliArgs) -> ReportOutputs:
         else:
             _progress('skipping synthetic-artifact diagnostics')
         _progress('computing aggregate family, budget, metric, and embedding summaries')
-        family_summary_rows = experiment_family_summary_rows(comparison_rows)
-        budget_rows = budget_category_rows_from_comparisons(comparison_rows)
+        primary_comparison_rows = primary_rows(comparison_rows)
+        interaction_comparison_rows = interaction_rows(comparison_rows)
+        family_summary_rows = experiment_family_summary_rows(primary_comparison_rows)
+        budget_rows = budget_category_rows_from_comparisons(primary_comparison_rows)
+        interaction_budget_rows = budget_category_rows_from_comparisons(interaction_comparison_rows)
         family_budget_summary_rows = experiment_family_budget_summary_rows(budget_rows)
-        metric_family_summary_rows_data = metric_family_summary_rows(comparison_rows)
+        interaction_family_budget_summary_rows = metric_family_budget_summary_rows(
+            interaction_budget_rows
+        )
+        metric_family_summary_rows_data = metric_family_summary_rows(primary_comparison_rows)
+        interaction_metric_family_summary_rows = metric_family_summary_rows(
+            interaction_comparison_rows
+        )
         metric_family_budget_summary_rows_data = metric_family_budget_summary_rows(budget_rows)
+        interaction_metric_summary_rows = metric_aggregate_summary_rows(
+            comparison_rows=interaction_comparison_rows,
+            budget_rows=interaction_budget_rows,
+        )
         metric_summary_rows = metric_aggregate_summary_rows(
-            comparison_rows=comparison_rows,
+            comparison_rows=primary_comparison_rows,
             budget_rows=budget_rows,
         )
         low_budget_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'low_budget']
@@ -287,6 +388,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'geometry_filter_summary.csv', geometry_rows)
         write_csv(data_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(data_dir / 'comparison_by_k.csv', comparison_rows)
+        if args.suite_id is not None:
+            write_csv(data_dir / 'suite_distribution_summary.csv', suite_distribution_rows)
+            write_csv(data_dir / 'suite_family_balanced_summary.csv', suite_family_rows)
+            write_csv(data_dir / 'suite_matched_contrasts.csv', suite_contrast_rows)
+            write_csv(data_dir / 'suite_analysis_series.csv', suite_analysis_series_rows)
+            write_csv(data_dir / 'suite_factor_interactions.csv', suite_interaction_rows)
+            write_csv(data_dir / 'suite_factor_crossings.csv', suite_crossing_rows)
+            write_csv(data_dir / 'suite_separability_test_strata.csv', suite_separability_rows)
         if geometry_population_enabled:
             write_csv(
                 data_dir / 'geometry_population_strategy_by_k.csv',
@@ -330,6 +439,18 @@ def run_report(args: CliArgs) -> ReportOutputs:
         )
         write_csv(data_dir / 'metric_aggregate_summary.csv', metric_summary_rows)
         write_csv(data_dir / 'budget_strategy_summary.csv', budget_rows)
+        write_csv(data_dir / 'interaction_budget_strategy_summary.csv', interaction_budget_rows)
+        write_csv(
+            data_dir / 'interaction_metric_family_summary.csv',
+            interaction_metric_family_summary_rows,
+        )
+        write_csv(
+            data_dir / 'interaction_metric_family_budget_summary.csv',
+            interaction_family_budget_summary_rows,
+        )
+        write_csv(
+            data_dir / 'interaction_metric_aggregate_summary.csv', interaction_metric_summary_rows
+        )
         write_csv(data_dir / 'low_budget_strategy_summary.csv', low_budget_rows)
         if lambda_analysis_enabled:
             write_csv(data_dir / 'lambda_stability.csv', lambda_rows)
@@ -348,13 +469,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
             comparison_rows=comparison_rows,
             budget_rows=budget_rows,
             lambda_safety_rows=lambda_safety_rows,
+            synthetic_artifact_rows=synthetic_artifact_diagnostic_rows_data,
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows_data,
             metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
             embedding_models=effective_embedding_models,
-            require_complete_wording_grid=False,
+            require_complete_wording_grid=args.cross_query_chunk_modes,
             warnings=warnings,
             paired_statistics=paired_statistics_enabled,
             output_dir=args.output_dir,
@@ -368,20 +490,46 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 plot_format=args.plot_format,
                 max_rows=args.max_table_rows,
                 budget_rows=budget_rows,
-                geometry_rows=geometry_rows,
-                lambda_rows=lambda_rows,
-                lambda_grid_delta_rows=lambda_grid_delta_rows,
-                lambda_safety_rows=lambda_safety_rows,
-                near_optimal_rows=near_optimal_rows,
-                dataset_rows=dataset_rows,
+                geometry_rows=primary_rows(geometry_rows),
+                lambda_rows=primary_rows(lambda_rows),
+                lambda_grid_delta_rows=primary_rows(lambda_grid_delta_rows),
+                lambda_safety_rows=primary_rows(lambda_safety_rows),
+                near_optimal_rows=primary_rows(near_optimal_rows),
+                dataset_rows=primary_rows(dataset_rows),
                 metric_summary_rows=metric_summary_rows,
                 metric_family_summary_rows=metric_family_summary_rows_data,
                 metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-                paired_cell_rows=paired_cell_rows,
+                paired_cell_rows=primary_rows(paired_cell_rows),
                 paired_suite_rows=paired_suite_rows,
                 paired_config_suite_rows=paired_config_suite_rows,
                 cross_query_chunk_modes=args.cross_query_chunk_modes,
                 warnings=warnings,
+            )
+            figures.extend(
+                write_figures(
+                    output_dir=args.output_dir / 'figures' / 'interactions',
+                    plot_format=args.plot_format,
+                    max_rows=args.max_table_rows,
+                    budget_rows=interaction_budget_rows,
+                    geometry_rows=interaction_rows(geometry_rows),
+                    lambda_rows=interaction_rows(lambda_rows),
+                    lambda_grid_delta_rows=interaction_rows(lambda_grid_delta_rows),
+                    lambda_safety_rows=interaction_rows(lambda_safety_rows),
+                    near_optimal_rows=interaction_rows(near_optimal_rows),
+                    dataset_rows=interaction_rows(dataset_rows),
+                    metric_summary_rows=interaction_metric_summary_rows,
+                    metric_family_summary_rows=interaction_metric_family_summary_rows,
+                    metric_family_budget_summary_rows=interaction_family_budget_summary_rows,
+                    paired_cell_rows=interaction_rows(paired_cell_rows),
+                    paired_suite_rows=[
+                        row
+                        for row in paired_suite_rows
+                        if row.get('Scope') == 'Interaction experiments'
+                    ],
+                    paired_config_suite_rows=[],
+                    cross_query_chunk_modes=args.cross_query_chunk_modes,
+                    warnings=warnings,
+                )
             )
             _progress(f'rendered {len(figures)} figures')
         else:
@@ -449,6 +597,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'requested_embedding_models': list(args.embedding_models),
                     'effective_embedding_models': list(effective_embedding_models),
                     'artifact_version': args.artifact_version,
+                    'suite_id': args.suite_id,
+                    'suite_where': args.suite_where,
+                    'strict_suite': args.strict_suite,
                     'main_query_scope': args.main_query_scope,
                     'experiments_discovered': discovered_count,
                     'experiments_after_embedding_filter': len(records),
@@ -477,6 +628,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
                         'synthetic_artifact_diagnostic_rows': len(
                             synthetic_artifact_diagnostic_rows_data
                         ),
+                    },
+                    'suite_outputs': {
+                        'distribution_rows': len(suite_distribution_rows),
+                        'family_rows': len(suite_family_rows),
+                        'matched_contrasts': len(suite_contrast_rows),
+                        'factor_interactions': len(suite_interaction_rows),
                     },
                 },
                 indent=2,
@@ -518,6 +675,18 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     )
     metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
     budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
+    interaction_budget_rows = _read_report_csv_rows(
+        data_dir, 'interaction_budget_strategy_summary.csv'
+    )
+    interaction_metric_family_summary_rows = _read_report_csv_rows(
+        data_dir, 'interaction_metric_family_summary.csv'
+    )
+    interaction_metric_family_budget_summary_rows = _read_report_csv_rows(
+        data_dir, 'interaction_metric_family_budget_summary.csv'
+    )
+    interaction_metric_summary_rows = _read_report_csv_rows(
+        data_dir, 'interaction_metric_aggregate_summary.csv'
+    )
     lambda_rows = _read_report_csv_rows(data_dir, 'lambda_stability.csv')
     lambda_grid_delta_rows = _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv')
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
@@ -527,27 +696,59 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     paired_config_suite_rows = _read_report_csv_rows(
         data_dir, 'paired_config_suite_effect_summary.csv'
     )
+    suite_contrast_rows = _read_report_csv_rows(data_dir, 'suite_matched_contrasts.csv')
     _progress('rendering report figures from existing CSV artifacts')
     figures = write_figures(
         output_dir=report_dir / 'figures',
         plot_format=args.plot_format,
         max_rows=args.max_table_rows,
         budget_rows=budget_rows,
-        geometry_rows=geometry_rows,
-        lambda_rows=lambda_rows,
-        lambda_grid_delta_rows=lambda_grid_delta_rows,
-        lambda_safety_rows=lambda_safety_rows,
-        near_optimal_rows=near_optimal_rows,
-        dataset_rows=dataset_rows,
+        geometry_rows=primary_rows(geometry_rows),
+        lambda_rows=primary_rows(lambda_rows),
+        lambda_grid_delta_rows=primary_rows(lambda_grid_delta_rows),
+        lambda_safety_rows=primary_rows(lambda_safety_rows),
+        near_optimal_rows=primary_rows(near_optimal_rows),
+        dataset_rows=primary_rows(dataset_rows),
         metric_summary_rows=metric_summary_rows,
         metric_family_summary_rows=metric_family_summary_rows_data,
         metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
-        paired_cell_rows=paired_cell_rows,
+        paired_cell_rows=primary_rows(paired_cell_rows),
         paired_suite_rows=paired_suite_rows,
         paired_config_suite_rows=paired_config_suite_rows,
         cross_query_chunk_modes=args.cross_query_chunk_modes,
         warnings=warnings,
     )
+    figures.extend(
+        write_figures(
+            output_dir=report_dir / 'figures' / 'interactions',
+            plot_format=args.plot_format,
+            max_rows=args.max_table_rows,
+            budget_rows=interaction_budget_rows,
+            geometry_rows=interaction_rows(geometry_rows),
+            lambda_rows=interaction_rows(lambda_rows),
+            lambda_grid_delta_rows=interaction_rows(lambda_grid_delta_rows),
+            lambda_safety_rows=interaction_rows(lambda_safety_rows),
+            near_optimal_rows=interaction_rows(near_optimal_rows),
+            dataset_rows=interaction_rows(dataset_rows),
+            metric_summary_rows=interaction_metric_summary_rows,
+            metric_family_summary_rows=interaction_metric_family_summary_rows,
+            metric_family_budget_summary_rows=interaction_metric_family_budget_summary_rows,
+            paired_cell_rows=interaction_rows(paired_cell_rows),
+            paired_suite_rows=[
+                row for row in paired_suite_rows if row.get('Scope') == 'Interaction experiments'
+            ],
+            paired_config_suite_rows=[],
+            cross_query_chunk_modes=args.cross_query_chunk_modes,
+            warnings=warnings,
+        )
+    )
+    figures.extend(
+        write_suite_factor_figures(
+            output_dir=report_dir,
+            contrast_rows=suite_contrast_rows,
+        )
+    )
+    _update_refreshed_figure_manifest(report_dir=report_dir, figures=figures)
     _progress(f'rendered {len(figures)} figures')
     if warnings:
         _progress(f'plot-only refresh finished with {len(warnings)} warnings')
@@ -579,6 +780,7 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     comparison_rows = _read_report_csv_rows(data_dir, 'comparison_by_k.csv')
     budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
+    synthetic_artifact_rows = _read_report_csv_rows(data_dir, 'synthetic_artifact_diagnostics.csv')
     metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
     metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
     paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
@@ -603,6 +805,7 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
             comparison_rows=comparison_rows,
             budget_rows=budget_rows,
             lambda_safety_rows=lambda_safety_rows,
+            synthetic_artifact_rows=synthetic_artifact_rows,
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
@@ -713,6 +916,39 @@ def _load_refresh_recap_records(
         MedicalDatasetGenPaths.results_dir = old_results_dir
 
 
+def _update_refreshed_figure_manifest(*, report_dir: Path, figures: Sequence[Path]) -> None:
+    """Keep a plot-only refresh auditable without recomputing report tables."""
+    manifest_path = report_dir / 'manifest.json'
+    if not manifest_path.is_file():
+        return
+    try:
+        manifest: object = json.loads(manifest_path.read_text())
+    except json.JSONDecodeError:
+        return
+    if not isinstance(manifest, dict):
+        return
+
+    figure_paths = sorted(
+        str(path.relative_to(report_dir))
+        for path in figures
+        if path.is_file() and path.is_relative_to(report_dir)
+    )
+    manifest['figures'] = figure_paths
+    existing_files = manifest.get('files')
+    non_figure_files = (
+        [
+            str(path)
+            for path in existing_files
+            if isinstance(path, str) and not path.startswith('figures/')
+        ]
+        if isinstance(existing_files, list)
+        else []
+    )
+    manifest['files'] = [*non_figure_files, *figure_paths]
+    manifest['figures_refreshed_at_utc'] = datetime.now(UTC).isoformat()
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
+
+
 def _saved_report_results_dir(report_dir: Path) -> Path | None:
     manifest_path = report_dir / 'manifest.json'
     if not manifest_path.is_file():
@@ -762,6 +998,7 @@ def _write_thesis_outputs_from_rows(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
+    synthetic_artifact_rows: Sequence[Mapping[str, object]],
     metric_summary_rows: Sequence[Mapping[str, object]],
     metric_family_summary_rows: Sequence[Mapping[str, object]],
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
@@ -788,6 +1025,7 @@ def _write_thesis_outputs_from_rows(
             comparison_rows=comparison_rows,
             budget_rows=budget_rows,
             lambda_safety_rows=lambda_safety_rows,
+            synthetic_artifact_rows=synthetic_artifact_rows,
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows,
             paired_suite_rows=paired_suite_rows,
