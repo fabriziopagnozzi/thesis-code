@@ -833,13 +833,15 @@ def materialize_suite(
     replace_planned: bool = False,
     refresh_planned_execution: bool = False,
     prune_planned: bool = False,
+    prune_removed_embeddings: bool = False,
 ) -> SuiteManifest:
-    """Materialize a native v5 suite without generating data or embeddings."""
+    """Materialize a v5 suite without generating data or embeddings."""
     if spec.origin == 'derived':
         return _materialize_derived_suite(
             spec=spec,
             results_dir=results_dir,
             replace_planned=replace_planned,
+            prune_removed_embeddings=prune_removed_embeddings,
         )
     validation = validate_suite(spec)
     root = suite_root(results_dir, spec.suite_id)
@@ -1021,7 +1023,11 @@ def materialize_suite(
 
 
 def _materialize_derived_suite(
-    *, spec: SuiteSpec, results_dir: Path, replace_planned: bool
+    *,
+    spec: SuiteSpec,
+    results_dir: Path,
+    replace_planned: bool,
+    prune_removed_embeddings: bool,
 ) -> SuiteManifest:
     """Materialize model-specific evaluations against immutable source data."""
     assert spec.origin == 'derived' and spec.source is not None
@@ -1029,6 +1035,8 @@ def _materialize_derived_suite(
     manifest_path = root / 'suite_manifest.json'
     if manifest_path.exists():
         existing = load_suite_manifest(results_dir, spec.suite_id)
+        if prune_removed_embeddings:
+            return _prune_removed_derived_embeddings(root=root, existing=existing, spec=spec)
         if not replace_planned:
             return existing
         _remove_planned_derived_suite(root, existing)
@@ -1230,6 +1238,85 @@ def _materialize_derived_suite(
     )
     _write_json(manifest_path, manifest.model_dump(mode='json'))
     return manifest
+
+
+def _prune_removed_derived_embeddings(
+    *, root: Path, existing: SuiteManifest, spec: SuiteSpec
+) -> SuiteManifest:
+    if existing.origin != 'derived' or existing.source is None or spec.source is None:
+        raise ValueError('embedding pruning requires an existing derived suite and source contract')
+    existing_source = existing.source
+    desired_source = spec.source
+    if (
+        existing_source.suite_id != desired_source.suite_id
+        or existing_source.manifest_sha256 != desired_source.manifest_sha256
+        or existing_source.distribution_ids != desired_source.distribution_ids
+    ):
+        raise ValueError('embedding pruning requires an unchanged pinned source and distributions')
+
+    existing_models = set(existing_source.embedding_models)
+    desired_models = set(desired_source.embedding_models)
+    unknown_models = desired_models - existing_models
+    removed_models = existing_models - desired_models
+    if unknown_models:
+        raise ValueError(f'embedding pruning cannot add models: {sorted(unknown_models)}')
+    if not removed_models:
+        raise ValueError('embedding pruning requires at least one removed embedding model')
+
+    retained_cells = [
+        cell for cell in existing.cells if cell.run_profile_factors.get('embedding') in desired_models
+    ]
+    removed_cells = [
+        cell for cell in existing.cells if cell.run_profile_factors.get('embedding') in removed_models
+    ]
+    if len(retained_cells) + len(removed_cells) != len(existing.cells):
+        raise ValueError('derived manifest contains a cell with an unknown embedding model')
+    if not retained_cells or not removed_cells:
+        raise ValueError('embedding pruning produced an invalid empty arm')
+    retained_profiles = [
+        profile
+        for profile in existing.run_profiles
+        if profile.factors.get('embedding') in desired_models
+    ]
+    removed_profiles = [
+        profile
+        for profile in existing.run_profiles
+        if profile.factors.get('embedding') in removed_models
+    ]
+    if len(retained_profiles) + len(removed_profiles) != len(existing.run_profiles):
+        raise ValueError('derived manifest contains a run profile with an unknown embedding model')
+
+    root_resolved = root.resolve()
+    paths_to_remove = [
+        root / profile.resolved_run_profile_path for profile in removed_profiles
+    ] + [
+        root / cell.resolved_config_path for cell in removed_cells
+    ]
+    removable_roots = {path.parent for path in paths_to_remove}
+    for path in removable_roots:
+        if not path.resolve().is_relative_to(root_resolved):
+            raise ValueError(f'refusing to remove a path outside the suite root: {path}')
+    for path in sorted(removable_roots, key=lambda item: len(item.parts), reverse=True):
+        if path.exists():
+            shutil.rmtree(path)
+
+    removed_tokens = {embedding_child_token(model_name) for model_name in removed_models}
+    retained_series = [
+        series
+        for series in existing.analysis_series
+        if not any(series.series_id.endswith(f'__{token}') for token in removed_tokens)
+    ]
+    pruned = existing.model_copy(
+        update={
+            'source': desired_source,
+            'cells': retained_cells,
+            'evaluations': retained_cells,
+            'run_profiles': retained_profiles,
+            'analysis_series': retained_series,
+        }
+    )
+    _write_json(root / 'suite_manifest.json', pruned.model_dump(mode='json'))
+    return pruned
 
 
 def _derived_run_profile_id(source_profile_id: str, model_token: str) -> str:

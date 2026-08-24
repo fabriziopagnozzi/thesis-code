@@ -24,7 +24,9 @@ from experiments.medical_dataset_gen.suites.core import (
 )
 from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
 from experiments.medical_dataset_gen.utils.global_utils import (
+    EMBEDDING_ARTIFACT_FILENAMES,
     MedicalDatasetGenPaths,
+    SharedEmbeddingArtifactPaths,
     SharedGenerationArtifactPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
@@ -97,12 +99,62 @@ def suite_paths_for_cell(
         'queries': data_root / 'queries' / query_key / 'queries.parquet',
         'gold_answers': data_root / 'queries' / query_key / 'gold_answers.parquet',
     }
+    shared_embeddings = suite_shared_embedding_artifact_paths(
+        root=root,
+        distribution_id=cell.distribution_id,
+        chunk_key=chunk_key,
+        query_key=query_key,
+        cfg=cfg,
+    )
     return MedicalDatasetGenPaths(
         cell.distribution_id,
         shared_generation_artifact_paths=cast(SharedGenerationArtifactPaths, shared),
+        shared_embedding_artifact_paths=shared_embeddings,
         artifact_root=artifact_root,
         cache_namespace='v5',
     )
+
+
+def suite_shared_embedding_artifact_paths(
+    *,
+    root: Path,
+    distribution_id: str,
+    chunk_key: str,
+    query_key: str,
+    cfg: ExperimentCfg,
+) -> SharedEmbeddingArtifactPaths:
+    """Resolve model-qualified matrices for each unique document and query surface."""
+    from experiments.medical_dataset_gen.dataset_generation.caches import (
+        chunk_embedding_signature,
+        query_embedding_signature,
+    )
+
+    chunk_signature = chunk_embedding_signature(cfg)
+    query_signature = query_embedding_signature(cfg)
+    chunk_root = (
+        root
+        / 'distributions'
+        / distribution_id
+        / 'shared_embeddings'
+        / 'chunks'
+        / chunk_key
+        / chunk_signature
+    )
+    query_root = (
+        root
+        / 'distributions'
+        / distribution_id
+        / 'shared_embeddings'
+        / 'queries'
+        / query_key
+        / query_signature
+    )
+    return {
+        'chunk_vectors': chunk_root / EMBEDDING_ARTIFACT_FILENAMES['chunk_vectors'],
+        'chunk_ids': chunk_root / EMBEDDING_ARTIFACT_FILENAMES['chunk_ids'],
+        'query_vectors': query_root / EMBEDDING_ARTIFACT_FILENAMES['query_vectors'],
+        'query_ids': query_root / EMBEDDING_ARTIFACT_FILENAMES['query_ids'],
+    }
 
 
 def write_attempt_metadata(

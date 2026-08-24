@@ -341,9 +341,7 @@ def plot_candidate_pool_umap_with_legend(
         include_title_prefix=False,
         show_title=SETTINGS.use_title,
     )
-    if artifact.reduction_method in {'umap', 'pca_umap'}:
-        ax_map.set_xlabel('UMAP dimension 1')
-        ax_map.set_ylabel('UMAP dimension 2')
+    _style_umap_axes(ax_map, artifact)
     ax_map.set_box_aspect(1)
 
     legend_handles = _selection_legend_handles([ax_map])
@@ -386,9 +384,7 @@ def plot_candidate_pool_umap(
         show_title=SETTINGS.use_title,
         hollow_background_markers=True,
     )
-    if artifact.reduction_method in {'umap', 'pca_umap'}:
-        ax.set_xlabel('UMAP dimension 1')
-        ax.set_ylabel('UMAP dimension 2')
+    _style_umap_axes(ax, artifact)
     ax.set_box_aspect(1)
     fig.tight_layout(pad=0.25)
     fig.savefig(
@@ -464,18 +460,27 @@ def plot_query_cosine_heatmap(
         show_title=SETTINGS.use_title,
         hollow_background_markers=True,
     )
-    if artifact.reduction_method in {'umap', 'pca_umap'}:
-        ax.set_xlabel('UMAP dimension 1')
-        ax.set_ylabel('UMAP dimension 2')
+    _style_umap_axes(ax, artifact)
     ax.set_box_aspect(1)
-    fig.colorbar(
-        similarity_points,
-        ax=ax,
-        fraction=0.05,
-        pad=0.025,
-        label='Query--chunk cosine similarity',
-    )
     fig.tight_layout(pad=0.25)
+    fig.canvas.draw()
+    plot_position = ax.get_position()
+    figure_width = fig.get_figwidth()
+    colorbar_ax = fig.add_axes(
+        (
+            plot_position.x1 + SETTINGS.query_cosine_colorbar_pad_in / figure_width,
+            plot_position.y0,
+            SETTINGS.query_cosine_colorbar_width_in / figure_width,
+            plot_position.height,
+        )
+    )
+    colorbar = fig.colorbar(similarity_points, cax=colorbar_ax)
+    colorbar.set_label(
+        'Query-document cosine similarity',
+        fontsize=SETTINGS.query_cosine_colorbar_label_font_size,
+        labelpad=12,
+    )
+    colorbar.ax.tick_params(labelsize=SETTINGS.query_cosine_colorbar_tick_font_size)
     fig.savefig(
         out_dir / 'query_cosine_heatmap.png',
         dpi=180,
@@ -483,6 +488,15 @@ def plot_query_cosine_heatmap(
         pad_inches=0.03,
     )
     plt.close(fig)
+
+
+def _style_umap_axes(ax: Any, artifact: GeometryArtifact) -> None:
+    """Keep standalone UMAP labels legible after paper-scale reduction."""
+    if artifact.reduction_method not in {'umap', 'pca_umap'}:
+        return
+    ax.set_xlabel('UMAP dimension 1', fontsize=SETTINGS.umap_axis_label_font_size)
+    ax.set_ylabel('UMAP dimension 2', fontsize=SETTINGS.umap_axis_label_font_size)
+    ax.tick_params(axis='both', labelsize=SETTINGS.umap_tick_label_font_size)
 
 
 def _pairwise_cosine_heatmap_groups(

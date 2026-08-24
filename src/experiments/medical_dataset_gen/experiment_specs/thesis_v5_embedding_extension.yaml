@@ -1,0 +1,54 @@
+layout_version: 5
+suite_id: thesis_v5_embedding_extension
+origin: derived
+dataset_schema_version: 5
+description: >-
+    MedEmbed-L embedding extension over the report-eligible thesis_v5 distributions.
+
+source:
+    suite_id: thesis_v5
+    manifest_sha256: 4bd2a9be63f29b62b96bc3fb2d2e8b1d3f2ee6769b247b998ca200c9f5bc348b
+    embedding_models:
+        - abhinand/MedEmbed-large-v0.1
+    distribution_ids:
+        - balanced_reference
+        - dominance_mild
+        - dominance_high
+        - dominance_extreme
+        - sparse_one_moderate
+        - sparse_one_severe
+        - sparse_one_extreme
+        - sparse_two_moderate
+        - sparse_two_severe
+        - sparse_two_extreme
+        - near_miss_h0
+        - near_miss_h24
+        - near_miss_h48
+        - near_miss_h96
+        - dilution_far_b40
+        - dilution_far_b64
+        - dilution_far_b112
+        - near_miss_h48_two_change
+        - near_miss_h48_one_change
+        - near_miss_h48_singleton
+        - near_miss_h48_compact
+        - background_far_32x1
+        - background_far_16x2
+        - background_far_8x4
+        - background_far_4x8
+        - scale_balanced_small
+        - scale_balanced_large
+        - scale_dominance_small
+        - scale_dominance_large
+        - scale_sparse_one_small
+        - scale_sparse_one_large
+        - scale_near_miss_small
+        - scale_near_miss_medium
+        - scale_near_miss_large
+        - scale_compact_background_small
+        - scale_compact_background_medium
+        - scale_compact_background_large
+        - interaction_dom_high_far_32x1
+        - interaction_dom_high_far_4x8
+        - interaction_sparse_severe_h24
+        - interaction_sparse_severe_h96

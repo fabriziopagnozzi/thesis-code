@@ -783,6 +783,9 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     synthetic_artifact_rows = _read_report_csv_rows(data_dir, 'synthetic_artifact_diagnostics.csv')
     metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
     metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
+    metric_family_budget_summary_rows_data = _read_report_csv_rows(
+        data_dir, 'metric_family_budget_summary.csv'
+    )
     paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
     embedding_summary_rows = _read_report_csv_rows(data_dir, 'embedding_model_summary.csv')
     warnings_path = report_dir / 'warnings.txt'
@@ -808,6 +811,7 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
             synthetic_artifact_rows=synthetic_artifact_rows,
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows_data,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
             embedding_models=_effective_embedding_models_for_rows(budget_rows),
@@ -1028,6 +1032,7 @@ def _write_thesis_outputs_from_rows(
             synthetic_artifact_rows=synthetic_artifact_rows,
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows,
+            metric_family_budget_summary_rows=metric_family_budget_summary_rows,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
             embedding_models=embedding_models,

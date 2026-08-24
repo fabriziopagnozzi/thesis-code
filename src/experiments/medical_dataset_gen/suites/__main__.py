@@ -59,6 +59,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     'unchanged generated smoke data.'
                 ),
             )
+            replacement_mode.add_argument(
+                '--prune-removed-embeddings',
+                action='store_true',
+                help=(
+                    'For a derived suite, delete only completed and planned evaluation arms for '
+                    'embedding models removed from an otherwise identical source contract.'
+                ),
+            )
         if command == 'freeze-geometry':
             subparser.add_argument('--replace', action='store_true')
     args = parser.parse_args(argv)
@@ -95,6 +103,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             replace_planned=bool(args.replace_planned),
             refresh_planned_execution=bool(args.refresh_planned_execution),
             prune_planned=bool(args.prune_planned),
+            prune_removed_embeddings=bool(args.prune_removed_embeddings),
         )
         print(f'materialized {len(manifest.cells)} cells')
     if args.check_artifacts or spec is None:

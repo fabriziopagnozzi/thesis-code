@@ -23,6 +23,7 @@ from experiments.medical_dataset_gen.dataset_generation.qrels import run_make_qr
 from experiments.medical_dataset_gen.dataset_generation.queries_answers import (
     run_make_queries_answers,
 )
+from experiments.medical_dataset_gen.embedding import stage as embedding_stage
 from experiments.medical_dataset_gen.embedding.artifacts import (
     chunk_embedding_artifacts_ready,
     embedding_artifacts_ready,
@@ -35,6 +36,9 @@ from experiments.medical_dataset_gen.reports.suite_analysis import (
     analysis_series_rows,
     matched_contrast_rows,
     write_suite_factor_figures,
+)
+from experiments.medical_dataset_gen.scripts.migrate_shared_chunk_embeddings import (
+    migrate_suite_chunk_embeddings,
 )
 from experiments.medical_dataset_gen.scripts.migrate_v4_to_v5 import (
     execute_migration,
@@ -66,7 +70,7 @@ def test_native_thesis_suite_expands_to_explicit_qwen_cells(tmp_path: Path) -> N
     spec = load_suite_spec('thesis_v5')
     validation = validate_suite(spec)
     assert len(spec.distributions) == 41
-    assert len(validation.resolved_configs) == 168
+    assert len(validation.resolved_configs) == 164
     assert all('qwen_' in cell_id for cell_id in validation.resolved_configs)
     assert not any(
         'NIC_M02' in cell_id or 'NIC_L02' in cell_id for cell_id in validation.resolved_configs
@@ -83,12 +87,9 @@ def test_native_thesis_suite_expands_to_explicit_qwen_cells(tmp_path: Path) -> N
     manifest = materialize_suite(spec, results_dir=tmp_path)
     assert manifest.manifest_version == 2
     assert len(manifest.distributions) == 41
-    assert len(manifest.cells) == 168
-    assert len(manifest.evaluations) == 168
-    assert {series.series_id for series in manifest.analysis_series} == {
-        'proportional_budget_balanced',
-        'proportional_budget_sparse_one',
-    }
+    assert len(manifest.cells) == 164
+    assert len(manifest.evaluations) == 164
+    assert manifest.analysis_series == []
     assert all(cell.dataset_schema_version == 5 for cell in manifest.cells)
     small = next(
         cell
@@ -121,6 +122,210 @@ def test_native_thesis_suite_expands_to_explicit_qwen_cells(tmp_path: Path) -> N
                 cfg.generation.total_gold_chunks() + cfg.generation.total_distractor_chunks()
             )
         assert masses == [64, 128, 256]
+
+
+def test_suite_embeddings_are_shared_by_independent_surface(tmp_path: Path) -> None:
+    manifest = materialize_suite(load_suite_spec('thesis_v5'), results_dir=tmp_path)
+    root = tmp_path / 'v5' / 'suites' / manifest.suite_id
+    cells = {cell.cell_id: cell for cell in manifest.cells}
+
+    biased_simple = cells['dominance_mild__qwen_biased_simple']
+    unbiased_simple = cells['dominance_mild__qwen_unbiased_simple']
+    biased_hardened = cells['dominance_mild__qwen_biased_hardened']
+    simple_paths = suite_paths_for_cell(
+        root=root,
+        cell=biased_simple,
+        cfg=load_cell_config(root, biased_simple),
+    )
+    unbiased_paths = suite_paths_for_cell(
+        root=root,
+        cell=unbiased_simple,
+        cfg=load_cell_config(root, unbiased_simple),
+    )
+    hardened_paths = suite_paths_for_cell(
+        root=root,
+        cell=biased_hardened,
+        cfg=load_cell_config(root, biased_hardened),
+    )
+
+    assert simple_paths.embeddings_paths('chunk_vectors') == unbiased_paths.embeddings_paths(
+        'chunk_vectors'
+    )
+    assert simple_paths.embeddings_paths('chunk_ids') == unbiased_paths.embeddings_paths(
+        'chunk_ids'
+    )
+    assert simple_paths.embeddings_paths('chunk_vectors') != hardened_paths.embeddings_paths(
+        'chunk_vectors'
+    )
+    assert simple_paths.embeddings_paths('query_vectors') == hardened_paths.embeddings_paths(
+        'query_vectors'
+    )
+    assert simple_paths.embeddings_paths('query_ids') == hardened_paths.embeddings_paths(
+        'query_ids'
+    )
+    assert simple_paths.embeddings_paths('query_vectors') != unbiased_paths.embeddings_paths(
+        'query_vectors'
+    )
+
+
+def test_shared_chunk_embedding_migration_moves_and_deduplicates(tmp_path: Path) -> None:
+    manifest = materialize_suite(load_suite_spec('thesis_v5'), results_dir=tmp_path)
+    root = tmp_path / 'v5' / 'suites' / manifest.suite_id
+    cells = {cell.cell_id: cell for cell in manifest.cells}
+    selected = [
+        cells['dominance_mild__qwen_biased_simple'],
+        cells['dominance_mild__qwen_unbiased_simple'],
+    ]
+    vectors = np.arange(6, dtype=np.float32).reshape(2, 3)
+    chunk_ids = np.asarray(['c1', 'c2'])
+    legacy_paths: list[tuple[Path, Path]] = []
+    metadata_paths: list[Path] = []
+    for cell in selected:
+        attempt_root = root / cell.attempt_root
+        attempt_root.mkdir(parents=True, exist_ok=True)
+        vector_path = attempt_root / 'embeddings_chunk_vectors.npy'
+        ids_path = attempt_root / 'embeddings_chunk_ids.npy'
+        metadata_path = attempt_root / 'embeddings_metadata.json'
+        np.save(vector_path, vectors)
+        np.save(ids_path, chunk_ids)
+        metadata_path.write_text(json.dumps({'n_chunks': 2, 'n_queries': 1}))
+        legacy_paths.append((vector_path, ids_path))
+        metadata_paths.append(metadata_path)
+
+    reports = migrate_suite_chunk_embeddings(
+        results_dir=tmp_path,
+        suite_id=manifest.suite_id,
+        execute=True,
+    )
+
+    shared_paths = suite_paths_for_cell(
+        root=root,
+        cell=selected[0],
+        cfg=load_cell_config(root, selected[0]),
+    )
+    shared_vectors = shared_paths.embeddings_paths('chunk_vectors')
+    shared_ids = shared_paths.embeddings_paths('chunk_ids')
+    assert len(reports) == 1
+    assert reports[0].matching_attempts == 2
+    assert reports[0].removed_files == 2
+    np.testing.assert_array_equal(np.load(shared_vectors), vectors)
+    np.testing.assert_array_equal(np.load(shared_ids), chunk_ids)
+    assert all(not path.exists() for pair in legacy_paths for path in pair)
+    for metadata_path in metadata_paths:
+        metadata = json.loads(metadata_path.read_text())
+        assert metadata['chunk_vectors_file'] == str(shared_vectors)
+        assert metadata['chunk_ids_file'] == str(shared_ids)
+
+
+def test_shared_query_embedding_migration_moves_and_deduplicates(tmp_path: Path) -> None:
+    manifest = materialize_suite(load_suite_spec('thesis_v5'), results_dir=tmp_path)
+    root = tmp_path / 'v5' / 'suites' / manifest.suite_id
+    cells = {cell.cell_id: cell for cell in manifest.cells}
+    selected = [
+        cells['dominance_mild__qwen_biased_simple'],
+        cells['dominance_mild__qwen_biased_hardened'],
+    ]
+    vectors = np.arange(12, dtype=np.float32).reshape(4, 3)
+    query_ids = np.asarray(['q1', 'q2', 'q3', 'q4'])
+    legacy_paths: list[tuple[Path, Path]] = []
+    metadata_paths: list[Path] = []
+    for cell in selected:
+        attempt_root = root / cell.attempt_root
+        attempt_root.mkdir(parents=True, exist_ok=True)
+        vector_path = attempt_root / 'embeddings_query_vectors.npy'
+        ids_path = attempt_root / 'embeddings_query_ids.npy'
+        metadata_path = attempt_root / 'embeddings_metadata.json'
+        np.save(vector_path, vectors)
+        np.save(ids_path, query_ids)
+        metadata_path.write_text(json.dumps({'n_chunks': 1, 'n_queries': 4}))
+        legacy_paths.append((vector_path, ids_path))
+        metadata_paths.append(metadata_path)
+
+    reports = migrate_suite_chunk_embeddings(
+        results_dir=tmp_path,
+        suite_id=manifest.suite_id,
+        execute=True,
+    )
+
+    shared_paths = suite_paths_for_cell(
+        root=root,
+        cell=selected[0],
+        cfg=load_cell_config(root, selected[0]),
+    )
+    shared_vectors = shared_paths.embeddings_paths('query_vectors')
+    shared_ids = shared_paths.embeddings_paths('query_ids')
+    assert len(reports) == 1
+    assert reports[0].artifact_kind == 'queries'
+    assert reports[0].matching_attempts == 2
+    assert reports[0].removed_files == 2
+    np.testing.assert_array_equal(np.load(shared_vectors), vectors)
+    np.testing.assert_array_equal(np.load(shared_ids), query_ids)
+    assert all(not path.exists() for pair in legacy_paths for path in pair)
+    for metadata_path in metadata_paths:
+        metadata = json.loads(metadata_path.read_text())
+        assert metadata['query_vectors_file'] == str(shared_vectors)
+        assert metadata['query_ids_file'] == str(shared_ids)
+
+
+@pytest.mark.parametrize(
+    ('chunks_ready', 'queries_ready', 'expected_mode'),
+    [
+        (True, True, 'all_arrays'),
+        (True, False, 'queries_only'),
+        (False, True, 'chunks_only'),
+        (False, False, 'full'),
+    ],
+)
+def test_embed_selects_only_the_missing_shared_side(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    chunks_ready: bool,
+    queries_ready: bool,
+    expected_mode: str,
+) -> None:
+    validation = validate_suite(load_suite_spec('thesis_v5'))
+    cfg = ExperimentCfg.model_validate(
+        validation.resolved_configs['dominance_mild__qwen_biased_simple']
+    )
+    paths = MedicalDatasetGenPaths('branch_fixture', artifact_root=tmp_path)
+    vectors = np.zeros((1, 2), dtype=np.float32)
+    called: list[str] = []
+
+    def result(mode: str) -> tuple[np.ndarray, np.ndarray, dict[str, object]]:
+        called.append(mode)
+        return vectors, vectors, {'n_chunks': 1, 'n_queries': 1}
+
+    monkeypatch.setattr(embedding_stage, 'embedding_artifacts_ready', lambda _: False)
+    monkeypatch.setattr(
+        embedding_stage, 'chunk_embedding_artifacts_ready', lambda _: chunks_ready
+    )
+    monkeypatch.setattr(
+        embedding_stage, 'query_embedding_artifacts_ready', lambda _: queries_ready
+    )
+    monkeypatch.setattr(
+        embedding_stage,
+        '_reuse_embedding_arrays',
+        lambda _cfg, _paths: result('all_arrays'),
+    )
+    monkeypatch.setattr(
+        embedding_stage,
+        '_embed_queries_only',
+        lambda _cfg, _paths: result('queries_only'),
+    )
+    monkeypatch.setattr(
+        embedding_stage,
+        '_embed_chunks_only',
+        lambda _cfg, _paths: result('chunks_only'),
+    )
+    monkeypatch.setattr(
+        embedding_stage,
+        '_embed_sentence_transformers_streaming',
+        lambda _cfg, _paths: result('full'),
+    )
+
+    embedding_stage.run_embed(cfg, paths)
+
+    assert called == [expected_mode]
 
 
 def test_native_v5_rejects_multiple_gold_regions_per_facet() -> None:
@@ -392,10 +597,12 @@ def test_nested_scale_reuses_verified_source_chunk_embeddings(
     queries = read_parquet(source_paths, 'queries')['query_id'].to_list()
     chunk_id_dtype = f'U{max(len(str(chunk_id)) for chunk_id in chunks)}'
     query_id_dtype = f'U{max(len(str(query_id)) for query_id in queries)}'
+    source_paths.embeddings_paths('chunk_vectors').parent.mkdir(parents=True, exist_ok=True)
     np.save(
         source_paths.embeddings_paths('chunk_vectors'), np.zeros((len(chunks), 2), dtype=np.float32)
     )
     np.save(source_paths.embeddings_paths('chunk_ids'), np.asarray(chunks, dtype=chunk_id_dtype))
+    source_paths.embeddings_paths('query_vectors').parent.mkdir(parents=True, exist_ok=True)
     np.save(
         source_paths.embeddings_paths('query_vectors'),
         np.zeros((len(queries), 2), dtype=np.float32),
@@ -528,12 +735,40 @@ def test_native_v5_rejects_incomplete_background_topology_ladder() -> None:
 
 
 def test_analysis_series_select_each_manifest_declared_budget(tmp_path: Path) -> None:
-    manifest = materialize_suite(load_suite_spec('thesis_v5'), results_dir=tmp_path)
-    series = next(
-        item
-        for item in manifest.analysis_series
-        if item.series_id == 'proportional_budget_balanced'
-    )
+    raw = load_suite_spec('thesis_v5').model_dump(mode='python')
+    raw['analysis_series'] = [
+        {
+            'series_id': 'declared_budget_fixture',
+            'analysis_block': 'scale',
+            'reference_point_id': 'medium',
+            'lambda_source_k': 6,
+            'points': [
+                {
+                    'point_id': 'small',
+                    'distribution_id': 'scale_balanced_small',
+                    'run_profile_id': 'qwen_unbiased_simple',
+                    'k': 4,
+                    'factors': {'scale': 'small', 'pool_mass': 64},
+                },
+                {
+                    'point_id': 'medium',
+                    'distribution_id': 'balanced_reference',
+                    'run_profile_id': 'qwen_unbiased_simple',
+                    'k': 6,
+                    'factors': {'scale': 'medium', 'pool_mass': 128},
+                },
+                {
+                    'point_id': 'large',
+                    'distribution_id': 'scale_balanced_large',
+                    'run_profile_id': 'qwen_unbiased_simple',
+                    'k': 10,
+                    'factors': {'scale': 'large', 'pool_mass': 256},
+                },
+            ],
+        }
+    ]
+    manifest = materialize_suite(SuiteSpec.model_validate(raw), results_dir=tmp_path)
+    series = manifest.analysis_series[0]
     cells = {cell.cell_id: cell for cell in manifest.cells}
     rows = []
     for point in series.points:
@@ -555,9 +790,9 @@ def test_analysis_series_select_each_manifest_declared_budget(tmp_path: Path) ->
         },
     )
     assert [(row['PointId'], row['k']) for row in output] == [
-        ('small', 6),
-        ('medium', 12),
-        ('large', 24),
+        ('small', 4),
+        ('medium', 6),
+        ('large', 10),
     ]
 
 
@@ -604,7 +839,7 @@ def test_prune_planned_removes_only_obsolete_metadata_and_preserves_data(tmp_pat
         prune_planned=True,
     )
     assert len(manifest.distributions) == 41
-    assert len(manifest.cells) == 168
+    assert len(manifest.cells) == 164
     assert data_marker.read_text() == 'keep generated smoke data\n'
     assert not (root / 'distributions' / 'obsolete_planned').exists()
 

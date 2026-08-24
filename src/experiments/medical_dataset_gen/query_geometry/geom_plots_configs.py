@@ -27,11 +27,17 @@ class GeomPlotsSettings:
 
     candidate_pool_umap_only_figure_size: tuple[float, float] = (6.4, 6.2)
     candidate_pool_umap_figure_size: tuple[float, float] = (13.0, 5.6)
+    umap_axis_label_font_size: int = 15
+    umap_tick_label_font_size: int = 12
     pairwise_cosine_figure_size: tuple[float, float] = (7.6, 6.8)
     pairwise_cosine_cmap: str = 'coolwarm'
     pairwise_cosine_vmin: float = -1.0
     pairwise_cosine_vmax: float = 1.0
     query_cosine_heatmap_figure_size: tuple[float, float] = (6.9, 6.2)
+    query_cosine_colorbar_width_in: float = 0.28
+    query_cosine_colorbar_pad_in: float = 0.16
+    query_cosine_colorbar_label_font_size: int = 15
+    query_cosine_colorbar_tick_font_size: int = 13
 
     background_outlier_label_id: str = 'background_clinical_cluster'
     background_outlier_role: str = 'background_outlier'

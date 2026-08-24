@@ -154,10 +154,16 @@ def _metric_budget_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
                 f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
                 f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
                 f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
-                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
-                f'{prefix}FacLocMmrMedianDelta': _signed(row.get('MedianDeltaFacLocMMR')),
-                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
-                f'{prefix}MmrTopKMeanDelta': _signed(row.get('MeanDeltaMMRTopK')),
+                f'{prefix}FacLocMmrMeanDelta': _signed(
+                    row.get('MeanDeltaFacLocMMR'), digits=3
+                ),
+                f'{prefix}FacLocMmrMedianDelta': _signed(
+                    row.get('MedianDeltaFacLocMMR'), digits=3
+                ),
+                f'{prefix}FacLocTopKMeanDelta': _signed(
+                    row.get('MeanDeltaFacLocTopK'), digits=3
+                ),
+                f'{prefix}MmrTopKMeanDelta': _signed(row.get('MeanDeltaMMRTopK'), digits=3),
             }
         )
     return macros
@@ -179,6 +185,32 @@ def _metric_family_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
                 f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
                 f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR')),
                 f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK')),
+            }
+        )
+    return macros
+
+
+def _metric_family_budget_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose descriptive family means at each thesis retrieval budget."""
+    macros: dict[str, str] = {}
+    for row in rows:
+        metric_token = _metric_result_token(row.get('MetricLabel'))
+        family_token = _label_token(_family_label(row.get('ExperimentFamilyLabel')))
+        budget_token = _budget_result_token(row.get('BudgetCategory'))
+        if metric_token is None or not family_token or budget_token is None:
+            continue
+        prefix = f'Result{metric_token}Family{family_token}{budget_token}'
+        macros.update(
+            {
+                f'{prefix}Rows': _integer(row.get('Rows')),
+                f'{prefix}FacLocMmrMeanDelta': _signed(
+                    row.get('MeanDeltaFacLocMMR'), digits=3
+                ),
+                f'{prefix}FacLocTopKMeanDelta': _signed(
+                    row.get('MeanDeltaFacLocTopK'), digits=3
+                ),
             }
         )
     return macros
@@ -462,6 +494,7 @@ def render_thesis_result_macros(
     synthetic_artifact_rows: Sequence[Mapping[str, object]] = (),
     metric_summary_rows: Sequence[Mapping[str, object]] = (),
     metric_family_summary_rows: Sequence[Mapping[str, object]] = (),
+    metric_family_budget_summary_rows: Sequence[Mapping[str, object]] = (),
     paired_suite_rows: Sequence[Mapping[str, object]] = (),
     embedding_summary_rows: Sequence[Mapping[str, object]] = (),
     embedding_models: Sequence[str] = (),
@@ -475,6 +508,7 @@ def render_thesis_result_macros(
         **_comparison_result_macros(comparison_rows, budget_rows),
         **_metric_budget_result_macros(metric_summary_rows),
         **_metric_family_result_macros(metric_family_summary_rows),
+        **_metric_family_budget_result_macros(metric_family_budget_summary_rows),
         **_paired_suite_result_macros(paired_suite_rows),
         **_background_topology_endpoint_result_macros(comparison_rows),
         **_distribution_budget_result_macros(comparison_rows),
@@ -532,6 +566,9 @@ def generate_exp_results_macros(
             synthetic_artifact_rows=_read_rows(data_dir / 'synthetic_artifact_diagnostics.csv'),
             metric_summary_rows=_read_rows(data_dir / 'metric_aggregate_summary.csv'),
             metric_family_summary_rows=_read_rows(data_dir / 'metric_family_summary.csv'),
+            metric_family_budget_summary_rows=_read_rows(
+                data_dir / 'metric_family_budget_summary.csv'
+            ),
             paired_suite_rows=_read_rows(
                 data_dir / 'paired_suite_effect_summary.csv', required=False
             ),

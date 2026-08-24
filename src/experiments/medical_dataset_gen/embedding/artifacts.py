@@ -66,6 +66,44 @@ def chunk_embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
     return True
 
 
+def query_embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
+    missing = [
+        artifact
+        for artifact in QUERY_EMBEDDING_ARRAY_ARTIFACTS
+        if not paths.embeddings_paths(artifact).exists()
+    ]
+    if missing:
+        return False
+
+    try:
+        query_file = pq.ParquetFile(paths.table_path('queries'))
+        n_queries = query_file.metadata.num_rows
+        query_vectors = np.load(paths.embeddings_paths('query_vectors'), mmap_mode='r')
+        query_ids = np.load(paths.embeddings_paths('query_ids'), mmap_mode='r')
+    except Exception as exc:
+        print(f'[embed] existing query embedding artifacts are unreadable ({exc})')
+        return False
+
+    if query_vectors.ndim != 2:
+        print('[embed] existing query embedding vectors have invalid rank')
+        return False
+    if query_vectors.shape[0] != n_queries or query_ids.shape != (n_queries,):
+        print(
+            '[embed] existing query embedding row count does not match '
+            f'queries ({query_vectors.shape[0]}, {query_ids.shape[0]} != {n_queries})'
+        )
+        return False
+    if not _stored_ids_match_table(
+        paths=paths,
+        artifact='query_ids',
+        table='queries',
+        id_column='query_id',
+    ):
+        print('[embed] existing query embedding IDs do not match queries.parquet')
+        return False
+    return True
+
+
 def embedding_artifacts_ready(paths: MedicalDatasetGenPaths) -> bool:
     if not _embedding_metadata_is_complete(paths):
         return False
