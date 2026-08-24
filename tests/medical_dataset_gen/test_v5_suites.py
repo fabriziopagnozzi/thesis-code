@@ -28,8 +28,13 @@ from experiments.medical_dataset_gen.embedding.artifacts import (
     chunk_embedding_artifacts_ready,
     embedding_artifacts_ready,
 )
+from experiments.medical_dataset_gen.embedding.cleanup import run_cleanup
 from experiments.medical_dataset_gen.evaluation import eval_worker_handler
-from experiments.medical_dataset_gen.pipeline.__main__ import _reuse_nested_scale_chunk_embeddings
+from experiments.medical_dataset_gen.pipeline.__main__ import (
+    _build_parser,
+    _reuse_nested_scale_chunk_embeddings,
+    _selected_stage_names,
+)
 from experiments.medical_dataset_gen.query_geometry import geom_worker_handler
 from experiments.medical_dataset_gen.reports.discovery import discover_suite_experiments
 from experiments.medical_dataset_gen.reports.suite_analysis import (
@@ -326,6 +331,46 @@ def test_embed_selects_only_the_missing_shared_side(
     embedding_stage.run_embed(cfg, paths)
 
     assert called == [expected_mode]
+
+
+def test_cleanup_removes_only_chunk_embedding_arrays(tmp_path: Path) -> None:
+    validation = validate_suite(load_suite_spec('thesis_v5'))
+    cfg = ExperimentCfg.model_validate(
+        validation.resolved_configs['dominance_mild__qwen_biased_simple']
+    )
+    paths = MedicalDatasetGenPaths('cleanup_fixture', artifact_root=tmp_path)
+    paths.ensure_dirs()
+    for artifact in ('chunk_vectors', 'chunk_ids', 'query_vectors', 'query_ids', 'metadata'):
+        path = paths.embeddings_paths(artifact)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if artifact == 'metadata':
+            path.write_text(json.dumps({'model_name': cfg.embeddings.model_name}))
+        else:
+            np.save(path, np.zeros((1, 2), dtype=np.float32))
+
+    run_cleanup(cfg, paths)
+
+    assert not paths.embeddings_paths('chunk_vectors').exists()
+    assert not paths.embeddings_paths('chunk_ids').exists()
+    assert paths.embeddings_paths('query_vectors').is_file()
+    assert paths.embeddings_paths('query_ids').is_file()
+    assert paths.embeddings_paths('metadata').is_file()
+
+
+def test_cleanup_stage_is_explicit_only() -> None:
+    parser = _build_parser()
+
+    default_args = parser.parse_args(['--exp', 'fixture'])
+    assert 'cleanup' not in _selected_stage_names(parser, default_args)
+
+    open_ended_args = parser.parse_args(['--exp', 'fixture', '--from', 'embed'])
+    assert 'cleanup' not in _selected_stage_names(parser, open_ended_args)
+
+    explicit_args = parser.parse_args(['--exp', 'fixture', '--stages', 'cleanup'])
+    assert _selected_stage_names(parser, explicit_args) == ['cleanup']
+
+    bounded_args = parser.parse_args(['--exp', 'fixture', '--to', 'cleanup'])
+    assert _selected_stage_names(parser, bounded_args)[-1] == 'cleanup'
 
 
 def test_native_v5_rejects_multiple_gold_regions_per_facet() -> None:

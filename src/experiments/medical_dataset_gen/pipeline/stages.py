@@ -14,6 +14,7 @@ from experiments.medical_dataset_gen.dataset_generation.queries_answers import (
     run_make_queries_answers,
 )
 from experiments.medical_dataset_gen.embedding.artifacts import embedding_artifacts_ready
+from experiments.medical_dataset_gen.embedding.cleanup import run_cleanup
 from experiments.medical_dataset_gen.embedding.stage import run_embed
 from experiments.medical_dataset_gen.evaluation.plot_stage import (
     parse_plots_cli_args,
@@ -46,9 +47,11 @@ type PipelineStage = Literal[
     'eval',
     'eval_plots',
     'geom_plots',
+    'cleanup',
 ]
 PIPELINE_STAGE_NAMES = list[PipelineStage](get_literals(PipelineStage))
 PIPELINE_STAGE_SET = set[PipelineStage](PIPELINE_STAGE_NAMES)
+EXPLICIT_ONLY_STAGE_SET: frozenset[PipelineStage] = frozenset({'cleanup'})
 type PipelineStageFn = Callable[[ExperimentCfg, MedicalDatasetGenPaths], object]
 type StageReadyFn = Callable[[MedicalDatasetGenPaths], bool]
 
@@ -75,6 +78,7 @@ STAGE_SPECS: tuple[StageSpec, ...] = (
     StageSpec('eval', run_evaluate),
     StageSpec('eval_plots', run_eval_plots),
     StageSpec('geom_plots', run_query_geom_plots),
+    StageSpec('cleanup', run_cleanup),
 )
 STAGE_BY_NAME = {spec.name: spec for spec in STAGE_SPECS}
 

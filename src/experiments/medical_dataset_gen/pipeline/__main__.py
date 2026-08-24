@@ -17,6 +17,7 @@ from experiments.medical_dataset_gen.dataset_generation.caches import chunk_embe
 from experiments.medical_dataset_gen.embedding.artifacts import embedding_artifacts_ready
 from experiments.medical_dataset_gen.embedding.stage import run_embed
 from experiments.medical_dataset_gen.pipeline.stages import (
+    EXPLICIT_ONLY_STAGE_SET,
     PIPELINE_STAGE_SET,
     STAGE_BY_NAME,
     STAGE_SPECS,
@@ -628,6 +629,15 @@ def _selected_stage_names(
         if stop_idx < start_idx:
             parser.error('--to must be the same as or later than --from')
         selected = [spec.name for spec in STAGE_SPECS[start_idx : stop_idx + 1]]
+
+        # Destructive maintenance stages must be named through a range bound.
+        # A default run, or an open-ended --from run, must never imply cleanup.
+        explicitly_named_bounds = {args.from_stage, args.to_stage}
+        selected = [
+            stage
+            for stage in selected
+            if stage not in EXPLICIT_ONLY_STAGE_SET or stage in explicitly_named_bounds
+        ]
 
     excluded = {pipeline_stage(stage) for group in args.exclude or [] for stage in group}
     selected_set = set(selected) - excluded
