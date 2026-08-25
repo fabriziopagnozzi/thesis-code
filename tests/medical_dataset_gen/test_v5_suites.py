@@ -13,6 +13,14 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 import yaml
+from experiments.medical_dataset_gen.scripts.migrate_shared_chunk_embeddings import (
+    migrate_suite_chunk_embeddings,
+)
+from experiments.medical_dataset_gen.scripts.migrate_v4_to_v5 import (
+    execute_migration,
+    inventory_v4_artifacts,
+    rollback_migration,
+)
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_materialization import (
     _write_normalized_chunks,
@@ -30,25 +38,14 @@ from experiments.medical_dataset_gen.embedding.artifacts import (
 )
 from experiments.medical_dataset_gen.embedding.cleanup import run_cleanup
 from experiments.medical_dataset_gen.evaluation import eval_worker_handler
-from experiments.medical_dataset_gen.pipeline.__main__ import (
-    _build_parser,
-    _reuse_nested_scale_chunk_embeddings,
-    _selected_stage_names,
-)
+from experiments.medical_dataset_gen.pipeline.cli import build_parser, selected_stage_names
+from experiments.medical_dataset_gen.pipeline.suite import reuse_nested_scale_chunk_embeddings
 from experiments.medical_dataset_gen.query_geometry import geom_worker_handler
 from experiments.medical_dataset_gen.reports.discovery import discover_suite_experiments
 from experiments.medical_dataset_gen.reports.suite_analysis import (
     analysis_series_rows,
     matched_contrast_rows,
     write_suite_factor_figures,
-)
-from experiments.medical_dataset_gen.scripts.migrate_shared_chunk_embeddings import (
-    migrate_suite_chunk_embeddings,
-)
-from experiments.medical_dataset_gen.scripts.migrate_v4_to_v5 import (
-    execute_migration,
-    inventory_v4_artifacts,
-    rollback_migration,
 )
 from experiments.medical_dataset_gen.suites.core import (
     SuiteSpec,
@@ -301,12 +298,8 @@ def test_embed_selects_only_the_missing_shared_side(
         return vectors, vectors, {'n_chunks': 1, 'n_queries': 1}
 
     monkeypatch.setattr(embedding_stage, 'embedding_artifacts_ready', lambda _: False)
-    monkeypatch.setattr(
-        embedding_stage, 'chunk_embedding_artifacts_ready', lambda _: chunks_ready
-    )
-    monkeypatch.setattr(
-        embedding_stage, 'query_embedding_artifacts_ready', lambda _: queries_ready
-    )
+    monkeypatch.setattr(embedding_stage, 'chunk_embedding_artifacts_ready', lambda _: chunks_ready)
+    monkeypatch.setattr(embedding_stage, 'query_embedding_artifacts_ready', lambda _: queries_ready)
     monkeypatch.setattr(
         embedding_stage,
         '_reuse_embedding_arrays',
@@ -358,19 +351,19 @@ def test_cleanup_removes_only_chunk_embedding_arrays(tmp_path: Path) -> None:
 
 
 def test_cleanup_stage_is_explicit_only() -> None:
-    parser = _build_parser()
+    parser = build_parser()
 
     default_args = parser.parse_args(['--exp', 'fixture'])
-    assert 'cleanup' not in _selected_stage_names(parser, default_args)
+    assert 'cleanup' not in selected_stage_names(parser, default_args)
 
     open_ended_args = parser.parse_args(['--exp', 'fixture', '--from', 'embed'])
-    assert 'cleanup' not in _selected_stage_names(parser, open_ended_args)
+    assert 'cleanup' not in selected_stage_names(parser, open_ended_args)
 
     explicit_args = parser.parse_args(['--exp', 'fixture', '--stages', 'cleanup'])
-    assert _selected_stage_names(parser, explicit_args) == ['cleanup']
+    assert selected_stage_names(parser, explicit_args) == ['cleanup']
 
     bounded_args = parser.parse_args(['--exp', 'fixture', '--to', 'cleanup'])
-    assert _selected_stage_names(parser, bounded_args)[-1] == 'cleanup'
+    assert selected_stage_names(parser, bounded_args)[-1] == 'cleanup'
 
 
 def test_native_v5_rejects_multiple_gold_regions_per_facet() -> None:
@@ -665,7 +658,7 @@ def test_nested_scale_reuses_verified_source_chunk_embeddings(
     target_cfg = load_cell_config(root, target_cell)
     target_paths = suite_paths_for_cell(root=root, cell=target_cell, cfg=target_cfg)
     target_paths.ensure_dirs()
-    assert _reuse_nested_scale_chunk_embeddings(
+    assert reuse_nested_scale_chunk_embeddings(
         root=root,
         cell=target_cell,
         cfg=target_cfg,

@@ -7,7 +7,7 @@ description: >-
 
 source:
     suite_id: thesis_v5
-    manifest_sha256: 4bd2a9be63f29b62b96bc3fb2d2e8b1d3f2ee6769b247b998ca200c9f5bc348b
+    manifest_sha256: 088959929312211d22a5172bf0ca9b912f7bfe845ec25d060beeef114c803343
     embedding_models:
         - abhinand/MedEmbed-large-v0.1
     distribution_ids:

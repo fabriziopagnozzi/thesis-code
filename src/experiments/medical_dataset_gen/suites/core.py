@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, model_validator
 
 from experiments.medical_dataset_gen.utils.exp_naming import embedding_child_token
 from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
@@ -224,6 +224,12 @@ class AnalysisSeries(SuiteModel):
         return self
 
 
+class DerivedEmbeddingOverrides(SuiteModel):
+    """Model-specific execution settings that do not alter the source dataset."""
+
+    batch_size: PositiveInt
+
+
 class DerivedSuiteSource(SuiteModel):
     """Immutable source contract for a suite that only reruns downstream stages."""
 
@@ -231,6 +237,7 @@ class DerivedSuiteSource(SuiteModel):
     manifest_sha256: str = Field(min_length=64, max_length=64)
     distribution_ids: list[str] = Field(min_length=1)
     embedding_models: list[str] = Field(min_length=1)
+    embedding_overrides: dict[str, DerivedEmbeddingOverrides] = Field(default_factory=dict)
 
     @model_validator(mode='before')
     @classmethod
@@ -252,6 +259,12 @@ class DerivedSuiteSource(SuiteModel):
             _validate_identifier(distribution_id, 'source distribution_id')
         if len(self.embedding_models) != len(set(self.embedding_models)):
             raise ValueError('derived source embedding_models must be unique')
+        unknown_overrides = set(self.embedding_overrides) - set(self.embedding_models)
+        if unknown_overrides:
+            raise ValueError(
+                'derived source embedding_overrides reference undeclared models: '
+                f'{sorted(unknown_overrides)}'
+            )
         if len(self.manifest_sha256) != 64 or any(
             character not in '0123456789abcdef' for character in self.manifest_sha256
         ):
@@ -1111,6 +1124,9 @@ def _materialize_derived_suite(
             if not isinstance(raw_embeddings, dict):
                 raise ValueError(f'{source_profile_id}: source embeddings profile is not a mapping')
             raw_embeddings['model_name'] = model_name
+            overrides = spec.source.embedding_overrides.get(model_name)
+            if overrides is not None:
+                raw_embeddings['batch_size'] = overrides.batch_size
             derived_profile_id = profile_map[source_profile_id]
             target_path = root / 'run_profiles' / derived_profile_id / 'resolved_run_profile.yaml'
             target_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1148,6 +1164,9 @@ def _materialize_derived_suite(
                     f'{source_cell.cell_id}: source embeddings config is not a mapping'
                 )
             raw_embeddings['model_name'] = model_name
+            overrides = spec.source.embedding_overrides.get(model_name)
+            if overrides is not None:
+                raw_embeddings['batch_size'] = overrides.batch_size
             ExperimentCfg.model_validate(raw_config)
             if _dataset_hash(raw_config) != source_cell.dataset_sha256:
                 raise ValueError(f'{source_cell.cell_id}: source dataset hash is stale')

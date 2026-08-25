@@ -1,15 +1,18 @@
 layout_version: 5
-suite_id: thesis_v5_multi_mpnet_extension
+suite_id: thesis_v5_qwen3_4b_extension
 origin: derived
 dataset_schema_version: 5
 description: >-
-    Multi-MPNet embedding extension over the report-eligible thesis_v5 distributions.
+    Qwen3-Embedding-4B extension over the report-eligible thesis_v5 distributions.
 
 source:
     suite_id: thesis_v5
     manifest_sha256: 088959929312211d22a5172bf0ca9b912f7bfe845ec25d060beeef114c803343
     embedding_models:
-        - multi-qa-mpnet-base-cos-v1
+        - Qwen/Qwen3-Embedding-4B
+    embedding_overrides:
+        Qwen/Qwen3-Embedding-4B:
+            batch_size: 16
     distribution_ids:
         - balanced_reference
         - dominance_mild
