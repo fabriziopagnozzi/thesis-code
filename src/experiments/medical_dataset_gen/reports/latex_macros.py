@@ -11,7 +11,10 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DeltaMetricLabel,
     practical_effect_threshold,
 )
-from experiments.medical_dataset_gen.reports.helpers import family_balanced_mean
+from experiments.medical_dataset_gen.reports.helpers import (
+    family_balanced_mean,
+    ordered_embedding_models,
+)
 from experiments.medical_dataset_gen.reports.latex_tables import (
     _METRIC_RESULT_TOKENS,
     _budget_result_token,
@@ -154,15 +157,9 @@ def _metric_budget_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
                 f'{prefix}FacLocMmrBetterPct': _tex_percent(row.get('FacLocBetterPct')),
                 f'{prefix}FacLocMmrTiedPct': _tex_percent(row.get('FacLocTiedPct')),
                 f'{prefix}FacLocMmrWorsePct': _tex_percent(row.get('FacLocWorsePct')),
-                f'{prefix}FacLocMmrMeanDelta': _signed(
-                    row.get('MeanDeltaFacLocMMR'), digits=3
-                ),
-                f'{prefix}FacLocMmrMedianDelta': _signed(
-                    row.get('MedianDeltaFacLocMMR'), digits=3
-                ),
-                f'{prefix}FacLocTopKMeanDelta': _signed(
-                    row.get('MeanDeltaFacLocTopK'), digits=3
-                ),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+                f'{prefix}FacLocMmrMedianDelta': _signed(row.get('MedianDeltaFacLocMMR'), digits=3),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK'), digits=3),
                 f'{prefix}MmrTopKMeanDelta': _signed(row.get('MeanDeltaMMRTopK'), digits=3),
             }
         )
@@ -205,12 +202,8 @@ def _metric_family_budget_result_macros(
         macros.update(
             {
                 f'{prefix}Rows': _integer(row.get('Rows')),
-                f'{prefix}FacLocMmrMeanDelta': _signed(
-                    row.get('MeanDeltaFacLocMMR'), digits=3
-                ),
-                f'{prefix}FacLocTopKMeanDelta': _signed(
-                    row.get('MeanDeltaFacLocTopK'), digits=3
-                ),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK'), digits=3),
             }
         )
     return macros
@@ -287,20 +280,24 @@ def _background_topology_endpoint_result_macros(
 
 def _distribution_budget_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
+    *,
+    embedding_models: Sequence[str] = (),
 ) -> dict[str, str]:
-    """Expose per-distribution results without coupling thesis tables to CSV rows.
-
-    The table values remain model-specific so a later multi-embedding report
-    cannot silently replace the Qwen thesis evidence with a pooled average.
-    """
+    """Expose model-specific and equally model-weighted distribution results."""
     grouped_rows: dict[tuple[str, str, int], list[Mapping[str, object]]] = {}
+    pooled_rows: dict[tuple[str, int], dict[str, list[Mapping[str, object]]]] = {}
     for row in comparison_rows:
+        embedding_model = str(row.get('EmbeddingModel') or '')
         model_token = _embedding_model_result_token(row.get('EmbeddingModel'))
         distribution = str(row.get('Distribution') or '')
         k_value = _float(row.get('k'))
-        if model_token is None or not distribution or k_value is None:
+        if not embedding_model or model_token is None or not distribution or k_value is None:
             continue
-        grouped_rows.setdefault((model_token, distribution, int(k_value)), []).append(row)
+        integer_k = int(k_value)
+        grouped_rows.setdefault((model_token, distribution, integer_k), []).append(row)
+        pooled_rows.setdefault((distribution, integer_k), {}).setdefault(
+            embedding_model, []
+        ).append(row)
 
     macros: dict[str, str] = {}
     for (model_token, distribution, k_value), rows in grouped_rows.items():
@@ -322,7 +319,66 @@ def _distribution_budget_result_macros(
                 ),
             }
         )
+
+    effective_models = tuple(
+        embedding_models
+        or ordered_embedding_models(
+            model for model_rows in pooled_rows.values() for model in model_rows
+        )
+    )
+    expected_models = set(effective_models)
+    macros['ResultDistributionPooledModels'] = _integer(len(effective_models))
+    for (distribution, k_value), rows_by_model in pooled_rows.items():
+        # Omit partially crossed cells: every pooled value must represent the same
+        # embedding-model scope declared by this report.
+        if set(rows_by_model) != expected_models:
+            continue
+        prefix = f'ResultDistribution{_label_token(distribution)}K{k_value}'
+        fcp_deltas = _model_means(rows_by_model, 'Delta_FacLoc_MMR_FCP')
+        mmr_near_miss_rates = _model_means(rows_by_model, 'MMR_NearMissDistractorRate')
+        facloc_near_miss_rates = _model_means(rows_by_model, 'FacLoc_NearMissDistractorRate')
+        mean_mmr_near_miss_rate = _mean_values(mmr_near_miss_rates)
+        mean_facloc_near_miss_rate = _mean_values(facloc_near_miss_rates)
+        macros.update(
+            {
+                f'{prefix}ModelCount': _integer(len(rows_by_model)),
+                f'{prefix}FacLocMmrFcpMeanDelta': _signed(_mean_values(fcp_deltas), digits=3),
+                f'{prefix}FacLocMmrFcpMinModelDelta': _signed(
+                    min(fcp_deltas) if fcp_deltas else None, digits=3
+                ),
+                f'{prefix}FacLocMmrFcpMaxModelDelta': _signed(
+                    max(fcp_deltas) if fcp_deltas else None, digits=3
+                ),
+                f'{prefix}FacLocMmrFcpPositiveModelCount': _integer(
+                    sum(delta > 0.0 for delta in fcp_deltas)
+                ),
+                f'{prefix}MmrNearMissDistractorRate': _tex_percent(mean_mmr_near_miss_rate),
+                f'{prefix}FacLocNearMissDistractorRate': _tex_percent(mean_facloc_near_miss_rate),
+                f'{prefix}NearMissReductionPp': _fixed(
+                    None
+                    if mean_mmr_near_miss_rate is None or mean_facloc_near_miss_rate is None
+                    else (mean_mmr_near_miss_rate - mean_facloc_near_miss_rate) * 100,
+                    digits=1,
+                ),
+            }
+        )
     return macros
+
+
+def _model_means(
+    rows_by_model: Mapping[str, Sequence[Mapping[str, object]]],
+    column: str,
+) -> list[float]:
+    """Average configurations within models before averaging across models."""
+    return [
+        model_mean
+        for model in sorted(rows_by_model)
+        if (model_mean := _mean(rows_by_model[model], column)) is not None
+    ]
+
+
+def _mean_values(values: Sequence[float]) -> float | None:
+    return sum(values) / len(values) if values else None
 
 
 def _embedding_model_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
@@ -511,7 +567,10 @@ def render_thesis_result_macros(
         **_metric_family_budget_result_macros(metric_family_budget_summary_rows),
         **_paired_suite_result_macros(paired_suite_rows),
         **_background_topology_endpoint_result_macros(comparison_rows),
-        **_distribution_budget_result_macros(comparison_rows),
+        **_distribution_budget_result_macros(
+            comparison_rows,
+            embedding_models=embedding_models,
+        ),
         **_embedding_model_result_macros(embedding_summary_rows),
         **_embedding_low_budget_result_macros(comparison_rows, budget_rows),
         **_embedding_edge_case_result_macros(comparison_rows),
