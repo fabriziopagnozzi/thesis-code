@@ -28,15 +28,29 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         default=default_results_dir,
         help='Root directory containing experiment result folders.',
     )
-    parser.add_argument(
+    suite_group = parser.add_mutually_exclusive_group()
+    suite_group.add_argument(
         '--suite',
         default=None,
         help='Materialized v5 suite ID. Uses its manifest instead of legacy directory discovery.',
+    )
+    suite_group.add_argument(
+        '--suite-base',
+        default=None,
+        help=(
+            'Native suite ID whose experiment_specs-derived suites should be discovered and '
+            'combined into one report.'
+        ),
     )
     parser.add_argument(
         '--where',
         default=None,
         help='Suite-only comma-separated equality filters, for example family_id=dominance,scale=medium.',
+    )
+    parser.add_argument(
+        '--suite-regex',
+        default=None,
+        help='Regex applied to derived suite IDs discovered by --suite-base.',
     )
     parser.add_argument(
         '--strict-suite',
@@ -151,6 +165,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             'and chunk_text_mode triples, including the singleton label-only query mode. '
             'This is intended for full all-mode reports.'
         ),
+        default=True,
     )
     parser.add_argument(
         '--main-query-scope',
@@ -197,6 +212,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         '--validity-analysis',
         action='store_true',
         help='Generate geometry-population and synthetic-artifact validity diagnostics.',
+        default=True,
     )
     parser.add_argument(
         '--full-report',
@@ -204,7 +220,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         help='Enable every optional expensive analysis.',
     )
     parsed = parser.parse_args(argv)
-    if parsed.suite is not None:
+    suite_selected = parsed.suite is not None or parsed.suite_base is not None
+    if suite_selected:
         incompatible = [
             option
             for option, value in (
@@ -218,10 +235,18 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         ]
         if incompatible:
             parser.error(
-                '--suite uses manifest selection and cannot combine with ' + ', '.join(incompatible)
+                '--suite/--suite-base use manifest selection and cannot combine with '
+                + ', '.join(incompatible)
             )
-    elif parsed.where is not None or parsed.strict_suite:
-        parser.error('--where and --strict-suite require --suite')
+    elif parsed.where is not None or parsed.strict_suite or parsed.suite_regex is not None:
+        parser.error('--where, --strict-suite, and --suite-regex require --suite or --suite-base')
+    if parsed.suite_regex is not None and parsed.suite_base is None:
+        parser.error('--suite-regex requires --suite-base')
+    if parsed.suite_regex is not None:
+        try:
+            re.compile(str(parsed.suite_regex))
+        except re.error as exc:
+            parser.error(f'invalid --suite-regex: {exc}')
     refresh_report_dir = (
         parsed.refresh_plots or parsed.refresh_latex_macros or parsed.refresh_output_artifacts
     )
@@ -295,6 +320,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         validity_analysis=bool(parsed.validity_analysis),
         full_report=bool(parsed.full_report),
         suite_id=str(parsed.suite).strip() if parsed.suite is not None else None,
+        suite_base_id=str(parsed.suite_base).strip() if parsed.suite_base is not None else None,
+        suite_regex=str(parsed.suite_regex).strip() if parsed.suite_regex is not None else None,
         suite_where=str(parsed.where).strip() if parsed.where is not None else None,
         strict_suite=bool(parsed.strict_suite),
     )

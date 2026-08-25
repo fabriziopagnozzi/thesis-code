@@ -9,6 +9,7 @@ from pathlib import Path
 from experiments.medical_dataset_gen.suites.core import (
     load_suite_spec,
     materialize_suite,
+    reconcile_suite_metadata,
     suite_spec_root,
     validate_suite,
 )
@@ -20,7 +21,7 @@ from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGen
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description='Validate or materialize a v5 experiment suite.')
     subparsers = parser.add_subparsers(dest='command', required=True)
-    for command in ('validate', 'materialize', 'freeze-geometry'):
+    for command in ('validate', 'materialize', 'freeze-geometry', 'reconcile-metadata'):
         subparser = subparsers.add_parser(command)
         subparser.add_argument('--suite', required=True, help='Suite ID or path to its YAML spec.')
         subparser.add_argument(
@@ -67,6 +68,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     'embedding models removed from an otherwise identical source contract.'
                 ),
             )
+        if command == 'reconcile-metadata':
+            subparser.add_argument(
+                '--dry-run',
+                action='store_true',
+                help='Validate and describe a metadata reconciliation without writing files.',
+            )
         if command == 'freeze-geometry':
             subparser.add_argument('--replace', action='store_true')
     args = parser.parse_args(argv)
@@ -106,6 +113,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             prune_removed_embeddings=bool(args.prune_removed_embeddings),
         )
         print(f'materialized {len(manifest.cells)} cells')
+    if args.command == 'reconcile-metadata':
+        assert spec is not None
+        result = reconcile_suite_metadata(
+            spec,
+            results_dir=results_dir,
+            dry_run=bool(args.dry_run),
+        )
+        action = 'would reconcile' if result.dry_run else 'reconciled'
+        print(
+            f'{action} {result.suite_id}: '
+            f'{result.previous_manifest_sha256} -> {result.manifest_sha256}'
+        )
+        if result.derived_suite_ids:
+            print(f'updated derived suites: {", ".join(result.derived_suite_ids)}')
+        if result.derived_spec_paths:
+            print(f'updated derived specs: {", ".join(str(path) for path in result.derived_spec_paths)}')
     if args.check_artifacts or spec is None:
         result = validate_materialized_suite(
             results_dir=results_dir,

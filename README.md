@@ -233,6 +233,17 @@ uv run task report \
   --output-dir ../thesis-documents/reports/experiment_comparison
 ```
 
+For a thesis report that combines the native suite with every materialized derived embedding suite, use the base-suite selector. It scans `experiment_specs/`, follows derived specs whose source is `thesis_v5`, verifies their pinned source manifest, and deduplicates the shared native cells:
+
+```bash
+uv run task report \
+  --suite-base thesis_v5 \
+  --results-dir /DATA/pagnozzi/thesis/medical_dataset_gen/_results \
+  --output-dir ../thesis-documents/reports/experiment_comparison/thesis_v5_all_embeddings
+```
+
+Use `--suite-regex` with `--suite-base` to restrict the derived suites, for example `--suite-regex '^(thesis_v5_embedding_extension|thesis_v5_multi_mpnet_extension)$'`. The native `thesis_v5` cells remain included automatically.
+
 By default, report output is written to `../thesis-documents/reports/experiment_comparison`. The thesis repository ignores everything under `reports/` except each report's `figures/` and `latex/` trees, so data, manifests, markdown, and warnings stay available locally without being committed. The `reports/` CLI also supports filtering experiments, selecting embedding models, refreshing only plots or LaTeX macros, and enabling optional lambda-transfer, paired-statistics, or validity analyses. The scripts under [`medical_dataset_gen/scripts`](src/experiments/medical_dataset_gen/scripts) provide smaller diagnostics and sample renderers.
 
 ## The earlier MIMIC-IV pipeline

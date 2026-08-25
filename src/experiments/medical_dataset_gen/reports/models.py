@@ -59,6 +59,8 @@ class CliArgs:
     validity_analysis: bool = False
     full_report: bool = False
     suite_id: str | None = None
+    suite_base_id: str | None = None
+    suite_regex: str | None = None
     suite_where: str | None = None
     strict_suite: bool = False
 

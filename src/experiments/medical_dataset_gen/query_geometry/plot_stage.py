@@ -19,6 +19,10 @@ import numpy as np
 import polars as pl
 from tqdm import tqdm
 
+from experiments.medical_dataset_gen.embedding.artifacts import (
+    chunk_embedding_artifacts_ready,
+)
+from experiments.medical_dataset_gen.embedding.stage import run_embed
 from experiments.medical_dataset_gen.evaluation.eval_worker_handler import (
     load_selected_parquet_columns,
 )
@@ -122,6 +126,11 @@ def run_query_geom_plots(
         paths.table_path('qrels'),
     ]
     missing = [str(path) for path in required_paths if not path.exists()]
+    if missing:
+        print(f'[query_geometry] skipping; missing required artifacts: {missing}')
+        return pl.DataFrame()
+
+    _ensure_query_geometry_chunk_embeddings(cfg, paths)
 
     embedding_paths = [
         paths.embeddings_paths('metadata'),
@@ -279,6 +288,25 @@ def run_query_geom_plots(
     selection_note = f' ({", ".join(selected_plot_names)})' if selected_plots is not None else ''
     print(f'[query_geometry] saved figures to {out_dir}{selection_note}')
     return stats
+
+
+def _ensure_query_geometry_chunk_embeddings(
+    cfg: ExperimentCfg,
+    paths: MedicalDatasetGenPaths,
+) -> None:
+    """Restore temporary chunk arrays removed by the explicit cleanup stage."""
+    if chunk_embedding_artifacts_ready(paths):
+        return
+
+    print(
+        '[query_geometry] chunk vectors or IDs are absent or invalid; '
+        'rematerializing them via the embed stage'
+    )
+    run_embed(cfg, paths)
+    if not chunk_embedding_artifacts_ready(paths):
+        raise RuntimeError(
+            '[query_geometry] embed stage did not restore valid chunk vectors and chunk IDs'
+        )
 
 
 def _render_query_geometry_query(qid: str) -> RenderedGeometryResult | None:

@@ -17,6 +17,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Literal, cast
 
 import yaml
@@ -533,6 +534,18 @@ class LogicalSuite:
     roots_by_cell_id: dict[str, Path]
 
 
+@dataclass(frozen=True)
+class SuiteMetadataReconciliation:
+    """Result of a metadata-only native-suite reconciliation."""
+
+    suite_id: str
+    previous_manifest_sha256: str
+    manifest_sha256: str
+    derived_suite_ids: tuple[str, ...]
+    derived_spec_paths: tuple[Path, ...]
+    dry_run: bool
+
+
 def suite_spec_root() -> Path:
     return MedicalDatasetGenPaths.root / 'experiment_specs'
 
@@ -554,6 +567,216 @@ def load_suite_manifest(results_dir: Path, suite_id: str) -> SuiteManifest:
     if not path.is_file():
         raise FileNotFoundError(f'missing suite manifest: {path}')
     return SuiteManifest.model_validate(json.loads(path.read_text()))
+
+
+def reconcile_suite_metadata(
+    spec: SuiteSpec,
+    *,
+    results_dir: Path,
+    dry_run: bool = False,
+) -> SuiteMetadataReconciliation:
+    """Synchronize analysis metadata without changing materialized experiment data.
+
+    A native suite's comparison groups and analysis series can evolve after its
+    data and evaluations are materialized.  Re-materializing such a suite is
+    deliberately forbidden because it would discard immutable attempts.  This
+    operation accepts only a byte-for-byte identical experiment surface, then
+    refreshes those suite-level analysis declarations and re-pins every local
+    derived suite to the resulting source manifest.
+    """
+    if spec.origin != 'native':
+        raise ValueError('metadata reconciliation requires a native suite spec')
+
+    validation = validate_suite(spec)
+    root = suite_root(results_dir, spec.suite_id)
+    manifest_path = root / 'suite_manifest.json'
+    existing = load_suite_manifest(results_dir, spec.suite_id)
+    if existing.origin != 'native':
+        raise ValueError(f'{spec.suite_id}: metadata reconciliation requires a native manifest')
+    _validate_reconciliation_surface(existing=existing, spec=spec, validation=validation)
+
+    previous_manifest_sha256 = _sha256_file(manifest_path)
+    reconciled = existing.model_copy(
+        update={
+            'comparison_groups': list(spec.comparison_groups),
+            'analysis_series': list(spec.analysis_series),
+        }
+    )
+    reconciled_text = _json_text(reconciled.model_dump(mode='json'))
+    manifest_sha256 = hashlib.sha256(reconciled_text.encode()).hexdigest()
+
+    derived_manifests = _derived_manifests_for_source(
+        results_dir=results_dir,
+        source_suite_id=spec.suite_id,
+        expected_source_manifest_sha256=previous_manifest_sha256,
+    )
+    derived_texts = {
+        path: _reconciled_derived_manifest_text(
+            manifest=manifest,
+            source_manifest_sha256=manifest_sha256,
+            comparison_groups=spec.comparison_groups,
+            analysis_series=spec.analysis_series,
+        )
+        for path, manifest in derived_manifests.items()
+    }
+    derived_spec_texts = {
+        path: _reconciled_derived_spec_text(
+            path=path,
+            source_suite_id=spec.suite_id,
+            previous_manifest_sha256=previous_manifest_sha256,
+            manifest_sha256=manifest_sha256,
+        )
+        for path in _derived_spec_paths(derived_manifests)
+    }
+
+    if not dry_run:
+        # Derived manifests are switched before the base manifest.  Callers
+        # must ensure no pipeline is resolving source cells during this small
+        # transaction; source hashes intentionally make concurrent changes
+        # fail closed instead of mixing dataset revisions.
+        for path, text in derived_texts.items():
+            _write_text_atomically(path, text)
+        _write_text_atomically(manifest_path, reconciled_text)
+        for path, text in derived_spec_texts.items():
+            _write_text_atomically(path, text)
+
+    return SuiteMetadataReconciliation(
+        suite_id=spec.suite_id,
+        previous_manifest_sha256=previous_manifest_sha256,
+        manifest_sha256=manifest_sha256,
+        derived_suite_ids=tuple(path.parent.name for path in derived_manifests),
+        derived_spec_paths=tuple(derived_spec_texts),
+        dry_run=dry_run,
+    )
+
+
+def _validate_reconciliation_surface(
+    *,
+    existing: SuiteManifest,
+    spec: SuiteSpec,
+    validation: ValidationResult,
+) -> None:
+    """Reject anything that would modify the immutable experiment surface."""
+    expected_distributions = set(spec.distributions)
+    existing_distributions = {
+        distribution.distribution_id: distribution for distribution in existing.distributions
+    }
+    if expected_distributions != set(existing_distributions):
+        raise ValueError('metadata reconciliation cannot add or remove distributions')
+    for distribution_id, resolved in validation.resolved_distributions.items():
+        materialized = existing_distributions[distribution_id]
+        if materialized.distribution_sha256 != _sha256_json(resolved):
+            raise ValueError(
+                f'{distribution_id}: reconciliation would change the distribution configuration'
+            )
+        if materialized.dataset_sha256 != _dataset_hash(resolved):
+            raise ValueError(f'{distribution_id}: reconciliation would change the dataset')
+
+    expected_profiles = set(spec.run_profiles)
+    existing_profiles = {profile.run_profile_id: profile for profile in existing.run_profiles}
+    if expected_profiles != set(existing_profiles):
+        raise ValueError('metadata reconciliation cannot add or remove run profiles')
+    for profile_id, profile in spec.run_profiles.items():
+        if existing_profiles[profile_id].run_profile_sha256 != _sha256_json(profile.config):
+            raise ValueError(
+                f'{profile_id}: reconciliation would change the run-profile configuration'
+            )
+
+    existing_cells = {cell.cell_id: cell for cell in existing.cells}
+    if set(validation.resolved_configs) != set(existing_cells):
+        raise ValueError('metadata reconciliation cannot add or remove evaluation cells')
+    for cell_id, resolved in validation.resolved_configs.items():
+        materialized = existing_cells[cell_id]
+        if materialized.config_sha256 != _sha256_json(resolved):
+            raise ValueError(f'{cell_id}: reconciliation would change the evaluation configuration')
+        if materialized.dataset_sha256 != _dataset_hash(resolved):
+            raise ValueError(f'{cell_id}: reconciliation would change the dataset')
+
+
+def _derived_manifests_for_source(
+    *,
+    results_dir: Path,
+    source_suite_id: str,
+    expected_source_manifest_sha256: str,
+) -> dict[Path, SuiteManifest]:
+    manifests: dict[Path, SuiteManifest] = {}
+    suites_root = suite_root(results_dir, source_suite_id).parent
+    for path in sorted(suites_root.glob('*/suite_manifest.json')):
+        manifest = SuiteManifest.model_validate(json.loads(path.read_text()))
+        if manifest.origin != 'derived' or manifest.source is None:
+            continue
+        source = manifest.source
+        if source.suite_id != source_suite_id:
+            continue
+        if source.manifest_sha256 != expected_source_manifest_sha256:
+            raise ValueError(
+                f'{manifest.suite_id}: source manifest hash is not the current {source_suite_id} hash'
+            )
+        if any(
+            cell.source_manifest_sha256 != expected_source_manifest_sha256
+            for cell in manifest.cells
+        ):
+            raise ValueError(f'{manifest.suite_id}: derived cell source hashes are inconsistent')
+        manifests[path] = manifest
+    return manifests
+
+
+def _reconciled_derived_manifest_text(
+    *,
+    manifest: SuiteManifest,
+    source_manifest_sha256: str,
+    comparison_groups: Sequence[ComparisonGroup],
+    analysis_series: Sequence[AnalysisSeries],
+) -> str:
+    assert manifest.source is not None
+    source = manifest.source.model_copy(
+        update={'manifest_sha256': source_manifest_sha256}
+    )
+    cells = [
+        cell.model_copy(update={'source_manifest_sha256': source_manifest_sha256})
+        for cell in manifest.cells
+    ]
+    reconciled = manifest.model_copy(
+        update={
+            'source': source,
+            'cells': cells,
+            # Keep the compatibility view in lock-step with the canonical
+            # cells list while touching this manifest.
+            'evaluations': cells,
+            'comparison_groups': list(comparison_groups),
+            'analysis_series': list(analysis_series),
+        }
+    )
+    return _json_text(reconciled.model_dump(mode='json'))
+
+
+def _derived_spec_paths(derived_manifests: Mapping[Path, SuiteManifest]) -> list[Path]:
+    paths: list[Path] = []
+    for manifest in derived_manifests.values():
+        path = suite_spec_root() / f'{manifest.suite_id}.yaml'
+        if not path.is_file():
+            raise FileNotFoundError(f'{manifest.suite_id}: missing declarative derived-suite spec')
+        paths.append(path)
+    return paths
+
+
+def _reconciled_derived_spec_text(
+    *,
+    path: Path,
+    source_suite_id: str,
+    previous_manifest_sha256: str,
+    manifest_sha256: str,
+) -> str:
+    spec = load_suite_spec(path)
+    if spec.origin != 'derived' or spec.source is None or spec.source.suite_id != source_suite_id:
+        raise ValueError(f'{path}: not a derived spec for {source_suite_id}')
+    if spec.source.manifest_sha256 != previous_manifest_sha256:
+        raise ValueError(f'{path}: source manifest hash is not the current {source_suite_id} hash')
+    text = path.read_text()
+    old_pin = f'manifest_sha256: {previous_manifest_sha256}'
+    if text.count(old_pin) != 1:
+        raise ValueError(f'{path}: cannot safely replace its source manifest hash')
+    return text.replace(old_pin, f'manifest_sha256: {manifest_sha256}')
 
 
 def load_pinned_source_manifest(
@@ -657,6 +880,90 @@ def load_logical_suite(results_dir: Path, suite_id: str) -> LogicalSuite:
             **{cell.cell_id: root for cell in manifest.cells},
         },
     )
+
+
+def load_logical_suite_family(
+    results_dir: Path,
+    *,
+    base_suite_id: str,
+    derived_suite_ids: Sequence[str],
+) -> LogicalSuite:
+    """Combine one native suite with derived embedding-suite evaluations.
+
+    Derived suites deliberately repeat the immutable source cells in their
+    logical view.  Reports need those source cells exactly once, followed by
+    each derived suite's local model cells.  The source manifest hash is
+    checked before any cells are combined so results from different dataset
+    revisions cannot silently enter one analysis.
+    """
+    base_root = suite_root(results_dir, base_suite_id)
+    base_manifest = load_suite_manifest(results_dir, base_suite_id)
+    if base_manifest.origin != 'native':
+        raise ValueError(f'{base_suite_id}: suite-base must identify a native suite')
+    base_manifest_hash = _sha256_file(base_root / 'suite_manifest.json')
+    base_logical = load_logical_suite(results_dir, base_suite_id)
+    base_cell_ids = {cell.cell_id for cell in base_manifest.cells}
+    base_profile_ids = {profile.run_profile_id for profile in base_manifest.run_profiles}
+    cells = list(base_manifest.cells)
+    profiles = list(base_manifest.run_profiles)
+    roots_by_cell_id = dict(base_logical.roots_by_cell_id)
+    seen_derived_suite_ids: set[str] = set()
+
+    for derived_suite_id in derived_suite_ids:
+        if derived_suite_id == base_suite_id:
+            continue
+        if derived_suite_id in seen_derived_suite_ids:
+            continue
+        seen_derived_suite_ids.add(derived_suite_id)
+        derived_manifest = load_suite_manifest(results_dir, derived_suite_id)
+        if derived_manifest.origin != 'derived' or derived_manifest.source is None:
+            raise ValueError(
+                f'{derived_suite_id}: suite discovered from --suite-base is not a derived suite'
+            )
+        source = derived_manifest.source
+        if source.suite_id != base_suite_id:
+            raise ValueError(
+                f'{derived_suite_id}: source suite is {source.suite_id!r}, '
+                f'expected {base_suite_id!r}'
+            )
+        if source.manifest_sha256 != base_manifest_hash:
+            raise ValueError(
+                f'{derived_suite_id}: source manifest hash does not match {base_suite_id}'
+            )
+        derived_logical = load_logical_suite(results_dir, derived_suite_id)
+        local_cells = list(derived_manifest.cells)
+        duplicate_cells = sorted(base_cell_ids.intersection(cell.cell_id for cell in local_cells))
+        if duplicate_cells:
+            raise ValueError(
+                f'{derived_suite_id}: derived cell IDs collide with the base suite: '
+                f'{duplicate_cells[:8]}'
+            )
+        duplicate_profiles = sorted(
+            base_profile_ids.intersection(
+                profile.run_profile_id for profile in derived_manifest.run_profiles
+            )
+        )
+        if duplicate_profiles:
+            raise ValueError(
+                f'{derived_suite_id}: derived run-profile IDs collide with the base suite: '
+                f'{duplicate_profiles[:8]}'
+            )
+        cells.extend(local_cells)
+        profiles.extend(derived_manifest.run_profiles)
+        roots_by_cell_id.update(
+            {cell.cell_id: derived_logical.roots_by_cell_id[cell.cell_id] for cell in local_cells}
+        )
+        base_cell_ids.update(cell.cell_id for cell in local_cells)
+        base_profile_ids.update(profile.run_profile_id for profile in derived_manifest.run_profiles)
+
+    aggregate_manifest = base_manifest.model_copy(
+        update={
+            'run_profiles': profiles,
+            'cells': cells,
+            'evaluations': cells,
+        }
+    )
+    return LogicalSuite(manifest=aggregate_manifest, roots_by_cell_id=roots_by_cell_id)
 
 
 def validate_suite(spec: SuiteSpec) -> ValidationResult:
@@ -2011,8 +2318,31 @@ def _deep_merge(base: Mapping[str, Any], overrides: Mapping[str, Any]) -> dict[s
 
 
 def _write_json(path: Path, value: Mapping[str, Any]) -> None:
+    _write_text_atomically(path, _json_text(value))
+
+
+def _json_text(value: object) -> str:
+    return json.dumps(value, indent=2, sort_keys=True) + '\n'
+
+
+def _write_text_atomically(path: Path, text: str) -> None:
+    """Replace one metadata file without ever exposing partial JSON or YAML."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
+    with NamedTemporaryFile(
+        mode='w',
+        encoding='utf-8',
+        dir=path.parent,
+        prefix=f'.{path.name}.',
+        suffix='.tmp',
+        delete=False,
+    ) as temporary:
+        temporary.write(text)
+        temporary_path = Path(temporary.name)
+    try:
+        temporary_path.replace(path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def _sha256_json(value: object) -> str:

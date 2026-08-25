@@ -48,6 +48,7 @@ query_diagnose = "./setup.sh python -m src.experiments.medical_dataset_gen.scrip
 suite_validate = './setup.sh python -m src.experiments.medical_dataset_gen.suites validate'
 suite_materialize = './setup.sh python -m src.experiments.medical_dataset_gen.suites materialize'
 suite_freeze_geometry = './setup.sh python -m src.experiments.medical_dataset_gen.suites freeze-geometry'
+suite_reconcile_metadata = './setup.sh python -m src.experiments.medical_dataset_gen.suites reconcile-metadata'
 migrate_v4 = './setup.sh python -m src.experiments.medical_dataset_gen.scripts.migrate_v4_to_v5'
 
 # -- MIMIC Experiments ---

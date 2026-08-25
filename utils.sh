@@ -1,6 +1,23 @@
 export RESULTS_DIR="${HOME}/thesis-code/src/experiments/medical_dataset_gen/_results"
 export REPORTS_DIR="${HOME}/thesis-documents/reports"
 
+gen_query_geometry_for_report() {
+    cells=(
+        balanced_reference__qwen_unbiased_simple
+        dominance_high__qwen_unbiased_simple
+        sparse_one_moderate__qwen_unbiased_simple
+        near_miss_h48__qwen_unbiased_simple
+        background_far_4x8__qwen_unbiased_simple
+    )
+
+    for cell in "${cells[@]}"; do
+    uv run task pipeline \
+        --suite thesis_v5 \
+        --cell "$cell" \
+        --no-log-tee \
+        --run "geom_plots --plots candidate_pool_umap,query_cosine_heatmap --query-ids q1 --output-dir /home/pagnozzi/thesis-documents/reports/current/figures/query_geometry --umap-neighbors 25 --umap-min-dist 0.3"
+    done
+}
 run() {
     uv run task pipeline "$@"
 }

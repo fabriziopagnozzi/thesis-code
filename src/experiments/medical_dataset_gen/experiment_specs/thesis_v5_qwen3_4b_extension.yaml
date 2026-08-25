@@ -7,7 +7,7 @@ description: >-
 
 source:
     suite_id: thesis_v5
-    manifest_sha256: 088959929312211d22a5172bf0ca9b912f7bfe845ec25d060beeef114c803343
+    manifest_sha256: 6eafcaa4a7cbf91251440d382e0414e2d766f765a610b8096c72947ef681f898
     embedding_models:
         - Qwen/Qwen3-Embedding-4B
     embedding_overrides:

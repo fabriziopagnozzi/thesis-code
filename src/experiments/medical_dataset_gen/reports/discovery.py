@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -13,7 +14,15 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ExperimentFamilyId,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
-from experiments.medical_dataset_gen.suites.core import load_logical_suite
+from experiments.medical_dataset_gen.suites.core import (
+    LogicalSuite,
+    load_logical_suite,
+    load_logical_suite_family,
+    load_suite_manifest,
+    load_suite_spec,
+    suite_root,
+    suite_spec_root,
+)
 from experiments.medical_dataset_gen.suites.runtime import (
     load_cell_config,
     suite_paths_for_cell,
@@ -34,12 +43,21 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 _VERSION_DIR_RE = re.compile(r'^v[0-9]+$')
 
 
+@dataclass(frozen=True)
+class ReportSuiteSelection:
+    logical_suite: LogicalSuite
+    suite_ids: tuple[str, ...]
+
+
 def discover_suite_experiments(
     results_dir: Path,
     *,
     suite_id: str,
     where: str | None,
     warnings: list[str],
+    suite_base_id: str | None = None,
+    suite_regex: str | None = None,
+    logical_suite: LogicalSuite | None = None,
 ) -> list[ExperimentRecord]:
     """Load completed v5-suite cells solely from their manifest.
 
@@ -47,7 +65,14 @@ def discover_suite_experiments(
     suite discovery.  This keeps the reporting population identical to the
     declared experiment design.
     """
-    logical_suite = load_logical_suite(results_dir, suite_id)
+    if logical_suite is None:
+        logical_suite = load_report_logical_suite(
+            results_dir=results_dir,
+            suite_id=suite_id,
+            suite_base_id=suite_base_id,
+            suite_regex=suite_regex,
+            warnings=warnings,
+        ).logical_suite
     manifest = logical_suite.manifest
     filters = _parse_suite_where(where)
     records: list[ExperimentRecord] = []
@@ -96,6 +121,87 @@ def discover_suite_experiments(
             )
         )
     return sorted(records, key=lambda record: record.name)
+
+
+def load_report_logical_suite(
+    *,
+    results_dir: Path,
+    suite_id: str,
+    suite_base_id: str | None,
+    suite_regex: str | None,
+    warnings: list[str],
+) -> ReportSuiteSelection:
+    """Resolve one suite or a base suite plus all derived suite specs."""
+    if suite_base_id is None:
+        return ReportSuiteSelection(
+            logical_suite=load_logical_suite(results_dir, suite_id),
+            suite_ids=(suite_id,),
+        )
+    if suite_id != suite_base_id:
+        raise ValueError('suite_id and suite_base_id must identify the same report base')
+    derived_suite_ids = _derived_suite_ids_from_specs(
+        results_dir=results_dir,
+        base_suite_id=suite_base_id,
+        suite_regex=suite_regex,
+        warnings=warnings,
+    )
+    return ReportSuiteSelection(
+        logical_suite=load_logical_suite_family(
+            results_dir,
+            base_suite_id=suite_base_id,
+            derived_suite_ids=derived_suite_ids,
+        ),
+        suite_ids=(suite_base_id, *derived_suite_ids),
+    )
+
+
+def _derived_suite_ids_from_specs(
+    *,
+    results_dir: Path,
+    base_suite_id: str,
+    suite_regex: str | None,
+    warnings: list[str],
+) -> tuple[str, ...]:
+    """Find materialized derived suites whose specs point at the base suite."""
+    compiled_regex = re.compile(suite_regex) if suite_regex is not None else None
+    candidates: dict[str, Path] = {}
+    spec_paths = sorted((*suite_spec_root().glob('*.yaml'), *suite_spec_root().glob('*.yml')))
+    for spec_path in spec_paths:
+        try:
+            spec = load_suite_spec(spec_path)
+        except Exception as exc:
+            warnings.append(f'{spec_path.name}: could not parse suite spec ({exc})')
+            continue
+        if spec.origin != 'derived' or spec.source is None:
+            continue
+        if spec.source.suite_id != base_suite_id or spec.suite_id == base_suite_id:
+            continue
+        if compiled_regex is not None and compiled_regex.search(spec.suite_id) is None:
+            continue
+        candidates[spec.suite_id] = spec_path
+
+    materialized: list[str] = []
+    for suite_id in sorted(candidates):
+        manifest_path = suite_root(results_dir, suite_id) / 'suite_manifest.json'
+        if not manifest_path.is_file():
+            warnings.append(
+                f'{suite_id}: derived suite spec found but manifest is not materialized'
+            )
+            continue
+        # Parse once here so a malformed manifest is reported with its suite ID
+        # before the family loader attempts to combine it.
+        try:
+            load_suite_manifest(results_dir, suite_id)
+        except Exception as exc:
+            warnings.append(f'{suite_id}: could not load derived suite manifest ({exc})')
+            continue
+        materialized.append(suite_id)
+    if compiled_regex is not None and not materialized:
+        warnings.append(
+            f'--suite-regex {suite_regex!r} selected no materialized derived suites for '
+            f'{base_suite_id}'
+        )
+    return tuple(materialized)
 
 
 def suite_cells_matching_where(manifest: object, where: str | None) -> set[str]:

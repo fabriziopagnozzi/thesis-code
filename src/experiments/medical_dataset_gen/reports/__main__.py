@@ -22,6 +22,7 @@ from experiments.medical_dataset_gen.reports.discovery import (
     discover_experiments,
     discover_suite_experiments,
     load_experiment_record,
+    load_report_logical_suite,
     suite_cells_matching_where,
 )
 from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
@@ -83,7 +84,6 @@ from experiments.medical_dataset_gen.reports.validity import (
     lodo_lambda_strategy_rows,
     synthetic_artifact_diagnostic_rows,
 )
-from experiments.medical_dataset_gen.suites.core import load_logical_suite
 from experiments.medical_dataset_gen.suites.geometry import apply_frozen_separability_strata
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
@@ -110,15 +110,27 @@ def run_report(args: CliArgs) -> ReportOutputs:
         _remove_obsolete_flat_data_files(args.output_dir)
         warnings: list[str] = []
         _progress(f'discovering completed experiments under: {args.results_dir}')
-        records = (
-            discover_suite_experiments(
-                args.results_dir,
-                suite_id=args.suite_id,
-                where=args.suite_where,
+        suite_mode = args.suite_id is not None or args.suite_base_id is not None
+        suite_selection = None
+        if suite_mode:
+            suite_selection = load_report_logical_suite(
+                results_dir=args.results_dir,
+                suite_id=args.suite_id or args.suite_base_id or '',
+                suite_base_id=args.suite_base_id,
+                suite_regex=args.suite_regex,
                 warnings=warnings,
             )
-            if args.suite_id is not None
-            else discover_experiments(
+            records = discover_suite_experiments(
+                args.results_dir,
+                suite_id=args.suite_id or args.suite_base_id or '',
+                where=args.suite_where,
+                warnings=warnings,
+                suite_base_id=args.suite_base_id,
+                suite_regex=args.suite_regex,
+                logical_suite=suite_selection.logical_suite,
+            )
+        else:
+            records = discover_experiments(
                 args.results_dir,
                 include_scrapped=args.include_scrapped,
                 requested_experiments=args.experiments,
@@ -127,7 +139,6 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 artifact_version=args.artifact_version,
                 warnings=warnings,
             )
-        )
         discovered_count = len(records)
         _progress(f'discovered {discovered_count} completed experiments')
         records, effective_embedding_models = _records_for_embedding_models(
@@ -135,8 +146,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
             requested_embedding_models=args.embedding_models,
         )
         suite_manifest = None
-        if args.suite_id is not None:
-            materialized_manifest = load_logical_suite(args.results_dir, args.suite_id).manifest
+        if suite_mode:
+            assert suite_selection is not None
+            materialized_manifest = suite_selection.logical_suite.manifest
             suite_manifest, excluded_distributions = report_eligible_manifest(materialized_manifest)
             if excluded_distributions:
                 eligible_names = {cell.name for cell in suite_manifest.cells}
@@ -218,7 +230,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         suite_interaction_rows: list[dict[str, object]] = []
         suite_crossing_rows: list[dict[str, object]] = []
         suite_separability_rows: list[dict[str, object]] = []
-        if args.suite_id is not None:
+        if suite_mode:
             assert suite_manifest is not None
             suite_scope = (
                 suite_cells_matching_where(suite_manifest, args.suite_where)
@@ -249,10 +261,15 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 output_dir=args.output_dir,
                 contrast_rows=suite_contrast_rows,
             )
-            suite_separability_rows = apply_frozen_separability_strata(
-                results_dir=args.results_dir,
-                suite_id=args.suite_id,
-            )
+            assert suite_selection is not None
+            suite_separability_rows = []
+            for concrete_suite_id in suite_selection.suite_ids:
+                suite_separability_rows.extend(
+                    apply_frozen_separability_strata(
+                        results_dir=args.results_dir,
+                        suite_id=concrete_suite_id,
+                    )
+                )
             eligible_distributions = {
                 distribution.distribution_id for distribution in suite_manifest.distributions
             }
@@ -388,7 +405,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'geometry_filter_summary.csv', geometry_rows)
         write_csv(data_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(data_dir / 'comparison_by_k.csv', comparison_rows)
-        if args.suite_id is not None:
+        if suite_mode:
             write_csv(data_dir / 'suite_distribution_summary.csv', suite_distribution_rows)
             write_csv(data_dir / 'suite_family_balanced_summary.csv', suite_family_rows)
             write_csv(data_dir / 'suite_matched_contrasts.csv', suite_contrast_rows)
@@ -598,6 +615,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'effective_embedding_models': list(effective_embedding_models),
                     'artifact_version': args.artifact_version,
                     'suite_id': args.suite_id,
+                    'suite_base_id': args.suite_base_id,
+                    'suite_regex': args.suite_regex,
+                    'suite_ids': list(suite_selection.suite_ids) if suite_selection else [],
                     'suite_where': args.suite_where,
                     'strict_suite': args.strict_suite,
                     'main_query_scope': args.main_query_scope,
