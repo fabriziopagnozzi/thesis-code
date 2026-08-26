@@ -4,10 +4,10 @@ export REPORTS_DIR="${HOME}/thesis-documents/reports"
 gen_query_geometry_for_report() {
     cells=(
         balanced_reference__qwen_unbiased_simple
-        dominance_high__qwen_unbiased_simple
-        sparse_one_moderate__qwen_unbiased_simple
-        near_miss_h48__qwen_unbiased_simple
-        background_far_4x8__qwen_unbiased_simple
+        dominance_extreme__qwen_unbiased_simple
+        sparse_two_severe__qwen_unbiased_simple
+        near_miss_h96__qwen_unbiased_simple
+        background_far_16x2__qwen_unbiased_simple
     )
 
     for cell in "${cells[@]}"; do
@@ -15,9 +15,10 @@ gen_query_geometry_for_report() {
         --suite thesis_v5 \
         --cell "$cell" \
         --no-log-tee \
-        --run "geom_plots --plots candidate_pool_umap,query_cosine_heatmap --query-ids q1 --output-dir /home/pagnozzi/thesis-documents/reports/current/figures/query_geometry --umap-neighbors 25 --umap-min-dist 0.3"
+        --run "geom_plots --plots candidate_pool_umap,query_cosine_heatmap --query-ids q1 --output-dir /home/pagnozzi/thesis-documents/reports/query_geometry --umap-neighbors 20 --umap-min-dist 0.20"
     done
 }
+
 run() {
     uv run task pipeline "$@"
 }

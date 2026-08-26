@@ -199,11 +199,12 @@ def plot_full_strategy_selection_overlay(
         height=SETTINGS.full_strategy_panel_size_in,
     )
     if similarity_points is not None:
-        fig.colorbar(
+        colorbar = fig.colorbar(
             similarity_points,
             cax=ax_colorbar,
             label='query cosine similarity',
         )
+        _format_colorbar_ticks(colorbar)
     else:
         ax_colorbar.axis('off')
 
@@ -283,13 +284,14 @@ def plot_query_overview_4panel(
 
     similarity_points = _plot_query_similarity_map_ax(ax_cos, artifact, include_title_prefix=False)
     if similarity_points is not None:
-        fig.colorbar(
+        colorbar = fig.colorbar(
             similarity_points,
             ax=ax_cos,
             fraction=0.05,
             pad=0.02,
             label='query cosine',
         )
+        _format_colorbar_ticks(colorbar)
 
     _plot_query_rank_ax(ax_rank, artifact, include_title_prefix=False)
     legend_handles = _selection_legend_handles([ax_map, ax_rank])
@@ -320,7 +322,28 @@ def plot_query_overview_4panel(
     )
     fig.savefig(out_dir / 'query_overview_4panel.png', dpi=150, bbox_inches='tight')
     plt.close(fig)
+    plot_query_similarity_ranking(artifact, out_dir)
     write_query_chunk_pools_txt(artifact, out_dir)
+
+
+def plot_query_similarity_ranking(
+    artifact: GeometryArtifact,
+    out_dir: Path,
+) -> None:
+    """Render the overview's query-similarity ranking as a standalone plot."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=SETTINGS.query_similarity_ranking_figure_size)  # type: ignore[attr-defined]
+    _plot_query_rank_ax(ax, artifact, include_title_prefix=False)
+    ax.set_box_aspect(1)
+    fig.tight_layout(pad=0.25)
+    fig.savefig(
+        out_dir / 'query_similarity_ranking.png',
+        dpi=180,
+        bbox_inches='tight',
+        pad_inches=0.03,
+    )
+    plt.close(fig)
 
 
 def plot_candidate_pool_umap_with_legend(
@@ -434,6 +457,7 @@ def plot_pairwise_cosine_heatmap(
     ax.set_xlabel('Candidate chunks grouped by evidence role')
     ax.set_ylabel('Candidate chunks grouped by evidence role')
     colorbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.035)
+    _format_colorbar_ticks(colorbar)
     colorbar.set_label('Pairwise cosine similarity')
     fig.tight_layout(pad=0.35)
     fig.savefig(
@@ -475,6 +499,7 @@ def plot_query_cosine_heatmap(
         )
     )
     colorbar = fig.colorbar(similarity_points, cax=colorbar_ax)
+    _format_colorbar_ticks(colorbar)
     colorbar.set_label(
         'Query-document cosine similarity',
         fontsize=SETTINGS.query_cosine_colorbar_label_font_size,
@@ -488,6 +513,14 @@ def plot_query_cosine_heatmap(
         pad_inches=0.03,
     )
     plt.close(fig)
+
+
+def _format_colorbar_ticks(colorbar: Any) -> None:
+    from matplotlib.ticker import FormatStrFormatter
+
+    formatter = FormatStrFormatter(SETTINGS.colorbar_tick_format)
+    axis = colorbar.ax.xaxis if colorbar.orientation == 'horizontal' else colorbar.ax.yaxis
+    axis.set_major_formatter(formatter)
 
 
 def _style_umap_axes(ax: Any, artifact: GeometryArtifact) -> None:
@@ -1802,6 +1835,18 @@ def _plot_query_rank_ax(
         label_groups=label_groups,
     )
     ax.axvline(artifact.k, color='black', lw=1.0, ls='--', alpha=0.7, label=f'k={artifact.k}')
+    ax.annotate(
+        f'k={artifact.k}',
+        xy=(artifact.k, 0.98),
+        xycoords=('data', 'axes fraction'),
+        xytext=(4, 0),
+        textcoords='offset points',
+        ha='left',
+        va='top',
+        fontsize=8,
+        color='black',
+        bbox={'facecolor': 'white', 'edgecolor': 'none', 'alpha': 0.75, 'pad': 1.5},
+    )
     ax.set_xlabel('rank by query cosine')
     ax.set_ylabel('query cosine similarity')
     ax.set_title(
@@ -1859,11 +1904,21 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
         artifact.label_ids[label_groups[label][0]]: label for label in gold_labels
     }
     gold_cmap = plt.get_cmap('tab20')  # type: ignore
-    facet_palette = {
-        facet_id: gold_cmap(index % 20)
-        for index, facet_id in enumerate(_ordered_facet_ids(artifact))
-        if facet_id in gold_label_by_facet_id
-    }
+    facet_colors_in_legend_order = (
+        '#1F77B4',  # primary axis, first facet
+        '#FF7F0E',  # primary axis, second facet
+        '#816E96',  # secondary axis, first facet
+        '#A1D39C',  # secondary axis, second facet
+    )
+    facet_palette: dict[str, Any] = {}
+    for index, facet_id in enumerate(_legend_ordered_facet_ids(artifact)):
+        if facet_id not in gold_label_by_facet_id:
+            continue
+        facet_palette[facet_id] = (
+            facet_colors_in_legend_order[index]
+            if index < len(facet_colors_in_legend_order)
+            else gold_cmap(index % 20)
+        )
     background_cluster_ids = sorted(
         {
             _cluster_id_for_index(artifact, indices[0]) or label
@@ -1879,7 +1934,7 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
     palette: dict[str, Any] = {}
     for label in gold_labels:
         facet_id = artifact.label_ids[label_groups[label][0]]
-        palette[label] = facet_palette.get(facet_id, gold_cmap(len(palette) % 20))
+        palette[label] = facet_palette[facet_id]
     for label, indices in label_groups.items():
         if label in palette:
             continue

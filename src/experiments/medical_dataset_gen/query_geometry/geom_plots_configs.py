@@ -38,6 +38,8 @@ class GeomPlotsSettings:
     query_cosine_colorbar_pad_in: float = 0.16
     query_cosine_colorbar_label_font_size: int = 15
     query_cosine_colorbar_tick_font_size: int = 13
+    query_similarity_ranking_figure_size: tuple[float, float] = (7.2, 5.8)
+    colorbar_tick_format: str = '%.2f'
 
     background_outlier_label_id: str = 'background_clinical_cluster'
     background_outlier_role: str = 'background_outlier'
