@@ -117,6 +117,8 @@ _METRIC_MACROS = {
     'Precision': r'\PrecisionK{}',
     'alpha_nDCG': r'\AlphanDCG{}',
     'AllFacetCleanRate': r'\ACR{}',
+    'NearMissDistractorRate': 'Near-miss rate',
+    'BackgroundOutlierRate': 'Background-outlier rate',
 }
 _FAMILY_LABELS = {
     'Balanced clean distributions': 'Balanced clean',

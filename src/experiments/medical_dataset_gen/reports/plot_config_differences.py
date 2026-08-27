@@ -39,6 +39,9 @@ from experiments.medical_dataset_gen.reports.report_config import (
     REPORT_METRIC_LABELS,
     REPORT_METRIC_SPECS,
 )
+from experiments.medical_dataset_gen.reports.summaries import (
+    metric_family_wording_budget_summary_rows,
+)
 
 
 @dataclass(frozen=True)
@@ -1046,50 +1049,7 @@ def _metric_config_family_budget_rows(
     *,
     metric_filter: DeltaMetricLabel | None = None,
 ) -> list[dict[str, object]]:
-    summary_rows: list[dict[str, object]] = []
-    for spec in REPORT_METRIC_SPECS:
-        if metric_filter is not None and spec.metric_label != metric_filter:
-            continue
-        grouped: dict[tuple[str, str, BudgetCategory, str], list[Mapping[str, object]]] = {}
-        for row in rows:
-            config = str(row.get('WordingConfig') or '')
-            family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
-            category_value = str(row.get('BudgetCategory') or '')
-            if (
-                not _is_core_embedding_row(row)
-                or not config
-                or category_value not in BUDGET_CATEGORIES
-                or family in AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS
-            ):
-                continue
-            category = cast(BudgetCategory, category_value)
-            budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
-            grouped.setdefault((config, family, category, budget_label), []).append(row)
-        for (config, family, category, budget_label), group in grouped.items():
-            first = group[0]
-            row_key = _composite_key(config, family)
-            metric_key = _composite_key(config, spec.metric_label)
-            summary_rows.append(
-                _metric_summary_row(
-                    metric=spec.metric_label,
-                    metric_title=spec.title_label,
-                    rows=group,
-                    extra={
-                        'WordingConfig': config,
-                        'WordingConfigLabel': first.get('WordingConfigLabel'),
-                        'QueryMode': first.get('QueryMode'),
-                        'FocusMode': first.get('FocusMode'),
-                        'ChunkTextMode': first.get('ChunkTextMode'),
-                        'ExperimentFamilyLabel': family,
-                        'BudgetCategory': category,
-                        'BudgetCategoryLabel': budget_label,
-                        'ConfigFamilyKey': row_key,
-                        'ConfigMetricKey': metric_key,
-                    },
-                )
-            )
-    summary_rows.sort(key=_config_family_budget_sort_key)
-    return summary_rows
+    return metric_family_wording_budget_summary_rows(rows, metric_filter=metric_filter)
 
 
 def _metric_config_family_budget_rows_by_embedding(
@@ -1483,10 +1443,6 @@ def _config_family_budget_sort_key(
         budget_order.get(cast(BudgetCategory, row.get('BudgetCategory')), 99),
         metric_order.get(cast(DeltaMetricLabel, row.get('MetricLabel')), 99),
     )
-
-
-def _composite_key(left: str, right: str) -> str:
-    return f'{left}::{right}'
 
 
 def _numeric_values(rows: Sequence[Mapping[str, object]], column: str) -> list[float]:

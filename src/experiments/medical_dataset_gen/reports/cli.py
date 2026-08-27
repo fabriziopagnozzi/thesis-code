@@ -192,6 +192,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         '--lambda-analysis',
         action='store_true',
         help='Generate lambda-grid, stability, safety, and near-optimal-width diagnostics.',
+        default=True,
     )
     parser.add_argument(
         '--global-lambda-analysis',

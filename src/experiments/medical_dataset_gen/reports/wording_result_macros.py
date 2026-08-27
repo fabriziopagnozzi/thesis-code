@@ -416,9 +416,44 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
         for spec in REPORT_METRIC_SPECS:
             metric = spec.metric_label
             metric_token = _metric_macro_token(spec.metric_label)
-            macros[f'ResultWordingLow{scope_token}{metric_token}FacLocMmrMeanDelta'] = _signed(
-                _column_mean(scope_rows, f'Delta_FacLoc_MMR_{metric}'),
-                digits=3,
+            prefix = f'ResultWordingLow{scope_token}{metric_token}'
+            mmr_deltas = [
+                _numeric(row, f'Delta_FacLoc_MMR_{metric}') for row in scope_rows
+            ]
+            topk_deltas = [
+                _numeric(row, f'Delta_FacLoc_TopK_{metric}') for row in scope_rows
+            ]
+            macros.update(
+                {
+                    f'{prefix}MmrMean': _fixed(
+                        _column_mean(scope_rows, f'MMR_{metric}'),
+                        digits=3,
+                    ),
+                    f'{prefix}FacLocMmrMeanDelta': _signed(
+                        _column_mean(scope_rows, f'Delta_FacLoc_MMR_{metric}'),
+                        digits=3,
+                    ),
+                    # The MMR comparison uses the pre-registered practical margin,
+                    # whereas the top-k baseline uses a strictly positive improvement.
+                    f'{prefix}FacLocMmrWinRate': _tex_percent(
+                        sum(
+                            delta > practical_effect_threshold(metric)
+                            for delta in mmr_deltas
+                        )
+                        / len(mmr_deltas)
+                    ),
+                    f'{prefix}TopKMean': _fixed(
+                        _column_mean(scope_rows, f'TopK_{metric}'),
+                        digits=3,
+                    ),
+                    f'{prefix}FacLocTopKMeanDelta': _signed(
+                        _column_mean(scope_rows, f'Delta_FacLoc_TopK_{metric}'),
+                        digits=3,
+                    ),
+                    f'{prefix}FacLocTopKWinRate': _tex_percent(
+                        sum(delta > 0.0 for delta in topk_deltas) / len(topk_deltas)
+                    ),
+                }
             )
     return macros
 
@@ -611,6 +646,10 @@ def _integer(value: int | float) -> str:
 
 def _fixed(value: float, *, digits: int) -> str:
     return f'{value:.{digits}f}'
+
+
+def _tex_percent(value: float) -> str:
+    return f'{value * 100:.1f}'.rstrip('0').rstrip('.') + r'\%'
 
 
 def _signed(value: float, *, digits: int) -> str:

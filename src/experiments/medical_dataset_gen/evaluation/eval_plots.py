@@ -784,7 +784,7 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
             bbox_to_anchor=(0.5, 0.0),
         )
         _style_legend(legend)
-    _figure_note(fig, f'Data split: {plot_data_split}. Deltas are paired against top-k.')
+    # _figure_note(fig, f'Data split: {plot_data_split}. Deltas are paired against top-k.')
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(
         out_dir / 'metrics_delta_vs_topk_k_curves_for_lambda.png',

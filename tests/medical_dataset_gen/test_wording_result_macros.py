@@ -36,6 +36,7 @@ def _budget_row(
         row[f'MMR_{metric}'] = 0.6
         row[f'FacLoc_{metric}'] = 0.7
         row[f'Delta_FacLoc_MMR_{metric}'] = 0.1
+        row[f'Delta_FacLoc_TopK_{metric}'] = 0.2
     return row
 
 
@@ -123,6 +124,12 @@ def test_wording_macros_select_the_global_low_budget_grid() -> None:
     assert macros['ResultWordingGeometryQwenConfigBiasedNaturalHardenedPassRateMean'] == '0.800'
     assert macros['ResultWordingGeometryQwenConfigUnbiasedNaturalSimplePassRateMean'] == '0.700'
     assert macros['ResultWordingGeometryQwenConfigUnbiasedNaturalHardenedPassRateMean'] == '0.600'
+    assert macros['ResultWordingLowFamilyBalancedCleanFCPMmrMean'] == '0.600'
+    assert macros['ResultWordingLowFamilyBalancedCleanFCPFacLocMmrMeanDelta'] == '+0.100'
+    assert macros['ResultWordingLowFamilyBalancedCleanFCPFacLocMmrWinRate'] == r'100\%'
+    assert macros['ResultWordingLowFamilyBalancedCleanFCPTopKMean'] == '0.500'
+    assert macros['ResultWordingLowFamilyBalancedCleanFCPFacLocTopKMeanDelta'] == '+0.200'
+    assert macros['ResultWordingLowFamilyBalancedCleanFCPFacLocTopKWinRate'] == r'100\%'
     assert warnings == [
         f'Wording result macros use the global k={LOW_BUDGET_K} low-budget grid and exclude 1 row(s) '
         'from alternative k values.'
