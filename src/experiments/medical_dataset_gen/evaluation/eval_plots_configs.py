@@ -147,6 +147,10 @@ EVAL_PLOT_DIVERGING_CMAP = 'RdBu_r'
 # Marker size for raw-lambda figures that draw one curve per k.
 FOR_LAMBDA_K_CURVE_MARKER_SIZE = 0.25
 FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE = 18  # points^2 area for matplotlib
+# The lambda-grid footer contains only the shared k legend. Keep it close to
+# the final subplot row instead of reserving the former explanatory-note space.
+LAMBDA_K_CURVE_BOTTOM_MARGIN = 0.025
+LAMBDA_K_CURVE_LEGEND_Y = 0.0
 
 # Human-readable titles for metrics when rendering subplot titles and labels.
 PLOT_METRIC_TITLES = {

@@ -20,6 +20,8 @@ from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
     EVAL_PLOT_THEMES,
     FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE,
     FOR_LAMBDA_K_CURVE_MARKER_SIZE,
+    LAMBDA_K_CURVE_BOTTOM_MARGIN,
+    LAMBDA_K_CURVE_LEGEND_Y,
     PLOT_METRIC_TITLES,
     PLOTTED_ANSWER_ROUGE_METRIC_NAMES,
     PLOTTED_DIAGNOSTIC_METRIC_NAMES,
@@ -284,18 +286,18 @@ def _plot_lambda_sensitivity(
             ncol=len(k_values),
             fontsize=8,
             frameon=False,
-            bbox_to_anchor=(0.5, -0.01),
+            bbox_to_anchor=(0.5, LAMBDA_K_CURVE_LEGEND_Y),
         )
         _style_legend(legend)
     fig.suptitle(figure_title, fontsize=12)
-    _figure_note(
-        fig,
-        (
-            f'Data split: {plot_data_split}. Dashed horizontal lines are the top-k '
-            'reference at each k; line colors identify k'
-        ),
-    )
-    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    # _figure_note(
+    #     fig,
+    #     (
+    #         f'Data split: {plot_data_split}. Dashed horizontal lines are the top-k '
+    #         'reference at each k; line colors identify k'
+    #     ),
+    # )
+    fig.tight_layout(rect=(0, LAMBDA_K_CURVE_BOTTOM_MARGIN, 1, 1))
     fig.savefig(out_dir / output_filename, dpi=140, bbox_inches='tight')
     plt.close(fig)
 
@@ -1412,21 +1414,21 @@ def plot_answer_metrics_k_curves_for_lambda(
             ncol=len(k_values),
             fontsize=8,
             frameon=False,
-            bbox_to_anchor=(0.5, -0.01),
+            bbox_to_anchor=(0.5, LAMBDA_K_CURVE_LEGEND_Y),
         )
         _style_legend(legend)
     fig.suptitle(
         'Auxiliary answer-token ROUGE lambda sensitivity',
         fontsize=12,
     )
-    _figure_note(
-        fig,
-        (
-            f'Data split: {plot_data_split}. Dashed horizontal lines are the top-k '
-            'reference at each k; line colors identify k'
-        ),
-    )
-    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    # _figure_note(
+    #     fig,
+    #     (
+    #         f'Data split: {plot_data_split}. Dashed horizontal lines are the top-k '
+    #         'reference at each k; line colors identify k'
+    #     ),
+    # )
+    fig.tight_layout(rect=(0, LAMBDA_K_CURVE_BOTTOM_MARGIN, 1, 1))
     fig.savefig(out_dir / 'answer_metrics_k_curves_for_lambda.png', dpi=140, bbox_inches='tight')
     plt.close(fig)
 
