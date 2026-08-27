@@ -28,8 +28,8 @@ from experiments.medical_dataset_gen.reports.models import PlotFormat
 from experiments.medical_dataset_gen.reports.plot_rendering import set_axis_title
 
 PRIMARY_GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
-    ('Dominant primary gold', 'DominantPrimaryGoldCountMean', '#0B5D6E'),
-    ('Other primary gold', 'OtherPrimaryGoldCountMean', '#287C8E'),
+    ('Facet 1', 'DominantPrimaryGoldCountMean', '#2166AC'),
+    ('Facet 2', 'OtherPrimaryGoldCountMean', '#4393C3'),
 )
 
 # Secondary and niche evidence is generated as one cluster per facet.  Keeping
@@ -37,26 +37,36 @@ PRIMARY_GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
 # composition visible instead of merging them into one broad gold segment.
 FACET_GOLD_ROLE_STACKS: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
     (
-        'Secondary',
+        'Facet',
         'SecondaryGoldCountMean',
         'secondary_gold',
-        ('#4C78A8', '#7EAED3', '#B6D1E8'),
+        ('#92C5DE', '#D1E5F0'),
     ),
     (
-        'Niche',
+        'Niche Facet',
         'NicheGoldCountMean',
         'niche_gold',
-        ('#B279A2', '#D4A6C8', '#E7CDE0'),
+        ('#9970AB', '#C2A5CF'),
     ),
 )
 
 # Composition figures reserve a fixed vertical budget for each distribution.
 # This keeps bar thickness comparable between the complete audit and small
 # subsets such as the four interaction pools.
-COMPOSITION_ROW_HEIGHT_IN = 0.28
-COMPOSITION_FAMILY_GAP_HEIGHT_IN = 0.18
-COMPOSITION_FIXED_HEIGHT_IN = 1.9
-COMPOSITION_BAR_HEIGHT = 0.60
+COMPOSITION_FIGURE_WIDTH_IN = 9
+COMPOSITION_ROW_HEIGHT_IN = 0.25
+
+COMPOSITION_FAMILY_GAP_HEIGHT_IN = 0.10
+COMPOSITION_FIXED_HEIGHT_IN = 1.3
+COMPOSITION_BAR_HEIGHT = 0.17
+COMPOSITION_BAR_ALPHA = 0.70
+
+BETWEEN_FAMILIES_OFFSET = 0.30
+WITHIN_FAMILY_OFFSET = 0.25
+
+COMPOSITION_LEGEND_FONT_SIZE = 10
+COMPOSITION_LEGEND_COLUMNS = 4
+COMPOSITION_LEGEND_ROW_HEIGHT_IN = 0.20
 SCALE_LABEL_ABBREVIATIONS: dict[str, str] = {
     'small': 'S',
     'medium': 'M',
@@ -453,22 +463,12 @@ def plot_lambda_delta_curve(
             summary = [row for row in curve_rows if row.get('strategy') == strategy]
             if summary:
                 xs = [float_or_none(row.get('lambda_norm')) for row in summary]
-                means = [
-                    float_or_none(row.get('MeanDeltaStrategyTopK_FCP')) for row in summary
-                ]
-                lowers = [
-                    float_or_none(row.get('CellQ25DeltaStrategyTopK_FCP')) for row in summary
-                ]
-                uppers = [
-                    float_or_none(row.get('CellQ75DeltaStrategyTopK_FCP')) for row in summary
-                ]
-                safe = [
-                    float_or_none(row.get('CellSafeLambdaFraction')) for row in summary
-                ]
+                means = [float_or_none(row.get('MeanDeltaStrategyTopK_FCP')) for row in summary]
+                lowers = [float_or_none(row.get('CellQ25DeltaStrategyTopK_FCP')) for row in summary]
+                uppers = [float_or_none(row.get('CellQ75DeltaStrategyTopK_FCP')) for row in summary]
+                safe = [float_or_none(row.get('CellSafeLambdaFraction')) for row in summary]
                 distractor = [
-                    float_or_none(
-                        row.get('MeanDeltaStrategyTopK_DistractorRate')
-                    )
+                    float_or_none(row.get('MeanDeltaStrategyTopK_DistractorRate'))
                     for row in summary
                 ]
             else:
@@ -671,7 +671,9 @@ def plot_dataset_composition(
         + COMPOSITION_FAMILY_GAP_HEIGHT_IN * family_gap_count
         + COMPOSITION_FIXED_HEIGHT_IN
     )
-    fig, ax = plt.subplots(figsize=(13.5, fig_height))  # type: ignore[attr-defined]
+    fig, ax = plt.subplots(  # type: ignore[attr-defined]
+        figsize=(COMPOSITION_FIGURE_WIDTH_IN, fig_height)
+    )
     try:
         granular_gold = _gold_role_share_series(plot_rows)
         if granular_gold is None:
@@ -682,6 +684,7 @@ def plot_dataset_composition(
                 height=COMPOSITION_BAR_HEIGHT,
                 label='Gold',
                 color='#287C8E',
+                alpha=COMPOSITION_BAR_ALPHA,
             )
         else:
             left = [0.0 for _row in plot_rows]
@@ -693,6 +696,7 @@ def plot_dataset_composition(
                     left=left,
                     label=label,
                     color=color,
+                    alpha=COMPOSITION_BAR_ALPHA,
                 )
                 left = [old + value for old, value in zip(left, values, strict=True)]
             displayed_gold = left
@@ -702,7 +706,8 @@ def plot_dataset_composition(
             height=COMPOSITION_BAR_HEIGHT,
             left=displayed_gold,
             label='Near-miss distractors',
-            color='#C47A3A',
+            color='#C48572',
+            alpha=COMPOSITION_BAR_ALPHA,
         )
         bottoms = [g + n for g, n in zip(displayed_gold, near, strict=True)]
         ax.barh(
@@ -712,6 +717,7 @@ def plot_dataset_composition(
             left=bottoms,
             label='Background outliers (clusters x chunks)',
             color='#6F7890',
+            alpha=COMPOSITION_BAR_ALPHA,
         )
         _annotate_background_topologies(
             ax=ax,
@@ -720,15 +726,18 @@ def plot_dataset_composition(
             widths=background,
             rows=plot_rows,
         )
-        set_axis_title(axis=ax, title='Candidate-pool composition')
         ax.set_xlabel('Share of qrel pool')
         ax.set_yticks(positions)
-        ax.set_yticklabels(labels, fontsize=8)
+        ax.set_yticklabels(labels, fontsize=10)
         ax.invert_yaxis()
+        ax.set_ylim(
+            positions[-1] + COMPOSITION_BAR_HEIGHT / 2.0,
+            positions[0] - COMPOSITION_BAR_HEIGHT / 2.0,
+        )
         ax.set_xlim(0, 1)
         ax.grid(axis='x', alpha=0.25)
         legend_handles, legend_labels = ax.get_legend_handles_labels()
-        legend_ncol = min(4, len(legend_handles))
+        legend_ncol = min(COMPOSITION_LEGEND_COLUMNS, len(legend_handles))
         legend_rows = (len(legend_handles) + legend_ncol - 1) // legend_ncol
         fig.legend(
             legend_handles,
@@ -736,16 +745,16 @@ def plot_dataset_composition(
             loc='lower center',
             ncol=legend_ncol,
             frameon=False,
-            fontsize=8,
+            fontsize=COMPOSITION_LEGEND_FONT_SIZE,
             bbox_to_anchor=(0.5, 0.0),
             borderaxespad=0.2,
         )
-        # Reserve only the measured number of legend rows; a fixed fraction
-        # becomes conspicuous empty space for tall audit plots.
-        legend_height = (0.16 + 0.18 * legend_rows) / fig_height
-        fig.tight_layout(rect=(0, legend_height, 1, 1))
+        # The legend height is measured from its wrapped rows so it receives
+        # enough room without leaving title-sized padding above the axes.
+        legend_height = (0.03 + COMPOSITION_LEGEND_ROW_HEIGHT_IN * legend_rows) / fig_height
+        fig.tight_layout(rect=(0, legend_height, 1, 1), pad=0.25)
         path = output_dir / f'dataset_composition_stacked.{plot_format}'
-        fig.savefig(path, dpi=180, bbox_inches='tight')
+        fig.savefig(path, dpi=180, bbox_inches='tight', pad_inches=0.02)
         return [path]
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
@@ -812,9 +821,9 @@ def _family_spaced_positions(rows: Sequence[Mapping[str, object]]) -> list[float
     for row in rows:
         family_id = _family_id_for_row(row)
         if previous_family_id is not None and family_id != previous_family_id:
-            current_position += 0.75
+            current_position += BETWEEN_FAMILIES_OFFSET
         positions.append(current_position)
-        current_position += 1.0
+        current_position += WITHIN_FAMILY_OFFSET
         previous_family_id = family_id
     return positions
 
@@ -847,9 +856,9 @@ def _gold_role_share_series(
                     return None
                 values.append(count / pool_size / facet_count if facet_index < facet_count else 0.0)
             label = (
-                f'{role_label} facet {facet_index + 1}'
-                if max_facet_count > 1
-                else f'{role_label} gold'
+                f'Facet {facet_index + 3}'
+                if role_label == 'Facet'
+                else f'{role_label} {facet_index + 1}'
             )
             series.append((label, column, colors[facet_index % len(colors)], values))
     return series
