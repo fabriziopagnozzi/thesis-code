@@ -4,7 +4,10 @@ import shutil
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from experiments.medical_dataset_gen.reports.models import PlotFormat
+import polars as pl
+
+from experiments.medical_dataset_gen.evaluation.eval_plots import plot_metrics_k_curves_for_lambda
+from experiments.medical_dataset_gen.reports.models import ExperimentRecord, PlotFormat
 from experiments.medical_dataset_gen.reports.plot_aggregates import (
     plot_budget_delta_columns,
     plot_fcp_family_budget_heatmaps,
@@ -66,6 +69,8 @@ def write_figures(
     paired_config_suite_rows: Sequence[Mapping[str, object]],
     cross_query_chunk_modes: bool,
     warnings: list[str],
+    lambda_curve_rows: Sequence[Mapping[str, object]] = (),
+    lambda_reference_record: ExperimentRecord | None = None,
 ) -> list[Path]:
     try:
         import matplotlib
@@ -299,6 +304,7 @@ def write_figures(
         plot_lambda_delta_curve(
             plt=plt,
             rows=lambda_grid_delta_rows,
+            curve_rows=lambda_curve_rows,
             output_dir=output_dir,
             plot_format=plot_format,
         )
@@ -319,4 +325,38 @@ def write_figures(
             plot_format=plot_format,
         )
     )
+    if lambda_reference_record is not None:
+        paths.extend(
+            _plot_reference_lambda_metrics(
+                record=lambda_reference_record,
+                output_dir=output_dir,
+                warnings=warnings,
+            )
+        )
     return paths
+
+
+def _plot_reference_lambda_metrics(
+    *,
+    record: ExperimentRecord,
+    output_dir: Path,
+    warnings: list[str],
+) -> list[Path]:
+    grid_path = record.paths.table_path('evaluation_selection_stats')
+    if not grid_path.is_file():
+        warnings.append(f'{record.name}: reference lambda plot skipped; validation grid missing')
+        return []
+    try:
+        stats = pl.read_parquet(grid_path)
+        reference_dir = output_dir / 'lambda_reference'
+        reference_dir.mkdir(parents=True, exist_ok=True)
+        plot_metrics_k_curves_for_lambda(
+            stats_df=stats,
+            out_dir=reference_dir,
+            plot_data_split='validation',
+        )
+    except Exception as exc:
+        warnings.append(f'{record.name}: reference lambda plot failed ({exc})')
+        return []
+    path = reference_dir / 'metrics_k_curves_for_lambda.png'
+    return [path] if path.is_file() else []

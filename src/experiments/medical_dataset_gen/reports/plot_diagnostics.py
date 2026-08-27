@@ -14,6 +14,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     EXPERIMENT_FAMILY_COLORS,
     EXPERIMENT_FAMILY_LABELS,
     ExperimentFamilyId,
+    StrategyName,
 )
 from experiments.medical_dataset_gen.reports.helpers import (
     experiment_plot_label,
@@ -439,42 +440,124 @@ def plot_lambda_delta_curve(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
+    curve_rows: Sequence[Mapping[str, object]] = (),
     output_dir: Path,
     plot_format: PlotFormat,
 ) -> list[Path]:
-    fig, ax = plt.subplots(figsize=(7.2, 4.8))  # type: ignore[attr-defined]
+    fig, axes = plt.subplots(3, 1, figsize=(7.2, 9.2), sharex=True)  # type: ignore[attr-defined]
+    axes = list(axes)
     try:
         has_data = False
         for (strategy), color in (('mmr', '#1F77B4'), ('fac_loc', '#D62728')):
+            typed_strategy = cast(StrategyName, strategy)
+            summary = [row for row in curve_rows if row.get('strategy') == strategy]
+            if summary:
+                xs = [float_or_none(row.get('lambda_norm')) for row in summary]
+                means = [
+                    float_or_none(row.get('MeanDeltaStrategyTopK_FCP')) for row in summary
+                ]
+                lowers = [
+                    float_or_none(row.get('CellQ25DeltaStrategyTopK_FCP')) for row in summary
+                ]
+                uppers = [
+                    float_or_none(row.get('CellQ75DeltaStrategyTopK_FCP')) for row in summary
+                ]
+                safe = [
+                    float_or_none(row.get('CellSafeLambdaFraction')) for row in summary
+                ]
+                distractor = [
+                    float_or_none(
+                        row.get('MeanDeltaStrategyTopK_DistractorRate')
+                    )
+                    for row in summary
+                ]
+            else:
+                points = [
+                    (
+                        float_or_none(row.get('lambda_norm')),
+                        float_or_none(row.get('DeltaStrategyTopK_FCP')),
+                    )
+                    for row in rows
+                    if row.get('strategy') == strategy
+                ]
+                binned = _binned_lambda_delta_stats(points, n_bins=20)
+                xs = [item['x'] for item in binned]
+                means = [item['mean'] for item in binned]
+                lowers = [item['q25'] for item in binned]
+                uppers = [item['q75'] for item in binned]
+                safe = []
+                distractor = []
             points = [
-                (
-                    float_or_none(row.get('lambda_norm')),
-                    float_or_none(row.get('DeltaStrategyTopK_FCP')),
-                )
-                for row in rows
-                if row.get('strategy') == strategy
+                (x, mean, lower, upper)
+                for x, mean, lower, upper in zip(xs, means, lowers, uppers, strict=True)
+                if x is not None and mean is not None and lower is not None and upper is not None
             ]
-            binned = _binned_lambda_delta_stats(points, n_bins=20)
-            if not binned:
+            if not points:
                 continue
             has_data = True
-            xs = [item['x'] for item in binned]
-            means = [item['mean'] for item in binned]
-            lowers = [item['q25'] for item in binned]
-            uppers = [item['q75'] for item in binned]
-            ax.plot(xs, means, color=color, linewidth=2.0, label=strategy_label(strategy))  # type: ignore
-            ax.fill_between(xs, lowers, uppers, color=color, alpha=0.16)
+            valid_xs = [point[0] for point in points]
+            valid_means = [point[1] for point in points]
+            valid_lowers = [point[2] for point in points]
+            valid_uppers = [point[3] for point in points]
+            axes[0].plot(
+                valid_xs,
+                valid_means,
+                color=color,
+                linewidth=2.0,
+                label=strategy_label(typed_strategy),
+            )
+            axes[0].fill_between(valid_xs, valid_lowers, valid_uppers, color=color, alpha=0.16)
+
+            if summary:
+                valid_safe = [
+                    (x, value)
+                    for x, value in zip(xs, safe, strict=True)
+                    if x is not None and value is not None
+                ]
+                if valid_safe:
+                    axes[1].plot(
+                        [item[0] for item in valid_safe],
+                        [item[1] for item in valid_safe],
+                        color=color,
+                        linewidth=2.0,
+                        label=strategy_label(typed_strategy),
+                    )
+                valid_distractor = [
+                    (x, value)
+                    for x, value in zip(xs, distractor, strict=True)
+                    if x is not None and value is not None
+                ]
+                if valid_distractor:
+                    axes[2].plot(
+                        [item[0] for item in valid_distractor],
+                        [item[1] for item in valid_distractor],
+                        color=color,
+                        linewidth=2.0,
+                        label=strategy_label(typed_strategy),
+                    )
 
         if not has_data:
             plt.close(fig)  # type: ignore[attr-defined]
             return []
-        ax.axhline(0.0, color='#202020', linewidth=0.9)
-        set_axis_title(axis=ax, title='Validation FCP delta vs top-k across lambda')
-        ax.set_xlabel('Normalized lambda within each strategy grid')
-        ax.set_ylabel('Mean FacetCoveragePurity@k delta')
-        ax.set_xlim(0, 1)
-        ax.grid(alpha=0.25)
-        ax.legend(frameon=False)
+        axes[0].axhline(0.0, color='#202020', linewidth=0.9)
+        set_axis_title(axis=axes[0], title='Validation FCP delta vs top-k across lambda')
+        axes[0].set_ylabel('Mean FCP delta')
+        axes[0].grid(alpha=0.25)
+
+        axes[1].set_ylim(0.0, 1.0)
+        set_axis_title(axis=axes[1], title='Cell-level lambda safety')
+        axes[1].set_ylabel('Fraction at or above top-k')
+        axes[1].grid(alpha=0.25)
+
+        axes[2].axhline(0.0, color='#202020', linewidth=0.9)
+        set_axis_title(axis=axes[2], title='Validation distractor-rate delta vs top-k')
+        axes[2].set_xlabel('Normalized lambda within each strategy grid')
+        axes[2].set_ylabel('Mean distractor-rate delta')
+        axes[2].grid(alpha=0.25)
+        axes[2].set_xlim(0, 1)
+        handles, _labels = axes[0].get_legend_handles_labels()
+        if handles:
+            axes[0].legend(frameon=False)
         fig.tight_layout()
         path = output_dir / f'lambda_fcp_delta_vs_topk_by_lambda.{plot_format}'
         fig.savefig(path, dpi=180)

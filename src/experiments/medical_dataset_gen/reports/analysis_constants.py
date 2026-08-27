@@ -136,6 +136,8 @@ REPORT_FILES = (
     'data/lambda_stability.csv',
     'data/lambda_grid_fcp_delta.csv',
     'data/lambda_safety_summary.csv',
+    'data/lambda_curve_summary.csv',
+    'data/lambda_robustness_summary.csv',
     'data/near_optimal_lambda_width.csv',
     'data/embedding_model_summary.csv',
     'data/paired_query_effects/',

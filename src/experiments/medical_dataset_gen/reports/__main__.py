@@ -26,6 +26,7 @@ from experiments.medical_dataset_gen.reports.discovery import (
     suite_cells_matching_where,
 )
 from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
+from experiments.medical_dataset_gen.reports.lambda_analysis import select_reference_record
 from experiments.medical_dataset_gen.reports.latex_macros import render_thesis_result_macros
 from experiments.medical_dataset_gen.reports.latex_tables import (
     render_thesis_aggregate_tables,
@@ -73,6 +74,8 @@ from experiments.medical_dataset_gen.reports.summaries import (
     embedding_model_summary_rows,
     experiment_family_budget_summary_rows,
     experiment_family_summary_rows,
+    lambda_curve_summary_rows,
+    lambda_robustness_summary_rows,
     lambda_stability_rows,
     metric_aggregate_summary_rows,
     metric_family_budget_summary_rows,
@@ -172,6 +175,11 @@ def run_report(args: CliArgs) -> ReportOutputs:
         lodo_analysis_enabled = args.run_lodo_analysis
         paired_statistics_enabled = args.run_paired_statistics
         validity_analysis_enabled = args.run_validity_analysis
+        lambda_reference_record = (
+            select_reference_record(records, warnings=warnings)
+            if lambda_analysis_enabled
+            else None
+        )
         geometry_population_enabled = (
             validity_analysis_enabled or args.main_query_scope == 'geometry_eligible'
         )
@@ -216,10 +224,14 @@ def run_report(args: CliArgs) -> ReportOutputs:
 
         lambda_grid_delta_rows: list[dict[str, object]] = []
         lambda_safety_rows: list[dict[str, object]] = []
+        lambda_curve_rows: list[dict[str, object]] = []
+        lambda_robustness_rows: list[dict[str, object]] = []
         if lambda_analysis_enabled:
             _progress('computing lambda-grid diagnostics')
             lambda_grid_delta_rows = lambda_grid_fcp_delta_rows(records, warnings=warnings)
             lambda_safety_rows = lambda_safety_summary_rows(lambda_grid_delta_rows)
+            lambda_curve_rows = lambda_curve_summary_rows(lambda_grid_delta_rows)
+            lambda_robustness_rows = lambda_robustness_summary_rows(lambda_safety_rows)
         else:
             _progress('skipping lambda-grid diagnostics')
         comparison_rows = comparison_by_k_rows(strategy_rows)
@@ -473,6 +485,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
             write_csv(data_dir / 'lambda_stability.csv', lambda_rows)
             write_csv(data_dir / 'lambda_grid_fcp_delta.csv', lambda_grid_delta_rows)
             write_csv(data_dir / 'lambda_safety_summary.csv', lambda_safety_rows)
+            write_csv(data_dir / 'lambda_curve_summary.csv', lambda_curve_rows)
+            write_csv(data_dir / 'lambda_robustness_summary.csv', lambda_robustness_rows)
             write_csv(data_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(data_dir / 'embedding_model_summary.csv', embedding_summary_rows)
         if paired_statistics_enabled:
@@ -495,6 +509,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
             embedding_models=effective_embedding_models,
             require_complete_wording_grid=args.cross_query_chunk_modes,
             warnings=warnings,
+            lambda_curve_rows=lambda_curve_rows,
+            lambda_robustness_rows=lambda_robustness_rows,
             paired_statistics=paired_statistics_enabled,
             output_dir=args.output_dir,
         )
@@ -521,6 +537,8 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 paired_config_suite_rows=paired_config_suite_rows,
                 cross_query_chunk_modes=args.cross_query_chunk_modes,
                 warnings=warnings,
+                lambda_curve_rows=lambda_curve_rows,
+                lambda_reference_record=lambda_reference_record,
             )
             figures.extend(
                 write_figures(
@@ -546,6 +564,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     paired_config_suite_rows=[],
                     cross_query_chunk_modes=args.cross_query_chunk_modes,
                     warnings=warnings,
+                    lambda_curve_rows=interaction_rows(lambda_curve_rows),
                 )
             )
             _progress(f'rendered {len(figures)} figures')
@@ -568,6 +587,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             low_budget_rows=low_budget_rows,
             lambda_rows=lambda_rows,
             lambda_safety_rows=lambda_safety_rows,
+            lambda_robustness_rows=lambda_robustness_rows,
             embedding_summary_rows=embedding_summary_rows,
             paired_config_suite_rows=paired_config_suite_rows,
             figures=figures,
@@ -710,6 +730,7 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
     lambda_rows = _read_report_csv_rows(data_dir, 'lambda_stability.csv')
     lambda_grid_delta_rows = _read_report_csv_rows(data_dir, 'lambda_grid_fcp_delta.csv')
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
+    lambda_curve_rows = _read_report_csv_rows(data_dir, 'lambda_curve_summary.csv', required=False)
     near_optimal_rows = _read_report_csv_rows(data_dir, 'near_optimal_lambda_width.csv')
     paired_cell_rows = _read_report_csv_rows(data_dir, 'paired_cell_effect_summary.csv')
     paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
@@ -737,6 +758,7 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
         paired_config_suite_rows=paired_config_suite_rows,
         cross_query_chunk_modes=args.cross_query_chunk_modes,
         warnings=warnings,
+        lambda_curve_rows=lambda_curve_rows,
     )
     figures.extend(
         write_figures(
@@ -760,6 +782,7 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
             paired_config_suite_rows=[],
             cross_query_chunk_modes=args.cross_query_chunk_modes,
             warnings=warnings,
+            lambda_curve_rows=interaction_rows(lambda_curve_rows),
         )
     )
     figures.extend(
@@ -800,6 +823,12 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     comparison_rows = _read_report_csv_rows(data_dir, 'comparison_by_k.csv')
     budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
+    lambda_curve_rows = _read_report_csv_rows(
+        data_dir, 'lambda_curve_summary.csv', required=False
+    )
+    lambda_robustness_rows = _read_report_csv_rows(
+        data_dir, 'lambda_robustness_summary.csv', required=False
+    )
     synthetic_artifact_rows = _read_report_csv_rows(data_dir, 'synthetic_artifact_diagnostics.csv')
     metric_summary_rows = _read_report_csv_rows(data_dir, 'metric_aggregate_summary.csv')
     metric_family_summary_rows_data = _read_report_csv_rows(data_dir, 'metric_family_summary.csv')
@@ -828,6 +857,8 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
             comparison_rows=comparison_rows,
             budget_rows=budget_rows,
             lambda_safety_rows=lambda_safety_rows,
+            lambda_curve_rows=lambda_curve_rows,
+            lambda_robustness_rows=lambda_robustness_rows,
             synthetic_artifact_rows=synthetic_artifact_rows,
             metric_summary_rows=metric_summary_rows,
             metric_family_summary_rows=metric_family_summary_rows_data,
@@ -1022,6 +1053,8 @@ def _write_thesis_outputs_from_rows(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
+    lambda_curve_rows: Sequence[Mapping[str, object]],
+    lambda_robustness_rows: Sequence[Mapping[str, object]],
     synthetic_artifact_rows: Sequence[Mapping[str, object]],
     metric_summary_rows: Sequence[Mapping[str, object]],
     metric_family_summary_rows: Sequence[Mapping[str, object]],
@@ -1058,6 +1091,8 @@ def _write_thesis_outputs_from_rows(
             embedding_models=embedding_models,
             require_complete_wording_grid=require_complete_wording_grid,
             warnings=warnings,
+            lambda_curve_rows=lambda_curve_rows,
+            lambda_robustness_rows=lambda_robustness_rows,
         )
     )
     statistical_tables_path = thesis_statistical_tables_path(output_dir)

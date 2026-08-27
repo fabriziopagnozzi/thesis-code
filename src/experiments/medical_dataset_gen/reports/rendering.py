@@ -38,6 +38,7 @@ def render_report(
     low_budget_rows: Sequence[Mapping[str, object]],
     lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
+    lambda_robustness_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
     paired_config_suite_rows: Sequence[Mapping[str, object]],
     figures: Sequence[Path],
@@ -303,6 +304,27 @@ def render_report(
                 'BestDeltaStrategyTopK_FCP',
                 'WorstLambda',
                 'BestLambda',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        section_with_table(
+            'Lambda Robustness Summary',
+            lambda_robustness_rows,
+            columns=[
+                'Scope',
+                'ScopeValue',
+                'strategy',
+                'Rows',
+                'MeanWeighting',
+                'MeanSafeLambdaFraction',
+                'MedianSafeLambdaFraction',
+                'AllGridSafeRows',
+                'AllGridSafeRate',
+                'MedianWorstDeltaStrategyTopK_FCP',
+                'MinWorstDeltaStrategyTopK_FCP',
             ],
             tablefmt=args.tablefmt,
             max_rows=args.max_table_rows,

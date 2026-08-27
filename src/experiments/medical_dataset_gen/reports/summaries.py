@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 import statistics
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import cast
 
 from experiments.medical_dataset_gen.reports.analysis_constants import (
@@ -20,6 +20,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     int_or_none,
     numeric_stats,
     numeric_values,
+    quantile,
     sorted_rows,
     strategy_label,
     subtract,
@@ -646,6 +647,231 @@ def lambda_stability_rows(
         row.update(numeric_stats(near_spans, prefix='near_optimal_span_norm'))
         rows.append(row)
     return rows
+
+
+def lambda_curve_summary_rows(
+    lambda_grid_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Aggregate validation-grid deltas at each normalized lambda position.
+
+    The mean gives every observed model/family stratum equal weight, while the
+    quantiles and cell-level safe fraction retain the unweighted experiment-
+    budget distribution.  Keeping both views prevents a large family from
+    hiding reversals in smaller but methodologically important cells.
+    """
+    grouped: dict[tuple[str, float], list[Mapping[str, object]]] = {}
+    for row in lambda_grid_rows:
+        strategy = row.get('strategy')
+        lambda_norm = float_or_none(row.get('lambda_norm'))
+        if strategy not in DIVERSIFYING_STRATEGIES or lambda_norm is None:
+            continue
+        grouped.setdefault((str(strategy), round(lambda_norm, 6)), []).append(row)
+
+    rows: list[dict[str, object]] = []
+    for (strategy, lambda_norm), group in sorted(grouped.items()):
+        fcp_deltas = numeric_values(group, 'DeltaStrategyTopK_FCP')
+        if not fcp_deltas:
+            continue
+        fcp_group = [
+            row for row in group if float_or_none(row.get('DeltaStrategyTopK_FCP')) is not None
+        ]
+        distractor_deltas = numeric_values(
+            group,
+            'DeltaStrategyTopK_DistractorRate',
+        )
+        balanced_fcp = _lambda_balanced_mean(
+            group,
+            'DeltaStrategyTopK_FCP',
+            dimensions=('EmbeddingModel', 'ExperimentFamily'),
+        )
+        balanced_safe = _lambda_balanced_fraction(
+            fcp_group,
+            predicate=lambda row: (
+                (value := float_or_none(row.get('DeltaStrategyTopK_FCP'))) is not None
+                and value >= 0.0
+            ),
+            dimensions=('EmbeddingModel', 'ExperimentFamily'),
+        )
+        balanced_distractor = _lambda_balanced_mean(
+            group,
+            'DeltaStrategyTopK_DistractorRate',
+            dimensions=('EmbeddingModel', 'ExperimentFamily'),
+        )
+        out: dict[str, object] = {
+            'strategy': strategy,
+            'lam': _mean_or_none(
+                [
+                    value
+                    for value in (float_or_none(row.get('lam')) for row in group)
+                    if value is not None
+                ]
+            ),
+            'lambda_norm': lambda_norm,
+            'CellRows': len(fcp_deltas),
+            'ModelCount': len({str(row.get('EmbeddingModel') or '') for row in group}),
+            'FamilyCount': len({str(row.get('ExperimentFamily') or '') for row in group}),
+            'MeanDeltaStrategyTopK_FCP': balanced_fcp,
+            'CellMeanDeltaStrategyTopK_FCP': statistics.fmean(fcp_deltas),
+            'CellMedianDeltaStrategyTopK_FCP': statistics.median(fcp_deltas),
+            'CellQ25DeltaStrategyTopK_FCP': quantile(sorted(fcp_deltas), 0.25),
+            'CellQ75DeltaStrategyTopK_FCP': quantile(sorted(fcp_deltas), 0.75),
+            'CellSafeLambdaFraction': sum(value >= 0.0 for value in fcp_deltas)
+            / len(fcp_deltas),
+            'BalancedSafeLambdaFraction': balanced_safe,
+            'MeanDeltaStrategyTopK_DistractorRate': balanced_distractor,
+            'CellMeanDeltaStrategyTopK_DistractorRate': (
+                statistics.fmean(distractor_deltas) if distractor_deltas else None
+            ),
+            'CellQ25DeltaStrategyTopK_DistractorRate': (
+                quantile(sorted(distractor_deltas), 0.25) if distractor_deltas else None
+            ),
+            'CellQ75DeltaStrategyTopK_DistractorRate': (
+                quantile(sorted(distractor_deltas), 0.75) if distractor_deltas else None
+            ),
+        }
+        rows.append(out)
+    return rows
+
+
+def lambda_robustness_summary_rows(
+    lambda_safety_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """Summarize full-grid safety overall and by model, family, and budget."""
+    rows: list[dict[str, object]] = []
+    for strategy in DIVERSIFYING_STRATEGIES:
+        strategy_rows = [row for row in lambda_safety_rows if row.get('strategy') == strategy]
+        if not strategy_rows:
+            continue
+        scopes: list[tuple[str, str, list[Mapping[str, object]], tuple[str, ...], str]] = [
+            (
+                'overall',
+                'all',
+                strategy_rows,
+                ('EmbeddingModel', 'ExperimentFamily'),
+                'model-and-family-balanced',
+            )
+        ]
+        for model in sorted({str(row.get('EmbeddingModel') or 'unknown') for row in strategy_rows}):
+            scopes.append(
+                (
+                    'embedding_model',
+                    model,
+                    [row for row in strategy_rows if str(row.get('EmbeddingModel') or 'unknown') == model],
+                    ('ExperimentFamily',),
+                    'family-balanced',
+                )
+            )
+        for family in sorted({str(row.get('ExperimentFamily') or 'unknown') for row in strategy_rows}):
+            scopes.append(
+                (
+                    'experiment_family',
+                    family,
+                    [row for row in strategy_rows if str(row.get('ExperimentFamily') or 'unknown') == family],
+                    ('EmbeddingModel',),
+                    'model-balanced',
+                )
+            )
+        for k in sorted(
+            {
+                k_value
+                for k_value in (int_or_none(row.get('k')) for row in strategy_rows)
+                if k_value is not None
+            }
+        ):
+            scopes.append(
+                (
+                    'budget',
+                    str(k),
+                    [row for row in strategy_rows if int_or_none(row.get('k')) == k],
+                    ('EmbeddingModel', 'ExperimentFamily'),
+                    'model-and-family-balanced',
+                )
+            )
+
+        for scope, scope_value, scoped_rows, dimensions, weighting in scopes:
+            safe_values = numeric_values(scoped_rows, 'SafeLambdaFraction')
+            worst_values = numeric_values(scoped_rows, 'WorstDeltaStrategyTopK_FCP')
+            range_values = numeric_values(scoped_rows, 'DeltaStrategyTopK_FCPRange')
+            if not safe_values or not worst_values:
+                continue
+            rows.append(
+                {
+                    'Scope': scope,
+                    'ScopeValue': scope_value,
+                    'strategy': strategy,
+                    'Rows': len(scoped_rows),
+                    'ModelCount': len(
+                        {str(row.get('EmbeddingModel') or 'unknown') for row in scoped_rows}
+                    ),
+                    'FamilyCount': len(
+                        {str(row.get('ExperimentFamily') or 'unknown') for row in scoped_rows}
+                    ),
+                    'BudgetCount': len(
+                        {int_or_none(row.get('k')) for row in scoped_rows if int_or_none(row.get('k')) is not None}
+                    ),
+                    'LambdaGridPoints': max(
+                        int_or_none(row.get('LambdaCount')) or 0 for row in scoped_rows
+                    ),
+                    'MeanWeighting': weighting,
+                    'MeanSafeLambdaFraction': _lambda_balanced_mean(
+                        scoped_rows,
+                        'SafeLambdaFraction',
+                        dimensions=dimensions,
+                    ),
+                    'MedianSafeLambdaFraction': statistics.median(safe_values),
+                    'AllGridSafeRows': sum(value >= 1.0 - 1e-12 for value in safe_values),
+                    'AllGridSafeRate': sum(value >= 1.0 - 1e-12 for value in safe_values)
+                    / len(safe_values),
+                    'MeanWorstDeltaStrategyTopK_FCP': _lambda_balanced_mean(
+                        scoped_rows,
+                        'WorstDeltaStrategyTopK_FCP',
+                        dimensions=dimensions,
+                    ),
+                    'MedianWorstDeltaStrategyTopK_FCP': statistics.median(worst_values),
+                    'MinWorstDeltaStrategyTopK_FCP': min(worst_values),
+                    'MeanFCPRange': _lambda_balanced_mean(
+                        scoped_rows,
+                        'DeltaStrategyTopK_FCPRange',
+                        dimensions=dimensions,
+                    )
+                    if range_values
+                    else None,
+                }
+            )
+    return rows
+
+
+def _lambda_balanced_mean(
+    rows: Sequence[Mapping[str, object]],
+    column: str,
+    *,
+    dimensions: tuple[str, ...],
+) -> float | None:
+    grouped: dict[tuple[str, ...], list[float]] = {}
+    for row in rows:
+        value = float_or_none(row.get(column))
+        if value is None:
+            continue
+        key = tuple(str(row.get(dimension) or 'unknown') for dimension in dimensions)
+        grouped.setdefault(key, []).append(value)
+    means = [statistics.fmean(values) for values in grouped.values() if values]
+    return statistics.fmean(means) if means else None
+
+
+def _lambda_balanced_fraction(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    predicate: Callable[[Mapping[str, object]], bool],
+    dimensions: tuple[str, ...],
+) -> float | None:
+    grouped: dict[tuple[str, ...], list[Mapping[str, object]]] = {}
+    for row in rows:
+        key = tuple(str(row.get(dimension) or 'unknown') for dimension in dimensions)
+        grouped.setdefault(key, []).append(row)
+    fractions: list[float] = []
+    for group in grouped.values():
+        fractions.append(sum(bool(predicate(row)) for row in group) / len(group))
+    return statistics.fmean(fractions) if fractions else None
 
 
 def embedding_model_summary_rows(

@@ -519,6 +519,54 @@ def _lambda_safety_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[s
     }
 
 
+def _lambda_curve_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for strategy, label in (('fac_loc', 'FacLoc'), ('mmr', 'Mmr')):
+        strategy_rows = [row for row in rows if row.get('strategy') == strategy]
+        mean_deltas = _values(strategy_rows, 'MeanDeltaStrategyTopK_FCP')
+        macros[f'Result{label}AggregateBelowTopKLambdaCount'] = _integer(
+            sum(delta < 0.0 for delta in mean_deltas)
+        )
+        macros[f'Result{label}AggregateMinMeanFcpDelta'] = _signed(
+            min(mean_deltas) if mean_deltas else None
+        )
+        macros[f'Result{label}AggregateLambdaPointCount'] = _integer(len(mean_deltas))
+    grid_counts = [
+        len([row for row in rows if row.get('strategy') == strategy])
+        for strategy in ('fac_loc', 'mmr')
+    ]
+    macros['ResultLambdaGridPoints'] = _integer(max(grid_counts, default=0))
+    return macros
+
+
+def _lambda_robustness_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    overall = [row for row in rows if row.get('Scope') == 'overall']
+    macros: dict[str, str] = {}
+    for strategy, label in (('fac_loc', 'FacLoc'), ('mmr', 'Mmr')):
+        match = next((row for row in overall if row.get('strategy') == strategy), None)
+        macros[f'Result{label}AllGridSafeRows'] = _integer(
+            None if match is None else match.get('AllGridSafeRows')
+        )
+        macros[f'Result{label}AllGridSafeRate'] = _tex_percent(
+            None if match is None else match.get('AllGridSafeRate')
+        )
+        macros[f'Result{label}MeanSafeLambdaFraction'] = _fixed(
+            _float(None if match is None else match.get('MeanSafeLambdaFraction')), digits=3
+        )
+        macros[f'Result{label}MedianSafeLambdaFraction'] = _fixed(
+            _float(None if match is None else match.get('MedianSafeLambdaFraction')), digits=3
+        )
+        macros[f'Result{label}MedianWorstLambdaFcpDelta'] = _signed(
+            None if match is None else match.get('MedianWorstDeltaStrategyTopK_FCP')
+        )
+        macros[f'Result{label}MinWorstLambdaFcpDelta'] = _signed(
+            None if match is None else match.get('MinWorstDeltaStrategyTopK_FCP')
+        )
+    return macros
+
+
 def _alpha_ndcg_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
@@ -556,6 +604,8 @@ def render_thesis_result_macros(
     embedding_models: Sequence[str] = (),
     require_complete_wording_grid: bool = False,
     warnings: list[str] | None = None,
+    lambda_curve_rows: Sequence[Mapping[str, object]] = (),
+    lambda_robustness_rows: Sequence[Mapping[str, object]] = (),
 ) -> str:
     """Render scalar result macros imported by the thesis text."""
     macros = {
@@ -575,6 +625,8 @@ def render_thesis_result_macros(
         **_embedding_low_budget_result_macros(comparison_rows, budget_rows),
         **_embedding_edge_case_result_macros(comparison_rows),
         **_lambda_safety_result_macros(lambda_safety_rows),
+        **_lambda_curve_result_macros(lambda_curve_rows),
+        **_lambda_robustness_result_macros(lambda_robustness_rows),
         **_alpha_ndcg_result_macros(comparison_rows, budget_rows),
         **render_wording_result_macros(
             budget_rows=budget_rows,
@@ -633,6 +685,10 @@ def generate_exp_results_macros(
             ),
             embedding_summary_rows=_read_rows(data_dir / 'embedding_model_summary.csv'),
             require_complete_wording_grid=True,
+            lambda_curve_rows=_read_rows(data_dir / 'lambda_curve_summary.csv', required=False),
+            lambda_robustness_rows=_read_rows(
+                data_dir / 'lambda_robustness_summary.csv', required=False
+            ),
         )
     )
     return output_path

@@ -393,8 +393,12 @@ def near_optimal_lambda_rows(
     epsilon: float,
     warnings: list[str],
 ) -> list[dict[str, object]]:
-    grid_path = _lambda_grid_stats_path(record)
+    # Sensitivity summaries must be computed from the validation grid.  The
+    # held-out report grid is reserved for the selected operating point and
+    # must never be used to tune or summarize lambda robustness.
+    grid_path = _lambda_validation_grid_stats_path(record)
     if not grid_path.is_file():
+        warnings.append(f'{record.name}: near-optimal lambda width skipped; validation grid missing')
         return []
     try:
         stats = pl.read_parquet(grid_path)
@@ -431,6 +435,7 @@ def near_optimal_lambda_rows(
             out = base_experiment_row(record)
             out.update(
                 {
+                    'DataSplit': 'validation',
                     'strategy': strategy,
                     'k': k,
                     'GridStatsPath': str(grid_path),
@@ -458,6 +463,7 @@ def lambda_grid_fcp_delta_rows(
     for record in records:
         grid_path = _lambda_validation_grid_stats_path(record)
         if not grid_path.is_file():
+            warnings.append(f'{record.name}: lambda sensitivity skipped; validation grid missing')
             continue
         try:
             stats = pl.read_parquet(grid_path)
@@ -511,8 +517,39 @@ def lambda_grid_fcp_delta_rows(
                     'DeltaStrategyTopK_FCP': fcp - topk_fcp,
                 }
             )
+            for metric_token, metric_column in (
+                ('DistractorRate', 'DistractorRate'),
+                ('NearMissDistractorRate', 'NearMissDistractorRate'),
+                ('BackgroundOutlierRate', 'BackgroundOutlierRate'),
+            ):
+                strategy_metric = float_or_none(row.get(metric_column))
+                topk_metric = _metric_value_for_k(
+                    topk,
+                    k=k,
+                    metric_column=metric_column,
+                )
+                if strategy_metric is not None:
+                    out[f'Strategy_{metric_token}'] = strategy_metric
+                if topk_metric is not None:
+                    out[f'TopK_{metric_token}'] = topk_metric
+                if strategy_metric is not None and topk_metric is not None:
+                    out[f'DeltaStrategyTopK_{metric_token}'] = strategy_metric - topk_metric
             rows.append(out)
     return rows
+
+
+def _metric_value_for_k(
+    stats: pl.DataFrame,
+    *,
+    k: int,
+    metric_column: str,
+) -> float | None:
+    if metric_column not in stats.columns:
+        return None
+    rows = stats.filter((pl.col('strategy') == 'top_k') & (pl.col('k') == k))
+    if rows.is_empty():
+        return None
+    return float_or_none(rows[metric_column][0])
 
 
 def lambda_safety_summary_rows(
@@ -590,7 +627,7 @@ def _lambda_grid_stats_path(record: ExperimentRecord) -> Path:
 
 
 def _lambda_validation_grid_stats_path(record: ExperimentRecord) -> Path:
-    selection_path = record.paths.table_path('evaluation_selection_stats')
-    if selection_path.is_file():
-        return selection_path
-    return _lambda_grid_stats_path(record)
+    # A sensitivity curve is a validation diagnostic.  Falling back to the
+    # held-out report grid would silently turn parameter inspection into test
+    # reuse, so callers skip cells whose validation grid is unavailable.
+    return record.paths.table_path('evaluation_selection_stats')
