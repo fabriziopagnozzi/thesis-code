@@ -706,7 +706,7 @@ def plot_dataset_composition(
             height=COMPOSITION_BAR_HEIGHT,
             left=displayed_gold,
             label='Near-miss distractors',
-            color='#C48572',
+            color='#CFA79A',
             alpha=COMPOSITION_BAR_ALPHA,
         )
         bottoms = [g + n for g, n in zip(displayed_gold, near, strict=True)]
