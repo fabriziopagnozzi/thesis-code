@@ -1,5 +1,7 @@
 """Static configuration for experiment-comparison aggregation and figures."""
 
+from dataclasses import dataclass
+
 from experiments.medical_dataset_gen.reports.analysis_constants import DeltaMetricLabel
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, DeltaMetricPlotSpec
 
@@ -20,13 +22,84 @@ AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset(
         'Unknown',
     }
 )
-PREFERRED_EMBEDDING_MODEL_ORDER: tuple[str, ...] = (
-    'BAAI/bge-m3',
-    'Qwen/Qwen3-Embedding-0.6B',
+
+
+@dataclass(frozen=True)
+class EmbeddingModelReportSpec:
+    """Stable report-facing metadata for a supported embedding model."""
+
+    model_name: str
+    label: str
+    macro_token: str
+    color: str
+
+
+EMBEDDING_MODEL_REPORT_SPECS: tuple[EmbeddingModelReportSpec, ...] = (
+    EmbeddingModelReportSpec(
+        'Qwen/Qwen3-Embedding-0.6B',
+        'Qwen3-0.6B',
+        'QwenSmall',
+        '#3B6FB6',
+    ),
+    EmbeddingModelReportSpec(
+        'Qwen/Qwen3-Embedding-4B',
+        'Qwen3-4B',
+        'QwenFourB',
+        '#6C5AAE',
+    ),
+    EmbeddingModelReportSpec(
+        'abhinand/MedEmbed-large-v0.1',
+        'MedEmbed-large',
+        'MedEmbed',
+        '#C45A3C',
+    ),
+    EmbeddingModelReportSpec(
+        'multi-qa-mpnet-base-cos-v1',
+        'MultiQA-MPNet',
+        'MultiMpnet',
+        '#27866D',
+    ),
+    EmbeddingModelReportSpec('BAAI/bge-m3', 'BGE-M3', 'Bge', '#8A6D3B'),
+    EmbeddingModelReportSpec(
+        'Qwen/Qwen3-Embedding-8B',
+        'Qwen3-8B',
+        'QwenEightB',
+        '#59408F',
+    ),
+    EmbeddingModelReportSpec(
+        'jinaai/jina-embeddings-v5-text-small',
+        'Jina-v5-small',
+        'Jina',
+        '#A65F8A',
+    ),
+    EmbeddingModelReportSpec('ncbi/MedCPT', 'MedCPT', 'MedCpt', '#A9782A'),
+)
+EMBEDDING_MODEL_REPORT_SPEC_BY_NAME = {
+    spec.model_name: spec for spec in EMBEDDING_MODEL_REPORT_SPECS
+}
+PREFERRED_EMBEDDING_MODEL_ORDER: tuple[str, ...] = tuple(
+    spec.model_name for spec in EMBEDDING_MODEL_REPORT_SPECS
 )
 # Backward-compatible alias for older imports; model inclusion is controlled by
 # report discovery plus --embedding-models, not by this tuple.
 EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = PREFERRED_EMBEDDING_MODEL_ORDER
+
+
+def embedding_model_display_label(model_name: str) -> str:
+    spec = EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.label if spec is not None else model_name.rsplit('/', 1)[-1]
+
+
+def embedding_model_macro_token(model_name: str) -> str | None:
+    spec = EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.macro_token if spec is not None else None
+
+
+def embedding_model_color(model_name: str) -> str:
+    spec = EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.color if spec is not None else '#666666'
+
+
 LEGACY_LOW_BUDGET_TOKEN = ''.join(('head', 'line'))
 
 # Fixed color ranges for aggregate heatmaps. The ranges are shared across

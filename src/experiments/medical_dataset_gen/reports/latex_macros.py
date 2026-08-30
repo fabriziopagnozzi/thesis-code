@@ -407,6 +407,139 @@ def _embedding_model_result_macros(rows: Sequence[Mapping[str, object]]) -> dict
     return macros
 
 
+def _embedding_analysis_result_macros(
+    *,
+    model_rows: Sequence[Mapping[str, object]],
+    range_rows: Sequence[Mapping[str, object]],
+    geometry_rows: Sequence[Mapping[str, object]],
+    lambda_robustness_rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose model-first means and cross-model envelopes to the thesis."""
+    macros: dict[str, str] = {}
+    for row in model_rows:
+        model_token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        metric_token = _metric_result_token(row.get('MetricLabel'))
+        scope_token = _embedding_scope_token(row)
+        if model_token is None or metric_token is None or scope_token is None:
+            continue
+        prefix = f'ResultEmbedding{model_token}{scope_token}{metric_token}'
+        macros.update(
+            {
+                f'{prefix}TopKMean': _fixed(_float(row.get('MeanTopK')), digits=3),
+                f'{prefix}MmrMean': _fixed(_float(row.get('MeanMMR')), digits=3),
+                f'{prefix}FacLocMean': _fixed(_float(row.get('MeanFacLoc')), digits=3),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+                f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK'), digits=3),
+            }
+        )
+
+    for row in range_rows:
+        metric_token = _metric_result_token(row.get('MetricLabel'))
+        scope_token = _range_scope_token(row)
+        if metric_token is None or scope_token is None:
+            continue
+        prefix = f'Result{metric_token}{scope_token}'
+        macros.update(
+            {
+                f'{prefix}FacLocMmrMinModelDelta': _signed(
+                    row.get('MeanDeltaFacLocMMRMinModel'), digits=3
+                ),
+                f'{prefix}FacLocMmrMaxModelDelta': _signed(
+                    row.get('MeanDeltaFacLocMMRMaxModel'), digits=3
+                ),
+                f'{prefix}FacLocMmrPositiveModelCount': _integer(row.get('PositiveModelCount')),
+            }
+        )
+
+    geometry_pass_rates = _values(geometry_rows, 'GeometryPassRate')
+    macros.update(
+        {
+            'ResultGeometryPassMinModel': _fixed(
+                min(geometry_pass_rates) if geometry_pass_rates else None, digits=3
+            ),
+            'ResultGeometryPassMaxModel': _fixed(
+                max(geometry_pass_rates) if geometry_pass_rates else None, digits=3
+            ),
+        }
+    )
+    for row in geometry_rows:
+        token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        if token is None:
+            continue
+        prefix = f'ResultEmbedding{token}Geometry'
+        macros.update(
+            {
+                f'{prefix}PassMean': _fixed(_float(row.get('GeometryPassRate')), digits=3),
+                f'{prefix}FacetCompletenessMean': _fixed(
+                    _float(row.get('FacetCompletenessPassRate')), digits=3
+                ),
+                f'{prefix}PrimaryAxisStressMean': _fixed(
+                    _float(row.get('PrimaryAxisStressPassRate')), digits=3
+                ),
+                f'{prefix}EarlyCoverageStressMean': _fixed(
+                    _float(row.get('EarlyFacetCoverageStressPassRate')), digits=3
+                ),
+                f'{prefix}GoldNearMissMarginMean': _fixed(
+                    _float(row.get('GoldMinusNearMissSimilarityMarginMean')), digits=3
+                ),
+                f'{prefix}GoldBackgroundMarginMean': _fixed(
+                    _float(row.get('GoldMinusBackgroundOutlierSimilarityMarginMean')), digits=3
+                ),
+            }
+        )
+
+    for row in lambda_robustness_rows:
+        if row.get('Scope') != 'embedding_model':
+            continue
+        token = _embedding_model_result_token(row.get('ScopeValue'))
+        strategy_token = {'fac_loc': 'FacLoc', 'mmr': 'Mmr'}.get(str(row.get('strategy') or ''))
+        if token is None or strategy_token is None:
+            continue
+        prefix = f'ResultEmbedding{token}{strategy_token}Lambda'
+        macros.update(
+            {
+                f'{prefix}MeanSafeFraction': _fixed(
+                    _float(row.get('MeanSafeLambdaFraction')), digits=3
+                ),
+                f'{prefix}AllGridSafeRate': _tex_percent(row.get('AllGridSafeRate')),
+                f'{prefix}MinWorstFcpDelta': _signed(
+                    row.get('MinWorstDeltaStrategyTopK_FCP'), digits=3
+                ),
+            }
+        )
+    return macros
+
+
+def _embedding_scope_token(row: Mapping[str, object]) -> str | None:
+    scope = str(row.get('Scope') or '')
+    if scope == 'overall':
+        return 'Overall'
+    budget = _budget_result_token(row.get('BudgetCategory'))
+    if scope == 'budget':
+        return budget
+    family = _label_token(_family_label(row.get('ExperimentFamilyLabel')))
+    if scope == 'family':
+        return f'Family{family}Overall' if family else None
+    if scope == 'family_budget':
+        return f'Family{family}{budget}' if family and budget else None
+    return None
+
+
+def _range_scope_token(row: Mapping[str, object]) -> str | None:
+    scope = str(row.get('Scope') or '')
+    if scope == 'overall':
+        return 'All'
+    budget = _budget_result_token(row.get('BudgetCategory'))
+    if scope == 'budget':
+        return budget
+    family = _label_token(_family_label(row.get('ExperimentFamilyLabel')))
+    if scope == 'family':
+        return f'Family{family}All' if family else None
+    if scope == 'family_budget':
+        return f'Family{family}{budget}' if family and budget else None
+    return None
+
+
 def _embedding_low_budget_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
@@ -601,6 +734,9 @@ def render_thesis_result_macros(
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]] = (),
     paired_suite_rows: Sequence[Mapping[str, object]] = (),
     embedding_summary_rows: Sequence[Mapping[str, object]] = (),
+    embedding_metric_rows: Sequence[Mapping[str, object]] = (),
+    embedding_metric_range_rows: Sequence[Mapping[str, object]] = (),
+    embedding_geometry_rows: Sequence[Mapping[str, object]] = (),
     embedding_models: Sequence[str] = (),
     require_complete_wording_grid: bool = False,
     warnings: list[str] | None = None,
@@ -622,6 +758,12 @@ def render_thesis_result_macros(
             embedding_models=embedding_models,
         ),
         **_embedding_model_result_macros(embedding_summary_rows),
+        **_embedding_analysis_result_macros(
+            model_rows=embedding_metric_rows,
+            range_rows=embedding_metric_range_rows,
+            geometry_rows=embedding_geometry_rows,
+            lambda_robustness_rows=lambda_robustness_rows,
+        ),
         **_embedding_low_budget_result_macros(comparison_rows, budget_rows),
         **_embedding_edge_case_result_macros(comparison_rows),
         **_lambda_safety_result_macros(lambda_safety_rows),
@@ -684,6 +826,15 @@ def generate_exp_results_macros(
                 data_dir / 'paired_suite_effect_summary.csv', required=False
             ),
             embedding_summary_rows=_read_rows(data_dir / 'embedding_model_summary.csv'),
+            embedding_metric_rows=_read_rows(
+                data_dir / 'embedding_model_metric_summary.csv', required=False
+            ),
+            embedding_metric_range_rows=_read_rows(
+                data_dir / 'embedding_model_metric_ranges.csv', required=False
+            ),
+            embedding_geometry_rows=_read_rows(
+                data_dir / 'embedding_geometry_summary.csv', required=False
+            ),
             require_complete_wording_grid=True,
             lambda_curve_rows=_read_rows(data_dir / 'lambda_curve_summary.csv', required=False),
             lambda_robustness_rows=_read_rows(

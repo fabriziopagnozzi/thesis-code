@@ -8,7 +8,10 @@ from typing import Literal
 
 from tabulate import tabulate
 
-from experiments.medical_dataset_gen.reports.report_config import REPORT_METRIC_LABELS
+from experiments.medical_dataset_gen.reports.report_config import (
+    REPORT_METRIC_LABELS,
+    embedding_model_macro_token,
+)
 
 LATEX_OUTPUT_DIRNAME = 'latex'
 THESIS_AGGREGATE_TABLES_FILENAME = 'exp_results_tables.tex'
@@ -147,15 +150,6 @@ _METRIC_RESULT_TOKENS = {
     'FacetWeightedRecall': 'FacetWeightedRecall',
     'Precision': 'Precision',
     'alpha_nDCG': 'AlphaNdcg',
-}
-_EMBEDDING_MODEL_RESULT_TOKENS = {
-    'BAAI/bge-m3': 'Bge',
-    'Qwen/Qwen3-Embedding-0.6B': 'QwenSmall',
-    'Qwen/Qwen3-Embedding-4B': 'QwenFourB',
-    'Qwen/Qwen3-Embedding-8B': 'QwenEightB',
-    'multi-qa-mpnet-base-cos-v1': 'MultiMpnet',
-    'jinaai/jina-embeddings-v5-text-small': 'Jina',
-    'abhinand/MedEmbed-large-v0.1': 'MedEmbed',
 }
 
 
@@ -336,7 +330,7 @@ def _metric_result_token(value: object) -> str | None:
 
 
 def _embedding_model_result_token(value: object) -> str | None:
-    return _EMBEDDING_MODEL_RESULT_TOKENS.get(str(value or ''))
+    return embedding_model_macro_token(str(value or ''))
 
 
 def _label_token(value: object) -> str:

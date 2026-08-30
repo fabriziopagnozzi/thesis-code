@@ -36,6 +36,7 @@ from experiments.medical_dataset_gen.reports.plot_diagnostics import (
     plot_lambda_stability,
     plot_near_optimal_width,
 )
+from experiments.medical_dataset_gen.reports.plot_models import write_embedding_model_figures
 from experiments.medical_dataset_gen.reports.plot_statistical import (
     plot_paired_fcp_config_embedding_forest,
     plot_paired_fcp_config_forest,
@@ -70,6 +71,10 @@ def write_figures(
     warnings: list[str],
     lambda_curve_rows: Sequence[Mapping[str, object]] = (),
     lambda_reference_record: ExperimentRecord | None = None,
+    embedding_metric_rows: Sequence[Mapping[str, object]] = (),
+    embedding_geometry_rows: Sequence[Mapping[str, object]] = (),
+    embedding_geometry_family_rows: Sequence[Mapping[str, object]] = (),
+    lambda_embedding_curve_rows: Sequence[Mapping[str, object]] = (),
 ) -> list[Path]:
     try:
         import matplotlib
@@ -106,6 +111,18 @@ def write_figures(
     for obsolete_stem in ('aggregate_metric_family_delta_heatmap',):
         (aggregate_dir / f'{obsolete_stem}.{plot_format}').unlink(missing_ok=True)
     paths: list[Path] = []
+
+    paths.extend(
+        write_embedding_model_figures(
+            plt=plt,
+            output_dir=aggregate_dir / 'embedding_models',
+            plot_format=plot_format,
+            metric_rows=embedding_metric_rows,
+            geometry_model_rows=embedding_geometry_rows,
+            geometry_family_rows=embedding_geometry_family_rows,
+            lambda_model_rows=lambda_embedding_curve_rows,
+        )
+    )
 
     paths.extend(
         plot_metric_budget_outcomes(
