@@ -65,9 +65,14 @@ def suite_paths_for_cell(
     cfg: ExperimentCfg,
     attempt_id: str | None = None,
     create_attempt: bool = False,
+    prevalidated_data_root: Path | None = None,
 ) -> MedicalDatasetGenPaths:
     """Create stage/report paths without relying on legacy directory parsing."""
-    if cell.origin == 'derived':
+    if prevalidated_data_root is not None:
+        # Logical-suite discovery has already checked the pinned source contract.
+        # Reusing its resolved root avoids rereading multi-megabyte manifests per cell.
+        data_root = prevalidated_data_root
+    elif cell.origin == 'derived':
         source_root, source_cell = resolve_derived_source_cell(root=root, cell=cell)
         data_root = _safe_relative(source_root, source_cell.data_root)
     else:

@@ -1,5 +1,7 @@
 """Static configuration for experiment-comparison aggregation and figures."""
 
+from dataclasses import dataclass
+
 from experiments.medical_dataset_gen.reports.analysis_constants import DeltaMetricLabel
 from experiments.medical_dataset_gen.reports.models import BudgetCategory, DeltaMetricPlotSpec
 
@@ -20,10 +22,95 @@ AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS = frozenset(
         'Unknown',
     }
 )
-PREFERRED_EMBEDDING_MODEL_ORDER: tuple[str, ...] = (
-    'BAAI/bge-m3',
-    'Qwen/Qwen3-Embedding-0.6B',
+
+
+@dataclass(frozen=True)
+class EmbeddingModelReportSpec:
+    model_name: str
+    display_label: str
+    macro_token: str
+    wording_macro_token: str
+    color: str
+
+
+EMBEDDING_MODEL_REPORT_SPECS: tuple[EmbeddingModelReportSpec, ...] = (
+    EmbeddingModelReportSpec(
+        'Qwen/Qwen3-Embedding-0.6B',
+        'Qwen3-0.6B',
+        'QwenSmall',
+        'Qwen',
+        '#3D71B7',
+    ),
+    EmbeddingModelReportSpec(
+        'Qwen/Qwen3-Embedding-4B',
+        'Qwen3-4B',
+        'QwenFourB',
+        'QwenFourB',
+        '#6F58B0',
+    ),
+    EmbeddingModelReportSpec(
+        'abhinand/MedEmbed-large-v0.1',
+        'MedEmbed-large',
+        'MedEmbed',
+        'MedEmbed',
+        '#C65A3E',
+    ),
+    EmbeddingModelReportSpec(
+        'multi-qa-mpnet-base-cos-v1',
+        'MultiQA-MPNet',
+        'MultiMpnet',
+        'MultiMpnet',
+        '#2D8871',
+    ),
+    EmbeddingModelReportSpec('BAAI/bge-m3', 'BGE-M3', 'Bge', 'Bge', '#7A7A7A'),
+    EmbeddingModelReportSpec(
+        'Qwen/Qwen3-Embedding-8B',
+        'Qwen3-8B',
+        'QwenEightB',
+        'QwenEightB',
+        '#8E79C6',
+    ),
+    EmbeddingModelReportSpec(
+        'jinaai/jina-embeddings-v5-text-small',
+        'Jina-v5-small',
+        'Jina',
+        'Jina',
+        '#B279A2',
+    ),
 )
+_EMBEDDING_MODEL_REPORT_SPEC_BY_NAME = {
+    spec.model_name: spec for spec in EMBEDDING_MODEL_REPORT_SPECS
+}
+PREFERRED_EMBEDDING_MODEL_ORDER: tuple[str, ...] = tuple(
+    spec.model_name for spec in EMBEDDING_MODEL_REPORT_SPECS
+)
+OBJECTIVE_COLORS: dict[str, str] = {
+    'top_k': '#7A7A7A',
+    'mmr': '#D08A2E',
+    'fac_loc': '#287C8E',
+}
+
+
+def embedding_model_display_label(model_name: str) -> str:
+    spec = _EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.display_label if spec is not None else model_name.rsplit('/', 1)[-1]
+
+
+def embedding_model_macro_token(model_name: str) -> str | None:
+    spec = _EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.macro_token if spec is not None else None
+
+
+def embedding_model_wording_macro_token(model_name: str) -> str | None:
+    spec = _EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.wording_macro_token if spec is not None else None
+
+
+def embedding_model_color(model_name: str) -> str:
+    spec = _EMBEDDING_MODEL_REPORT_SPEC_BY_NAME.get(model_name)
+    return spec.color if spec is not None else '#808080'
+
+
 # Backward-compatible alias for older imports; model inclusion is controlled by
 # report discovery plus --embedding-models, not by this tuple.
 EMBEDDING_MODEL_FACETED_PLOT_MODELS: tuple[str, ...] = PREFERRED_EMBEDDING_MODEL_ORDER

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,6 +26,9 @@ from experiments.medical_dataset_gen.reports.discovery import (
     load_report_logical_suite,
     suite_cells_matching_where,
 )
+from experiments.medical_dataset_gen.reports.geometry_coverage import (
+    representation_audit_manifest_metadata,
+)
 from experiments.medical_dataset_gen.reports.helpers import ordered_embedding_models
 from experiments.medical_dataset_gen.reports.lambda_analysis import select_reference_record
 from experiments.medical_dataset_gen.reports.latex_macros import render_thesis_result_macros
@@ -35,6 +39,13 @@ from experiments.medical_dataset_gen.reports.latex_tables import (
     thesis_result_macros_path,
     thesis_statistical_tables_path,
 )
+from experiments.medical_dataset_gen.reports.model_analysis import (
+    embedding_geometry_summary_rows,
+    embedding_metric_range_rows,
+    embedding_metric_summary_rows,
+    lambda_curve_by_embedding_model_rows,
+    model_grid_coverage_rows,
+)
 from experiments.medical_dataset_gen.reports.models import CliArgs, ExperimentRecord, ReportOutputs
 from experiments.medical_dataset_gen.reports.plots import write_figures
 from experiments.medical_dataset_gen.reports.rendering import (
@@ -42,6 +53,7 @@ from experiments.medical_dataset_gen.reports.rendering import (
     render_report,
 )
 from experiments.medical_dataset_gen.reports.report_config import LEGACY_LOW_BUDGET_TOKEN
+from experiments.medical_dataset_gen.reports.report_io import report_io_workers
 from experiments.medical_dataset_gen.reports.rows import (
     dataset_distribution_row,
     experiment_manifest_row,
@@ -176,18 +188,23 @@ def run_report(args: CliArgs) -> ReportOutputs:
         paired_statistics_enabled = args.run_paired_statistics
         validity_analysis_enabled = args.run_validity_analysis
         lambda_reference_record = (
-            select_reference_record(records, warnings=warnings)
-            if lambda_analysis_enabled
-            else None
+            select_reference_record(records, warnings=warnings) if lambda_analysis_enabled else None
         )
         geometry_population_enabled = (
             validity_analysis_enabled or args.main_query_scope == 'geometry_eligible'
         )
 
         _progress('loading manifest, dataset, and geometry rows')
-        manifest_rows = [experiment_manifest_row(record) for record in records]
-        dataset_rows = [dataset_distribution_row(record, warnings=warnings) for record in records]
-        geometry_rows = [geometry_filter_row(record, warnings=warnings) for record in records]
+        with ThreadPoolExecutor(max_workers=report_io_workers(len(records))) as executor:
+            loaded_input_rows = executor.map(_load_report_input_rows, records)
+            manifest_rows: list[dict[str, object]] = []
+            dataset_rows: list[dict[str, object]] = []
+            geometry_rows: list[dict[str, object]] = []
+            for manifest_row, dataset_row, geometry_row, row_warnings in loaded_input_rows:
+                manifest_rows.append(manifest_row)
+                dataset_rows.append(dataset_row)
+                geometry_rows.append(geometry_row)
+                warnings.extend(row_warnings)
 
         geometry_population_strategy_rows_data: list[dict[str, object]] = []
         if geometry_population_enabled:
@@ -205,16 +222,19 @@ def run_report(args: CliArgs) -> ReportOutputs:
         _progress('loading selected strategy rows')
         strategy_rows: list[dict[str, object]] = []
         near_optimal_rows: list[dict[str, object]] = []
-        for record in records:
-            strategy_rows.extend(selected_strategy_rows(record, warnings=warnings))
-            if lambda_analysis_enabled:
-                near_optimal_rows.extend(
-                    near_optimal_lambda_rows(
-                        record,
-                        epsilon=args.near_optimal_epsilon,
-                        warnings=warnings,
-                    )
-                )
+        with ThreadPoolExecutor(max_workers=report_io_workers(len(records))) as executor:
+            loaded_strategy_rows = executor.map(
+                lambda record: _load_selected_and_near_optimal_rows(
+                    record,
+                    lambda_analysis_enabled=lambda_analysis_enabled,
+                    near_optimal_epsilon=args.near_optimal_epsilon,
+                ),
+                records,
+            )
+            for selected_rows, near_rows, row_warnings in loaded_strategy_rows:
+                strategy_rows.extend(selected_rows)
+                near_optimal_rows.extend(near_rows)
+                warnings.extend(row_warnings)
         if args.main_query_scope == 'geometry_eligible':
             strategy_rows = [
                 dict(row)
@@ -242,6 +262,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         suite_interaction_rows: list[dict[str, object]] = []
         suite_crossing_rows: list[dict[str, object]] = []
         suite_separability_rows: list[dict[str, object]] = []
+        suite_figures: list[Path] = []
         if suite_mode:
             assert suite_manifest is not None
             suite_scope = (
@@ -269,7 +290,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 comparison_rows=comparison_rows,
             )
             suite_crossing_rows = crossing_rows(suite_contrast_rows)
-            write_suite_factor_figures(
+            suite_figures = write_suite_factor_figures(
                 output_dir=args.output_dir,
                 contrast_rows=suite_contrast_rows,
             )
@@ -350,6 +371,22 @@ def run_report(args: CliArgs) -> ReportOutputs:
             comparison_rows=primary_comparison_rows,
             budget_rows=budget_rows,
         )
+        model_grid_rows, model_grid_missing_rows = model_grid_coverage_rows(
+            comparison_rows,
+            embedding_models=effective_embedding_models,
+        )
+        embedding_model_grid_complete = bool(model_grid_rows) and all(
+            row.get('Complete') is True for row in model_grid_rows
+        )
+        embedding_metric_rows = embedding_metric_summary_rows(budget_rows)
+        embedding_metric_ranges = embedding_metric_range_rows(
+            embedding_metric_rows,
+            complete_crossing=embedding_model_grid_complete,
+        )
+        embedding_geometry_rows, embedding_geometry_family_rows = embedding_geometry_summary_rows(
+            geometry_rows
+        )
+        lambda_embedding_rows = lambda_curve_by_embedding_model_rows(lambda_grid_delta_rows)
         low_budget_rows = [row for row in budget_rows if row.get('BudgetCategory') == 'low_budget']
         lambda_rows = (
             lambda_stability_rows(strategy_rows, near_optimal_rows)
@@ -489,6 +526,19 @@ def run_report(args: CliArgs) -> ReportOutputs:
             write_csv(data_dir / 'lambda_robustness_summary.csv', lambda_robustness_rows)
             write_csv(data_dir / 'near_optimal_lambda_width.csv', near_optimal_rows)
         write_csv(data_dir / 'embedding_model_summary.csv', embedding_summary_rows)
+        write_csv(data_dir / 'embedding_model_grid_coverage.csv', model_grid_rows)
+        write_csv(data_dir / 'embedding_model_grid_missing.csv', model_grid_missing_rows)
+        write_csv(data_dir / 'embedding_model_metric_summary.csv', embedding_metric_rows)
+        write_csv(data_dir / 'embedding_model_metric_ranges.csv', embedding_metric_ranges)
+        write_csv(data_dir / 'embedding_geometry_summary.csv', embedding_geometry_rows)
+        write_csv(
+            data_dir / 'embedding_geometry_family_summary.csv',
+            embedding_geometry_family_rows,
+        )
+        write_csv(
+            data_dir / 'lambda_curve_by_embedding_model.csv',
+            lambda_embedding_rows,
+        )
         if paired_statistics_enabled:
             write_csv(data_dir / 'paired_cell_effect_summary.csv', paired_cell_rows)
             write_csv(data_dir / 'paired_suite_effect_summary.csv', paired_suite_rows)
@@ -506,6 +556,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
             metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_metric_rows=embedding_metric_rows,
+            embedding_metric_range_rows=embedding_metric_ranges,
+            embedding_geometry_rows=embedding_geometry_rows,
             embedding_models=effective_embedding_models,
             require_complete_wording_grid=args.cross_query_chunk_modes,
             warnings=warnings,
@@ -539,6 +592,10 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 warnings=warnings,
                 lambda_curve_rows=lambda_curve_rows,
                 lambda_reference_record=lambda_reference_record,
+                embedding_metric_rows=embedding_metric_rows,
+                embedding_geometry_rows=embedding_geometry_rows,
+                embedding_geometry_family_rows=embedding_geometry_family_rows,
+                lambda_embedding_rows=lambda_embedding_rows,
             )
             figures.extend(
                 write_figures(
@@ -567,6 +624,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     lambda_curve_rows=interaction_rows(lambda_curve_rows),
                 )
             )
+            figures.extend(suite_figures)
             _progress(f'rendered {len(figures)} figures')
         else:
             _progress('skipping figure rendering because --no-plots is set')
@@ -633,6 +691,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'exclude_experiment_regex': args.exclude_experiment_regex,
                     'requested_embedding_models': list(args.embedding_models),
                     'effective_embedding_models': list(effective_embedding_models),
+                    'embedding_model_grid_complete': embedding_model_grid_complete,
+                    'thesis_ready_model_crossing': {
+                        'complete': embedding_model_grid_complete,
+                        'models': len(model_grid_rows),
+                        'missing_cells': len(model_grid_missing_rows),
+                    },
                     'artifact_version': args.artifact_version,
                     'suite_id': args.suite_id,
                     'suite_base_id': args.suite_base_id,
@@ -659,6 +723,9 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'files': [*generated_files, 'manifest.json'],
                     'lambda_selection_metric': LAMBDA_SELECTION_MAXIMIZING_METRIC,
                     'near_optimal_epsilon': args.near_optimal_epsilon,
+                    'representation_audit': representation_audit_manifest_metadata(
+                        suite_selection.suite_ids if suite_selection else ()
+                    ),
                     'bootstrap_replicates': args.bootstrap_replicates,
                     'bootstrap_seed': args.bootstrap_seed,
                     'validity_outputs': {
@@ -738,6 +805,12 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
         data_dir, 'paired_config_suite_effect_summary.csv'
     )
     suite_contrast_rows = _read_report_csv_rows(data_dir, 'suite_matched_contrasts.csv')
+    embedding_metric_rows = _read_report_csv_rows(data_dir, 'embedding_model_metric_summary.csv')
+    embedding_geometry_rows = _read_report_csv_rows(data_dir, 'embedding_geometry_summary.csv')
+    embedding_geometry_family_rows = _read_report_csv_rows(
+        data_dir, 'embedding_geometry_family_summary.csv'
+    )
+    lambda_embedding_rows = _read_report_csv_rows(data_dir, 'lambda_curve_by_embedding_model.csv')
     _progress('rendering report figures from existing CSV artifacts')
     figures = write_figures(
         output_dir=report_dir / 'figures',
@@ -759,6 +832,10 @@ def refresh_report_plots(args: CliArgs) -> ReportOutputs:
         cross_query_chunk_modes=args.cross_query_chunk_modes,
         warnings=warnings,
         lambda_curve_rows=lambda_curve_rows,
+        embedding_metric_rows=embedding_metric_rows,
+        embedding_geometry_rows=embedding_geometry_rows,
+        embedding_geometry_family_rows=embedding_geometry_family_rows,
+        lambda_embedding_rows=lambda_embedding_rows,
     )
     figures.extend(
         write_figures(
@@ -823,9 +900,7 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     comparison_rows = _read_report_csv_rows(data_dir, 'comparison_by_k.csv')
     budget_rows = _read_report_csv_rows(data_dir, 'budget_strategy_summary.csv', required=True)
     lambda_safety_rows = _read_report_csv_rows(data_dir, 'lambda_safety_summary.csv')
-    lambda_curve_rows = _read_report_csv_rows(
-        data_dir, 'lambda_curve_summary.csv', required=False
-    )
+    lambda_curve_rows = _read_report_csv_rows(data_dir, 'lambda_curve_summary.csv', required=False)
     lambda_robustness_rows = _read_report_csv_rows(
         data_dir, 'lambda_robustness_summary.csv', required=False
     )
@@ -837,6 +912,11 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
     )
     paired_suite_rows = _read_report_csv_rows(data_dir, 'paired_suite_effect_summary.csv')
     embedding_summary_rows = _read_report_csv_rows(data_dir, 'embedding_model_summary.csv')
+    embedding_metric_rows = _read_report_csv_rows(data_dir, 'embedding_model_metric_summary.csv')
+    embedding_metric_range_rows = _read_report_csv_rows(
+        data_dir, 'embedding_model_metric_ranges.csv'
+    )
+    embedding_geometry_rows = _read_report_csv_rows(data_dir, 'embedding_geometry_summary.csv')
     warnings_path = report_dir / 'warnings.txt'
     wording_warning_prefixes = (
         'Wording result macros were omitted:',
@@ -865,6 +945,9 @@ def refresh_latex_macros(args: CliArgs) -> ReportOutputs:
             metric_family_budget_summary_rows=metric_family_budget_summary_rows_data,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_metric_rows=embedding_metric_rows,
+            embedding_metric_range_rows=embedding_metric_range_rows,
+            embedding_geometry_rows=embedding_geometry_rows,
             embedding_models=_effective_embedding_models_for_rows(budget_rows),
             require_complete_wording_grid=args.cross_query_chunk_modes,
             warnings=warnings,
@@ -925,6 +1008,40 @@ def _dedupe_warnings(warnings: list[str]) -> list[str]:
         seen.add(warning)
         deduped.append(warning)
     return deduped
+
+
+def _load_report_input_rows(
+    record: ExperimentRecord,
+) -> tuple[dict[str, object], dict[str, object], dict[str, object], tuple[str, ...]]:
+    """Read one experiment's independent inputs for ordered parallel collection."""
+    warnings: list[str] = []
+    return (
+        experiment_manifest_row(record),
+        dataset_distribution_row(record, warnings=warnings),
+        geometry_filter_row(record, warnings=warnings),
+        tuple(warnings),
+    )
+
+
+def _load_selected_and_near_optimal_rows(
+    record: ExperimentRecord,
+    *,
+    lambda_analysis_enabled: bool,
+    near_optimal_epsilon: float,
+) -> tuple[list[dict[str, object]], list[dict[str, object]], tuple[str, ...]]:
+    """Load independent selected-strategy and validation-grid rows concurrently by record."""
+    warnings: list[str] = []
+    selected_rows = selected_strategy_rows(record, warnings=warnings)
+    near_rows = (
+        near_optimal_lambda_rows(
+            record,
+            epsilon=near_optimal_epsilon,
+            warnings=warnings,
+        )
+        if lambda_analysis_enabled
+        else []
+    )
+    return selected_rows, near_rows, tuple(warnings)
 
 
 def _progress(message: str) -> None:
@@ -1061,6 +1178,9 @@ def _write_thesis_outputs_from_rows(
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
     paired_suite_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
+    embedding_metric_rows: Sequence[Mapping[str, object]],
+    embedding_metric_range_rows: Sequence[Mapping[str, object]],
+    embedding_geometry_rows: Sequence[Mapping[str, object]],
     embedding_models: Sequence[str],
     require_complete_wording_grid: bool,
     warnings: list[str],
@@ -1088,6 +1208,9 @@ def _write_thesis_outputs_from_rows(
             metric_family_budget_summary_rows=metric_family_budget_summary_rows,
             paired_suite_rows=paired_suite_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_metric_rows=embedding_metric_rows,
+            embedding_metric_range_rows=embedding_metric_range_rows,
+            embedding_geometry_rows=embedding_geometry_rows,
             embedding_models=embedding_models,
             require_complete_wording_grid=require_complete_wording_grid,
             warnings=warnings,

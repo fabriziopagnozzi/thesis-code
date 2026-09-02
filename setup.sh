@@ -24,6 +24,7 @@ systemd-run --user \
   --same-dir \
   --setenv="EVALUATION_WORKERS=${EVALUATION_WORKERS:-11}" \
   --setenv="QUERY_GEOMETRY_WORKERS=${QUERY_GEOMETRY_WORKERS:-8}" \
+  --setenv="REPORT_IO_WORKERS=${REPORT_IO_WORKERS:-1}" \
   --setenv=HF_TOKEN \
   --property=Type=exec \
   -p MemoryHigh="${MEMORY_HIGH:-59G}" \

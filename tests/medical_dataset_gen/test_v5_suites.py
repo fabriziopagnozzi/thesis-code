@@ -943,6 +943,7 @@ def test_strict_matched_report_rejects_partial_declared_cross(tmp_path: Path) ->
     rows = [
         {
             'Experiment': cell.name,
+            'EmbeddingModel': 'Qwen/Qwen3-Embedding-0.6B',
             'k': 6,
             'IncludeInCausalSummaries': True,
             'Delta_FacLoc_MMR_FCP': 0.0,
@@ -972,6 +973,7 @@ def test_suite_factor_figures_use_declared_factor_columns(tmp_path: Path) -> Non
             'Comparison': 'scale_balanced',
             'AnalysisBlock': 'scale',
             'RunProfile': 'qwen_unbiased_simple',
+            'EmbeddingModel': 'Qwen/Qwen3-Embedding-0.6B',
             'k': 6,
             'Factor_scale': level,
             'FactorOrder_scale': '["small", "medium", "large"]',

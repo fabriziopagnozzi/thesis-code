@@ -407,6 +407,124 @@ def _embedding_model_result_macros(rows: Sequence[Mapping[str, object]]) -> dict
     return macros
 
 
+def _embedding_metric_result_macros(
+    rows: Sequence[Mapping[str, object]],
+    range_rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for row in rows:
+        if row.get('MetricLabel') != 'FCP' or row.get('Scope') != 'overall':
+            continue
+        token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        if token is None:
+            continue
+        prefix = f'ResultEmbedding{token}OverallFcp'
+        macros.update(
+            {
+                f'{prefix}TopKMean': _fixed(_float(row.get('MeanTopK')), digits=3),
+                f'{prefix}MmrMean': _fixed(_float(row.get('MeanMMR')), digits=3),
+                f'{prefix}FacLocMean': _fixed(_float(row.get('MeanFacLoc')), digits=3),
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+            }
+        )
+    for row in range_rows:
+        if row.get('MetricLabel') != 'FCP':
+            continue
+        scope = str(row.get('Scope') or '')
+        if scope == 'overall':
+            prefix = 'ResultFcpAll'
+        elif scope == 'budget':
+            budget_token = _budget_result_token(row.get('ScopeValue'))
+            if budget_token is None:
+                continue
+            prefix = f'ResultFcp{budget_token}'
+        elif scope == 'experiment_family':
+            family_token = _label_token(_family_label(row.get('ScopeValue')))
+            if not family_token:
+                continue
+            prefix = f'ResultFcpFamily{family_token}'
+        elif scope == 'family_budget':
+            family, separator, budget = str(row.get('ScopeValue') or '').partition('|')
+            family_token = _label_token(_family_label(family))
+            budget_token = _budget_result_token(budget)
+            if not separator or not family_token or budget_token is None:
+                continue
+            prefix = f'ResultFcpFamily{family_token}{budget_token}'
+        else:
+            continue
+        macros.update(
+            {
+                f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
+                f'{prefix}FacLocMmrMinModelDelta': _signed(
+                    row.get('MeanDeltaFacLocMMRMinModel'), digits=3
+                ),
+                f'{prefix}FacLocMmrMaxModelDelta': _signed(
+                    row.get('MeanDeltaFacLocMMRMaxModel'), digits=3
+                ),
+            }
+        )
+    return macros
+
+
+def _embedding_geometry_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    stress_values: list[float] = []
+    for row in rows:
+        token = _embedding_model_result_token(row.get('EmbeddingModel'))
+        if token is None:
+            continue
+        prefix = f'ResultEmbedding{token}Geometry'
+        stress = _float(row.get('CoverageStressRate'))
+        if stress is not None:
+            stress_values.append(stress)
+        macros.update(
+            {
+                f'{prefix}CoverageStressMean': _fixed(stress, digits=3),
+                f'{prefix}GoldNearMissMarginMean': _fixed(
+                    _float(row.get('GoldNearMissMargin')), digits=3
+                ),
+                f'{prefix}GoldBackgroundMarginMean': _fixed(
+                    _float(row.get('GoldBackgroundMargin')), digits=3
+                ),
+            }
+        )
+    if stress_values:
+        macros.update(
+            {
+                'ResultGeometryCoverageStressMean': _fixed(
+                    sum(stress_values) / len(stress_values), digits=3
+                ),
+                'ResultGeometryCoverageStressMedian': _fixed(_median(stress_values), digits=3),
+                'ResultGeometryCoverageStressMinModel': _fixed(min(stress_values), digits=3),
+                'ResultGeometryCoverageStressMaxModel': _fixed(max(stress_values), digits=3),
+            }
+        )
+    return macros
+
+
+def _embedding_lambda_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    macros: dict[str, str] = {}
+    for row in rows:
+        if row.get('Scope') != 'embedding_model':
+            continue
+        token = _embedding_model_result_token(row.get('ScopeValue'))
+        strategy = str(row.get('strategy') or '')
+        strategy_token = {'fac_loc': 'FacLoc', 'mmr': 'Mmr'}.get(strategy)
+        if token is None or strategy_token is None:
+            continue
+        prefix = f'ResultEmbedding{token}{strategy_token}Lambda'
+        macros[f'{prefix}MeanSafeFraction'] = _fixed(
+            _float(row.get('MeanSafeLambdaFraction')), digits=3
+        )
+        macros[f'{prefix}AllGridSafeRate'] = _tex_percent(row.get('AllGridSafeRate'))
+        macros[f'{prefix}MinWorstFcpDelta'] = _signed(row.get('MinWorstDeltaStrategyTopK_FCP'))
+    return macros
+
+
 def _embedding_low_budget_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
@@ -606,6 +724,9 @@ def render_thesis_result_macros(
     warnings: list[str] | None = None,
     lambda_curve_rows: Sequence[Mapping[str, object]] = (),
     lambda_robustness_rows: Sequence[Mapping[str, object]] = (),
+    embedding_metric_rows: Sequence[Mapping[str, object]] = (),
+    embedding_metric_range_rows: Sequence[Mapping[str, object]] = (),
+    embedding_geometry_rows: Sequence[Mapping[str, object]] = (),
 ) -> str:
     """Render scalar result macros imported by the thesis text."""
     macros = {
@@ -622,6 +743,9 @@ def render_thesis_result_macros(
             embedding_models=embedding_models,
         ),
         **_embedding_model_result_macros(embedding_summary_rows),
+        **_embedding_metric_result_macros(embedding_metric_rows, embedding_metric_range_rows),
+        **_embedding_geometry_result_macros(embedding_geometry_rows),
+        **_embedding_lambda_result_macros(lambda_robustness_rows),
         **_embedding_low_budget_result_macros(comparison_rows, budget_rows),
         **_embedding_edge_case_result_macros(comparison_rows),
         **_lambda_safety_result_macros(lambda_safety_rows),
@@ -684,6 +808,22 @@ def generate_exp_results_macros(
                 data_dir / 'paired_suite_effect_summary.csv', required=False
             ),
             embedding_summary_rows=_read_rows(data_dir / 'embedding_model_summary.csv'),
+            embedding_metric_rows=_read_rows(
+                data_dir / 'embedding_model_metric_summary.csv', required=False
+            ),
+            embedding_metric_range_rows=_read_rows(
+                data_dir / 'embedding_model_metric_ranges.csv', required=False
+            ),
+            embedding_geometry_rows=_read_rows(
+                data_dir / 'embedding_geometry_summary.csv', required=False
+            ),
+            embedding_models=tuple(
+                str(row.get('EmbeddingModel') or '')
+                for row in _read_rows(
+                    data_dir / 'embedding_model_grid_coverage.csv', required=False
+                )
+                if row.get('EmbeddingModel')
+            ),
             require_complete_wording_grid=True,
             lambda_curve_rows=_read_rows(data_dir / 'lambda_curve_summary.csv', required=False),
             lambda_robustness_rows=_read_rows(

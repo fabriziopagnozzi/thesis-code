@@ -528,10 +528,11 @@ class ValidationResult:
 
 @dataclass(frozen=True)
 class LogicalSuite:
-    """A report-facing suite plus the physical root for every cell."""
+    """A report-facing suite plus prevalidated physical roots for every cell."""
 
     manifest: SuiteManifest
     roots_by_cell_id: dict[str, Path]
+    data_roots_by_cell_id: dict[str, Path]
 
 
 @dataclass(frozen=True)
@@ -813,12 +814,27 @@ def resolve_derived_source_cell(
     source_root, source_manifest = load_pinned_source_manifest(
         results_dir=results_dir, source=source
     )
+    source_cell = _validated_derived_source_cell(
+        cell=cell,
+        source=source,
+        source_cells={candidate.cell_id: candidate for candidate in source_manifest.cells},
+    )
+    _validate_source_generation_artifacts(source_root=source_root, source_cell=source_cell)
+    return source_root, source_cell
+
+
+def _validated_derived_source_cell(
+    *,
+    cell: SuiteManifestCell,
+    source: DerivedSuiteSource,
+    source_cells: Mapping[str, SuiteManifestCell],
+) -> SuiteManifestCell:
+    """Validate one derived reference against manifests already loaded by its caller."""
     if (
         cell.source_suite_id != source.suite_id
         or cell.source_manifest_sha256 != source.manifest_sha256
     ):
         raise ValueError(f'{cell.cell_id}: source reference disagrees with derived suite contract')
-    source_cells = {candidate.cell_id: candidate for candidate in source_manifest.cells}
     source_cell_id = cast(str, cell.source_cell_id)
     source_cell = source_cells.get(source_cell_id)
     if source_cell is None:
@@ -831,8 +847,7 @@ def resolve_derived_source_cell(
         raise ValueError(f'{cell.cell_id}: source dataset hash changed')
     if cell.dataset_sha256 != cell.source_dataset_sha256:
         raise ValueError(f'{cell.cell_id}: derived dataset hash differs from its source')
-    _validate_source_generation_artifacts(source_root=source_root, source_cell=source_cell)
-    return source_root, source_cell
+    return source_cell
 
 
 def load_logical_suite(results_dir: Path, suite_id: str) -> LogicalSuite:
@@ -843,6 +858,9 @@ def load_logical_suite(results_dir: Path, suite_id: str) -> LogicalSuite:
         return LogicalSuite(
             manifest=manifest,
             roots_by_cell_id={cell.cell_id: root for cell in manifest.cells},
+            data_roots_by_cell_id={
+                cell.cell_id: _safe_relative(root, cell.data_root) for cell in manifest.cells
+            },
         )
     assert manifest.source is not None
     source_root, source_manifest = load_pinned_source_manifest(
@@ -855,8 +873,16 @@ def load_logical_suite(results_dir: Path, suite_id: str) -> LogicalSuite:
     if any(cell.status != 'completed' for cell in source_cells):
         incomplete = [cell.cell_id for cell in source_cells if cell.status != 'completed']
         raise ValueError(f'{suite_id}: incomplete source cells: {incomplete[:8]}')
+    source_cells_by_id = {cell.cell_id: cell for cell in source_manifest.cells}
+    resolved_source_cells: dict[str, SuiteManifestCell] = {}
     for cell in manifest.cells:
-        resolve_derived_source_cell(root=root, cell=cell)
+        source_cell = _validated_derived_source_cell(
+            cell=cell,
+            source=manifest.source,
+            source_cells=source_cells_by_id,
+        )
+        _validate_source_generation_artifacts(source_root=source_root, source_cell=source_cell)
+        resolved_source_cells[cell.cell_id] = source_cell
     all_cells = source_cells + list(manifest.cells)
     cell_ids = [cell.cell_id for cell in all_cells]
     if len(cell_ids) != len(set(cell_ids)):
@@ -878,6 +904,19 @@ def load_logical_suite(results_dir: Path, suite_id: str) -> LogicalSuite:
         roots_by_cell_id={
             **{cell.cell_id: source_root for cell in source_cells},
             **{cell.cell_id: root for cell in manifest.cells},
+        },
+        data_roots_by_cell_id={
+            **{
+                cell.cell_id: _safe_relative(source_root, cell.data_root)
+                for cell in source_cells
+            },
+            **{
+                cell.cell_id: _safe_relative(
+                    source_root,
+                    resolved_source_cells[cell.cell_id].data_root,
+                )
+                for cell in manifest.cells
+            },
         },
     )
 
@@ -907,6 +946,9 @@ def load_logical_suite_family(
     cells = list(base_manifest.cells)
     profiles = list(base_manifest.run_profiles)
     roots_by_cell_id = dict(base_logical.roots_by_cell_id)
+    data_roots_by_cell_id = dict(base_logical.data_roots_by_cell_id)
+    base_cells_by_id = {cell.cell_id: cell for cell in base_manifest.cells}
+    validated_source_artifact_cells: set[str] = set()
     seen_derived_suite_ids: set[str] = set()
 
     for derived_suite_id in derived_suite_ids:
@@ -930,8 +972,22 @@ def load_logical_suite_family(
             raise ValueError(
                 f'{derived_suite_id}: source manifest hash does not match {base_suite_id}'
             )
-        derived_logical = load_logical_suite(results_dir, derived_suite_id)
+        derived_root = suite_root(results_dir, derived_suite_id)
         local_cells = list(derived_manifest.cells)
+        resolved_source_cells: dict[str, SuiteManifestCell] = {}
+        for cell in local_cells:
+            source_cell = _validated_derived_source_cell(
+                cell=cell,
+                source=source,
+                source_cells=base_cells_by_id,
+            )
+            if source_cell.cell_id not in validated_source_artifact_cells:
+                _validate_source_generation_artifacts(
+                    source_root=base_root,
+                    source_cell=source_cell,
+                )
+                validated_source_artifact_cells.add(source_cell.cell_id)
+            resolved_source_cells[cell.cell_id] = source_cell
         duplicate_cells = sorted(base_cell_ids.intersection(cell.cell_id for cell in local_cells))
         if duplicate_cells:
             raise ValueError(
@@ -950,8 +1006,15 @@ def load_logical_suite_family(
             )
         cells.extend(local_cells)
         profiles.extend(derived_manifest.run_profiles)
-        roots_by_cell_id.update(
-            {cell.cell_id: derived_logical.roots_by_cell_id[cell.cell_id] for cell in local_cells}
+        roots_by_cell_id.update({cell.cell_id: derived_root for cell in local_cells})
+        data_roots_by_cell_id.update(
+            {
+                cell.cell_id: _safe_relative(
+                    base_root,
+                    resolved_source_cells[cell.cell_id].data_root,
+                )
+                for cell in local_cells
+            }
         )
         base_cell_ids.update(cell.cell_id for cell in local_cells)
         base_profile_ids.update(profile.run_profile_id for profile in derived_manifest.run_profiles)
@@ -963,7 +1026,11 @@ def load_logical_suite_family(
             'evaluations': cells,
         }
     )
-    return LogicalSuite(manifest=aggregate_manifest, roots_by_cell_id=roots_by_cell_id)
+    return LogicalSuite(
+        manifest=aggregate_manifest,
+        roots_by_cell_id=roots_by_cell_id,
+        data_roots_by_cell_id=data_roots_by_cell_id,
+    )
 
 
 def validate_suite(spec: SuiteSpec) -> ValidationResult:

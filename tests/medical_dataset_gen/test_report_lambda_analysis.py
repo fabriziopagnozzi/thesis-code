@@ -12,11 +12,29 @@ from experiments.medical_dataset_gen.reports.latex_macros import (
     _lambda_robustness_result_macros,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
+from experiments.medical_dataset_gen.reports.plot_diagnostics import _save_plot_with_vector_copy
 from experiments.medical_dataset_gen.reports.summaries import (
     lambda_curve_summary_rows,
     lambda_robustness_summary_rows,
 )
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
+
+
+class _FakeFigure:
+    def savefig(self, path: Path, **_kwargs: object) -> None:
+        path.touch()
+
+
+def test_lambda_plots_write_png_and_vector_pdf(tmp_path: Path) -> None:
+    written = _save_plot_with_vector_copy(
+        figure=_FakeFigure(),
+        output_dir=tmp_path,
+        stem='lambda_summary',
+        plot_format='png',
+    )
+
+    assert [path.name for path in written] == ['lambda_summary.png', 'lambda_summary.pdf']
+    assert all(path.is_file() for path in written)
 
 
 def _grid_row(

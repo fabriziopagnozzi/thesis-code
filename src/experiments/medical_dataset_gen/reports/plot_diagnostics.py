@@ -26,6 +26,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
 )
 from experiments.medical_dataset_gen.reports.models import PlotFormat
 from experiments.medical_dataset_gen.reports.plot_rendering import set_axis_title
+from experiments.medical_dataset_gen.reports.report_config import OBJECTIVE_COLORS
 
 PRIMARY_GOLD_ROLE_STACKS: tuple[tuple[str, str, str], ...] = (
     ('Dominant primary gold', 'DominantPrimaryGoldCountMean', '#0B5D6E'),
@@ -313,28 +314,28 @@ def _color_tick_labels_by_family(*, ax: Any, rows: Sequence[Mapping[str, object]
         tick_label.set_color(family_color_for_row(row))
 
 
-def plot_geometry_pass_rate(
+def plot_geometry_coverage_stress_rate(
     *,
     plt: object,
     rows: Sequence[Mapping[str, object]],
     output_dir: Path,
     plot_format: PlotFormat,
 ) -> list[Path]:
-    plot_rows = _geometry_pass_rate_rows(rows)
+    plot_rows = _geometry_coverage_stress_rows(rows)
     if not plot_rows:
         return []
     labels = [
         f'{experiment_plot_label(row)}/{short_model_label(str(row.get("EmbeddingModel")))}'
         for row in plot_rows
     ]
-    values = [float_or_none(row.get('GeometryPassRate')) or 0.0 for row in plot_rows]
+    values = [float_or_none(row.get('CoverageStressRate')) or 0.0 for row in plot_rows]
     colors = [family_color_for_row(row) for row in plot_rows]
     fig_height = max(5.0, 0.28 * len(labels) + 1.6)
     fig, ax = plt.subplots(figsize=(8.5, fig_height))  # type: ignore[attr-defined]
     try:
         ax.barh(range(len(labels)), values, color=colors)
-        set_axis_title(axis=ax, title='Geometry filter pass rate by experiment and embedding')
-        ax.set_xlabel('Pass rate')
+        set_axis_title(axis=ax, title='Coverage-stress rate by experiment and embedding')
+        ax.set_xlabel('Coverage-stress rate')
         ax.set_yticks(range(len(labels)))
         ax.set_yticklabels(labels)
         ax.invert_yaxis()
@@ -351,16 +352,17 @@ def plot_geometry_pass_rate(
         plt.close(fig)  # type: ignore[attr-defined]
 
 
-def _geometry_pass_rate_rows(
+def _geometry_coverage_stress_rows(
     rows: Sequence[Mapping[str, object]],
 ) -> list[Mapping[str, object]]:
     return _family_grouped_rows(
         [
             row
             for row in rows
-            if float_or_none(row.get('GeometryPassRate')) is not None and row.get('EmbeddingModel')
+            if float_or_none(row.get('CoverageStressRate')) is not None
+            and row.get('EmbeddingModel')
         ],
-        'GeometryPassRate',
+        'CoverageStressRate',
     )
 
 
@@ -379,7 +381,13 @@ def plot_lambda_stability(
     stds = [float_or_none(row.get('selected_lambda_norm_std')) or 0.0 for row in plot_rows]
     fig, ax = plt.subplots(figsize=(6.5, 4.5))  # type: ignore[attr-defined]
     try:
-        ax.bar(labels, means, yerr=stds, color=['#C47A3A', '#287C8E'], capsize=5)
+        ax.bar(
+            labels,
+            means,
+            yerr=stds,
+            color=[OBJECTIVE_COLORS['mmr'], OBJECTIVE_COLORS['fac_loc']],
+            capsize=5,
+        )
         set_axis_title(axis=ax, title='Selected lambda stability')
         ax.set_ylabel('Normalized lambda mean ± std')
         ax.set_ylim(0, min(1.0, max(means + stds + [0.1]) + 0.15))
@@ -429,9 +437,12 @@ def plot_lambda_safety_worst_delta(
         ax.set_ylabel('Worst FacetCoveragePurity@k delta over lambda')
         ax.grid(axis='y', alpha=0.25)
         fig.tight_layout()
-        path = output_dir / f'lambda_safety_worst_delta_vs_topk.{plot_format}'
-        fig.savefig(path, dpi=180)
-        return [path]
+        return _save_plot_with_vector_copy(
+            figure=fig,
+            output_dir=output_dir,
+            stem='lambda_safety_worst_delta_vs_topk',
+            plot_format=plot_format,
+        )
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
 
@@ -448,27 +459,18 @@ def plot_lambda_delta_curve(
     axes = list(axes)
     try:
         has_data = False
-        for (strategy), color in (('mmr', '#1F77B4'), ('fac_loc', '#D62728')):
+        for strategy in ('mmr', 'fac_loc'):
+            color = OBJECTIVE_COLORS[strategy]
             typed_strategy = cast(StrategyName, strategy)
             summary = [row for row in curve_rows if row.get('strategy') == strategy]
             if summary:
                 xs = [float_or_none(row.get('lambda_norm')) for row in summary]
-                means = [
-                    float_or_none(row.get('MeanDeltaStrategyTopK_FCP')) for row in summary
-                ]
-                lowers = [
-                    float_or_none(row.get('CellQ25DeltaStrategyTopK_FCP')) for row in summary
-                ]
-                uppers = [
-                    float_or_none(row.get('CellQ75DeltaStrategyTopK_FCP')) for row in summary
-                ]
-                safe = [
-                    float_or_none(row.get('CellSafeLambdaFraction')) for row in summary
-                ]
+                means = [float_or_none(row.get('MeanDeltaStrategyTopK_FCP')) for row in summary]
+                lowers = [float_or_none(row.get('CellQ25DeltaStrategyTopK_FCP')) for row in summary]
+                uppers = [float_or_none(row.get('CellQ75DeltaStrategyTopK_FCP')) for row in summary]
+                safe = [float_or_none(row.get('CellSafeLambdaFraction')) for row in summary]
                 distractor = [
-                    float_or_none(
-                        row.get('MeanDeltaStrategyTopK_DistractorRate')
-                    )
+                    float_or_none(row.get('MeanDeltaStrategyTopK_DistractorRate'))
                     for row in summary
                 ]
             else:
@@ -559,9 +561,12 @@ def plot_lambda_delta_curve(
         if handles:
             axes[0].legend(frameon=False)
         fig.tight_layout()
-        path = output_dir / f'lambda_fcp_delta_vs_topk_by_lambda.{plot_format}'
-        fig.savefig(path, dpi=180)
-        return [path]
+        return _save_plot_with_vector_copy(
+            figure=fig,
+            output_dir=output_dir,
+            stem='lambda_fcp_delta_vs_topk_by_lambda',
+            plot_format=plot_format,
+        )
     finally:
         plt.close(fig)  # type: ignore[attr-defined]
 
@@ -593,6 +598,24 @@ def _binned_lambda_delta_stats(
             }
         )
     return out
+
+
+def _save_plot_with_vector_copy(
+    *,
+    figure: object,
+    output_dir: Path,
+    stem: str,
+    plot_format: PlotFormat,
+) -> list[Path]:
+    """Save the requested report image and a vector twin when rendering PNG."""
+    path = output_dir / f'{stem}.{plot_format}'
+    figure.savefig(path, dpi=180, bbox_inches='tight')  # type: ignore[attr-defined]
+    paths = [path]
+    if plot_format == 'png':
+        pdf_path = output_dir / f'{stem}.pdf'
+        figure.savefig(pdf_path, bbox_inches='tight')  # type: ignore[attr-defined]
+        paths.append(pdf_path)
+    return paths
 
 
 def plot_near_optimal_width(

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import statistics
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
@@ -71,6 +71,20 @@ _TOPOLOGY_FIGURE_SPECS: tuple[tuple[str, str, str, str, str | None], ...] = (
         'background_topology',
         'dominance_level',
     ),
+    (
+        'sparse_near_miss_interaction_by_objective',
+        'Sparse support x near-miss-load response',
+        'interaction_sparse_near_miss',
+        'near_miss_mass',
+        'sparse_level',
+    ),
+)
+
+RESULTS_SUITE_FIGURE_STEMS: tuple[str, ...] = (
+    'scale_by_dataset_size',
+    'background_topology_by_objective',
+    'dominance_background_interaction_by_objective',
+    'sparse_near_miss_interaction_by_objective',
 )
 
 
@@ -149,8 +163,8 @@ def suite_distribution_and_family_rows(
     have more variants.
     """
     causal = [row for row in comparison_rows if row.get('IncludeInCausalSummaries') is True]
-    by_distribution: dict[tuple[str, str, str, str, int], list[Mapping[str, object]]] = defaultdict(
-        list
+    by_distribution: dict[tuple[str, str, str, str, str, int], list[Mapping[str, object]]] = (
+        defaultdict(list)
     )
     for row in causal:
         k = row.get('k')
@@ -162,17 +176,19 @@ def suite_distribution_and_family_rows(
                 block,
                 str(row.get('Distribution') or 'unknown'),
                 str(row.get('ArtifactOrigin') or 'unknown'),
+                str(row.get('EmbeddingModel') or 'unknown'),
                 k,
             )
             by_distribution[key].append(row)
     distribution_rows: list[dict[str, object]] = []
-    for (family, block, distribution, origin, k), rows in sorted(by_distribution.items()):
+    for (family, block, distribution, origin, model, k), rows in sorted(by_distribution.items()):
         out: dict[str, object] = {
             'ExperimentFamily': family,
             'ExperimentFamilyLabel': rows[0].get('ExperimentFamilyLabel'),
             'AnalysisBlock': block,
             'Distribution': distribution,
             'ArtifactOrigin': origin,
+            'EmbeddingModel': model,
             'k': k,
             'Cells': len(rows),
             'IncludeInFamilySummary': all(
@@ -185,23 +201,25 @@ def suite_distribution_and_family_rows(
     # Equal-weight distributions within a block.  The distribution report
     # remains complete (including scale and interactions); primary family
     # summaries are restricted below so those dense blocks cannot dominate.
-    by_block: dict[tuple[str, str, str, int], list[dict[str, object]]] = defaultdict(list)
+    by_block: dict[tuple[str, str, str, str, int], list[dict[str, object]]] = defaultdict(list)
     for row in distribution_rows:
         by_block[
             (
                 str(row['ExperimentFamily']),
                 str(row['AnalysisBlock']),
                 str(row['ArtifactOrigin']),
+                str(row['EmbeddingModel']),
                 int(cast(int, row['k'])),
             )
         ].append(row)
     block_rows: list[dict[str, object]] = []
-    for (family, block, origin, k), rows in sorted(by_block.items()):
+    for (family, block, origin, model, k), rows in sorted(by_block.items()):
         out: dict[str, object] = {
             'ExperimentFamily': family,
             'ExperimentFamilyLabel': rows[0].get('ExperimentFamilyLabel'),
             'AnalysisBlock': block,
             'ArtifactOrigin': origin,
+            'EmbeddingModel': model,
             'k': k,
             'Distributions': len(rows),
             'Aggregation': 'equal_distribution_weight',
@@ -211,7 +229,7 @@ def suite_distribution_and_family_rows(
         }
         _add_means(out, rows)
         block_rows.append(out)
-    by_family: dict[tuple[str, str, int], list[dict[str, object]]] = defaultdict(list)
+    by_family: dict[tuple[str, str, str, int], list[dict[str, object]]] = defaultdict(list)
     for row in block_rows:
         if row.get('AnalysisBlock') == 'scale' or row.get('IncludeInFamilySummary') is not True:
             continue
@@ -219,15 +237,17 @@ def suite_distribution_and_family_rows(
             (
                 str(row['ExperimentFamily']),
                 str(row['ArtifactOrigin']),
+                str(row['EmbeddingModel']),
                 int(cast(int, row['k'])),
             )
         ].append(row)
     family_rows: list[dict[str, object]] = []
-    for (family, origin, k), rows in sorted(by_family.items()):
+    for (family, origin, model, k), rows in sorted(by_family.items()):
         out = {
             'ExperimentFamily': family,
             'ExperimentFamilyLabel': rows[0].get('ExperimentFamilyLabel'),
             'ArtifactOrigin': origin,
+            'EmbeddingModel': model,
             'k': k,
             'AnalysisBlocks': len(rows),
             'Aggregation': 'equal_analysis_block_weight',
@@ -296,6 +316,7 @@ def matched_contrast_rows(
                     'Distribution': cell.distribution_id,
                     'RunProfile': cell.run_profile_id,
                     'ArtifactOrigin': cell.origin,
+                    'EmbeddingModel': row.get('EmbeddingModel'),
                     'k': k,
                     'TuningPolicy': str(row.get('LambdaPolicy') or 'cell_tuned'),
                 }
@@ -367,6 +388,7 @@ def analysis_series_rows(
                 'Distribution': cell.distribution_id,
                 'RunProfile': cell.run_profile_id,
                 'ArtifactOrigin': cell.origin,
+                'EmbeddingModel': row.get('EmbeddingModel'),
                 'k': point.k,
                 'TuningPolicy': str(row.get('LambdaPolicy') or 'cell_tuned'),
             }
@@ -414,6 +436,7 @@ def factor_interaction_rows(
                         'AnalysisBlock': group.analysis_block,
                         'InteractionType': 'response_surface',
                         'RunProfile': profile,
+                        'EmbeddingModel': rows_by_name[cell.name][k].get('EmbeddingModel'),
                         'k': k,
                         f'Factor_{factors[0]}': key[0],
                         f'Factor_{factors[1]}': key[1],
@@ -438,6 +461,14 @@ def factor_interaction_rows(
                     'AnalysisBlock': group.analysis_block,
                     'InteractionType': 'difference_in_differences',
                     'RunProfile': profile,
+                    'EmbeddingModel': next(
+                        (
+                            value.get('EmbeddingModel')
+                            for value in values.values()
+                            if value.get('EmbeddingModel')
+                        ),
+                        None,
+                    ),
                     'k': k,
                     f'Factor_{factors[0]}_low': levels_a[0],
                     f'Factor_{factors[0]}_high': levels_a[1],
@@ -467,7 +498,7 @@ def factor_interaction_rows(
 
 def crossing_rows(contrast_rows: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
     """Bracket zero and practical-margin crossings on declared factor orders."""
-    grouped: dict[tuple[str, str, int, str], list[Mapping[str, object]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, int, str], list[Mapping[str, object]]] = defaultdict(list)
     for row in contrast_rows:
         factor_columns = sorted(key for key in row if key.startswith('Factor_'))
         if len(factor_columns) != 1:
@@ -476,12 +507,13 @@ def crossing_rows(contrast_rows: Sequence[Mapping[str, object]]) -> list[dict[st
             (
                 str(row['Comparison']),
                 str(row['RunProfile']),
+                str(row.get('EmbeddingModel') or 'unknown'),
                 int(cast(int, row['k'])),
                 factor_columns[0],
             )
         ].append(row)
     output: list[dict[str, object]] = []
-    for (comparison, profile, k, factor), rows in grouped.items():
+    for (comparison, profile, model, k, factor), rows in grouped.items():
         order_column = f'FactorOrder_{factor.removeprefix("Factor_")}'
         raw_order = next((row.get(order_column) for row in rows if row.get(order_column)), '[]')
         try:
@@ -501,6 +533,7 @@ def crossing_rows(contrast_rows: Sequence[Mapping[str, object]]) -> list[dict[st
                             {
                                 'Comparison': comparison,
                                 'RunProfile': profile,
+                                'EmbeddingModel': model,
                                 'k': k,
                                 'Factor': factor.removeprefix('Factor_'),
                                 'Metric': metric.removeprefix('Delta_FacLoc_MMR_'),
@@ -515,7 +548,10 @@ def crossing_rows(contrast_rows: Sequence[Mapping[str, object]]) -> list[dict[st
 
 
 def write_suite_factor_figures(
-    *, output_dir: Path, contrast_rows: Sequence[Mapping[str, object]]
+    *,
+    output_dir: Path,
+    contrast_rows: Sequence[Mapping[str, object]],
+    stems: Collection[str] | None = None,
 ) -> list[Path]:
     """Render compact, manifest-factor-driven scale and topology response plots."""
     from matplotlib import pyplot as plt
@@ -529,19 +565,23 @@ def write_suite_factor_figures(
     # A raw line for every profile x k x comparison produces over one hundred
     # traces.  These figures instead show equal-weight means over those
     # evaluation conditions, retaining the declared manipulation as the line.
-    written.extend(
-        _write_aggregated_factor_figure(
-            plt=plt,
-            output_dir=figure_dir,
-            rows=contrast_rows,
-            stem='scale_by_dataset_size',
-            title='Scale response by candidate-pool size',
-            comparison_ids=tuple(_SUITE_COMPARISON_LABELS),
-            factor='scale',
-            line_key='comparison',
+    selected_stems = set(stems) if stems is not None else None
+    if selected_stems is None or 'scale_by_dataset_size' in selected_stems:
+        written.extend(
+            _write_aggregated_factor_figure(
+                plt=plt,
+                output_dir=figure_dir,
+                rows=contrast_rows,
+                stem='scale_by_dataset_size',
+                title='Scale response by candidate-pool size',
+                comparison_ids=tuple(_SUITE_COMPARISON_LABELS),
+                factor='scale',
+                line_key='comparison',
+            )
         )
-    )
     for stem, title, comparison_id, factor, line_factor in _TOPOLOGY_FIGURE_SPECS:
+        if selected_stems is not None and stem not in selected_stems:
+            continue
         written.extend(
             _write_aggregated_factor_figure(
                 plt=plt,
@@ -583,35 +623,56 @@ def _write_aggregated_factor_figure(
     levels = _ordered_factor_levels(selected_rows, factor=factor)
     if not levels:
         return []
-    line_values: dict[str, dict[str, dict[str, list[float]]]] = defaultdict(
-        lambda: defaultdict(lambda: defaultdict(list))
+    line_values: dict[str, dict[str, dict[str, dict[str, list[float]]]]] = defaultdict(
+        lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     )
     for row in selected_rows:
         line_label = _suite_line_label(row=row, line_key=line_key)
         level = str(row[factor_column])
+        model = str(row.get('EmbeddingModel') or 'unknown')
         for metric in _PRIMARY_METRICS:
             value = _number(row.get(metric))
             if value is not None:
-                line_values[line_label][metric][level].append(value)
+                line_values[line_label][metric][level][model].append(value)
 
     figure, axes = plt.subplots(2, 3, figsize=(15, 8))
     try:
         for metric, axis in zip(_PRIMARY_METRICS, axes.flat, strict=True):
             for line_label in sorted(line_values):
-                means = [
-                    statistics.fmean(values)
-                    if (values := line_values[line_label][metric].get(level, []))
-                    else None
+                model_means = [
+                    [
+                        statistics.fmean(values)
+                        for values in line_values[line_label][metric].get(level, {}).values()
+                        if values
+                    ]
                     for level in levels
                 ]
+                means = [statistics.fmean(values) if values else None for values in model_means]
                 if any(value is not None for value in means):
-                    axis.plot(levels, means, marker='o', linewidth=2.0, label=line_label)
+                    positions = list(range(len(levels)))
+                    line = axis.plot(
+                        positions,
+                        means,
+                        marker='o',
+                        linewidth=2.0,
+                        label=line_label,
+                    )[0]
+                    if all(values for values in model_means):
+                        axis.fill_between(
+                            positions,
+                            [min(values) for values in model_means],
+                            [max(values) for values in model_means],
+                            color=line.get_color(),
+                            alpha=0.14,
+                            linewidth=0,
+                        )
             axis.axhline(0.0, color='#666666', linewidth=0.8, zorder=0)
             axis.axhline(0.05, color='#999999', linewidth=0.5, linestyle=':', zorder=0)
             axis.axhline(-0.05, color='#999999', linewidth=0.5, linestyle=':', zorder=0)
             set_axis_title(axis=axis, title=_PRIMARY_METRIC_LABELS[metric])
             axis.set_xlabel(_factor_axis_label(factor))
             axis.set_ylabel('FacLoc - MMR')
+            axis.set_xticks(range(len(levels)), [_display_factor_level(level) for level in levels])
             axis.grid(axis='y', alpha=0.2)
 
         handles, labels = axes.flat[0].get_legend_handles_labels()
@@ -727,7 +788,12 @@ def _factor_for_cell(group: ComparisonGroup, cell: SuiteManifestCell, factor: st
 def _add_means(out: dict[str, object], rows: Sequence[Mapping[str, object]]) -> None:
     for metric in _PRIMARY_METRICS:
         values = [
-            float(value) for row in rows if isinstance((value := row.get(metric)), int | float)
+            float(value)
+            for row in rows
+            if isinstance(
+                (value := row.get(metric, row.get(f'{metric}_mean'))),
+                int | float,
+            )
         ]
         if values:
             out[f'{metric}_mean'] = statistics.fmean(values)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import statistics
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
 
@@ -19,6 +20,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ROLE_COUNT_COLUMNS,
     StrategyName,
 )
+from experiments.medical_dataset_gen.reports.geometry_coverage import summarize_geometry_coverage
 from experiments.medical_dataset_gen.reports.helpers import (
     base_experiment_row,
     distribution_category,
@@ -38,6 +40,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     title_token,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
+from experiments.medical_dataset_gen.reports.report_io import report_io_workers
 from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 
@@ -246,6 +249,23 @@ def geometry_filter_row(
 
     columns = set(geometry.columns)
     base['GeometryQueries'] = geometry.height
+    try:
+        coverage = summarize_geometry_coverage(
+            geometry,
+            source=str(geometry_path),
+        )
+    except ValueError as exc:
+        warnings.append(f'{record.name}: coverage-stress audit unavailable ({exc})')
+    else:
+        base.update(
+            {
+                'CoverageStressQueries': coverage.query_count,
+                'CoverageStressPassQueries': coverage.coverage_stress_pass_count,
+                'CoverageStressRate': coverage.coverage_stress_rate,
+                'GoldNearMissMargin': coverage.gold_near_miss_margin,
+                'GoldBackgroundMargin': coverage.gold_background_margin,
+            }
+        )
     if 'passes_filter' in columns:
         pass_count = int(geometry.select(pl.col('passes_filter').fill_null(False).sum()).item())
         base['GeometryPassQueries'] = pass_count
@@ -398,7 +418,9 @@ def near_optimal_lambda_rows(
     # must never be used to tune or summarize lambda robustness.
     grid_path = _lambda_validation_grid_stats_path(record)
     if not grid_path.is_file():
-        warnings.append(f'{record.name}: near-optimal lambda width skipped; validation grid missing')
+        warnings.append(
+            f'{record.name}: near-optimal lambda width skipped; validation grid missing'
+        )
         return []
     try:
         stats = pl.read_parquet(grid_path)
@@ -455,6 +477,27 @@ def near_optimal_lambda_rows(
 
 
 def lambda_grid_fcp_delta_rows(
+    records: Sequence[ExperimentRecord],
+    *,
+    warnings: list[str],
+) -> list[dict[str, object]]:
+    with ThreadPoolExecutor(max_workers=report_io_workers(len(records))) as executor:
+        loaded = executor.map(_lambda_grid_rows_for_record, records)
+        rows: list[dict[str, object]] = []
+        for record_rows, record_warnings in loaded:
+            rows.extend(record_rows)
+            warnings.extend(record_warnings)
+    return rows
+
+
+def _lambda_grid_rows_for_record(
+    record: ExperimentRecord,
+) -> tuple[list[dict[str, object]], tuple[str, ...]]:
+    warnings: list[str] = []
+    return _lambda_grid_fcp_delta_rows_serial((record,), warnings=warnings), tuple(warnings)
+
+
+def _lambda_grid_fcp_delta_rows_serial(
     records: Sequence[ExperimentRecord],
     *,
     warnings: list[str],

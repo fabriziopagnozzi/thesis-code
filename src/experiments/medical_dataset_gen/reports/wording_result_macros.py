@@ -16,8 +16,8 @@ from experiments.medical_dataset_gen.reports.helpers import (
 )
 from experiments.medical_dataset_gen.reports.report_config import (
     LOW_BUDGET_K,
-    PREFERRED_EMBEDDING_MODEL_ORDER,
     REPORT_METRIC_SPECS,
+    embedding_model_wording_macro_token,
 )
 
 type ReportRow = Mapping[str, object]
@@ -37,7 +37,6 @@ FACTOR_CONTRASTS: tuple[FactorContrast, ...] = (
     FactorContrast('FocusMode', 'list', 'natural'),
     FactorContrast('ChunkTextMode', 'simple', 'hardened'),
 )
-_PREFERRED_MODEL_TOKENS = dict(zip(PREFERRED_EMBEDDING_MODEL_ORDER, ('Bge', 'Qwen'), strict=True))
 # Crossed interaction cells answer a separate factorial question. They are
 # reported independently and do not belong to the wording-comparison grid.
 WORDING_EXPERIMENT_FAMILIES = tuple(
@@ -60,7 +59,7 @@ def _effective_embedding_models(
 
 
 def _model_token(model: str) -> str:
-    token = _PREFERRED_MODEL_TOKENS.get(model)
+    token = embedding_model_wording_macro_token(model)
     if token is not None:
         return token
     return _macro_token(model.rsplit('/', 1)[-1] or model)
@@ -417,12 +416,8 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
             metric = spec.metric_label
             metric_token = _metric_macro_token(spec.metric_label)
             prefix = f'ResultWordingLow{scope_token}{metric_token}'
-            mmr_deltas = [
-                _numeric(row, f'Delta_FacLoc_MMR_{metric}') for row in scope_rows
-            ]
-            topk_deltas = [
-                _numeric(row, f'Delta_FacLoc_TopK_{metric}') for row in scope_rows
-            ]
+            mmr_deltas = [_numeric(row, f'Delta_FacLoc_MMR_{metric}') for row in scope_rows]
+            topk_deltas = [_numeric(row, f'Delta_FacLoc_TopK_{metric}') for row in scope_rows]
             macros.update(
                 {
                     f'{prefix}MmrMean': _fixed(
@@ -436,10 +431,7 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
                     # The MMR comparison uses the pre-registered practical margin,
                     # whereas the top-k baseline uses a strictly positive improvement.
                     f'{prefix}FacLocMmrWinRate': _tex_percent(
-                        sum(
-                            delta > practical_effect_threshold(metric)
-                            for delta in mmr_deltas
-                        )
+                        sum(delta > practical_effect_threshold(metric) for delta in mmr_deltas)
                         / len(mmr_deltas)
                     ),
                     f'{prefix}TopKMean': _fixed(
@@ -484,10 +476,13 @@ def _embedding_contrast_macros(
         model_token = _model_token(str(row.get('EmbeddingModel') or ''))
         grouped_rows.setdefault((config_token, model_token), []).append(row)
     for (config_token, model_token), matching_rows in grouped_rows.items():
-        macro_name = (
-            f'ResultWordingLowConfig{config_token}Embedding{model_token}FacLocMmrFcpMeanDelta'
+        prefix = f'ResultWordingLowConfig{config_token}Embedding{model_token}'
+        macros[f'{prefix}FacLocMmrFcpMeanDelta'] = _signed(
+            _column_mean(matching_rows, 'Delta_FacLoc_MMR_FCP'), digits=3
         )
-        macros[macro_name] = _signed(_column_mean(matching_rows, 'Delta_FacLoc_MMR_FCP'), digits=3)
+        macros[f'{prefix}FacLocTopKFcpMeanDelta'] = _signed(
+            _column_mean(matching_rows, 'Delta_FacLoc_TopK_FCP'), digits=3
+        )
     return macros
 
 

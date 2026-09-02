@@ -238,7 +238,7 @@ For a thesis report that combines the native suite with every materialized deriv
 ```bash
 uv run task report \
   --suite-base thesis_v5 \
-  --results-dir /DATA/pagnozzi/thesis/medical_dataset_gen/_results \
+  --results-dir /mnt/d/thesis/last-results/_results \
   --output-dir ../thesis-documents/reports/experiment_comparison/thesis_v5_all_embeddings
 ```
 

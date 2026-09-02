@@ -4,6 +4,7 @@ import re
 import statistics
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
@@ -15,7 +16,6 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
     LAMBDA_SELECTION_MAXIMIZING_METRIC,
     select_best_lambda_row,
 )
-from experiments.medical_dataset_gen.evaluation.statistics import stats_aggregated_results_df
 from experiments.medical_dataset_gen.reports.analysis_constants import (
     DIVERSIFYING_STRATEGIES,
     EVALUATION_METRICS,
@@ -29,6 +29,7 @@ from experiments.medical_dataset_gen.reports.helpers import (
     lambda_norm,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
+from experiments.medical_dataset_gen.reports.report_io import report_io_workers
 from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 type LambdaTransferPolicy = Literal['global', 'leave_one_distribution_out']
@@ -45,6 +46,28 @@ _TEST_SPLIT = 'test'
 _WORD_RE = re.compile(r'[A-Za-z0-9]+')
 _JACCARD_QUERY_LIMIT = 128
 _MAX_CHUNKS_PER_FACET_FOR_JACCARD = 2
+_POPULATION_METRIC_COLUMNS: tuple[tuple[str, str], ...] = (
+    ('gold_precision', 'Precision@k'),
+    ('gold_recall', 'Recall@k'),
+    ('gold_f1', 'F1@k'),
+    ('average_precision_at_k', 'MAP@k'),
+    ('facet_coverage', 'FacetCoverage@k'),
+    ('all_facet_coverage', 'AllFacetCoverageRate@k'),
+    ('weighted_facet_coverage', 'FacetWeightedRecall@k'),
+    ('facet_coverage_purity', 'FacetCoveragePurity@k'),
+    ('all_facet_clean', 'AllFacetCleanRate@k'),
+    ('facet_mrr_at_k', 'FacetMRR@k'),
+    ('alpha_ndcg', 'alpha-nDCG@k'),
+    ('distractor_rate', 'DistractorRate'),
+    ('near_miss_distractor_rate', 'NearMissDistractorRate'),
+    ('background_outlier_rate', 'BackgroundOutlierRate'),
+    ('primary_axis_rate', 'PrimaryAxisRate'),
+    ('dominant_facet_rate', 'DominantFacetRate'),
+    ('redundant_gold_rate', 'RedundantGoldRate'),
+    ('fac_cov_score', 'fac'),
+    ('avg_cos', 'avg_cos'),
+    ('jaccard_vs_topk', 'jac'),
+)
 
 
 @dataclass(frozen=True)
@@ -102,36 +125,48 @@ def geometry_population_strategy_rows(
     derived from each experiment's own result table rather than from separate
     all-query sibling branches.
     """
-    rows: list[dict[str, object]] = []
-    for record in records:
-        results_path = record.paths.table_path('evaluation_results')
-        if not results_path.is_file():
-            warnings.append(f'{record.name}: evaluation_results missing at {results_path}')
-            continue
-
-        try:
-            results = _load_population_results(
-                results_path,
-                geometry_path=record.paths.table_path('geometry_stats'),
-            )
-        except Exception as exc:
-            warnings.append(f'{record.name}: could not load population results ({exc})')
-            continue
-
-        for population in _GEOMETRY_POPULATIONS:
-            population_results = _filter_geometry_population(results, population)
-            if population_results.is_empty():
-                warnings.append(f'{record.name}: no rows for geometry population {population}')
-                continue
-            rows.extend(
-                _population_selected_strategy_rows(
-                    record=record,
-                    population=population,
-                    results=population_results,
-                    warnings=warnings,
-                )
-            )
+    with ThreadPoolExecutor(max_workers=report_io_workers(len(records))) as executor:
+        loaded = executor.map(_geometry_population_rows_for_record, records)
+        rows: list[dict[str, object]] = []
+        for record_rows, record_warnings in loaded:
+            rows.extend(record_rows)
+            warnings.extend(record_warnings)
     return rows
+
+
+def _geometry_population_rows_for_record(
+    record: ExperimentRecord,
+) -> tuple[list[dict[str, object]], tuple[str, ...]]:
+    warnings: list[str] = []
+    results_path = record.paths.table_path('evaluation_results')
+    if not results_path.is_file():
+        warnings.append(f'{record.name}: evaluation_results missing at {results_path}')
+        return [], tuple(warnings)
+
+    try:
+        partition_stats = _load_population_partition_stats(
+            results_path,
+            geometry_path=record.paths.table_path('geometry_stats'),
+        )
+    except Exception as exc:
+        warnings.append(f'{record.name}: could not load population results ({exc})')
+        return [], tuple(warnings)
+
+    rows: list[dict[str, object]] = []
+    for population in _GEOMETRY_POPULATIONS:
+        population_stats = _stats_for_geometry_population(partition_stats, population)
+        if population_stats.is_empty():
+            warnings.append(f'{record.name}: no rows for geometry population {population}')
+            continue
+        rows.extend(
+            _population_selected_strategy_rows(
+                record=record,
+                population=population,
+                stats=population_stats,
+                warnings=warnings,
+            )
+        )
+    return rows, tuple(warnings)
 
 
 def synthetic_artifact_diagnostic_rows(
@@ -492,59 +527,93 @@ def _strategy_row_from_stats(
     return out
 
 
-def _load_population_results(results_path: Path, *, geometry_path: Path) -> pl.DataFrame:
-    needed_columns = [
+def _load_population_partition_stats(
+    results_path: Path,
+    *,
+    geometry_path: Path,
+) -> pl.DataFrame:
+    identity_columns = [
         _QUERY_ID,
         _SPLIT,
         _STRATEGY,
         _K,
         _LAMBDA,
-        'gold_precision',
-        'gold_recall',
-        'gold_f1',
-        'average_precision_at_k',
-        'facet_coverage',
-        'weighted_facet_coverage',
-        'facet_coverage_purity',
-        'all_facet_coverage',
-        'all_facet_clean',
-        'facet_mrr_at_k',
-        'alpha_ndcg',
-        'distractor_rate',
-        'near_miss_distractor_rate',
-        'background_outlier_rate',
-        'primary_axis_rate',
-        'dominant_facet_rate',
-        'redundant_gold_rate',
-        'fac_cov_score',
-        'avg_cos',
-        'jaccard_vs_topk',
     ]
     available = set(pl.scan_parquet(results_path).collect_schema().names())
     pass_column = _population_pass_column(available)
-    selected_columns = [column for column in needed_columns if column in available]
+    available_metrics = [
+        (source, target) for source, target in _POPULATION_METRIC_COLUMNS if source in available
+    ]
+    selected_columns = [column for column in identity_columns if column in available]
+    selected_columns.extend(source for source, _target in available_metrics)
     if pass_column is not None:
         selected_columns.append(pass_column)
     results = pl.scan_parquet(results_path).select(selected_columns)
     if pass_column is None:
-        collected = results.collect()
-        if geometry_path.is_file() and _QUERY_ID in collected.columns:
-            geometry = pl.read_parquet(geometry_path, columns=[_QUERY_ID, 'passes_filter'])
-            return collected.join(
-                geometry.select(
-                    _QUERY_ID,
-                    pl.col('passes_filter').fill_null(False).alias('passes_geometry_filter'),
-                ),
+        if geometry_path.is_file() and _QUERY_ID in selected_columns:
+            geometry = pl.scan_parquet(geometry_path).select(
+                _QUERY_ID,
+                pl.col('passes_filter').fill_null(False).alias('passes_geometry_filter'),
+            )
+            results = results.join(
+                geometry,
                 on=_QUERY_ID,
                 how='left',
             ).with_columns(pl.col('passes_geometry_filter').fill_null(False))
-        return collected.with_columns(pl.lit(True).alias('passes_geometry_filter'))
-    if pass_column == 'passes_geometry_filter':
-        return results.with_columns(pl.col(pass_column).fill_null(False)).collect()
+        else:
+            results = results.with_columns(pl.lit(True).alias('passes_geometry_filter'))
+    elif pass_column == 'passes_geometry_filter':
+        results = results.with_columns(pl.col(pass_column).fill_null(False))
+    else:
+        results = results.rename({pass_column: 'passes_geometry_filter'}).with_columns(
+            pl.col('passes_geometry_filter').fill_null(False)
+        )
     return (
-        results.rename({pass_column: 'passes_geometry_filter'})
-        .with_columns(pl.col('passes_geometry_filter').fill_null(False))
-        .collect()
+        results.group_by(
+            _SPLIT,
+            'passes_geometry_filter',
+            _STRATEGY,
+            _LAMBDA,
+            _K,
+        )
+        .agg(
+            pl.col(_QUERY_ID).n_unique().alias(_N_QUERIES),
+            *(pl.col(source).mean().alias(target) for source, target in available_metrics),
+        )
+        .collect(engine='streaming')
+    )
+
+
+def _stats_for_geometry_population(
+    partition_stats: pl.DataFrame,
+    population: GeometryPopulation,
+) -> pl.DataFrame:
+    pass_value = _POPULATION_PASS_FILTER_VALUE[population]
+    if pass_value is not None:
+        return partition_stats.filter(pl.col('passes_geometry_filter') == pass_value).drop(
+            'passes_geometry_filter'
+        )
+    metric_columns = [
+        target for _source, target in _POPULATION_METRIC_COLUMNS if target in partition_stats.columns
+    ]
+    return (
+        partition_stats.with_columns(
+            *(
+                (pl.col(metric) * pl.col(_N_QUERIES)).alias(f'__weighted_{metric}')
+                for metric in metric_columns
+            )
+        )
+        .group_by(_SPLIT, _STRATEGY, _LAMBDA, _K)
+        .agg(
+            pl.col(_N_QUERIES).sum(),
+            *(
+                (
+                    pl.col(f'__weighted_{metric}').sum()
+                    / pl.col(_N_QUERIES).sum()
+                ).alias(metric)
+                for metric in metric_columns
+            ),
+        )
     )
 
 
@@ -555,33 +624,17 @@ def _population_pass_column(columns: set[str]) -> str | None:
     return None
 
 
-def _filter_geometry_population(
-    results: pl.DataFrame,
-    population: GeometryPopulation,
-) -> pl.DataFrame:
-    pass_value = _POPULATION_PASS_FILTER_VALUE[population]
-    if pass_value is None:
-        return results
-    return results.filter(pl.col('passes_geometry_filter') == pass_value)
-
-
 def _population_selected_strategy_rows(
     *,
     record: ExperimentRecord,
     population: GeometryPopulation,
-    results: pl.DataFrame,
+    stats: pl.DataFrame,
     warnings: list[str],
 ) -> list[dict[str, object]]:
-    selection_results = results.filter(pl.col(_SPLIT) == _VALIDATION_SPLIT)
-    report_results = results.filter(pl.col(_SPLIT) == _TEST_SPLIT)
-    if selection_results.is_empty() or report_results.is_empty():
-        warnings.append(f'{record.name}: missing split rows for population {population}')
-        return []
-
-    selection_stats = stats_aggregated_results_df(selection_results)
-    report_grid_stats = stats_aggregated_results_df(report_results)
+    selection_stats = stats.filter(pl.col(_SPLIT) == _VALIDATION_SPLIT).drop(_SPLIT)
+    report_grid_stats = stats.filter(pl.col(_SPLIT) == _TEST_SPLIT).drop(_SPLIT)
     if selection_stats.is_empty() or report_grid_stats.is_empty():
-        warnings.append(f'{record.name}: empty stats for population {population}')
+        warnings.append(f'{record.name}: missing split rows for population {population}')
         return []
 
     rows: list[dict[str, object]] = []

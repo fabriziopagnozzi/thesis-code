@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -14,8 +15,10 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     ExperimentFamilyId,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord
+from experiments.medical_dataset_gen.reports.report_io import report_io_workers
 from experiments.medical_dataset_gen.suites.core import (
     LogicalSuite,
+    SuiteManifestCell,
     load_logical_suite,
     load_logical_suite_family,
     load_suite_manifest,
@@ -75,52 +78,81 @@ def discover_suite_experiments(
         ).logical_suite
     manifest = logical_suite.manifest
     filters = _parse_suite_where(where)
-    records: list[ExperimentRecord] = []
-    for cell in manifest.cells:
-        if cell.status != 'completed' or not _suite_cell_matches(cell, filters):
-            continue
-        root = logical_suite.roots_by_cell_id[cell.cell_id]
-        cfg: ExperimentCfg | None = None
-        config_error: str | None = None
-        try:
-            cfg = load_cell_config(root, cell)
-            paths = suite_paths_for_cell(root=root, cell=cell, cfg=cfg)
-        except Exception as exc:
-            config_error = str(exc)
-            warnings.append(f'{cell.cell_id}: could not load suite config ({exc})')
-            # The stats path remains explicit even if a manually edited
-            # snapshot no longer parses.
-            paths = MedicalDatasetGenPaths(cell.name, artifact_root=root / cell.attempt_root)
-        stats_path = paths.table_path('evaluation_stats')
-        if not stats_path.is_file():
-            warnings.append(f'{cell.cell_id}: skipped because evaluation_stats.parquet is missing')
-            continue
-        records.append(
-            ExperimentRecord(
-                name=cell.name,
-                experiment_dir=paths.experiment_dir,
-                distribution_id=cell.distribution_id,
-                distribution_base_id=cell.distribution_base_id,
-                run_label=cell.run_profile_id,
-                is_subexperiment=True,
-                cfg=cfg,
-                paths=paths,
-                config_error=config_error,
-                family_id=cast(ExperimentFamilyId, cell.family_id),
-                family_label=cell.family_label,
-                origin=cell.origin,
-                dataset_schema_version=cell.dataset_schema_version,
-                evaluation_schema_version=cell.evaluation_schema_version,
-                include_in_causal_summaries=cell.include_in_causal_summaries,
-                include_in_family_summary=cell.include_in_family_summary,
-                factors={str(key): value for key, value in cell.factors.items()},
-                tags=tuple(cell.tags),
-                analysis_blocks=tuple(cell.analysis_blocks),
-                analysis_tier=cell.analysis_tier,
-                run_profile_factors=dict(cell.run_profile_factors),
-            )
+    selected_cells = [
+        cell
+        for cell in manifest.cells
+        if cell.status == 'completed' and _suite_cell_matches(cell, filters)
+    ]
+    if not selected_cells:
+        return []
+    worker_count = report_io_workers(len(selected_cells))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        loaded = executor.map(
+            lambda cell: _load_suite_experiment_record(logical_suite=logical_suite, cell=cell),
+            selected_cells,
         )
+        records: list[ExperimentRecord] = []
+        for record, record_warnings in loaded:
+            warnings.extend(record_warnings)
+            if record is not None:
+                records.append(record)
     return sorted(records, key=lambda record: record.name)
+
+
+def _load_suite_experiment_record(
+    *,
+    logical_suite: LogicalSuite,
+    cell: SuiteManifestCell,
+) -> tuple[ExperimentRecord | None, tuple[str, ...]]:
+    root = logical_suite.roots_by_cell_id[cell.cell_id]
+    local_warnings: list[str] = []
+    cfg: ExperimentCfg | None = None
+    config_error: str | None = None
+    try:
+        cfg = load_cell_config(root, cell)
+        paths = suite_paths_for_cell(
+            root=root,
+            cell=cell,
+            cfg=cfg,
+            prevalidated_data_root=logical_suite.data_roots_by_cell_id[cell.cell_id],
+        )
+    except Exception as exc:
+        config_error = str(exc)
+        local_warnings.append(f'{cell.cell_id}: could not load suite config ({exc})')
+        # The stats path remains explicit even if a manually edited snapshot no longer parses.
+        paths = MedicalDatasetGenPaths(cell.name, artifact_root=root / cell.attempt_root)
+    stats_path = paths.table_path('evaluation_stats')
+    if not stats_path.is_file():
+        local_warnings.append(
+            f'{cell.cell_id}: skipped because evaluation_stats.parquet is missing'
+        )
+        return None, tuple(local_warnings)
+    return (
+        ExperimentRecord(
+            name=cell.name,
+            experiment_dir=paths.experiment_dir,
+            distribution_id=cell.distribution_id,
+            distribution_base_id=cell.distribution_base_id,
+            run_label=cell.run_profile_id,
+            is_subexperiment=True,
+            cfg=cfg,
+            paths=paths,
+            config_error=config_error,
+            family_id=cast(ExperimentFamilyId, cell.family_id),
+            family_label=cell.family_label,
+            origin=cell.origin,
+            dataset_schema_version=cell.dataset_schema_version,
+            evaluation_schema_version=cell.evaluation_schema_version,
+            include_in_causal_summaries=cell.include_in_causal_summaries,
+            include_in_family_summary=cell.include_in_family_summary,
+            factors={str(key): value for key, value in cell.factors.items()},
+            tags=tuple(cell.tags),
+            analysis_blocks=tuple(cell.analysis_blocks),
+            analysis_tier=cell.analysis_tier,
+            run_profile_factors=dict(cell.run_profile_factors),
+        ),
+        tuple(local_warnings),
+    )
 
 
 def load_report_logical_suite(
