@@ -15,6 +15,17 @@ from experiments.medical_dataset_gen.reports.report_config import (
     embedding_model_display_label,
 )
 
+# These figures are embedded at approximately text width in the thesis.  The
+# explicit sizes keep labels readable after that down-scaling instead of
+# relying on Matplotlib's small defaults.
+MODEL_FIGURE_TITLE_SIZE = 18
+MODEL_AXIS_TITLE_SIZE = 15
+MODEL_AXIS_LABEL_SIZE = 13
+MODEL_TICK_LABEL_SIZE = 12
+MODEL_LEGEND_SIZE = 12
+MODEL_VALUE_LABEL_SIZE = 11
+MODEL_HEATMAP_CELL_SIZE = 13
+
 
 def write_embedding_model_figures(
     *,
@@ -61,7 +72,10 @@ def _embedding_model_fcp_overview(
     models = [str(row.get('EmbeddingModel') or '') for row in selected]
     labels = [embedding_model_display_label(model) for model in models]
     positions = np.arange(len(selected), dtype=np.float64)
-    figure, (absolute_axis, delta_axis) = plt.subplots(1, 2, figsize=(13.8, 5.5))
+    # Keep the source canvas close to the thesis column width.  The report
+    # stores vector PDFs, so an oversized canvas would make every label
+    # unreadably small when LaTeX scales it to ``\\linewidth``.
+    figure, (absolute_axis, delta_axis) = plt.subplots(1, 2, figsize=(8.0, 4.6))
     try:
         width = 0.24
         objectives = (
@@ -79,13 +93,26 @@ def _embedding_model_fcp_overview(
                 label=label,
                 color=color,
             )
-            absolute_axis.bar_label(bars, fmt='%.3f', padding=2, fontsize=7.5, rotation=90)
-        absolute_axis.set_title('Absolute retrieval performance')
-        absolute_axis.set_ylabel('Family- and budget-balanced mean FCP@k')
-        absolute_axis.set_xticks(positions, labels, rotation=20, ha='right')
+            absolute_axis.bar_label(
+                bars,
+                fmt='%.3f',
+                padding=2,
+                fontsize=MODEL_VALUE_LABEL_SIZE,
+                rotation=90,
+            )
+        absolute_axis.set_title(
+            'Absolute retrieval performance',
+            fontsize=MODEL_AXIS_TITLE_SIZE,
+        )
+        absolute_axis.set_ylabel(
+            'Family- and budget-balanced mean FCP@k',
+            fontsize=MODEL_AXIS_LABEL_SIZE,
+        )
+        absolute_axis.set_xticks(positions, labels, rotation=28, ha='right')
+        absolute_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         absolute_axis.set_ylim(0, 1.02)
         absolute_axis.grid(axis='y', alpha=0.22)
-        absolute_axis.legend(frameon=False, ncol=3, fontsize=8.5)
+        absolute_axis.legend(frameon=False, ncol=3, fontsize=MODEL_LEGEND_SIZE)
 
         deltas = [float_or_none(row.get('MeanDeltaFacLocMMR')) or 0.0 for row in selected]
         bars = delta_axis.bar(
@@ -94,18 +121,25 @@ def _embedding_model_fcp_overview(
             color=[embedding_model_color(model) for model in models],
             width=0.72,
         )
-        delta_axis.bar_label(bars, fmt='%+.3f', padding=3, fontsize=9)
+        delta_axis.bar_label(bars, fmt='%+.3f', padding=3, fontsize=MODEL_VALUE_LABEL_SIZE)
         delta_axis.axhline(0.0, color='#555555', linewidth=0.9)
         delta_axis.axhline(0.05, color='#888888', linestyle=':', linewidth=1.0)
-        delta_axis.set_title('Relative objective effect')
-        delta_axis.set_ylabel('Mean FCP@k difference (FacLoc - MMR)')
-        delta_axis.set_xticks(positions, labels, rotation=20, ha='right')
+        delta_axis.set_title('Relative objective effect', fontsize=MODEL_AXIS_TITLE_SIZE)
+        delta_axis.set_ylabel(
+            'Mean FCP@k difference (FacLoc - MMR)',
+            fontsize=MODEL_AXIS_LABEL_SIZE,
+        )
+        delta_axis.set_xticks(positions, labels, rotation=28, ha='right')
+        delta_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         delta_axis.grid(axis='y', alpha=0.22)
         top = max(deltas) + 0.025
         delta_axis.set_ylim(min(-0.01, min(deltas) - 0.015), top)
 
-        figure.suptitle('Retrieval results across representation spaces', fontsize=16)
-        figure.tight_layout()
+        figure.suptitle(
+            'Retrieval results across representation spaces',
+            fontsize=MODEL_FIGURE_TITLE_SIZE,
+        )
+        figure.tight_layout(rect=(0, 0, 1, 0.94), pad=0.7)
         return _save_both(figure=figure, output_dir=output_dir, stem='embedding_model_fcp_overview')
     finally:
         plt.close(figure)
@@ -126,14 +160,18 @@ def _embedding_geometry_overview(
     models = [str(row.get('EmbeddingModel') or '') for row in selected]
     labels = [embedding_model_display_label(model) for model in models]
     positions = np.arange(len(selected), dtype=np.float64)
-    figure, (stress_axis, margin_axis) = plt.subplots(1, 2, figsize=(13.8, 5.64))
+    figure, (stress_axis, margin_axis) = plt.subplots(1, 2, figsize=(8.0, 4.6))
     try:
         stress = [float_or_none(row.get('CoverageStressRate')) or 0.0 for row in selected]
         bars = stress_axis.bar(positions, stress, width=0.58, color='#287C8E')
-        stress_axis.bar_label(bars, fmt='%.3f', padding=3, fontsize=9)
-        stress_axis.set_title('Early-ranking coverage stress')
-        stress_axis.set_ylabel('Family-balanced coverage-stress rate')
-        stress_axis.set_xticks(positions, labels, rotation=20, ha='right')
+        stress_axis.bar_label(bars, fmt='%.3f', padding=3, fontsize=MODEL_VALUE_LABEL_SIZE)
+        stress_axis.set_title('Early-ranking coverage stress', fontsize=MODEL_AXIS_TITLE_SIZE)
+        stress_axis.set_ylabel(
+            'Family-balanced coverage-stress rate',
+            fontsize=MODEL_AXIS_LABEL_SIZE,
+        )
+        stress_axis.set_xticks(positions, labels, rotation=28, ha='right')
+        stress_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         stress_axis.set_ylim(0, 1.05)
         stress_axis.grid(axis='y', alpha=0.22)
 
@@ -151,14 +189,21 @@ def _embedding_geometry_overview(
                 label=label,
                 color=color,
             )
-        margin_axis.set_title('Gold separation from distractors')
-        margin_axis.set_ylabel('Within-model cosine-similarity margin')
-        margin_axis.set_xticks(positions, labels, rotation=20, ha='right')
+        margin_axis.set_title('Gold separation from distractors', fontsize=MODEL_AXIS_TITLE_SIZE)
+        margin_axis.set_ylabel(
+            'Within-model cosine-similarity margin',
+            fontsize=MODEL_AXIS_LABEL_SIZE,
+        )
+        margin_axis.set_xticks(positions, labels, rotation=28, ha='right')
+        margin_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         margin_axis.grid(axis='y', alpha=0.22)
-        margin_axis.legend(frameon=False)
+        margin_axis.legend(frameon=False, fontsize=MODEL_LEGEND_SIZE)
 
-        figure.suptitle('Representation-space audit by embedding model', fontsize=16)
-        figure.tight_layout()
+        figure.suptitle(
+            'Representation-space audit by embedding model',
+            fontsize=MODEL_FIGURE_TITLE_SIZE,
+        )
+        figure.tight_layout(rect=(0, 0, 1, 0.94), pad=0.7)
         return _save_both(figure=figure, output_dir=output_dir, stem='embedding_geometry_overview')
     finally:
         plt.close(figure)
@@ -188,15 +233,24 @@ def _embedding_geometry_family_heatmap(
             value = float_or_none(row.get('CoverageStressRate'))
             if value is not None:
                 values[model_index, family_index] = value
-    figure, axis = plt.subplots(figsize=(10.5, 5.3))
+    figure, axis = plt.subplots(figsize=(7.5, 4.1))
     try:
         image = axis.imshow(values, vmin=0.5, vmax=1.0, cmap='viridis', aspect='auto')
-        axis.set_title('Coverage-stress rate by embedding model and distribution family')
-        axis.set_xticks(range(len(families)), families, rotation=27, ha='right')
+        axis.set_title(
+            'Coverage-stress rate by embedding model and distribution family',
+            fontsize=MODEL_AXIS_TITLE_SIZE,
+        )
+        axis.set_xticks(
+            range(len(families)),
+            [_heatmap_family_label(family) for family in families],
+            rotation=25,
+            ha='right',
+        )
         axis.set_yticks(
             range(len(models)),
             [embedding_model_display_label(model) for model in models],
         )
+        axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         for row_index in range(values.shape[0]):
             for column_index in range(values.shape[1]):
                 value = values[row_index, column_index]
@@ -208,11 +262,13 @@ def _embedding_geometry_family_heatmap(
                     f'{value:.3f}',
                     ha='center',
                     va='center',
+                    fontsize=MODEL_HEATMAP_CELL_SIZE,
                     color='white' if value < 0.74 else 'black',
                 )
         colorbar = figure.colorbar(image, ax=axis)
-        colorbar.set_label('Mean coverage-stress rate')
-        figure.tight_layout()
+        colorbar.set_label('Mean coverage-stress rate', fontsize=MODEL_AXIS_LABEL_SIZE)
+        colorbar.ax.tick_params(labelsize=MODEL_TICK_LABEL_SIZE)
+        figure.tight_layout(pad=0.7)
         return _save_both(
             figure=figure,
             output_dir=output_dir,
@@ -234,7 +290,7 @@ def _lambda_fcp_delta_by_embedding_model(
         {str(row.get('EmbeddingModel') or '') for row in rows},
         key=embedding_model_sort_key,
     )
-    figure, axes = plt.subplots(1, 2, figsize=(14.4, 5.76), sharey=True)
+    figure, axes = plt.subplots(1, 2, figsize=(8.0, 4.6), sharey=True)
     try:
         for axis, strategy, title in zip(
             axes,
@@ -261,16 +317,22 @@ def _lambda_fcp_delta_by_embedding_model(
                     ],
                     label=embedding_model_display_label(model),
                     color=embedding_model_color(model),
-                    linewidth=2.2,
+                    linewidth=2.8,
                 )
             axis.axhline(0.0, color='#555555', linewidth=0.9)
-            axis.set_title(title)
-            axis.set_xlabel('Normalized lambda-grid position')
+            axis.set_title(title, fontsize=MODEL_AXIS_TITLE_SIZE)
+            axis.set_xlabel('Normalized lambda-grid position', fontsize=MODEL_AXIS_LABEL_SIZE)
+            axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
             axis.grid(alpha=0.22)
-        axes[0].set_ylabel('Family-balanced validation FCP@k delta vs Top-k')
-        axes[1].legend(frameon=False, fontsize=8.5)
-        figure.suptitle('Lambda sensitivity across representation spaces', fontsize=16)
-        figure.tight_layout()
+        axes[0].set_ylabel(
+            'Family-balanced validation FCP@k delta vs Top-k',
+            fontsize=MODEL_AXIS_LABEL_SIZE,
+        )
+        axes[1].legend(frameon=False, fontsize=MODEL_LEGEND_SIZE)
+        figure.suptitle(
+            'Lambda sensitivity across representation spaces', fontsize=MODEL_FIGURE_TITLE_SIZE
+        )
+        figure.tight_layout(rect=(0, 0, 1, 0.94), pad=0.7)
         return _save_both(
             figure=figure,
             output_dir=output_dir,
@@ -287,3 +349,16 @@ def _save_both(*, figure: Any, output_dir: Path, stem: str) -> list[Path]:
         figure.savefig(path, dpi=180 if suffix == 'png' else None, bbox_inches='tight')
         paths.append(path)
     return paths
+
+
+def _heatmap_family_label(label: str) -> str:
+    """Use compact labels so every family remains legible at thesis width."""
+    return {
+        # These compact labels prevent collisions in the five-column matrix;
+        # the title/caption retains the full distribution-family terminology.
+        'Background variants': 'Background',
+        'Balanced clean distributions': 'Balanced',
+        'Dominance distributions': 'Dominance',
+        'Near-miss-heavy distributions': 'Near-miss',
+        'Sparse-niche distributions': 'Sparse-niche',
+    }.get(label, label)

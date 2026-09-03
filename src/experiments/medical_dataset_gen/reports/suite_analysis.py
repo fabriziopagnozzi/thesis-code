@@ -41,6 +41,18 @@ _PRIMARY_METRIC_LABELS: dict[str, str] = {
     'Delta_FacLoc_MMR_alpha_nDCG': 'alpha-nDCG',
 }
 
+# Suite response surfaces are included at text width and retain a 3-column by
+# 2-row layout.  Larger explicit typography keeps the six panels legible after
+# the PDF is scaled in the thesis.
+SUITE_FIGURE_SIZE_IN = (10.0, 6.6)
+SUITE_AXIS_TITLE_SIZE = 17
+SUITE_AXIS_LABEL_SIZE = 15
+SUITE_TICK_LABEL_SIZE = 14
+SUITE_LEGEND_SIZE = 14
+SUITE_FIGURE_TITLE_SIZE = 20
+SUITE_LINE_WIDTH = 2.6
+SUITE_MARKER_SIZE = 6
+
 _SUITE_COMPARISON_LABELS: dict[str, str] = {
     'scale_balanced': 'Balanced reference',
     'scale_dominance': 'Dominant facet',
@@ -635,9 +647,9 @@ def _write_aggregated_factor_figure(
             if value is not None:
                 line_values[line_label][metric][level][model].append(value)
 
-    figure, axes = plt.subplots(2, 3, figsize=(15, 8))
+    figure, axes = plt.subplots(2, 3, figsize=SUITE_FIGURE_SIZE_IN)
     try:
-        for metric, axis in zip(_PRIMARY_METRICS, axes.flat, strict=True):
+        for panel_index, (metric, axis) in enumerate(zip(_PRIMARY_METRICS, axes.flat, strict=True)):
             for line_label in sorted(line_values):
                 model_means = [
                     [
@@ -654,7 +666,8 @@ def _write_aggregated_factor_figure(
                         positions,
                         means,
                         marker='o',
-                        linewidth=2.0,
+                        linewidth=SUITE_LINE_WIDTH,
+                        markersize=SUITE_MARKER_SIZE,
                         label=line_label,
                     )[0]
                     if all(values for values in model_means):
@@ -669,37 +682,48 @@ def _write_aggregated_factor_figure(
             axis.axhline(0.0, color='#666666', linewidth=0.8, zorder=0)
             axis.axhline(0.05, color='#999999', linewidth=0.5, linestyle=':', zorder=0)
             axis.axhline(-0.05, color='#999999', linewidth=0.5, linestyle=':', zorder=0)
-            set_axis_title(axis=axis, title=_PRIMARY_METRIC_LABELS[metric])
-            axis.set_xlabel(_factor_axis_label(factor))
-            axis.set_ylabel('FacLoc - MMR')
+            set_axis_title(
+                axis=axis,
+                title=_PRIMARY_METRIC_LABELS[metric],
+                fontsize=SUITE_AXIS_TITLE_SIZE,
+            )
+            axis.set_xlabel(_factor_axis_label(factor), fontsize=SUITE_AXIS_LABEL_SIZE)
+            # One y-label per row avoids collisions in the narrow thesis
+            # column while retaining the shared unit for all three panels.
+            axis.set_ylabel(
+                'FacLoc - MMR' if panel_index % 3 == 0 else '',
+                fontsize=SUITE_AXIS_LABEL_SIZE,
+            )
             axis.set_xticks(range(len(levels)), [_display_factor_level(level) for level in levels])
+            axis.tick_params(axis='both', labelsize=SUITE_TICK_LABEL_SIZE)
             axis.grid(axis='y', alpha=0.2)
 
         handles, labels = axes.flat[0].get_legend_handles_labels()
         if len(handles) > 1:
+            legend_columns = min(len(handles), 3)
             figure.legend(
                 handles,
                 labels,
                 loc='lower center',
-                ncol=min(len(handles), 5),
+                ncol=legend_columns,
                 frameon=False,
-                fontsize=9,
+                fontsize=SUITE_LEGEND_SIZE,
             )
-            bottom = 0.14
+            bottom = 0.20 if len(handles) > 3 else 0.14
         else:
             bottom = 0.08
         set_figure_title(
             figure=figure,
             title=f'{title} (equal-model mean; band: model range)',
-            fontsize=16,
+            fontsize=SUITE_FIGURE_TITLE_SIZE,
         )
         figure.subplots_adjust(
-            left=0.08,
-            right=0.98,
+            left=0.09,
+            right=0.99,
             top=title_aware_layout_top(titled_top=0.88, untitled_top=0.96),
             bottom=bottom,
-            wspace=0.26,
-            hspace=0.34,
+            wspace=0.34,
+            hspace=0.42,
         )
         written: list[Path] = []
         for suffix in ('png', 'pdf'):
