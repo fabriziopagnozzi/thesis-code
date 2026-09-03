@@ -690,7 +690,7 @@ def _write_aggregated_factor_figure(
             bottom = 0.08
         set_figure_title(
             figure=figure,
-            title=f'{title} (mean across run profiles and K)',
+            title=f'{title} (equal-model mean; band: model range)',
             fontsize=16,
         )
         figure.subplots_adjust(
