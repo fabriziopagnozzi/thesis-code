@@ -20,7 +20,10 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     StrategyName,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord, ScalarItem
-from experiments.medical_dataset_gen.reports.report_config import PREFERRED_EMBEDDING_MODEL_ORDER
+from experiments.medical_dataset_gen.reports.report_config import (
+    PREFERRED_EMBEDDING_MODEL_ORDER,
+    embedding_model_display_label,
+)
 from experiments.medical_dataset_gen.utils.exp_naming import (
     is_compact_embedding_child_token,
 )
@@ -539,7 +542,7 @@ def short_token(value: str) -> str:
 
 
 def short_model_label(value: str) -> str:
-    return value.rsplit('/', 1)[-1].replace('Embedding-', '').replace('-cos-v1', '')
+    return embedding_model_display_label(value)
 
 
 def sorted_rows(

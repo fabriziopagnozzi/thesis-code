@@ -40,6 +40,10 @@ def render_report(
     lambda_safety_rows: Sequence[Mapping[str, object]],
     lambda_robustness_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
+    embedding_metric_rows: Sequence[Mapping[str, object]],
+    embedding_metric_range_rows: Sequence[Mapping[str, object]],
+    embedding_geometry_rows: Sequence[Mapping[str, object]],
+    model_grid_rows: Sequence[Mapping[str, object]],
     paired_config_suite_rows: Sequence[Mapping[str, object]],
     figures: Sequence[Path],
 ) -> str:
@@ -345,6 +349,79 @@ def render_report(
                 'FacLoc_FCP_mean',
                 'Delta_FacLoc_MMR_FCP_mean',
                 'PassFilterRuns',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        section_with_table(
+            'Embedding Model Grid Coverage',
+            model_grid_rows,
+            columns=[
+                'EmbeddingModelLabel',
+                'ExpectedCells',
+                'ObservedCells',
+                'MissingCells',
+                'Complete',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        section_with_table(
+            'Model-First FCP Summary',
+            [
+                row
+                for row in embedding_metric_rows
+                if row.get('MetricLabel') == 'FCP' and row.get('Scope') == 'overall'
+            ],
+            columns=[
+                'EmbeddingModelLabel',
+                'Rows',
+                'MeanTopK',
+                'MeanMMR',
+                'MeanFacLoc',
+                'MeanDeltaFacLocMMR',
+                'MeanDeltaFacLocTopK',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        section_with_table(
+            'Cross-Model FCP Ranges',
+            [
+                row
+                for row in embedding_metric_range_rows
+                if row.get('MetricLabel') == 'FCP'
+                and row.get('Scope') in {'overall', 'budget', 'family_budget'}
+            ],
+            columns=[
+                'Scope',
+                'ScopeValue',
+                'ModelCount',
+                'CompleteCrossing',
+                'MeanDeltaFacLocMMR',
+                'MeanDeltaFacLocMMRMinModel',
+                'MeanDeltaFacLocMMRMaxModel',
+            ],
+            tablefmt=args.tablefmt,
+            max_rows=args.max_table_rows,
+        )
+    )
+    lines.extend(
+        section_with_table(
+            'Representation-Space Audit By Model',
+            embedding_geometry_rows,
+            columns=[
+                'EmbeddingModelLabel',
+                'Rows',
+                'CoverageStressRate',
+                'GoldNearMissMargin',
+                'GoldBackgroundMargin',
             ],
             tablefmt=args.tablefmt,
             max_rows=args.max_table_rows,

@@ -647,6 +647,10 @@ def run_report(args: CliArgs) -> ReportOutputs:
             lambda_safety_rows=lambda_safety_rows,
             lambda_robustness_rows=lambda_robustness_rows,
             embedding_summary_rows=embedding_summary_rows,
+            embedding_metric_rows=embedding_metric_rows,
+            embedding_metric_range_rows=embedding_metric_ranges,
+            embedding_geometry_rows=embedding_geometry_rows,
+            model_grid_rows=model_grid_rows,
             paired_config_suite_rows=paired_config_suite_rows,
             figures=figures,
         )
