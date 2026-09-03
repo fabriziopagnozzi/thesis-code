@@ -85,9 +85,9 @@ PREFERRED_EMBEDDING_MODEL_ORDER: tuple[str, ...] = tuple(
     spec.model_name for spec in EMBEDDING_MODEL_REPORT_SPECS
 )
 OBJECTIVE_COLORS: dict[str, str] = {
-    'top_k': '#7A7A7A',
-    'mmr': '#D08A2E',
-    'fac_loc': '#287C8E',
+    'top_k': '#333333',
+    'mmr': '#1F77B4',
+    'fac_loc': '#D62728',
 }
 
 
