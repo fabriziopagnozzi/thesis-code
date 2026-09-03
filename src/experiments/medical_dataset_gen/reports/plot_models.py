@@ -28,20 +28,20 @@ MODEL_HEATMAP_CELL_SIZE = 12
 # Muted blue/rose/slate tones echo the pastel composition audit while keeping
 # the objective semantics stable: MMR remains blue and Facility-Location red.
 PASTEL_OBJECTIVE_COLORS: dict[str, str] = {
-    'top_k': '#9AA7B5',
-    'mmr': '#78A9C4',
-    'fac_loc': '#D09A8F',
+    'top_k': '#8297B3',
+    'mmr': '#5FA7CF',
+    'fac_loc': '#D98F82',
 }
 PASTEL_EMBEDDING_MODEL_COLORS: dict[str, str] = {
-    'Qwen/Qwen3-Embedding-0.6B': '#78A6C8',
-    'Qwen/Qwen3-Embedding-4B': '#9A87BF',
-    'abhinand/MedEmbed-large-v0.1': '#D1917E',
-    'multi-qa-mpnet-base-cos-v1': '#7CA998',
+    'Qwen/Qwen3-Embedding-0.6B': '#5E9FD0',
+    'Qwen/Qwen3-Embedding-4B': '#9B78C7',
+    'abhinand/MedEmbed-large-v0.1': '#DD8B70',
+    'multi-qa-mpnet-base-cos-v1': '#68AA91',
 }
 PASTEL_GEOMETRY_COLORS: dict[str, str] = {
-    'coverage_stress': '#7FA3B7',
-    'near_miss': '#D0A08F',
-    'background': '#8FBBD0',
+    'coverage_stress': '#639DBA',
+    'near_miss': '#DB9A80',
+    'background': '#78B9D4',
 }
 
 
@@ -90,9 +90,7 @@ def _embedding_model_fcp_overview(
     models = [str(row.get('EmbeddingModel') or '') for row in selected]
     labels = [embedding_model_display_label(model) for model in models]
     positions = np.arange(len(selected), dtype=np.float64)
-    # Keep the source canvas close to the thesis column width.  The report
-    # stores vector PDFs, so an oversized canvas would make every label
-    # unreadably small when LaTeX scales it to ``\\linewidth``.
+
     figure, (absolute_axis, delta_axis) = plt.subplots(1, 2, figsize=(8.0, 4.6))
     try:
         width = 0.24
