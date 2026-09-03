@@ -45,11 +45,11 @@ _PRIMARY_METRIC_LABELS: dict[str, str] = {
 # 2-row layout.  Larger explicit typography keeps the six panels legible after
 # the PDF is scaled in the thesis.
 SUITE_FIGURE_SIZE_IN = (10.0, 6.6)
-SUITE_AXIS_TITLE_SIZE = 17
-SUITE_AXIS_LABEL_SIZE = 15
-SUITE_TICK_LABEL_SIZE = 14
-SUITE_LEGEND_SIZE = 14
-SUITE_FIGURE_TITLE_SIZE = 20
+SUITE_AXIS_TITLE_SIZE = 15
+SUITE_AXIS_LABEL_SIZE = 13
+SUITE_TICK_LABEL_SIZE = 12
+SUITE_LEGEND_SIZE = 13
+SUITE_FIGURE_TITLE_SIZE = 18
 SUITE_LINE_WIDTH = 2.6
 SUITE_MARKER_SIZE = 6
 
@@ -90,6 +90,15 @@ _TOPOLOGY_FIGURE_SPECS: tuple[tuple[str, str, str, str, str | None], ...] = (
         'near_miss_mass',
         'sparse_level',
     ),
+)
+
+_SUITE_FIGURES_WITHOUT_X_LABEL = frozenset(
+    {
+        'scale_by_dataset_size',
+        'background_topology_by_objective',
+        'dominance_background_interaction_by_objective',
+        'sparse_near_miss_interaction_by_objective',
+    }
 )
 
 RESULTS_SUITE_FIGURE_STEMS: tuple[str, ...] = (
@@ -687,7 +696,8 @@ def _write_aggregated_factor_figure(
                 title=_PRIMARY_METRIC_LABELS[metric],
                 fontsize=SUITE_AXIS_TITLE_SIZE,
             )
-            axis.set_xlabel(_factor_axis_label(factor), fontsize=SUITE_AXIS_LABEL_SIZE)
+            if stem not in _SUITE_FIGURES_WITHOUT_X_LABEL:
+                axis.set_xlabel(_factor_axis_label(factor), fontsize=SUITE_AXIS_LABEL_SIZE)
             # One y-label per row avoids collisions in the narrow thesis
             # column while retaining the shared unit for all three panels.
             axis.set_ylabel(

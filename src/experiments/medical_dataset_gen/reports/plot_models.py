@@ -10,7 +10,6 @@ import numpy as np
 
 from experiments.medical_dataset_gen.reports.helpers import embedding_model_sort_key, float_or_none
 from experiments.medical_dataset_gen.reports.report_config import (
-    OBJECTIVE_COLORS,
     embedding_model_color,
     embedding_model_display_label,
 )
@@ -18,13 +17,32 @@ from experiments.medical_dataset_gen.reports.report_config import (
 # These figures are embedded at approximately text width in the thesis.  The
 # explicit sizes keep labels readable after that down-scaling instead of
 # relying on Matplotlib's small defaults.
-MODEL_FIGURE_TITLE_SIZE = 18
-MODEL_AXIS_TITLE_SIZE = 15
-MODEL_AXIS_LABEL_SIZE = 13
-MODEL_TICK_LABEL_SIZE = 12
-MODEL_LEGEND_SIZE = 12
-MODEL_VALUE_LABEL_SIZE = 11
-MODEL_HEATMAP_CELL_SIZE = 13
+MODEL_FIGURE_TITLE_SIZE = 16
+MODEL_AXIS_TITLE_SIZE = 14
+MODEL_AXIS_LABEL_SIZE = 12
+MODEL_TICK_LABEL_SIZE = 11
+MODEL_LEGEND_SIZE = 11
+MODEL_VALUE_LABEL_SIZE = 10
+MODEL_HEATMAP_CELL_SIZE = 12
+
+# Muted blue/rose/slate tones echo the pastel composition audit while keeping
+# the objective semantics stable: MMR remains blue and Facility-Location red.
+PASTEL_OBJECTIVE_COLORS: dict[str, str] = {
+    'top_k': '#9AA7B5',
+    'mmr': '#78A9C4',
+    'fac_loc': '#D09A8F',
+}
+PASTEL_EMBEDDING_MODEL_COLORS: dict[str, str] = {
+    'Qwen/Qwen3-Embedding-0.6B': '#78A6C8',
+    'Qwen/Qwen3-Embedding-4B': '#9A87BF',
+    'abhinand/MedEmbed-large-v0.1': '#D1917E',
+    'multi-qa-mpnet-base-cos-v1': '#7CA998',
+}
+PASTEL_GEOMETRY_COLORS: dict[str, str] = {
+    'coverage_stress': '#7FA3B7',
+    'near_miss': '#D0A08F',
+    'background': '#8FBBD0',
+}
 
 
 def write_embedding_model_figures(
@@ -79,9 +97,9 @@ def _embedding_model_fcp_overview(
     try:
         width = 0.24
         objectives = (
-            ('Top-k', 'MeanTopK', OBJECTIVE_COLORS['top_k']),
-            ('MMR', 'MeanMMR', OBJECTIVE_COLORS['mmr']),
-            ('Facility-Location', 'MeanFacLoc', OBJECTIVE_COLORS['fac_loc']),
+            ('Top-k', 'MeanTopK', PASTEL_OBJECTIVE_COLORS['top_k']),
+            ('MMR', 'MeanMMR', PASTEL_OBJECTIVE_COLORS['mmr']),
+            ('Facility-Location', 'MeanFacLoc', PASTEL_OBJECTIVE_COLORS['fac_loc']),
         )
         for index, (label, column, color) in enumerate(objectives):
             offset = (index - 1) * width
@@ -104,42 +122,42 @@ def _embedding_model_fcp_overview(
             'Absolute retrieval performance',
             fontsize=MODEL_AXIS_TITLE_SIZE,
         )
-        absolute_axis.set_ylabel(
-            'Family- and budget-balanced mean FCP@k',
-            fontsize=MODEL_AXIS_LABEL_SIZE,
-        )
+        absolute_axis.set_ylabel('Mean FCP@k', fontsize=MODEL_AXIS_LABEL_SIZE)
         absolute_axis.set_xticks(positions, labels, rotation=28, ha='right')
         absolute_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         absolute_axis.set_ylim(0, 1.02)
         absolute_axis.grid(axis='y', alpha=0.22)
-        absolute_axis.legend(frameon=False, ncol=3, fontsize=MODEL_LEGEND_SIZE)
+        handles, legend_labels = absolute_axis.get_legend_handles_labels()
+        figure.legend(
+            handles,
+            legend_labels,
+            frameon=False,
+            ncol=3,
+            fontsize=MODEL_LEGEND_SIZE,
+            loc='upper center',
+            bbox_to_anchor=(0.5, 0.995),
+            columnspacing=1.0,
+        )
 
         deltas = [float_or_none(row.get('MeanDeltaFacLocMMR')) or 0.0 for row in selected]
         bars = delta_axis.bar(
             positions,
             deltas,
-            color=[embedding_model_color(model) for model in models],
+            color=[PASTEL_EMBEDDING_MODEL_COLORS.get(model, '#A9A9A9') for model in models],
             width=0.72,
         )
         delta_axis.bar_label(bars, fmt='%+.3f', padding=3, fontsize=MODEL_VALUE_LABEL_SIZE)
         delta_axis.axhline(0.0, color='#555555', linewidth=0.9)
         delta_axis.axhline(0.05, color='#888888', linestyle=':', linewidth=1.0)
         delta_axis.set_title('Relative objective effect', fontsize=MODEL_AXIS_TITLE_SIZE)
-        delta_axis.set_ylabel(
-            'Mean FCP@k difference (FacLoc - MMR)',
-            fontsize=MODEL_AXIS_LABEL_SIZE,
-        )
+        delta_axis.set_ylabel('FCP@k delta', fontsize=MODEL_AXIS_LABEL_SIZE)
         delta_axis.set_xticks(positions, labels, rotation=28, ha='right')
         delta_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         delta_axis.grid(axis='y', alpha=0.22)
         top = max(deltas) + 0.025
         delta_axis.set_ylim(min(-0.01, min(deltas) - 0.015), top)
 
-        figure.suptitle(
-            'Retrieval results across representation spaces',
-            fontsize=MODEL_FIGURE_TITLE_SIZE,
-        )
-        figure.tight_layout(rect=(0, 0, 1, 0.94), pad=0.7)
+        figure.tight_layout(rect=(0, 0, 1, 0.90), pad=0.7)
         return _save_both(figure=figure, output_dir=output_dir, stem='embedding_model_fcp_overview')
     finally:
         plt.close(figure)
@@ -163,13 +181,15 @@ def _embedding_geometry_overview(
     figure, (stress_axis, margin_axis) = plt.subplots(1, 2, figsize=(8.0, 4.6))
     try:
         stress = [float_or_none(row.get('CoverageStressRate')) or 0.0 for row in selected]
-        bars = stress_axis.bar(positions, stress, width=0.58, color='#287C8E')
+        bars = stress_axis.bar(
+            positions,
+            stress,
+            width=0.58,
+            color=PASTEL_GEOMETRY_COLORS['coverage_stress'],
+        )
         stress_axis.bar_label(bars, fmt='%.3f', padding=3, fontsize=MODEL_VALUE_LABEL_SIZE)
         stress_axis.set_title('Early-ranking coverage stress', fontsize=MODEL_AXIS_TITLE_SIZE)
-        stress_axis.set_ylabel(
-            'Family-balanced coverage-stress rate',
-            fontsize=MODEL_AXIS_LABEL_SIZE,
-        )
+        stress_axis.set_ylabel('Coverage-stress rate', fontsize=MODEL_AXIS_LABEL_SIZE)
         stress_axis.set_xticks(positions, labels, rotation=28, ha='right')
         stress_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         stress_axis.set_ylim(0, 1.05)
@@ -177,8 +197,8 @@ def _embedding_geometry_overview(
 
         width = 0.34
         series = (
-            ('Gold - near miss', 'GoldNearMissMargin', '#D08A2E'),
-            ('Gold - background', 'GoldBackgroundMargin', '#3D71B7'),
+            ('Gold - near miss', 'GoldNearMissMargin', PASTEL_GEOMETRY_COLORS['near_miss']),
+            ('Gold - background', 'GoldBackgroundMargin', PASTEL_GEOMETRY_COLORS['background']),
         )
         for index, (label, column, color) in enumerate(series):
             values = [float_or_none(row.get(column)) or 0.0 for row in selected]
@@ -190,20 +210,13 @@ def _embedding_geometry_overview(
                 color=color,
             )
         margin_axis.set_title('Gold separation from distractors', fontsize=MODEL_AXIS_TITLE_SIZE)
-        margin_axis.set_ylabel(
-            'Within-model cosine-similarity margin',
-            fontsize=MODEL_AXIS_LABEL_SIZE,
-        )
+        margin_axis.set_ylabel('Cosine margin', fontsize=MODEL_AXIS_LABEL_SIZE)
         margin_axis.set_xticks(positions, labels, rotation=28, ha='right')
         margin_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         margin_axis.grid(axis='y', alpha=0.22)
         margin_axis.legend(frameon=False, fontsize=MODEL_LEGEND_SIZE)
 
-        figure.suptitle(
-            'Representation-space audit by embedding model',
-            fontsize=MODEL_FIGURE_TITLE_SIZE,
-        )
-        figure.tight_layout(rect=(0, 0, 1, 0.94), pad=0.7)
+        figure.tight_layout(pad=0.7)
         return _save_both(figure=figure, output_dir=output_dir, stem='embedding_geometry_overview')
     finally:
         plt.close(figure)
@@ -233,13 +246,9 @@ def _embedding_geometry_family_heatmap(
             value = float_or_none(row.get('CoverageStressRate'))
             if value is not None:
                 values[model_index, family_index] = value
-    figure, axis = plt.subplots(figsize=(7.5, 4.1))
+    figure, axis = plt.subplots(figsize=(7.5, 3.2))
     try:
         image = axis.imshow(values, vmin=0.5, vmax=1.0, cmap='viridis', aspect='auto')
-        axis.set_title(
-            'Coverage-stress rate by embedding model and distribution family',
-            fontsize=MODEL_AXIS_TITLE_SIZE,
-        )
         axis.set_xticks(
             range(len(families)),
             [_heatmap_family_label(family) for family in families],
