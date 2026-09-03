@@ -14,9 +14,6 @@ from experiments.medical_dataset_gen.reports.report_config import (
     embedding_model_display_label,
 )
 
-# These figures are embedded at approximately text width in the thesis.  The
-# explicit sizes keep labels readable after that down-scaling instead of
-# relying on Matplotlib's small defaults.
 MODEL_FIGURE_TITLE_SIZE = 16
 MODEL_AXIS_TITLE_SIZE = 14
 MODEL_AXIS_LABEL_SIZE = 12
@@ -25,23 +22,25 @@ MODEL_LEGEND_SIZE = 11
 MODEL_VALUE_LABEL_SIZE = 10
 MODEL_HEATMAP_CELL_SIZE = 12
 
-# Muted blue/rose/slate tones echo the pastel composition audit while keeping
-# the objective semantics stable: MMR remains blue and Facility-Location red.
 PASTEL_OBJECTIVE_COLORS: dict[str, str] = {
-    'top_k': '#8297B3',
-    'mmr': '#5FA7CF',
-    'fac_loc': '#D98F82',
+    'top_k': '#7F95B2',  # soft steel blue
+    'mmr': '#4FA3C7',  # fresh cyan-blue
+    'fac_loc': '#D88478',  # coral
 }
+
 PASTEL_EMBEDDING_MODEL_COLORS: dict[str, str] = {
-    'Qwen/Qwen3-Embedding-0.6B': '#5E9FD0',
-    'Qwen/Qwen3-Embedding-4B': '#9B78C7',
-    'abhinand/MedEmbed-large-v0.1': '#DD8B70',
-    'multi-qa-mpnet-base-cos-v1': '#68AA91',
+    'Qwen/Qwen3-Embedding-0.6B': '#5B9FD3',  # blue
+    'Qwen/Qwen3-Embedding-4B': '#9A6BC3',  # violet
+    'abhinand/MedEmbed-large-v0.1': '#DB836B',  # terracotta/coral
+    'multi-qa-mpnet-base-cos-v1': '#63AE8B',  # jade green
 }
+
 PASTEL_GEOMETRY_COLORS: dict[str, str] = {
-    'coverage_stress': '#639DBA',
-    'near_miss': '#DB9A80',
-    'background': '#78B9D4',
+    # Muted lilac keeps coverage stress distinct from the salmon near-miss and
+    # blue background-margin series while retaining the pastel visual language.
+    'coverage_stress': '#B6A6C5',
+    'near_miss': '#DF8D73',
+    'background': '#72B7D2',
 }
 
 
@@ -182,7 +181,7 @@ def _embedding_geometry_overview(
         bars = stress_axis.bar(
             positions,
             stress,
-            width=0.58,
+            width=0.40,
             color=PASTEL_GEOMETRY_COLORS['coverage_stress'],
         )
         stress_axis.bar_label(bars, fmt='%.3f', padding=3, fontsize=MODEL_VALUE_LABEL_SIZE)
@@ -212,9 +211,19 @@ def _embedding_geometry_overview(
         margin_axis.set_xticks(positions, labels, rotation=28, ha='right')
         margin_axis.tick_params(axis='both', labelsize=MODEL_TICK_LABEL_SIZE)
         margin_axis.grid(axis='y', alpha=0.22)
-        margin_axis.legend(frameon=False, fontsize=MODEL_LEGEND_SIZE)
+        handles, legend_labels = margin_axis.get_legend_handles_labels()
+        figure.legend(
+            handles,
+            legend_labels,
+            frameon=False,
+            ncol=2,
+            fontsize=MODEL_LEGEND_SIZE,
+            loc='upper center',
+            bbox_to_anchor=(0.5, 0.995),
+            columnspacing=1.0,
+        )
 
-        figure.tight_layout(pad=0.7)
+        figure.tight_layout(rect=(0, 0, 1, 0.90), pad=0.7)
         return _save_both(figure=figure, output_dir=output_dir, stem='embedding_geometry_overview')
     finally:
         plt.close(figure)
@@ -244,9 +253,15 @@ def _embedding_geometry_family_heatmap(
             value = float_or_none(row.get('CoverageStressRate'))
             if value is not None:
                 values[model_index, family_index] = value
-    figure, axis = plt.subplots(figsize=(7.5, 3.2))
+    figure, axis = plt.subplots(figsize=(7.5, 2.5))
     try:
-        image = axis.imshow(values, vmin=0.5, vmax=1.0, cmap='viridis', aspect='auto')
+        image = axis.imshow(
+            values,
+            vmin=0.5,
+            vmax=1.0,
+            cmap='viridis',
+            aspect='auto',
+        )
         axis.set_xticks(
             range(len(families)),
             [_heatmap_family_label(family) for family in families],
@@ -273,7 +288,7 @@ def _embedding_geometry_family_heatmap(
                     color='white' if value < 0.74 else 'black',
                 )
         colorbar = figure.colorbar(image, ax=axis)
-        colorbar.set_label('Mean coverage-stress rate', fontsize=MODEL_AXIS_LABEL_SIZE)
+        colorbar.set_label('Coverage stress', fontsize=MODEL_AXIS_LABEL_SIZE)
         colorbar.ax.tick_params(labelsize=MODEL_TICK_LABEL_SIZE)
         figure.tight_layout(pad=0.7)
         return _save_both(
