@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from experiments.medical_dataset_gen.reports.suite_analysis import write_suite_factor_figures
+from experiments.medical_dataset_gen.reports.suite_analysis import (
+    _suite_line_label,
+    write_suite_factor_figures,
+)
 
 
-def test_suite_factor_figures_write_both_interactions_as_png_and_pdf(tmp_path: Path) -> None:
+def _interaction_rows() -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for comparison, x_factor, x_levels, line_factor, line_levels in (
         (
@@ -14,7 +17,7 @@ def test_suite_factor_figures_write_both_interactions_as_png_and_pdf(tmp_path: P
             'background_topology',
             ('32x1', '4x8'),
             'dominance_level',
-            ('balanced', 'high'),
+            ('control', 'high'),
         ),
         (
             'interaction_sparse_near_miss',
@@ -45,50 +48,50 @@ def test_suite_factor_figures_write_both_interactions_as_png_and_pdf(tmp_path: P
                 ):
                     row[metric] = 0.1 * (x_index + line_index)
                 rows.append(row)
+    return rows
 
-    written = write_suite_factor_figures(output_dir=tmp_path, contrast_rows=rows)
+
+def test_suite_factor_figures_write_one_combined_interaction_as_png_and_pdf(
+    tmp_path: Path,
+) -> None:
+    written = write_suite_factor_figures(output_dir=tmp_path, contrast_rows=_interaction_rows())
 
     assert {path.name for path in written} == {
-        'dominance_background_interaction_by_objective.png',
-        'dominance_background_interaction_by_objective.pdf',
-        'sparse_near_miss_interaction_by_objective.png',
-        'sparse_near_miss_interaction_by_objective.pdf',
+        'stressor_interactions_by_objective.png',
+        'stressor_interactions_by_objective.pdf',
     }
     assert all(path.is_file() for path in written)
 
 
 def test_suite_factor_figures_can_regenerate_one_stem(tmp_path: Path) -> None:
-    rows = [
-        {
-            'Comparison': 'interaction_sparse_near_miss',
-            'RunProfile': 'qwen_unbiased_simple',
-            'EmbeddingModel': 'Qwen/Qwen3-Embedding-0.6B',
-            'k': 6,
-            'Factor_near_miss_mass': level,
-            'FactorOrder_near_miss_mass': json.dumps(['24', '96']),
-            'Factor_sparse_level': 'control',
-            **{
-                metric: value
-                for metric in (
-                    'Delta_FacLoc_MMR_FCP',
-                    'Delta_FacLoc_MMR_FacetCoverage',
-                    'Delta_FacLoc_MMR_AllFacetCoverageRate',
-                    'Delta_FacLoc_MMR_AllFacetCleanRate',
-                    'Delta_FacLoc_MMR_Precision',
-                    'Delta_FacLoc_MMR_alpha_nDCG',
-                )
-            },
-        }
-        for level, value in (('24', 0.1), ('96', 0.2))
-    ]
-
     written = write_suite_factor_figures(
         output_dir=tmp_path,
-        contrast_rows=rows,
-        stems=('sparse_near_miss_interaction_by_objective',),
+        contrast_rows=_interaction_rows(),
+        stems=('stressor_interactions_by_objective',),
     )
 
     assert {path.name for path in written} == {
-        'sparse_near_miss_interaction_by_objective.png',
-        'sparse_near_miss_interaction_by_objective.pdf',
+        'stressor_interactions_by_objective.png',
+        'stressor_interactions_by_objective.pdf',
     }
+
+
+def test_suite_interaction_legends_describe_gold_support() -> None:
+    assert (
+        _suite_line_label(
+            row={'Factor_dominance_level': 'control'}, line_key='dominance_level'
+        )
+        == 'Balanced support'
+    )
+    assert (
+        _suite_line_label(row={'Factor_dominance_level': 'high'}, line_key='dominance_level')
+        == 'High dominance'
+    )
+    assert (
+        _suite_line_label(row={'Factor_sparse_level': 'control'}, line_key='sparse_level')
+        == 'Balanced support'
+    )
+    assert (
+        _suite_line_label(row={'Factor_sparse_level': 'severe'}, line_key='sparse_level')
+        == 'One severe sparse facet'
+    )

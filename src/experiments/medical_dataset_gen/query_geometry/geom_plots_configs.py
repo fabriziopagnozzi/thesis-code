@@ -19,6 +19,13 @@ type GeomPlotName = Literal[
 ]
 GEOM_PLOT_FILE_NAMES = set[GeomPlotName](get_literals(GeomPlotName))
 
+CANDIDATE_POOL_FACET_COLORS: Final[tuple[str, str, str, str]] = (
+    '#1F77B4',
+    '#FF7F0E',
+    '#816E96',
+    '#A1D39C',
+)
+
 
 @dataclass(frozen=True, slots=True)
 class GeomPlotsSettings:

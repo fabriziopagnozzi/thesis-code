@@ -255,9 +255,6 @@ def _embedding_geometry_family_heatmap(
                 values[model_index, family_index] = value
     figure, axis = plt.subplots(figsize=(7.5, 2.5))
     try:
-        # Preserve viridis's perceptual ordering while softening its saturation
-        # for print: a small white blend keeps the same purple--green--yellow
-        # progression without the default palette's strongest contrast.
         from matplotlib.colors import LinearSegmentedColormap
 
         viridis = plt.get_cmap('viridis')

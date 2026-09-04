@@ -14,7 +14,10 @@ import polars as pl
 from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.dataset_generation.schemas import ClusterRole
-from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import SETTINGS
+from experiments.medical_dataset_gen.query_geometry.geom_plots_configs import (
+    CANDIDATE_POOL_FACET_COLORS,
+    SETTINGS,
+)
 from experiments.medical_dataset_gen.query_geometry.schemas import (
     GeometryArtifact,
     GeometrySelection,
@@ -1904,19 +1907,13 @@ def label_palette(artifact: GeometryArtifact) -> dict[str, Any]:
         artifact.label_ids[label_groups[label][0]]: label for label in gold_labels
     }
     gold_cmap = plt.get_cmap('tab20')  # type: ignore
-    facet_colors_in_legend_order = (
-        '#1F77B4',  # primary axis, first facet
-        '#FF7F0E',  # primary axis, second facet
-        '#816E96',  # secondary axis, first facet
-        '#A1D39C',  # secondary axis, second facet
-    )
     facet_palette: dict[str, Any] = {}
     for index, facet_id in enumerate(_legend_ordered_facet_ids(artifact)):
         if facet_id not in gold_label_by_facet_id:
             continue
         facet_palette[facet_id] = (
-            facet_colors_in_legend_order[index]
-            if index < len(facet_colors_in_legend_order)
+            CANDIDATE_POOL_FACET_COLORS[index]
+            if index < len(CANDIDATE_POOL_FACET_COLORS)
             else gold_cmap(index % 20)
         )
     background_cluster_ids = sorted(
