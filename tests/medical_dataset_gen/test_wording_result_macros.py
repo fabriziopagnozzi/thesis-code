@@ -138,3 +138,33 @@ def test_wording_macros_select_the_global_low_budget_grid() -> None:
         f'Wording result macros use the global k={LOW_BUDGET_K} low-budget grid and exclude 1 row(s) '
         'from alternative k values.'
     ]
+
+
+def test_wording_macros_expose_raw_lower_is_better_deltas() -> None:
+    rows = _complete_grid_rows()
+    for row in rows:
+        for metric in ('NearMissDistractorRate', 'BackgroundOutlierRate'):
+            row[f'MMR_{metric}'] = 0.10
+            row[f'FacLoc_{metric}'] = 0.02
+            row[f'TopK_{metric}'] = 0.03
+            # These are intentionally oriented to represent Facility-Location
+            # reducing a lower-is-better rate.
+            row[f'Delta_FacLoc_MMR_{metric}'] = 0.08
+            row[f'Delta_FacLoc_TopK_{metric}'] = 0.01
+
+    macros = render_wording_result_macros(
+        budget_rows=rows,
+        geometry_rows=_geometry_rows(rows),
+        embedding_models=(_MODEL,),
+        require_complete_grid=True,
+    )
+
+    prefix = 'ResultWordingLowFamilySparseNicheNearMissDistractorRate'
+    assert macros[f'{prefix}FacLocMmrMeanDelta'] == '+0.080'
+    assert macros[f'{prefix}FacLocMmrRawMeanDelta'] == '-0.080'
+    assert macros[f'{prefix}FacLocTopKMeanDelta'] == '+0.010'
+    assert macros[f'{prefix}FacLocTopKRawMeanDelta'] == '-0.010'
+
+    background_prefix = 'ResultWordingLowFamilySparseNicheBackgroundOutlierRate'
+    assert macros[f'{background_prefix}FacLocMmrRawMeanDelta'] == '-0.080'
+    assert macros[f'{background_prefix}FacLocTopKRawMeanDelta'] == '-0.010'

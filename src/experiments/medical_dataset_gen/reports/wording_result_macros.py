@@ -418,6 +418,20 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
             prefix = f'ResultWordingLow{scope_token}{metric_token}'
             mmr_deltas = [_numeric(row, f'Delta_FacLoc_MMR_{metric}') for row in scope_rows]
             topk_deltas = [_numeric(row, f'Delta_FacLoc_TopK_{metric}') for row in scope_rows]
+            # The standard delta fields are oriented so that a positive value
+            # always favours Facility-Location.  For lower-is-better metrics
+            # this is the negative of the literal Facility-Location minus
+            # comparator difference.  Keep both forms available: plots and
+            # win rates use the oriented values, whereas tables that report
+            # the measured rate difference use the raw values.
+            raw_facloc_mmr_delta = (
+                _column_mean(scope_rows, f'FacLoc_{metric}')
+                - _column_mean(scope_rows, f'MMR_{metric}')
+            )
+            raw_facloc_topk_delta = (
+                _column_mean(scope_rows, f'FacLoc_{metric}')
+                - _column_mean(scope_rows, f'TopK_{metric}')
+            )
             macros.update(
                 {
                     f'{prefix}MmrMean': _fixed(
@@ -426,6 +440,10 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
                     ),
                     f'{prefix}FacLocMmrMeanDelta': _signed(
                         _column_mean(scope_rows, f'Delta_FacLoc_MMR_{metric}'),
+                        digits=3,
+                    ),
+                    f'{prefix}FacLocMmrRawMeanDelta': _signed(
+                        raw_facloc_mmr_delta,
                         digits=3,
                     ),
                     # The MMR comparison uses the pre-registered practical margin,
@@ -440,6 +458,10 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
                     ),
                     f'{prefix}FacLocTopKMeanDelta': _signed(
                         _column_mean(scope_rows, f'Delta_FacLoc_TopK_{metric}'),
+                        digits=3,
+                    ),
+                    f'{prefix}FacLocTopKRawMeanDelta': _signed(
+                        raw_facloc_topk_delta,
                         digits=3,
                     ),
                     f'{prefix}FacLocTopKWinRate': _tex_percent(

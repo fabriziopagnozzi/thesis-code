@@ -245,7 +245,9 @@ def test_lambda_result_macros_expose_grid_and_robustness_claims() -> None:
     assert curve_macros['ResultFacLocAggregateMinMeanFcpDelta'] == '-0.0200'
     assert curve_macros['ResultMmrAggregateBelowTopKLambdaCount'] == '1'
     assert robustness_macros['ResultFacLocAllGridSafeRate'] == r'75\%'
+    assert robustness_macros['ResultFacLocMinWorstLambdaFcpDelta'] == '-0.2000'
     assert robustness_macros['ResultMmrMedianWorstLambdaFcpDelta'] == '-0.3000'
+    assert robustness_macros['ResultMmrMinWorstLambdaFcpDelta'] == '-0.7000'
 
 
 def _reference_record(

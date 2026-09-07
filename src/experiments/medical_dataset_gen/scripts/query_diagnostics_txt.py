@@ -22,6 +22,7 @@ from experiments.medical_dataset_gen.utils.global_schemas import (
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
+    SyntheticMedicalDatasetTableName,
     load_config,
     paths_for,
 )
@@ -1360,11 +1361,11 @@ def _rank_candidate_pools(
 
 def _collect_query_table(
     paths: MedicalDatasetGenPaths,
-    table: str,
+    table: SyntheticMedicalDatasetTableName,
     query_ids: list[str],
     columns: list[str] | None = None,
 ) -> pl.DataFrame:
-    path = paths.experiment_dir / f'{table}.parquet'
+    path = paths.table_path(table)
     if not path.exists():
         return pl.DataFrame()
     lf = pl.scan_parquet(path)
