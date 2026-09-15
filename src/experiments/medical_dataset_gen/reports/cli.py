@@ -162,8 +162,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         action='store_true',
         help=(
             'Enable cross-wording-configuration analyses across query_mode, focus_mode, '
-            'and chunk_text_mode triples, including the singleton label-only query mode. '
-            'This is intended for full all-mode reports.'
+            'and chunk_text_mode triples. This is intended for full all-mode reports.'
         ),
         default=True,
     )

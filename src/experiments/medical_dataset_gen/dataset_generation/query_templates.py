@@ -12,9 +12,9 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryPlan,
     QueryStructure,
     QueryTemplateData,
-    QueryTemplateSpec,
-    canonical_query_focus_mode,
+    TemplateSpec,
 )
+from experiments.medical_dataset_gen.utils.deterministic_ids import stable_id, stable_int
 
 
 def _load_query_template_data() -> QueryTemplateData:
@@ -29,18 +29,12 @@ def render_query_template(
     plan: QueryPlan,
     ontology: MedicalOntology,
     *,
-    template_id: str | None = None,
+    template_id: str,
     focus_mode: QueryFocusMode = 'natural',
     query_structure: QueryStructure = 'unbalanced',
 ) -> str:
-    focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
-    resolved_template_id = template_id
-    if resolved_template_id is None and plan.template_id != 'deferred':
-        resolved_template_id = plan.template_id
-    if resolved_template_id is None:
-        resolved_template_id = query_template_ids(query_structure, focus_mode)[0]
     template = query_template_spec(
-        resolved_template_id,
+        template_id,
         query_structure=query_structure,
         focus_mode=focus_mode,
     ).template
@@ -94,7 +88,6 @@ def query_template_ids(
     query_structure: QueryStructure = 'unbalanced',
     focus_mode: QueryFocusMode = 'natural',
 ) -> list[str]:
-    focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
     return [spec.id for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]]
 
 
@@ -103,19 +96,36 @@ def query_template_spec(
     *,
     query_structure: QueryStructure = 'unbalanced',
     focus_mode: QueryFocusMode = 'natural',
-) -> QueryTemplateSpec:
-    focus_mode = canonical_query_focus_mode(query_structure, focus_mode)
+) -> TemplateSpec:
     for spec in QUERY_TEMPLATE_DATA.query_templates[query_structure][focus_mode]:
         if spec.id == template_id:
             return spec
     raise KeyError(f'unknown query template id for {query_structure}/{focus_mode}: {template_id}')
 
 
-def axis_query_label(axis: ClinicalAxis, ontology: MedicalOntology | None = None) -> str:
-    """Return the ontology-owned query wording, with a legacy-safe fallback."""
-    if ontology is not None:
-        return ontology.clinical_axes[axis].query_label
-    return axis.replace('_', ' ')
+def select_query_template_id(
+    plan: QueryPlan,
+    *,
+    dataset_schema_version: int,
+    global_seed: int,
+    query_structure: QueryStructure,
+    focus_mode: QueryFocusMode,
+) -> str:
+    """Select the authored frame deterministically for one query realization."""
+    template_ids = query_template_ids(query_structure, focus_mode)
+    query_key = stable_id(
+        'qv4',
+        dataset_schema_version,
+        global_seed,
+        plan.evidence_profile_id,
+        plan.primary_axis,
+        plan.secondary_axis,
+    )
+    return template_ids[stable_int(query_key, 'template') % len(template_ids)]
+
+
+def axis_query_label(axis: ClinicalAxis, ontology: MedicalOntology) -> str:
+    return ontology.clinical_axes[axis].query_label
 
 
 def squash_whitespaces(text: str) -> str:

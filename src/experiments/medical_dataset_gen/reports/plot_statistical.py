@@ -306,8 +306,8 @@ def _config_embedding_forest_sort_key(
 
 def _config_sort_key(config: str) -> tuple[int, int, int, str]:
     query_mode, focus_mode, chunk_mode = wording_config_parts(config)
-    query_order = {'biased': 0, 'unbiased': 1, 'label_only': 2}
-    focus_order = {'list': 0, 'natural': 1, 'label_only': 0}
+    query_order = {'biased': 0, 'unbiased': 1}
+    focus_order = {'list': 0, 'natural': 1}
     chunk_order = {'simple': 0, 'hardened': 1}
     return (
         query_order.get(query_mode, 99),

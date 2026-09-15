@@ -119,7 +119,6 @@ def render_wording_result_macros(
         core_rows=core_rows,
         all_low_rows=low_rows,
         embedding_models=effective_embedding_models,
-        warnings=warnings,
     )
     macros.update(_fcp_summary_macros('ResultWordingLowOverall', core_rows))
     macros.update(_grouped_fcp_macros(core_rows))
@@ -172,29 +171,18 @@ def _wording_grid_error(
 ) -> str | None:
     configurations = {_required_wording_key(row) for row in rows}
     chunk_modes = sorted({key[2] for key in configurations})
-    standard_configurations = {
-        key for key in configurations if key[0] != 'label_only' and key[1] != 'label_only'
-    }
-    malformed_label_only = {
-        key for key in configurations if (key[0] == 'label_only') != (key[1] == 'label_only')
-    }
-    standard_query_modes = sorted({key[0] for key in standard_configurations})
-    standard_focus_modes = sorted({key[1] for key in standard_configurations})
+    query_modes = sorted({key[0] for key in configurations})
+    focus_modes = sorted({key[1] for key in configurations})
     expected_configurations = {
         (query_mode, focus_mode, chunk_mode)
-        for query_mode in standard_query_modes
-        for focus_mode in standard_focus_modes
+        for query_mode in query_modes
+        for focus_mode in focus_modes
         for chunk_mode in chunk_modes
     }
-    if any(key[0] == 'label_only' for key in configurations):
-        expected_configurations.update(
-            ('label_only', 'label_only', chunk_mode) for chunk_mode in chunk_modes
-        )
-    if malformed_label_only or configurations != expected_configurations:
+    if configurations != expected_configurations:
         return (
             'The wording macro grid is ragged: balanced/unbalanced modes must contain their '
-            'represented query/focus cross-product, while label_only must have exactly one '
-            'query form for every represented chunk mode.'
+            'represented query/focus/chunk cross-product.'
         )
 
     expected_models = set(embedding_models)
@@ -259,7 +247,6 @@ def _grid_metadata_macros(
     core_rows: Sequence[ReportRow],
     all_low_rows: Sequence[ReportRow],
     embedding_models: Sequence[str],
-    warnings: list[str] | None,
 ) -> dict[str, str]:
     configurations = {_required_wording_key(row) for row in core_rows}
     variants = {
@@ -268,41 +255,15 @@ def _grid_metadata_macros(
     }
     families = {str(row.get('ExperimentFamily') or '') for row in core_rows}
     budgets = {_integer(_numeric(row, 'k')) for row in core_rows}
-    standard_test_query_counts = {
+    test_query_counts = {
         _integer(_numeric(row, 'TopK_n_queries'))
         for row in core_rows
-        if row.get('QueryMode') != 'label_only'
-    }
-    label_only_test_query_counts = {
-        _integer(_numeric(row, 'TopK_n_queries'))
-        for row in core_rows
-        if row.get('QueryMode') == 'label_only'
     }
     if len(budgets) != 1:
         raise ValueError('The core wording grid must use one low budget.')
-    if len(standard_test_query_counts) != 1:
-        raise ValueError(
-            'The standard wording configurations must use one common test-query count.'
-        )
-    standard_test_query_count = next(iter(standard_test_query_counts))
-    label_only_test_query_count = (
-        next(iter(label_only_test_query_counts))
-        if len(label_only_test_query_counts) == 1
-        else standard_test_query_count
-    )
-    if len(label_only_test_query_counts) > 1:
-        raise ValueError(
-            'The label-only wording configurations must use one common test-query count.'
-        )
-    if label_only_test_query_counts and label_only_test_query_count != standard_test_query_count:
-        warning = (
-            'Wording configurations use different held-out test-query counts: '
-            f'standard={standard_test_query_count}, label_only={label_only_test_query_count}. '
-            'Cross-wording summaries therefore compare configuration-specific evaluation '
-            'populations.'
-        )
-        if warnings is not None:
-            warnings.append(warning)
+    if len(test_query_counts) != 1:
+        raise ValueError('The wording configurations must use one common test-query count.')
+    test_query_count = next(iter(test_query_counts))
     auxiliary_rows = [
         row
         for row in all_low_rows
@@ -319,9 +280,7 @@ def _grid_metadata_macros(
         'ResultWordingCoreCells': _integer(len(core_rows)),
         'ResultWordingCellsPerConfiguration': _integer(len(core_rows) // len(configurations)),
         'ResultWordingAuxiliaryCells': _integer(len(auxiliary_rows)),
-        'ResultWordingEvaluationQueriesPerCell': standard_test_query_count,
-        'ResultWordingStandardEvaluationQueriesPerCell': standard_test_query_count,
-        'ResultWordingLabelOnlyEvaluationQueriesPerCell': label_only_test_query_count,
+        'ResultWordingEvaluationQueriesPerCell': test_query_count,
         'ResultWordingFcpPracticalMargin': _fixed(practical_effect_threshold('FCP'), digits=2),
     }
 

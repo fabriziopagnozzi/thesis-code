@@ -1409,8 +1409,8 @@ def _ordered_distribution_family_labels(rows: Sequence[Mapping[str, object]]) ->
 
 def _config_sort_key(config: str) -> tuple[int, int, int, str]:
     parts = _config_parts(config)
-    query_order = {'biased': 0, 'unbiased': 1, 'label_only': 2}
-    focus_order = {'list': 0, 'natural': 1, 'label_only': 0}
+    query_order = {'biased': 0, 'unbiased': 1}
+    focus_order = {'list': 0, 'natural': 1}
     chunk_order = {'simple': 0, 'hardened': 1}
     return (
         query_order.get(parts[0], 99),

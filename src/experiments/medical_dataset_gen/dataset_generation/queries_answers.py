@@ -4,18 +4,24 @@ from collections import defaultdict
 from collections.abc import Sequence
 
 import polars as pl
+from pydantic import model_validator
 
+from experiments.medical_dataset_gen.dataset_generation.artifact_serialization import (
+    gold_answer_output_row,
+    query_output_row,
+    query_plan_from_parquet_row,
+)
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
-    query_template_ids,
     render_answer_template,
     render_query_template,
+    select_query_template_id,
 )
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     AcuteClinicalCoursePayload,
     AnswerFact,
-    AnswerSourceFact,
     AxisFactPayload,
+    BenchmarkPydanticModel,
     CareIntensityPayload,
     ClinicalAxis,
     ComplicationBurdenPayload,
@@ -28,8 +34,8 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     RehabOutcomePayload,
     TreatmentDurationPayload,
     parse_axis_payload,
+    validate_axis_payload,
 )
-from experiments.medical_dataset_gen.utils.deterministic_ids import stable_id, stable_int
 from experiments.medical_dataset_gen.utils.global_schemas import (
     ExperimentCfg,
 )
@@ -37,6 +43,19 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     MedicalDatasetGenPaths,
 )
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet, write_parquet
+
+
+class _AnswerSourceFact(BenchmarkPydanticModel):
+    query_id: str
+    facet_id: str
+    axis: ClinicalAxis
+    axis_payload_json: str
+    fact_id: str
+
+    @model_validator(mode='after')
+    def _validate_payload(self) -> _AnswerSourceFact:
+        validate_axis_payload(self.axis, self.axis_payload_json)
+        return self
 
 
 def run_make_queries_answers(
@@ -48,7 +67,7 @@ def run_make_queries_answers(
 
     plans_by_query: dict[str, QueryPlan] = {}
     for plan_row in plans_df.iter_rows(named=True):
-        plan = QueryPlan.model_validate(plan_row)
+        plan = query_plan_from_parquet_row(plan_row)
         plans_by_query[plan.query_id] = plan
 
     # Facts are sorted by query, so each query can be finalized as soon as its
@@ -56,7 +75,7 @@ def run_make_queries_answers(
     query_rows: list[QueryOutputRow] = []
     answer_rows: list[GoldAnswerOutputRow] = []
     current_query_id: str | None = None
-    current_fact_rows: list[AnswerSourceFact] = []
+    current_fact_rows: list[_AnswerSourceFact] = []
     retained_facts = (
         read_parquet(paths, 'clinical_facts')
         .filter(pl.col('is_gold'))
@@ -64,14 +83,12 @@ def run_make_queries_answers(
             'query_id',
             'facet_id',
             'axis',
-            'value_bin',
             'axis_payload_json',
-            'facet_priority',
             'fact_id',
         )
     )
     for raw_fact_row in retained_facts.iter_rows(named=True):
-        fact_row = AnswerSourceFact.model_validate(raw_fact_row)
+        fact_row = _AnswerSourceFact.model_validate(raw_fact_row)
         query_id = fact_row.query_id
         if current_query_id is None:
             current_query_id = query_id
@@ -117,7 +134,7 @@ def run_make_queries_answers(
 def _finalize_query(
     *,
     query_id: str,
-    fact_rows: list[AnswerSourceFact],
+    fact_rows: list[_AnswerSourceFact],
     plans_by_query: dict[str, QueryPlan],
     ontology: MedicalOntology,
     cfg: ExperimentCfg,
@@ -128,19 +145,13 @@ def _finalize_query(
     if plan is None or not fact_rows:
         return
 
-    template_ids = query_template_ids(
-        cfg.generation.query_structure,
-        cfg.generation.focus_mode,
+    template_id = select_query_template_id(
+        plan,
+        dataset_schema_version=cfg.dataset_schema_version,
+        global_seed=cfg.global_.seed,
+        query_structure=cfg.generation.query_structure,
+        focus_mode=cfg.generation.focus_mode,
     )
-    query_key = stable_id(
-        'qv4',
-        cfg.dataset_schema_version,
-        cfg.global_.seed,
-        plan.evidence_profile_id,
-        plan.primary_axis,
-        plan.secondary_axis,
-    )
-    template_id = template_ids[stable_int(query_key, 'template') % len(template_ids)]
     query_text = render_query_template(
         plan,
         ontology,
@@ -152,9 +163,10 @@ def _finalize_query(
     facet_summaries, facet_answer_objects = _facet_summaries(plan.facets, fact_rows)
     answer_text = _canonical_answer(plan, facet_summaries, ontology)
 
-    query_rows.append(plan.to_query_row(query_text, template_id=template_id))
+    query_rows.append(query_output_row(plan, query_text=query_text, template_id=template_id))
     answer_rows.append(
-        plan.to_answer_row(
+        gold_answer_output_row(
+            plan,
             answer_text=answer_text,
             facet_summaries=facet_summaries,
             facet_answer_objects=facet_answer_objects,
@@ -191,9 +203,9 @@ def _profile_facet_key(subgroup_id: str, axis: ClinicalAxis) -> str:
 
 def _facet_summaries(
     facets: list[QueryPlanFacet],
-    facts: Sequence[AnswerSourceFact],
+    facts: Sequence[_AnswerSourceFact],
 ) -> tuple[dict[str, str], list[AnswerFact]]:
-    by_facet: dict[str, list[AnswerSourceFact]] = defaultdict(list)
+    by_facet: dict[str, list[_AnswerSourceFact]] = defaultdict(list)
     for fact in facts:
         by_facet[fact.facet_id].append(fact)
 

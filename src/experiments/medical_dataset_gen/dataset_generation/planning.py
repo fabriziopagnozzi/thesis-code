@@ -1,4 +1,4 @@
-"""Build deterministic schema-v4 query plans from explicit evidence profiles.
+"""Build deterministic query plans from explicit evidence profiles.
 
 Pair-level ontology policies can restrict which axis may be dominant for a
 given joint profile, preventing clinically entangled primary-axis queries from
@@ -7,10 +7,14 @@ materializing at all.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from itertools import combinations
 
 import polars as pl
 
+from experiments.medical_dataset_gen.dataset_generation.artifact_serialization import (
+    query_plan_to_parquet_row,
+)
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
     get_axis_pair_profiles,
     get_selected_conditions,
@@ -21,12 +25,13 @@ from experiments.medical_dataset_gen.dataset_generation.ontology_utils import (
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CLINICAL_AXIS_LIST,
     ClinicalAxis,
+    CohortContrastFamily,
+    ConditionKey,
     DataSplit,
     MedicalOntology,
     QueryLogicalForm,
     QueryPlan,
     QueryPlanFacet,
-    QueryPlanSpec,
     QueryType,
     SubgroupOntology,
 )
@@ -44,6 +49,25 @@ _PROFILE_SPLIT_BUCKET_COUNT = 10
 _TEST_PROFILE_BUCKET_COUNT = 5
 
 
+@dataclass(frozen=True)
+class _EvidenceProfileSpec:
+    evidence_profile_id: str
+    cohort_contrast_id: str
+    cohort_contrast_family: CohortContrastFamily
+    cohort_dimension_id: str
+    axis_a: ClinicalAxis
+    axis_b: ClinicalAxis
+    profile_id: str
+    cohort_a_bins: tuple[str, str]
+    cohort_b_bins: tuple[str, str]
+    condition_key: ConditionKey
+    condition_display: str
+    subgroup_a_id: str
+    subgroup_a: SubgroupOntology
+    subgroup_b_id: str
+    subgroup_b: SubgroupOntology
+
+
 def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> pl.DataFrame:
     ontology = load_ontology(cfg)
     conditions = get_selected_conditions(ontology, cfg.global_.conditions)
@@ -51,7 +75,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     axis_pairs = [
         pair for pair in combinations(CLINICAL_AXIS_LIST, 2) if not set(pair) & excluded_axes
     ]
-    specs: list[QueryPlanSpec] = []
+    evidence_profile_count = 0
     plans: list[QueryPlan] = []
     next_query_number = 1
 
@@ -103,7 +127,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                         profile.cohort_a_bins,
                         profile.cohort_b_bins,
                     )
-                    spec = QueryPlanSpec(
+                    spec = _EvidenceProfileSpec(
                         evidence_profile_id=evidence_profile_id,
                         cohort_contrast_id=contrast.id,
                         cohort_contrast_family=contrast.family,
@@ -120,7 +144,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                         subgroup_b_id=cohort_b_id,
                         subgroup_b=cohort_b,
                     )
-                    specs.append(spec)
+                    evidence_profile_count += 1
 
                     if len(primary_axes) == 2:
                         plans.extend(
@@ -164,7 +188,7 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
                     )
                     next_query_number += 1
 
-    rows = [plan.to_row() for plan in plans]
+    rows = [query_plan_to_parquet_row(plan) for plan in plans]
     if cfg.generation.query_limit is not None:
         rows = rows[: int(cfg.generation.query_limit)]
 
@@ -172,14 +196,14 @@ def run_make_query_plans(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> p
     if df['query_id'].n_unique() != len(df):
         raise RuntimeError('query IDs must be unique')
     write_parquet(paths, 'query_plans', df)
-    print(f'[plans] {len(specs):,} evidence profiles -> {len(df):,} prioritized queries')
+    print(f'[plans] {evidence_profile_count:,} evidence profiles -> {len(df):,} prioritized queries')
     return df
 
 
 def _materialize_plan(
     cfg: ExperimentCfg,
     ontology: MedicalOntology,
-    spec: QueryPlanSpec,
+    spec: _EvidenceProfileSpec,
     primary_axis: ClinicalAxis,
     secondary_axis: ClinicalAxis,
     *,
@@ -254,13 +278,8 @@ def _materialize_plan(
         facets.append(
             QueryPlanFacet(
                 facet_id=facet_id,
-                condition_id=spec.condition_key,
-                condition_display=spec.condition_display,
                 subgroup_id=cohort_id,
                 subgroup_label=cohort.label,
-                subgroup_axis=cohort.axis,
-                subgroup_field=cohort.field,
-                subgroup_value=cohort.value,
                 axis=axis,
                 value_bin=bin_by_cohort_axis[(cohort_id, axis)],
                 cluster_id=f'{pool_id}_c{index}',
@@ -300,22 +319,18 @@ def _materialize_plan(
         plan_seed=stable_int(cfg.global_.seed, query_key) % (2**31 - 1),
         split=split,
         query_type=QUERY_TYPE,
-        # Surface-template selection belongs to queries_answers so plans can be shared
-        # across query wording modes. The field remains for archived schema compatibility.
-        template_id='deferred',
         condition_id=spec.condition_key,
         condition_display=spec.condition_display,
-        **spec.subgroup_a.prefixed_fields('subgroup_a', spec.subgroup_a_id),  # type: ignore[arg-type]
-        **spec.subgroup_b.prefixed_fields('subgroup_b', spec.subgroup_b_id),  # type: ignore[arg-type]
+        subgroup_a_id=spec.subgroup_a_id,
+        subgroup_a_label=spec.subgroup_a.label,
+        subgroup_b_id=spec.subgroup_b_id,
+        subgroup_b_label=spec.subgroup_b.label,
         cohort_contrast_id=spec.cohort_contrast_id,
         cohort_contrast_family=spec.cohort_contrast_family,
         cohort_dimension_id=spec.cohort_dimension_id,
         primary_axis=primary_axis,
         secondary_axis=secondary_axis,
         dominant_primary_facet_id=dominant_id,
-        n_facets=4,
-        gold_chunks_total=sum(facet.target_gold_chunks for facet in facets),
-        distractor_chunks=cfg.generation.total_distractor_chunks(),
         facets=facets,
         logical_form=logical_form,
     )

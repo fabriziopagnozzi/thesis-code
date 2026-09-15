@@ -94,7 +94,7 @@ def run_make_chunks(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
     validate_chunk_template_sources(ontology)
     facts = read_parquet(paths, 'clinical_facts')
 
-    print(f'[chunks] deterministic v4 rendering for {len(facts):,} facts')
+    print(f'[chunks] deterministic rendering for {len(facts):,} facts')
     return _render_chunks_deterministic_parallel(
         cfg=cfg,
         paths=paths,

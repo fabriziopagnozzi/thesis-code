@@ -90,11 +90,8 @@ def suite_paths_for_cell(
     chunk_key = (
         'simple_c' if cfg.generation.chunk_text_style == 'ontology_explicit' else 'hardened_c'
     )
-    if cfg.generation.query_structure == 'label_only':
-        query_key = 'label_only_q_label_only_f'
-    else:
-        surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
-        query_key = f'{surface}_q_{cfg.generation.focus_mode}_f'
+    surface = 'biased' if cfg.generation.query_structure == 'unbalanced' else 'unbiased'
+    query_key = f'{surface}_q_{cfg.generation.focus_mode}_f'
     shared = {
         'query_plans': data_root / 'base' / 'query_plans.parquet',
         'clinical_facts': data_root / 'base' / 'clinical_facts.parquet',

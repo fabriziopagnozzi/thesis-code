@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from random import Random
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
@@ -9,13 +10,21 @@ from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
 )
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ChunkRow,
-    ChunkState,
     ChunkTextStyle,
     ClinicalFact,
     MedicalOntology,
 )
 from experiments.medical_dataset_gen.utils.deterministic_ids import stable_seed
 from experiments.medical_dataset_gen.utils.global_schemas import ExperimentCfg
+
+
+@dataclass(frozen=True)
+class ChunkState:
+    final_text: str
+    outer_template_family: str | None = None
+    outer_template_id: str | None = None
+    axis_template_family: str | None = None
+    axis_template_id: str | None = None
 
 
 def word_count_ok(word_count: int, min_words: int, max_words: int, tolerance: int) -> bool:
@@ -83,7 +92,16 @@ def finalize_chunk_row(
     if word_errors:
         raise RuntimeError('; '.join(word_errors))
 
-    return ChunkRow.from_state(fact, chunk_id=chunk_id(index), state=state)
+    return ChunkRow(
+        **fact.model_dump(mode='python'),
+        chunk_id=chunk_id(index),
+        text=state.final_text,
+        approx_words=len(state.final_text.split()),
+        outer_template_family=state.outer_template_family,
+        outer_template_id=state.outer_template_id,
+        axis_template_family=state.axis_template_family,
+        axis_template_id=state.axis_template_id,
+    )
 
 
 def chunk_id(index: int) -> str:
