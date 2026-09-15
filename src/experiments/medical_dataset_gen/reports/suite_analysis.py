@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import statistics
 from collections import defaultdict
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, cast
@@ -74,9 +74,7 @@ _SUITE_FACTOR_LEVEL_LABELS: dict[tuple[str, str], str] = {
 }
 
 _COMBINED_INTERACTION_STEM = 'stressor_interactions_by_objective'
-_COMBINED_INTERACTION_SPECS: tuple[
-    tuple[str, str, str, str, Mapping[str, str]], ...
-] = (
+_COMBINED_INTERACTION_SPECS: tuple[tuple[str, str, str, str, Mapping[str, str]], ...] = (
     (
         'Dominance \N{MULTIPLICATION SIGN} background topology',
         'interaction_dominance_background',
@@ -107,13 +105,6 @@ _TOPOLOGY_FIGURE_SPECS: tuple[tuple[str, str, str, str, str | None], ...] = (
         'background_topology',
         None,
     ),
-    (
-        'near_miss_topology_by_objective',
-        'Near-miss topology response',
-        'near_miss_topology',
-        'near_miss_topology',
-        None,
-    ),
 )
 
 _SUITE_FIGURES_WITHOUT_X_LABEL = frozenset(
@@ -122,12 +113,6 @@ _SUITE_FIGURES_WITHOUT_X_LABEL = frozenset(
         'background_topology_by_objective',
         _COMBINED_INTERACTION_STEM,
     }
-)
-
-RESULTS_SUITE_FIGURE_STEMS: tuple[str, ...] = (
-    'scale_by_dataset_size',
-    'background_topology_by_objective',
-    _COMBINED_INTERACTION_STEM,
 )
 
 
@@ -594,7 +579,6 @@ def write_suite_factor_figures(
     *,
     output_dir: Path,
     contrast_rows: Sequence[Mapping[str, object]],
-    stems: Collection[str] | None = None,
 ) -> list[Path]:
     """Render compact, manifest-factor-driven scale and topology response plots."""
     from matplotlib import pyplot as plt
@@ -608,23 +592,19 @@ def write_suite_factor_figures(
     # A raw line for every profile x k x comparison produces over one hundred
     # traces.  These figures instead show equal-weight means over those
     # evaluation conditions, retaining the declared manipulation as the line.
-    selected_stems = set(stems) if stems is not None else None
-    if selected_stems is None or 'scale_by_dataset_size' in selected_stems:
-        written.extend(
-            _write_aggregated_factor_figure(
-                plt=plt,
-                output_dir=figure_dir,
-                rows=contrast_rows,
-                stem='scale_by_dataset_size',
-                title='Scale response by candidate-pool size',
-                comparison_ids=tuple(_SUITE_COMPARISON_LABELS),
-                factor='scale',
-                line_key='comparison',
-            )
+    written.extend(
+        _write_aggregated_factor_figure(
+            plt=plt,
+            output_dir=figure_dir,
+            rows=contrast_rows,
+            stem='scale_by_dataset_size',
+            title='Scale response by candidate-pool size',
+            comparison_ids=tuple(_SUITE_COMPARISON_LABELS),
+            factor='scale',
+            line_key='comparison',
         )
+    )
     for stem, title, comparison_id, factor, line_factor in _TOPOLOGY_FIGURE_SPECS:
-        if selected_stems is not None and stem not in selected_stems:
-            continue
         written.extend(
             _write_aggregated_factor_figure(
                 plt=plt,
@@ -637,20 +617,19 @@ def write_suite_factor_figures(
                 line_key=line_factor,
             )
         )
-    if selected_stems is None or _COMBINED_INTERACTION_STEM in selected_stems:
-        for obsolete_stem in (
-            'dominance_background_interaction_by_objective',
-            'sparse_near_miss_interaction_by_objective',
-        ):
-            for suffix in ('png', 'pdf'):
-                (figure_dir / f'{obsolete_stem}.{suffix}').unlink(missing_ok=True)
-        written.extend(
-            _write_combined_interaction_figure(
-                plt=plt,
-                output_dir=figure_dir,
-                rows=contrast_rows,
-            )
+    for obsolete_stem in (
+        'dominance_background_interaction_by_objective',
+        'sparse_near_miss_interaction_by_objective',
+    ):
+        for suffix in ('png', 'pdf'):
+            (figure_dir / f'{obsolete_stem}.{suffix}').unlink(missing_ok=True)
+    written.extend(
+        _write_combined_interaction_figure(
+            plt=plt,
+            output_dir=figure_dir,
+            rows=contrast_rows,
         )
+    )
     return written
 
 
@@ -801,9 +780,7 @@ def _aggregated_factor_values(
     comparison_ids: Sequence[str],
     factor: str,
     line_key: str | None,
-) -> tuple[
-    list[str], dict[str, dict[str, dict[str, dict[str, list[float]]]]]
-] | None:
+) -> tuple[list[str], dict[str, dict[str, dict[str, dict[str, list[float]]]]]] | None:
     """Collect factor levels and model-stratified values for one response surface."""
     factor_column = f'Factor_{factor}'
     comparison_set = set(comparison_ids)

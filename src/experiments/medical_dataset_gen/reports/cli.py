@@ -9,7 +9,6 @@ from typing import cast
 from experiments.medical_dataset_gen.reports.analysis_constants import TABLEFMT_OPTS
 from experiments.medical_dataset_gen.reports.models import (
     CliArgs,
-    MainQueryScope,
     PlotFormat,
     RefreshMode,
 )
@@ -151,74 +150,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         default='png',
         help='Matplotlib figure file format.',
     )
-    parser.add_argument(
-        '--near-optimal-epsilon',
-        type=float,
-        default=0.01,
-        help='A lambda is near-optimal when FCP is within this absolute margin of the best FCP.',
-    )
-    parser.add_argument(
-        '--cross-query-chunk-modes',
-        action='store_true',
-        help=(
-            'Enable cross-wording-configuration analyses across query_mode, focus_mode, '
-            'and chunk_text_mode triples. This is intended for full all-mode reports.'
-        ),
-        default=True,
-    )
-    parser.add_argument(
-        '--main-query-scope',
-        choices=('all', 'geometry_eligible'),
-        default='all',
-        help=(
-            'Population used for primary strategy/comparison summaries. '
-            'geometry_eligible recomputes them from queries that pass the geometry filter.'
-        ),
-    )
-    parser.add_argument(
-        '--bootstrap-replicates',
-        type=int,
-        default=1000,
-        help='Number of deterministic profile-cluster bootstrap replicates for paired inference.',
-    )
-    parser.add_argument(
-        '--bootstrap-seed',
-        type=int,
-        default=20260712,
-        help='Random seed for deterministic paired-inference bootstrap resampling.',
-    )
-    parser.add_argument(
-        '--lambda-analysis',
-        action='store_true',
-        help='Generate lambda-grid, stability, safety, and near-optimal-width diagnostics.',
-        default=True,
-    )
-    parser.add_argument(
-        '--global-lambda-analysis',
-        action='store_true',
-        help='Generate global-lambda transfer validity outputs.',
-    )
-    parser.add_argument(
-        '--lodo-analysis',
-        action='store_true',
-        help='Generate leave-one-distribution-out lambda-transfer outputs.',
-    )
-    parser.add_argument(
-        '--paired-statistics',
-        action='store_true',
-        help='Generate paired query/profile datasets, bootstrap summaries, and statistical tables.',
-    )
-    parser.add_argument(
-        '--validity-analysis',
-        action='store_true',
-        help='Generate geometry-population and synthetic-artifact validity diagnostics.',
-        default=True,
-    )
-    parser.add_argument(
-        '--full-report',
-        action='store_true',
-        help='Enable every optional expensive analysis.',
-    )
     parsed = parser.parse_args(argv)
     suite_selected = parsed.suite is not None or parsed.suite_base is not None
     if suite_selected:
@@ -306,19 +237,8 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         tablefmt=str(parsed.tablefmt),
         plots=not bool(parsed.no_plots),
         plot_format=cast(PlotFormat, parsed.plot_format),
-        near_optimal_epsilon=max(0.0, float(parsed.near_optimal_epsilon)),
-        cross_query_chunk_modes=bool(parsed.cross_query_chunk_modes),
         refresh_report_dir=refresh_report_dir,
         refresh_mode=refresh_mode,
-        bootstrap_replicates=max(100, int(parsed.bootstrap_replicates)),
-        bootstrap_seed=int(parsed.bootstrap_seed),
-        main_query_scope=cast(MainQueryScope, parsed.main_query_scope),
-        lambda_analysis=bool(parsed.lambda_analysis),
-        global_lambda_analysis=bool(parsed.global_lambda_analysis),
-        lodo_analysis=bool(parsed.lodo_analysis),
-        paired_statistics=bool(parsed.paired_statistics),
-        validity_analysis=bool(parsed.validity_analysis),
-        full_report=bool(parsed.full_report),
         suite_id=str(parsed.suite).strip() if parsed.suite is not None else None,
         suite_base_id=str(parsed.suite_base).strip() if parsed.suite_base is not None else None,
         suite_regex=str(parsed.suite_regex).strip() if parsed.suite_regex is not None else None,

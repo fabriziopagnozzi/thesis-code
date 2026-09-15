@@ -377,13 +377,6 @@ def quantile(sorted_values: Sequence[float], q: float) -> float:
     return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
-def boundary_rate(values: Sequence[float]) -> float | None:
-    if not values:
-        return None
-    boundary_count = sum(value <= 0.02 or value >= 0.98 for value in values)
-    return boundary_count / len(values)
-
-
 def ratio(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator is None or denominator == 0.0:
         return None

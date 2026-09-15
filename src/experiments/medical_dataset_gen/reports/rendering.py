@@ -36,7 +36,6 @@ def render_report(
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
     metric_summary_rows: Sequence[Mapping[str, object]],
     low_budget_rows: Sequence[Mapping[str, object]],
-    lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
     lambda_robustness_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
@@ -44,7 +43,6 @@ def render_report(
     embedding_metric_range_rows: Sequence[Mapping[str, object]],
     embedding_geometry_rows: Sequence[Mapping[str, object]],
     model_grid_rows: Sequence[Mapping[str, object]],
-    paired_config_suite_rows: Sequence[Mapping[str, object]],
     figures: Sequence[Path],
 ) -> str:
     lines: list[str] = [
@@ -71,7 +69,6 @@ def render_report(
         f'- Output dir: `{args.output_dir}`',
         f'- Experiments discovered: `{experiment_count}`',
         f'- Scrapped experiments included: `{args.include_scrapped}`',
-        f'- Near-optimal lambda epsilon: `{args.near_optimal_epsilon}`',
         '',
     ]
 
@@ -275,26 +272,6 @@ def render_report(
     )
     lines.extend(
         section_with_table(
-            'Lambda Stability',
-            lambda_rows,
-            columns=[
-                'strategy',
-                'n_selected',
-                'distinct_lambda_count',
-                'selected_lambda_mean',
-                'selected_lambda_std',
-                'selected_lambda_norm_mean',
-                'selected_lambda_norm_std',
-                'boundary_selection_rate',
-                'near_optimal_fraction_mean',
-                'near_optimal_span_norm_mean',
-            ],
-            tablefmt=args.tablefmt,
-            max_rows=args.max_table_rows,
-        )
-    )
-    lines.extend(
-        section_with_table(
             'Lambda Safety On Validation FCP',
             sorted_rows(lambda_safety_rows, 'WorstDeltaStrategyTopK_FCP', descending=False),
             columns=[
@@ -428,27 +405,6 @@ def render_report(
         )
     )
     lines.extend(
-        section_with_table(
-            'Low-Budget Wording Configuration Paired FCP',
-            [
-                row
-                for row in paired_config_suite_rows
-                if row.get('BudgetCategory') == 'low_budget' and row.get('Scope') == 'Configuration'
-            ],
-            columns=[
-                'WordingConfigLabel',
-                'Distributions',
-                'Runs',
-                'MeanDeltaFacLocMMR',
-                'CI95Low',
-                'CI95High',
-                'PracticalConclusion',
-            ],
-            tablefmt=args.tablefmt,
-            max_rows=args.max_table_rows,
-        )
-    )
-    lines.extend(
         [
             '## Output Files',
             '',
@@ -477,7 +433,6 @@ def render_interesting_findings(
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]],
     metric_summary_rows: Sequence[Mapping[str, object]],
     geometry_rows: Sequence[Mapping[str, object]],
-    lambda_rows: Sequence[Mapping[str, object]],
     lambda_safety_rows: Sequence[Mapping[str, object]],
     embedding_summary_rows: Sequence[Mapping[str, object]],
     tablefmt: str,
@@ -560,19 +515,6 @@ def render_interesting_findings(
             '- Validation lambda-safety check: median worst-case FacLoc - top-k FCP delta '
             f'is `{statistics.median(facloc_worst_deltas):.4f}`, while the corresponding '
             f'MMR value is `{statistics.median(mmr_worst_deltas):.4f}`.'
-        )
-
-    lambda_std = {
-        str(row.get('strategy')): float_or_none(row.get('selected_lambda_norm_std'))
-        for row in lambda_rows
-    }
-    facloc_lambda_std = lambda_std.get('fac_loc')
-    mmr_lambda_std = lambda_std.get('mmr')
-    if facloc_lambda_std is not None and mmr_lambda_std is not None:
-        less_sensitive = 'FacLoc' if facloc_lambda_std <= mmr_lambda_std else 'MMR'
-        lines.append(
-            f'- Normalized selected-lambda std is lower for `{less_sensitive}` in the '
-            'aggregate lambda-stability table.'
         )
 
     lines.append('')
