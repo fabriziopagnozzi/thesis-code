@@ -172,14 +172,6 @@ def reuse_nested_scale_chunk_embeddings(
     paths: MedicalDatasetGenPaths,
     requested: set[PipelineStage],
 ) -> bool:
-    """Hard-link verified source vectors for nested-scale evaluation cells.
-
-    Nested scales project memberships/qrels but deliberately share the same
-    immutable chunk document surface.  Re-embedding it for each 64/128 subset
-    would be both redundant and prone to cache contention.  Query vectors are
-    still materialized per cell because wording and query IDs belong to the
-    run profile.
-    """
     from experiments.medical_dataset_gen.suites.core import SuiteManifestCell
 
     if 'embed' not in requested or not isinstance(cell, SuiteManifestCell):
@@ -227,12 +219,6 @@ def run_suite_where(
     args: argparse.Namespace,
     run_specs: list[StandaloneRunSpec] | None,
 ) -> None:
-    """Run a manifest-selected batch in dependency order.
-
-    Selection is manifest metadata only.  A nested scale request that includes
-    generation implicitly adds its terminal large support, then executes it
-    first so smaller cells are projected rather than independently generated.
-    """
     assert args.suite is not None and args.where is not None
     manifest = load_suite_manifest(MedicalDatasetGenPaths.results_dir, args.suite)
     selected = [cell for cell in manifest.cells if suite_where_matches(cell, args.where)]
@@ -273,12 +259,6 @@ def run_suite_where(
         cell_args.cell = cell.cell_id
         cell_args.where = None
         if run_specs is None and required_nested_scale_source(root=root, cell=cell) is not None:
-            # The terminal large cell above has already produced and projected
-            # this cell's generation artifacts.  Running its normal stage
-            # selection would ask the nested-cell guard to regenerate plans,
-            # facts, chunks, queries, or qrels.  Retain only downstream work
-            # so that chunk vectors can be hard-linked and query vectors plus
-            # evaluation are materialized in the immutable target cell.
             downstream_stages = [
                 stage
                 for stage in stages

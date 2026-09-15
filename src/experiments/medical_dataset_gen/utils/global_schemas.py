@@ -40,7 +40,6 @@ class GlobalCfg(BasePydanticCfgModel):
 
 
 # Dataset construction and distractor-pool settings.
-type EvalPlotTheme = Literal['dark', 'light']
 type DatasetSchemaVersion = Literal[2, 3, 4, 5]
 DATASET_SCHEMA_VERSION_LIST = list[DatasetSchemaVersion](get_literals(DatasetSchemaVersion))
 type DistractorChange = Literal['condition', 'subgroup', 'axis', 'axis_value_bin']
@@ -467,7 +466,6 @@ class EvaluationCfg(BasePydanticCfgModel):
     use_reranker: bool = False
     reranker: EvaluationRerankerCfg = Field(default_factory=EvaluationRerankerCfg)
     all_clean_rate_precision_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
-    plot_theme: EvalPlotTheme = 'light'
     lambda_selection: LambdaSelectionCfg = Field(default_factory=LambdaSelectionCfg)
 
 

@@ -304,12 +304,6 @@ def component_query_similarity_diagnostics(
     topn_sims: NDArray[np.float32],
     query_qrels: QueryIdToQrels,
 ) -> dict[str, object]:
-    """Persist realized query similarity by pool component and near-miss type.
-
-    Structural-change labels are design metadata, not a claim about embedding
-    hardness.  These diagnostics make the empirical distance visible to the
-    report without involving a retrieval outcome.
-    """
     by_type: dict[str, list[float]] = {}
     component: dict[str, list[float]] = {'gold': [], 'near_miss': [], 'background': []}
     for chunk_id, similarity in zip(topn_chunk_ids, topn_sims, strict=True):

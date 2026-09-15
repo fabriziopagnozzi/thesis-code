@@ -60,22 +60,6 @@ QUERY_WORDING_MODE_LIST: list[QueryWordingMode] = [
 ]
 
 
-def query_focus_modes_for_structure(structure: QueryStructure) -> list[QueryFocusMode]:
-    """Return the meaningful focus modes without inventing label-only subvariants."""
-    if structure == 'label_only':
-        return [LABEL_ONLY_CANONICAL_FOCUS_MODE]
-    return QUERY_FOCUS_MODE_LIST
-
-
-def canonical_query_focus_mode(
-    structure: QueryStructure,
-    focus_mode: QueryFocusMode,
-) -> QueryFocusMode:
-    if structure == 'label_only':
-        return LABEL_ONLY_CANONICAL_FOCUS_MODE
-    return focus_mode
-
-
 type ChunkSurfaceGroup = Literal['seen', 'heldout']
 CHUNK_SURFACE_GROUP_LIST = list[ChunkSurfaceGroup](get_literals(ChunkSurfaceGroup))
 type ChunkSurfacePolicy = Literal['split_heldout', 'seen_only', 'heldout_only']
@@ -181,6 +165,22 @@ type AxisFactPayload = Annotated[
     | DiagnosticEvidencePayload,
     Field(discriminator='axis'),
 ]
+
+
+def query_focus_modes_for_structure(structure: QueryStructure) -> list[QueryFocusMode]:
+    """Return the meaningful focus modes without inventing label-only subvariants."""
+    if structure == 'label_only':
+        return [LABEL_ONLY_CANONICAL_FOCUS_MODE]
+    return QUERY_FOCUS_MODE_LIST
+
+
+def canonical_query_focus_mode(
+    structure: QueryStructure,
+    focus_mode: QueryFocusMode,
+) -> QueryFocusMode:
+    if structure == 'label_only':
+        return LABEL_ONLY_CANONICAL_FOCUS_MODE
+    return focus_mode
 
 
 def parse_axis_payload(value: str) -> AxisFactPayload:
