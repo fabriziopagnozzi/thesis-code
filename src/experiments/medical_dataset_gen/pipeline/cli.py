@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import cast
 
 from experiments.medical_dataset_gen.pipeline.stages import (
     EXPLICIT_ONLY_STAGE_SET,
@@ -16,11 +15,6 @@ from experiments.medical_dataset_gen.pipeline.stages import (
     stage_index,
 )
 from experiments.medical_dataset_gen.utils.cli_parsing import parse_comma_separated_names
-from experiments.medical_dataset_gen.utils.global_schemas import (
-    DATASET_SCHEMA_VERSION_LIST,
-    DatasetSchemaVersion,
-    ExperimentCfg,
-)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--suite',
         type=str,
         default=None,
-        help='Materialized v5 suite ID. Requires --cell and bypasses legacy directory discovery.',
+        help='Materialized v5 suite ID. Requires --cell or --where.',
     )
     parser.add_argument(
         '--cell', type=str, default=None, help='Explicit materialized suite cell ID.'
@@ -47,22 +41,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help='Batch-select materialized suite cells, for example tag=smoke|core or analysis_tier=scale.',
     )
-    parser.add_argument(
-        '--attempt',
-        type=str,
-        default=None,
-        help='New immutable evaluation attempt ID for a suite cell.',
-    )
-    parser.add_argument(
-        '--version',
-        choices=[f'v{version}' for version in DATASET_SCHEMA_VERSION_LIST],
-        default=None,
-        help=(
-            'Override dataset_schema_version from the resolved experiment config for this run, '
-            'for example --version v4.'
-        ),
-    )
-
     # Normal pipeline selection.
     parser.add_argument('--from', dest='from_stage', choices=PIPELINE_STAGE_SET, default=None)
     parser.add_argument('--to', dest='to_stage', choices=PIPELINE_STAGE_SET, default=None)
@@ -106,24 +84,6 @@ def build_parser() -> argparse.ArgumentParser:
         help='Run the parent experiment itself even if child subexperiments exist.',
     )
     return parser
-
-
-def with_dataset_schema_version(
-    cfg: ExperimentCfg,
-    raw_version: str | None,
-) -> ExperimentCfg:
-    if raw_version is None:
-        return cfg
-
-    version = cast(DatasetSchemaVersion, int(raw_version.removeprefix('v')))
-    if cfg.dataset_schema_version != version:
-        print(
-            '[pipeline] overriding dataset_schema_version: '
-            f'v{cfg.dataset_schema_version} -> v{version}'
-        )
-    raw_cfg = cfg.model_dump(mode='python', by_alias=True)
-    raw_cfg['dataset_schema_version'] = version
-    return ExperimentCfg.model_validate(raw_cfg)
 
 
 def selected_stage_names(

@@ -31,7 +31,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
     suite_group.add_argument(
         '--suite',
         default=None,
-        help='Materialized v5 suite ID. Uses its manifest instead of legacy directory discovery.',
+        help='Materialized v5 suite ID. Uses its manifest for discovery.',
     )
     suite_group.add_argument(
         '--suite-base',
@@ -122,11 +122,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
         ),
     )
     parser.add_argument(
-        '--artifact-version',
-        default=None,
-        help='Optional exact local artifact version to report, for example v4.',
-    )
-    parser.add_argument(
         '--max-table-rows',
         type=int,
         default=100,
@@ -159,7 +154,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
                 ('--experiments', parsed.experiments),
                 ('--experiment-regex', parsed.experiment_regex),
                 ('--exclude-experiment-regex', parsed.exclude_experiment_regex),
-                ('--artifact-version', parsed.artifact_version),
                 ('--include-scrapped', parsed.include_scrapped),
             )
             if value
@@ -230,9 +224,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CliArgs:
             else None
         ),
         embedding_models=tuple(_normalized_embedding_models(parsed.embedding_models)),
-        artifact_version=(
-            str(parsed.artifact_version).strip() if parsed.artifact_version is not None else None
-        ),
         max_table_rows=max(1, int(parsed.max_table_rows)),
         tablefmt=str(parsed.tablefmt),
         plots=not bool(parsed.no_plots),

@@ -20,7 +20,6 @@ type RefreshMode = Literal['plots', 'latex_macros']
 class DeltaMetricPlotSpec:
     metric_label: DeltaMetricLabel
     title_label: str
-    filename_token: str
     source_metric_name: str
     higher_is_better: bool = True
 
@@ -39,7 +38,6 @@ class CliArgs:
     experiment_regex: str | None
     exclude_experiment_regex: str | None
     embedding_models: tuple[str, ...]
-    artifact_version: str | None
     max_table_rows: int
     tablefmt: str
     plots: bool
@@ -65,13 +63,9 @@ class ExperimentRecord:
     config_error: str | None
     family_id: ExperimentFamilyId
     family_label: str
-    origin: str = 'legacy'
-    dataset_schema_version: int | None = None
-    evaluation_schema_version: int | None = None
-    include_in_causal_summaries: bool = True
+    origin: str = 'native'
     include_in_family_summary: bool = True
     factors: dict[str, object] | None = None
-    distribution_base_id: str | None = None
     tags: tuple[str, ...] = ()
     analysis_blocks: tuple[str, ...] = ()
     analysis_tier: str | None = None

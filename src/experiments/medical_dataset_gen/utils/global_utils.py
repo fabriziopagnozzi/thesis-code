@@ -98,9 +98,8 @@ class MedicalDatasetGenPaths:
         if artifact_root is None and len(exp_parts) > 2:
             raise ValueError(f'subexperiments support only one nesting level: {exp_name!r}')
 
-        # Suite cells live deeper than the historic parent/child layout.  An
-        # explicit root lets them reuse this path interface without faking a
-        # legacy experiment name.
+        # Suite cells live deeper than the parent/child layout. An explicit
+        # root lets both entry paths share this artifact interface.
         self.config_experiment_dir = (
             artifact_root if artifact_root is not None else self.results_dir / exp_name
         )
@@ -267,29 +266,16 @@ def _deep_merge_config(base: YamlMapping, overrides: YamlMapping) -> YamlMapping
     return merged
 
 
-def paths_for(
-    cfg: ExperimentCfg,
-    *,
-    local_artifact_version: str | None = None,
-) -> MedicalDatasetGenPaths:
-    # The artifact version is part of the local namespace, while shared paths
-    # are derived from the effective experiment configuration.
-    resolved_local_artifact_version = local_artifact_version or local_artifact_version_for_config(
-        cfg
-    )
+def paths_for(cfg: ExperimentCfg) -> MedicalDatasetGenPaths:
     paths = MedicalDatasetGenPaths(
         cfg.global_.output_experiment,
         result_dir_overrides=cfg.global_.result_dir_overrides,
         shared_generation_artifact_paths=shared_generation_artifact_paths_for_config(cfg),
         shared_embedding_artifact_paths=shared_embedding_artifact_paths_for_config(cfg),
-        local_artifact_version=resolved_local_artifact_version,
+        local_artifact_version='v5',
     )
     paths.ensure_dirs()
     return paths
-
-
-def local_artifact_version_for_config(cfg: ExperimentCfg) -> str:
-    return f'v{cfg.dataset_schema_version}'
 
 
 def shared_generation_root_for_config(cfg: ExperimentCfg) -> Path | None:
@@ -304,7 +290,7 @@ def shared_generation_root_for_config(cfg: ExperimentCfg) -> Path | None:
     return (
         MedicalDatasetGenPaths.results_dir
         / parent_name
-        / shared_artifact_store_name('_shared', cfg.dataset_schema_version)
+        / shared_artifact_store_name('_shared')
     )
 
 
@@ -339,15 +325,12 @@ def shared_embeddings_dir_for_config(cfg: ExperimentCfg) -> Path | None:
     return (
         MedicalDatasetGenPaths.results_dir
         / exp_path.parts[0]
-        / shared_artifact_store_name('_embeddings', cfg.dataset_schema_version)
+        / shared_artifact_store_name('_embeddings')
     )
 
 
-def shared_artifact_store_name(
-    base_name: SharedArtifactStoreName,
-    dataset_schema_version: int,
-) -> str:
-    return f'{base_name}_v{dataset_schema_version}'
+def shared_artifact_store_name(base_name: SharedArtifactStoreName) -> str:
+    return f'{base_name}_v5'
 
 
 def shared_embedding_artifact_paths_for_config(

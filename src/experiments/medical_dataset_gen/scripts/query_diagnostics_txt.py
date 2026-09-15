@@ -1426,9 +1426,8 @@ def _diagnostic_top_ks(ctx: _RenderContext, pool_size: int) -> list[int]:
 
 
 def _configured_stress_horizon(cfg: ExperimentCfg) -> int:
-    chunk_pools = cfg.generation.chunk_pools
     competitive_pool_mass = (
-        chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
+        cfg.generation.total_gold_chunks() + cfg.generation.near_miss_distractors_per_query()
     )
     return cfg.geometry_filter.stress_horizon(competitive_pool_mass=competitive_pool_mass)
 

@@ -50,7 +50,6 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
 from experiments.medical_dataset_gen.utils.deterministic_ids import stable_seed, stable_sha256
 from experiments.medical_dataset_gen.utils.global_schemas import (
     BackgroundDistractorSpec,
-    ChunkPoolsCfg,
     DistractorSpec,
     ExperimentCfg,
 )
@@ -109,26 +108,15 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
 
             # Distractors are generated from the same plan so their metadata
             # remains query-local and auditable.
-            if cfg.generation.near_miss_specs is None:
-                facts.extend(
-                    make_distractor_facts(
-                        plan,
-                        ontology,
-                        rng,
-                        cfg.generation.chunk_pools,
-                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
-                    )
+            facts.extend(
+                make_global_near_miss_facts(
+                    plan,
+                    ontology,
+                    rng,
+                    cfg.generation.near_miss_specs,
+                    chunk_surface_policy=cfg.generation.chunk_surface_policy,
                 )
-            else:
-                facts.extend(
-                    make_global_near_miss_facts(
-                        plan,
-                        ontology,
-                        rng,
-                        cfg.generation.near_miss_specs,
-                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
-                    )
-                )
+            )
             facts.extend(
                 make_background_outlier_facts(
                     plan,
@@ -230,31 +218,6 @@ def make_gold_fact(
     )
 
 
-def make_distractor_facts(
-    plan: QueryPlan,
-    ontology: MedicalOntology,
-    rng: Random,
-    chunk_pools: ChunkPoolsCfg,
-    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
-) -> list[ClinicalFact]:
-    """Create the configured mix of point distractors for one query-local pool."""
-    rows: list[ClinicalFact] = []
-    for facet in plan.facets:
-        local_cfg = _local_distractor_config_for_facet(chunk_pools, facet)
-
-        rows.extend(
-            make_local_distractor_facts(
-                plan,
-                facet,
-                ontology,
-                rng,
-                local_cfg,
-                chunk_surface_policy=chunk_surface_policy,
-            )
-        )
-    return rows
-
-
 def make_global_near_miss_facts(
     plan: QueryPlan,
     ontology: MedicalOntology,
@@ -294,45 +257,6 @@ def make_global_near_miss_facts(
                         }
                     )
                 )
-    return rows
-
-
-def _local_distractor_config_for_facet(
-    chunk_pools: ChunkPoolsCfg,
-    facet: QueryPlanFacet,
-) -> list[DistractorSpec]:
-    if facet.cluster_role == 'dominant_primary_gold':
-        return chunk_pools.dominant_primary.distractors
-    if facet.cluster_role == 'primary_gold':
-        return chunk_pools.other_primary.distractors
-    if facet.cluster_role == 'niche_gold':
-        return chunk_pools.niche.distractors
-    return chunk_pools.secondary.distractors
-
-
-def make_local_distractor_facts(
-    plan: QueryPlan,
-    target: QueryPlanFacet,
-    ontology: MedicalOntology,
-    rng: Random,
-    distractor_config: list[DistractorSpec],
-    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
-) -> list[ClinicalFact]:
-    rows: list[ClinicalFact] = []
-    for spec_idx, spec in enumerate(distractor_config):
-        for local_idx in range(cast(int, spec.size)):
-            rows.append(
-                make_local_distractor_fact(
-                    plan=plan,
-                    target=target,
-                    ontology=ontology,
-                    rng=rng,
-                    spec=spec,
-                    spec_idx=spec_idx,
-                    local_idx=local_idx,
-                    chunk_surface_policy=chunk_surface_policy,
-                )
-            )
     return rows
 
 

@@ -14,15 +14,11 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
 )
 from experiments.medical_dataset_gen.reports.analysis_constants import REPORT_FILES
 from experiments.medical_dataset_gen.reports.analysis_scope import interaction_rows, primary_rows
-from experiments.medical_dataset_gen.reports.artifacts import (
-    render_experiment_config_recap,
-    write_csv,
-)
+from experiments.medical_dataset_gen.reports.artifacts import write_csv
 from experiments.medical_dataset_gen.reports.cli import parse_args
 from experiments.medical_dataset_gen.reports.discovery import (
     discover_experiments,
     discover_suite_experiments,
-    load_experiment_record,
     load_report_logical_suite,
     suite_cells_matching_where,
 )
@@ -59,12 +55,7 @@ from experiments.medical_dataset_gen.reports.rows import (
     selected_strategy_rows,
 )
 from experiments.medical_dataset_gen.reports.suite_analysis import (
-    analysis_series_rows,
-    crossing_rows,
-    factor_interaction_rows,
     matched_contrast_rows,
-    report_eligible_manifest,
-    suite_distribution_and_family_rows,
     write_suite_factor_figures,
 )
 from experiments.medical_dataset_gen.reports.summaries import (
@@ -80,7 +71,6 @@ from experiments.medical_dataset_gen.reports.summaries import (
     metric_family_summary_rows,
 )
 from experiments.medical_dataset_gen.reports.validity import synthetic_artifact_diagnostic_rows
-from experiments.medical_dataset_gen.suites.geometry import apply_frozen_separability_strata
 from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGenPaths
 
 
@@ -133,7 +123,6 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 requested_experiments=args.experiments,
                 experiment_regex=args.experiment_regex,
                 exclude_experiment_regex=args.exclude_experiment_regex,
-                artifact_version=args.artifact_version,
                 warnings=warnings,
             )
         discovered_count = len(records)
@@ -145,25 +134,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
         suite_manifest = None
         if suite_mode:
             assert suite_selection is not None
-            materialized_manifest = suite_selection.logical_suite.manifest
-            suite_manifest, excluded_distributions = report_eligible_manifest(materialized_manifest)
-            if excluded_distributions:
-                eligible_names = {cell.name for cell in suite_manifest.cells}
-                excluded_records = len(records) - sum(
-                    record.name in eligible_names for record in records
-                )
-                records = [record for record in records if record.name in eligible_names]
-                warnings.append(
-                    'excluded legacy background variants that do not satisfy the background-outlier '
-                    f'definition: {", ".join(sorted(excluded_distributions))} '
-                    f'({excluded_records} completed run-profile cells)'
-                )
+            suite_manifest = suite_selection.logical_suite.manifest
         _progress(f'{len(records)} experiments remain after embedding-model filtering')
         _progress(
             'using embedding models: '
             + (', '.join(effective_embedding_models) if effective_embedding_models else 'none')
         )
-        plot_and_recap_records = records
         _progress('loading manifest, dataset, and geometry rows')
         with ThreadPoolExecutor(max_workers=report_io_workers(len(records))) as executor:
             loaded_input_rows = executor.map(_load_report_input_rows, records)
@@ -190,13 +166,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         lambda_curve_rows = lambda_curve_summary_rows(lambda_grid_delta_rows)
         lambda_robustness_rows = lambda_robustness_summary_rows(lambda_safety_rows)
         comparison_rows = comparison_by_k_rows(strategy_rows)
-        suite_distribution_rows: list[dict[str, object]] = []
-        suite_family_rows: list[dict[str, object]] = []
         suite_contrast_rows: list[dict[str, object]] = []
-        suite_analysis_series_rows: list[dict[str, object]] = []
-        suite_interaction_rows: list[dict[str, object]] = []
-        suite_crossing_rows: list[dict[str, object]] = []
-        suite_separability_rows: list[dict[str, object]] = []
         if suite_mode:
             assert suite_manifest is not None
             suite_scope = (
@@ -204,43 +174,12 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 if args.suite_where is not None
                 else None
             )
-            suite_distribution_rows, suite_family_rows = suite_distribution_and_family_rows(
-                comparison_rows
-            )
             suite_contrast_rows = matched_contrast_rows(
                 manifest=suite_manifest,
                 comparison_rows=comparison_rows,
                 enforce_strict=args.strict_suite,
                 scope_cell_ids=suite_scope,
             )
-            suite_analysis_series_rows = analysis_series_rows(
-                manifest=suite_manifest,
-                comparison_rows=comparison_rows,
-                enforce_strict=args.strict_suite,
-                scope_cell_ids=suite_scope,
-            )
-            suite_interaction_rows = factor_interaction_rows(
-                manifest=suite_manifest,
-                comparison_rows=comparison_rows,
-            )
-            suite_crossing_rows = crossing_rows(suite_contrast_rows)
-            assert suite_selection is not None
-            suite_separability_rows = []
-            for concrete_suite_id in suite_selection.suite_ids:
-                suite_separability_rows.extend(
-                    apply_frozen_separability_strata(
-                        results_dir=args.results_dir,
-                        suite_id=concrete_suite_id,
-                    )
-                )
-            eligible_distributions = {
-                distribution.distribution_id for distribution in suite_manifest.distributions
-            }
-            suite_separability_rows = [
-                row
-                for row in suite_separability_rows
-                if row.get('Distribution') in eligible_distributions
-            ]
         _progress('computing synthetic-artifact diagnostics')
         synthetic_artifact_diagnostic_rows_data = synthetic_artifact_diagnostic_rows(
             records,
@@ -290,13 +229,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
         write_csv(data_dir / 'strategy_by_k.csv', strategy_rows)
         write_csv(data_dir / 'comparison_by_k.csv', comparison_rows)
         if suite_mode:
-            write_csv(data_dir / 'suite_distribution_summary.csv', suite_distribution_rows)
-            write_csv(data_dir / 'suite_family_balanced_summary.csv', suite_family_rows)
             write_csv(data_dir / 'suite_matched_contrasts.csv', suite_contrast_rows)
-            write_csv(data_dir / 'suite_analysis_series.csv', suite_analysis_series_rows)
-            write_csv(data_dir / 'suite_factor_interactions.csv', suite_interaction_rows)
-            write_csv(data_dir / 'suite_factor_crossings.csv', suite_crossing_rows)
-            write_csv(data_dir / 'suite_separability_test_strata.csv', suite_separability_rows)
         write_csv(
             data_dir / 'synthetic_artifact_diagnostics.csv',
             synthetic_artifact_diagnostic_rows_data,
@@ -332,7 +265,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
             data_dir / 'lambda_curve_by_embedding_model.csv',
             lambda_embedding_rows,
         )
-        _progress('writing report LaTeX tables and macros')
+        _progress('writing thesis LaTeX macros')
         _write_thesis_outputs_from_rows(
             geometry_rows=geometry_rows,
             comparison_rows=comparison_rows,
@@ -428,9 +361,6 @@ def run_report(args: CliArgs) -> ReportOutputs:
                 max_table_rows=args.max_table_rows,
             )
         )
-        (args.output_dir / 'latex' / 'txt_experiments_config_recap.md').write_text(
-            render_experiment_config_recap(plot_and_recap_records)
-        )
         (args.output_dir / 'warnings.txt').write_text(
             '\n'.join(warnings) + ('\n' if warnings else '')
         )
@@ -457,7 +387,6 @@ def run_report(args: CliArgs) -> ReportOutputs:
                         'models': len(model_grid_rows),
                         'missing_cells': len(model_grid_missing_rows),
                     },
-                    'artifact_version': args.artifact_version,
                     'suite_id': args.suite_id,
                     'suite_base_id': args.suite_base_id,
                     'suite_regex': args.suite_regex,
@@ -477,12 +406,7 @@ def run_report(args: CliArgs) -> ReportOutputs:
                     'synthetic_artifact_diagnostic_rows': len(
                         synthetic_artifact_diagnostic_rows_data
                     ),
-                    'suite_outputs': {
-                        'distribution_rows': len(suite_distribution_rows),
-                        'family_rows': len(suite_family_rows),
-                        'matched_contrasts': len(suite_contrast_rows),
-                        'factor_interactions': len(suite_interaction_rows),
-                    },
+                    'suite_matched_contrasts': len(suite_contrast_rows),
                 },
                 indent=2,
                 sort_keys=True,
@@ -735,30 +659,6 @@ def _read_report_csv_rows(
     return [dict(row) for row in pl.read_csv(path, infer_schema_length=None).to_dicts()]
 
 
-def _load_refresh_recap_records(
-    *,
-    report_dir: Path,
-    fallback_results_dir: Path,
-    manifest_rows: Sequence[Mapping[str, object]],
-    warnings: list[str],
-) -> list[ExperimentRecord]:
-    results_dir = _saved_report_results_dir(report_dir) or fallback_results_dir
-    if not results_dir.is_dir():
-        return []
-    experiment_names = [
-        str(row.get('Experiment') or '') for row in manifest_rows if row.get('Experiment')
-    ]
-    old_results_dir = MedicalDatasetGenPaths.results_dir
-    MedicalDatasetGenPaths.results_dir = results_dir
-    try:
-        return [
-            load_experiment_record(results_dir, name, warnings=warnings)
-            for name in experiment_names
-        ]
-    finally:
-        MedicalDatasetGenPaths.results_dir = old_results_dir
-
-
 def _update_refreshed_figure_manifest(*, report_dir: Path, figures: Sequence[Path]) -> None:
     """Keep a plot-only refresh auditable without recomputing report tables."""
     manifest_path = report_dir / 'manifest.json'
@@ -790,22 +690,6 @@ def _update_refreshed_figure_manifest(*, report_dir: Path, figures: Sequence[Pat
     manifest['files'] = [*non_figure_files, *figure_paths]
     manifest['figures_refreshed_at_utc'] = datetime.now(UTC).isoformat()
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n')
-
-
-def _saved_report_results_dir(report_dir: Path) -> Path | None:
-    manifest_path = report_dir / 'manifest.json'
-    if not manifest_path.is_file():
-        return None
-    try:
-        manifest: object = json.loads(manifest_path.read_text())
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(manifest, dict):
-        return None
-    raw_results_dir = manifest.get('results_dir')
-    return (
-        Path(raw_results_dir).expanduser().resolve() if isinstance(raw_results_dir, str) else None
-    )
 
 
 def _remove_obsolete_flat_data_files(output_dir: Path) -> None:

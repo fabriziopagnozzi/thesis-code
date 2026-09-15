@@ -42,7 +42,7 @@ The construction graph and rendered language are kept separate. Structured facts
 | --- | --- | --- | --- |
 | `plans` | [`dataset_generation/planning.py`](src/experiments/medical_dataset_gen/dataset_generation/planning.py) | Enumerate conditions, cohort contrasts, axis pairs, ontology profiles, and permitted primary-axis orientations. | `query_plans.parquet` |
 | `facts` | [`dataset_generation/facts.py`](src/experiments/medical_dataset_gen/dataset_generation/facts.py) | Materialize typed gold facts, facet-attached distractors, and background outlier clusters. | `clinical_facts.parquet` |
-| `chunks` | [`dataset_generation/chunk_materialization.py`](src/experiments/medical_dataset_gen/dataset_generation/chunk_materialization.py), [`chunk_rendering.py`](src/experiments/medical_dataset_gen/dataset_generation/chunk_rendering.py) | Render and validate document text, remove query-local duplicates, assign stable IDs, and record memberships. | `chunk_documents.parquet`, `chunk_memberships.parquet` |
+| `chunks` | [`dataset_generation/chunk_materialization.py`](src/experiments/medical_dataset_gen/dataset_generation/chunk_materialization.py), [`chunk_rendering.py`](src/experiments/medical_dataset_gen/dataset_generation/chunk_rendering.py) | Render and validate document text, assign stable semantic IDs, and record memberships. | `chunk_documents.parquet`, `chunk_memberships.parquet` |
 | `queries_answers` | [`dataset_generation/queries_answers.py`](src/experiments/medical_dataset_gen/dataset_generation/queries_answers.py) | Render the query surface and derive canonical answers from the structured gold facts. | `queries.parquet`, `gold_answers.parquet` |
 | `qrels` | [`dataset_generation/qrels.py`](src/experiments/medical_dataset_gen/dataset_generation/qrels.py) | Convert structured memberships into binary relevance labels while preserving facet and distractor provenance. | `qrels.parquet` |
 | `embed` | [`embedding/stage.py`](src/experiments/medical_dataset_gen/embedding/stage.py) | Encode document and query text, validate ID alignment, and record embedding provenance. | `.npy` ID/vector arrays and metadata |
@@ -64,7 +64,7 @@ The ontology defines:
 - joint axis-pair profiles and policies that decide which axis can be primary;
 - wording and surface terms used by the query and chunk templates.
 
-The current schema construction uses query-local pools and normally gives every query four relevant facets. The frozen `thesis_v5` paper suite defines 41 evidence-space distributions crossed with four primary wording profiles, plus four proportional-budget cells, for 168 cells in total. Each distribution contains 5,304 deterministically generated queries, including 2,636 held-out test queries. Counts for standalone configurations can differ when the ontology, condition limit, excluded axes, or query limit changes.
+The schema-v5 construction uses query-local pools and normally gives every query four relevant facets. The frozen `thesis_v5` suite defines 41 evidence-space distributions crossed with four wording profiles, for 164 configurations per embedding model. The native suite and three derived embedding suites therefore contain 656 completed cells. Each distribution contains 5,304 deterministically generated queries, including 2,636 held-out test queries. Counts for standalone configurations can differ when the ontology, condition limit, excluded axes, or query limit changes.
 
 The key structured identifiers are defined in [`dataset_generation/schemas.py`](src/experiments/medical_dataset_gen/dataset_generation/schemas.py):
 
@@ -197,17 +197,17 @@ Run the parent name to launch its children sequentially:
 uv run task pipeline --exp comparison
 ```
 
-The parent configuration fixes the dataset distribution. Child subconfigs may change downstream choices such as the embedding model, wording mode, retrieval grid, or evaluation settings; they may not change generation semantics. With `global.use_shared: true`, invariant plans and facts are stored in a parent shared-generation store, compatible document/query embeddings in a shared-embedding store, and local evaluation, geometry, logs, and figures remain in each child’s schema-versioned directory.
+The parent configuration fixes the dataset distribution. Child subconfigs may change downstream choices such as the embedding model, wording mode, retrieval grid, or evaluation settings; they may not change generation semantics. With `global.use_shared: true`, invariant plans and facts are stored in a parent shared-generation store, compatible document/query embeddings in a shared-embedding store, and local evaluation, geometry, logs, and figures remain in each child’s `v5` directory.
 
 ## Artifact layout
 
-The configuration files are kept at the experiment root, while versioned local artifacts are written below the schema-version directory:
+The configuration files are kept at the experiment root, while local artifacts are written below the schema-v5 directory:
 
 ```text
 _results/<experiment>/
 ├── _config.yaml
 ├── _subconfig.yaml                 # child experiments only
-└── <schema-version>/
+└── v5/
     ├── query_plans.parquet         # or shared when reuse is enabled
     ├── clinical_facts.parquet
     ├── chunk_documents.parquet

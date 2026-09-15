@@ -18,8 +18,6 @@ type DeltaMetricLabel = Literal[
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
 ]
-DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_literals(DeltaMetricLabel))
-
 # Thresholds to set for each metric to identify when methods are tied
 PRACTICAL_EFFECT_THRESHOLDS: dict[DeltaMetricLabel, float] = {
     'FCP': 0.05,
@@ -83,17 +81,6 @@ DISTRIBUTION_FAMILY_ABBREVIATIONS: dict[ExperimentFamilyId, str] = {
     'embedding_comparison': 'EMB',
     'unknown': 'UNK',
 }
-EXPERIMENT_FAMILY_COLORS: dict[ExperimentFamilyId, str] = {
-    'balanced_clean': '#287C8E',
-    'dominance': '#C44E52',
-    'sparse_niche': '#5F8F3F',
-    'near_miss_heavy': '#C47A3A',
-    'background_variant': '#6F63A6',
-    'interaction': '#444444',
-    'budget_sweep': '#8C6D31',
-    'embedding_comparison': '#4C78A8',
-    'unknown': '#808080',
-}
 HELDOUT_SELECTION_COLUMNS = frozenset(
     {
         'lambda_selection_split',
@@ -105,7 +92,6 @@ HELDOUT_SELECTION_COLUMNS = frozenset(
 REPORT_FILES = (
     'txt_report.md',
     'txt_report_highlights.md',
-    'txt_experiments_config_recap.md',
     'warnings.txt',
     'manifest.json',
     'data/experiment_manifest.csv',
@@ -151,17 +137,6 @@ EVALUATION_METRICS = (
         if metric_name not in ANALYSIS_EXCLUDED_METRICS
     ),
 )
-METRIC_LABEL_OVERRIDES = {
-    'FacetCoveragePurity@k': 'FCP',
-    'FacetWeightedRecall@k': 'FacetWeightedRecall',
-    'AllFacetCoverageRate@k': 'AllFacetCoverageRate',
-    'alpha-nDCG@k': 'alpha_nDCG',
-}
-METRIC_LABELS = {
-    metric_name: METRIC_LABEL_OVERRIDES.get(metric_name, metric_name.removesuffix('@k'))
-    for metric_name in EVALUATION_METRICS
-    if metric_name not in {'n_queries', 'fac', 'avg_cos', 'jac'}
-}
 TABLE_HEADERS = {
     'ShortExperiment': 'ID',
     'ShortDistribution': 'Dist',

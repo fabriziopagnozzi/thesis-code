@@ -14,7 +14,6 @@ import pyarrow.parquet as pq
 from tqdm import tqdm
 
 from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
-    chunk_id,
     finalize_chunk_row,
     new_chunk_state,
     render_canonical_chunk,
@@ -124,24 +123,10 @@ def _render_chunks_deterministic_parallel(
         facts=facts,
         workers=workers,
     )
-    if cfg.dataset_schema_version >= 5:
-        _write_v5_chunks_streaming(
-            paths=paths,
-            rendered_batches=rendered_batches,
-            total_batches=n_batches,
-            stable_document_ids=True,
-        )
-        return
-    rows_all = [row for rows in rendered_batches for row in rows]
-    chunk_rows = pl.from_dicts(rows_all, infer_schema_length=None) if rows_all else pl.DataFrame()
-    chunk_documents, chunk_memberships = _write_normalized_chunks(
-        paths,
-        chunk_rows,
-        stable_document_ids=False,
-    )
-    print(
-        f'[chunks] normalized deterministic rows: '
-        f'{len(chunk_documents):,} documents, {len(chunk_memberships):,} memberships'
+    _write_v5_chunks_streaming(
+        paths=paths,
+        rendered_batches=rendered_batches,
+        total_batches=n_batches,
     )
 
 
@@ -248,11 +233,8 @@ def _write_v5_chunks_streaming(
     paths: MedicalDatasetGenPaths,
     rendered_batches: Iterator[list[dict[str, object]]],
     total_batches: int,
-    stable_document_ids: bool,
 ) -> None:
     """Append query-local chunk rows without retaining a full pool in RAM."""
-    if not stable_document_ids:
-        raise ValueError('streaming chunk materialization is reserved for schema-v5 stable IDs')
     documents_path = paths.table_path('chunk_documents')
     memberships_path = paths.table_path('chunk_memberships')
     documents_tmp = _parquet_temp_path(documents_path)
@@ -442,172 +424,3 @@ def _parquet_temp_path(path: Path) -> Path:
 def _close_parquet_writer(writer: pq.ParquetWriter | None) -> None:
     if writer is not None:
         writer.close()
-
-
-def _write_normalized_chunks(
-    paths: MedicalDatasetGenPaths,
-    chunk_rows: pl.DataFrame,
-    *,
-    stable_document_ids: bool = False,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
-    if len(chunk_rows) == 0:
-        chunk_documents = pl.DataFrame()
-        chunk_memberships = pl.DataFrame()
-        write_parquet(paths, 'chunk_documents', chunk_documents)
-        write_parquet(paths, 'chunk_memberships', chunk_memberships)
-        return chunk_documents, chunk_memberships
-
-    # A reuse key is allowed to identify only one rendered document surface.
-    duplicate_text_keys = (
-        chunk_rows.group_by('chunk_reuse_key')
-        .agg(pl.col('text').n_unique().alias('n_texts'))
-        .filter(pl.col('n_texts') > 1)
-    )
-    if len(duplicate_text_keys):
-        examples = duplicate_text_keys['chunk_reuse_key'].head(5).to_list()
-        raise RuntimeError(
-            'chunk_reuse_key must map to exactly one text after canonical rendering; '
-            f'found {len(duplicate_text_keys):,} violating key(s), examples={examples}'
-        )
-
-    # Deduplicate identical text only within a query. The same document can
-    # remain shared across queries through its reuse key.
-    if stable_document_ids:
-        retained_rows = chunk_rows
-    else:
-        chunk_rows = chunk_rows.with_columns(
-            pl.col('text')
-            .str.to_lowercase()
-            .str.replace_all(r'\s+', ' ')
-            .str.strip_chars()
-            .alias('_normalized_text')
-        )
-        before_dedup = len(chunk_rows)
-        retained_rows = chunk_rows.unique(
-            subset=['query_id', '_normalized_text'],
-            keep='first',
-            maintain_order=True,
-        )
-        dropped_duplicate_memberships = before_dedup - len(retained_rows)
-        if dropped_duplicate_memberships:
-            print(
-                f'[chunks] dropped {dropped_duplicate_memberships:,} query-local duplicate '
-                'membership row(s) by normalized text'
-            )
-
-    # Schema v5 gives documents semantic IDs derived from their stable reuse
-    # keys.  A scale suite can therefore generate its largest support once and
-    # project exact smaller candidate sets without renumbering the shared
-    # evidence.  v2--v4 retain their positional IDs verbatim so archived
-    # artifact semantics (and their embedding mappings) remain untouched.
-    doc_keys = retained_rows.select('chunk_reuse_key').unique(maintain_order=True)
-    if stable_document_ids:
-        doc_key_to_id = {key: f'chunk_{key}' for key in doc_keys['chunk_reuse_key'].to_list()}
-    else:
-        doc_key_to_id = {
-            key: chunk_id(index) for index, key in enumerate(doc_keys['chunk_reuse_key'].to_list())
-        }
-
-    with_doc_id = retained_rows.with_columns(
-        pl.col('chunk_reuse_key')
-        .replace_strict(doc_key_to_id, return_dtype=pl.String)
-        .alias('chunk_id')
-    ).with_columns(pl.col('chunk_id').alias('membership_id'))
-
-    doc_cols = [
-        'chunk_id',
-        'chunk_reuse_key',
-        'text',
-        'approx_words',
-        'condition_id',
-        'condition_display',
-        'subgroup_id',
-        'subgroup_label',
-        'subgroup_axis',
-        'subgroup_field',
-        'subgroup_value',
-        'axis',
-        'value_bin',
-        'axis_bin_term',
-        'axis_payload_json',
-        'subgroup_dimension_id',
-        'subgroup_level_id',
-        'subgroup_is_reference',
-        'patient_age',
-        'patient_sex',
-        'clinical_subgroup_phrase',
-        'note_style',
-        'chunk_surface_group',
-        'outer_template_family',
-        'outer_template_id',
-        'axis_template_family',
-        'axis_template_id',
-    ]
-    membership_cols = [
-        'membership_id',
-        'chunk_id',
-        'query_id',
-        'evidence_profile_id',
-        'pool_id',
-        'primary_axis',
-        'secondary_axis',
-        'dominant_primary_facet_id',
-        'fact_id',
-        'facet_id',
-        'target_facet_id',
-        'cluster_id',
-        'cluster_role',
-        'axis',
-        'value_bin',
-        'axis_payload_json',
-        'facet_priority',
-        'is_gold',
-        'distractor_type',
-        'split',
-    ]
-
-    # Keep document payload and query-local membership metadata in separate
-    # tables; evaluation consumes the latter while embeddings consume the former.
-    chunk_documents = (
-        with_doc_id.select([col for col in doc_cols if col in with_doc_id.columns])
-        .unique(subset=['chunk_id'], keep='first', maintain_order=True)
-        .sort('chunk_id')
-    )
-    chunk_memberships = with_doc_id.select(
-        [col for col in membership_cols if col in with_doc_id.columns]
-    )
-
-    # These checks protect the four-facet gold structure from accidental
-    # collapse during text-level deduplication.
-    duplicate_memberships = (
-        chunk_memberships.group_by('query_id', 'chunk_id')
-        .agg(pl.len().alias('n'))
-        .filter(pl.col('n') > 1)
-    )
-    if len(duplicate_memberships):
-        examples = duplicate_memberships.select('query_id', 'chunk_id').head(5).to_dicts()
-        raise RuntimeError(
-            'a query may only contain one membership for each chunk document; '
-            f'found {len(duplicate_memberships):,} duplicate pair(s), examples={examples}'
-        )
-
-    invalid_gold_coverage = (
-        chunk_memberships.filter(pl.col('is_gold'))
-        .group_by('query_id')
-        .agg(pl.col('facet_id').n_unique().alias('n_gold_facets'))
-        .filter(pl.col('n_gold_facets') != 4)
-    )
-    if len(invalid_gold_coverage):
-        examples = invalid_gold_coverage.head(5).to_dicts()
-        raise RuntimeError(
-            f'query-local duplicate dropping removed a required gold facet; examples={examples}'
-        )
-
-    write_parquet(paths, 'chunk_documents', chunk_documents)
-    write_parquet(paths, 'chunk_memberships', chunk_memberships)
-    print(
-        f'[chunks] normalized {len(chunk_rows):,} generated row(s) -> '
-        f'{len(chunk_documents):,} chunk document(s), '
-        f'{len(chunk_memberships):,} query membership(s)'
-    )
-    return chunk_documents, chunk_memberships

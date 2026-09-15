@@ -50,15 +50,11 @@ def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
         'Experiment': record.name,
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
-        'DistributionBase': record.distribution_base_id,
         'ShortDistribution': short_token(record.distribution_id),
         'ExperimentFamily': record.family_id,
         'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
         'ArtifactOrigin': record.origin,
-        'DatasetSchemaVersion': record.dataset_schema_version,
-        'EvaluationSchemaVersion': record.evaluation_schema_version,
-        'IncludeInCausalSummaries': record.include_in_causal_summaries,
         'IncludeInFamilySummary': record.include_in_family_summary,
         'SuiteTags': '|'.join(record.tags),
         'AnalysisBlocks': '|'.join(record.analysis_blocks),
@@ -591,13 +587,6 @@ def lambda_safety_summary_rows(
         )
         rows.append(out)
     return rows
-
-
-def _lambda_grid_stats_path(record: ExperimentRecord) -> Path:
-    report_grid_path = record.paths.table_path('evaluation_report_grid_stats')
-    if report_grid_path.is_file():
-        return report_grid_path
-    return record.paths.table_path('evaluation_stats')
 
 
 def _lambda_validation_grid_stats_path(record: ExperimentRecord) -> Path:

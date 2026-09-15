@@ -22,7 +22,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     QueryFocusMode,
     QueryStructure,
 )
-from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides, get_literals
+from experiments.medical_dataset_gen.utils.global_utils import ResultDirOverrides
 from helpers.embedder import EmbeddingModelName
 
 
@@ -34,23 +34,17 @@ class BasePydanticCfgModel(BaseModel):
 class GlobalCfg(BasePydanticCfgModel):
     seed: PositiveInt = 42
     conditions: PositiveInt = 4
-    output_experiment: str = 'v4'
+    output_experiment: str = 'v5'
     use_shared: bool = True
     result_dir_overrides: ResultDirOverrides = Field(default_factory=dict)
 
 
 # Dataset construction and distractor-pool settings.
-type DatasetSchemaVersion = Literal[2, 3, 4, 5]
-DATASET_SCHEMA_VERSION_LIST = list[DatasetSchemaVersion](get_literals(DatasetSchemaVersion))
 type DistractorChange = Literal['condition', 'subgroup', 'axis', 'axis_value_bin']
 
 
 class DistractorSpec(BasePydanticCfgModel):
-    # ``size`` is retained as the compiled, total number of chunks for the
-    # legacy generator.  Schema-v5 authoring uses the explicit cluster
-    # vocabulary below.  Keeping both at the boundary means old experiments
-    # remain readable while new specifications never have to encode topology
-    # in an overloaded scalar.
+    # ``size`` is a compiled total retained in materialized v5 snapshots.
     size: int | None = Field(default=None, ge=1)
     num_clusters: PositiveInt = 1
     chunks_per_cluster: PositiveInt | None = None
@@ -58,55 +52,14 @@ class DistractorSpec(BasePydanticCfgModel):
 
     @model_validator(mode='before')
     @classmethod
-    def _normalize_legacy_same_different_spec(cls, data: object) -> object:
+    def _normalize_cluster_fields(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
-        if 'changes' in data:
-            return cls._normalize_cluster_size(data)
-        if not {'condition', 'subgroup', 'axis_config'} <= set(data):
-            return cls._normalize_cluster_size(data)
-
-        axis_config = data['axis_config']
-        if not isinstance(axis_config, dict):
-            return cls._normalize_cluster_size(data)
-
-        condition_value = data['condition']
-        subgroup_value = data['subgroup']
-        axis_value = axis_config.get('axis')
-        value_bin = axis_config.get('value_bin')
-        allowed_values = {'same', 'different'}
-        if condition_value not in allowed_values:
-            raise ValueError('condition must be "same" or "different"')
-        if subgroup_value not in allowed_values:
-            raise ValueError('subgroup must be "same" or "different"')
-        if axis_value not in allowed_values:
-            raise ValueError('axis_config.axis must be "same" or "different"')
-        if value_bin is not None and value_bin not in allowed_values:
-            raise ValueError('axis_config.value_bin must be "same" or "different"')
-
-        normalized = dict(data)
-        normalized.pop('condition')
-        normalized.pop('subgroup')
-        normalized.pop('axis_config')
-        changes: list[DistractorChange] = []
-        if condition_value == 'different':
-            changes.append('condition')
-        if subgroup_value == 'different':
-            changes.append('subgroup')
-        if axis_value == 'different':
-            if value_bin is not None:
-                raise ValueError(
-                    'axis_config.value_bin is only allowed when axis_config.axis="same"'
-                )
-            changes.append('axis')
-        elif value_bin == 'different':
-            changes.append('axis_value_bin')
-        normalized['changes'] = changes
-        return cls._normalize_cluster_size(normalized)
+        return cls._normalize_cluster_size(data)
 
     @staticmethod
     def _normalize_cluster_size(data: dict[object, object]) -> dict[object, object]:
-        """Compile v5 cluster fields into the legacy total-size field."""
+        """Compile explicit v5 cluster support into the materialized total size."""
         normalized = dict(data)
         raw_size = normalized.get('size')
         raw_clusters = normalized.get('num_clusters', 1)
@@ -159,8 +112,7 @@ class DistractorSpec(BasePydanticCfgModel):
 
 
 class BackgroundDistractorSpec(DistractorSpec):
-    # Background ``size`` has historically meant chunks *per* cluster.  The
-    # v5 vocabulary keeps that semantic meaning and makes it explicit.
+    # Background ``size`` is the compiled per-cluster support in v5 snapshots.
     size: int | None = Field(default=8, ge=1)
     num_clusters: int = Field(default=1, ge=1)
     chunks_per_cluster: PositiveInt | None = None
@@ -171,35 +123,11 @@ class BackgroundDistractorSpec(DistractorSpec):
 
     @model_validator(mode='before')
     @classmethod
-    def _normalize_legacy_same_different_spec(cls, data: object) -> object:
-        """Background keeps ``size`` as a per-cluster quantity.
-
-        This intentionally overrides ``DistractorSpec``'s normalizer: local
-        distractor sizes are totals whereas background sizes have always been
-        per-cluster.  Using the same validator name prevents Pydantic from
-        applying the local-pool interpretation first.
-        """
+    def _normalize_cluster_fields(cls, data: object) -> object:
+        """Compile explicit background support while preserving v5 snapshots."""
         if not isinstance(data, dict):
             return data
         normalized = dict(data)
-        if 'changes' not in normalized and {'condition', 'subgroup', 'axis_config'} <= set(
-            normalized
-        ):
-            axis_config = normalized.pop('axis_config')
-            condition = normalized.pop('condition')
-            subgroup = normalized.pop('subgroup')
-            if not isinstance(axis_config, dict):
-                return data
-            changes: list[DistractorChange] = []
-            if condition == 'different':
-                changes.append('condition')
-            if subgroup == 'different':
-                changes.append('subgroup')
-            if axis_config.get('axis') == 'different':
-                changes.append('axis')
-            elif axis_config.get('value_bin') == 'different':
-                changes.append('axis_value_bin')
-            normalized['changes'] = changes
         raw_per_cluster = normalized.get('chunks_per_cluster')
         raw_size = normalized.get('size')
         if raw_per_cluster is None:
@@ -213,14 +141,13 @@ class BackgroundDistractorSpec(DistractorSpec):
 
 
 class LocalChunkPoolCfg(BasePydanticCfgModel):
-    # v5 accepts explicit cluster/support values instead of an overloaded
-    # scalar. Suite-level contracts decide whether those values describe
-    # topology (near misses/background) or only compile a gold facet's total
-    # support. ``size`` remains the materialized total for generator code.
+    # Suite-level contracts decide whether explicit cluster/support values
+    # describe topology or only compile a gold facet's total support. ``size``
+    # remains the materialized total used by generator code.
     size: PositiveInt | None = None
     num_clusters: PositiveInt = 1
     chunks_per_cluster: PositiveInt | None = None
-    distractors: list[DistractorSpec] = Field(default_factory=list)
+    distractors: list[DistractorSpec] = Field(default_factory=list, max_length=0)
 
     @model_validator(mode='before')
     @classmethod
@@ -253,9 +180,6 @@ class LocalChunkPoolCfg(BasePydanticCfgModel):
             raise ValueError('pool requires size or chunks_per_cluster')
         return self
 
-    def total_distractor_chunks(self) -> int:
-        return sum(int(spec.size or 0) for spec in self.distractors)
-
 
 class NicheChunkPoolCfg(LocalChunkPoolCfg):
     num_clusters_per_query: int = Field(default=0, ge=0, le=2)
@@ -282,19 +206,8 @@ class ChunkPoolsCfg(BasePydanticCfgModel):
             + self.niche.num_clusters_per_query * int(self.niche.size or 0)
         )
 
-    def near_miss_distractors_per_query(self) -> int:
-        return (
-            self.dominant_primary.total_distractor_chunks()
-            + self.other_primary.total_distractor_chunks()
-            + (2 - self.niche.num_clusters_per_query) * self.secondary.total_distractor_chunks()
-            + self.niche.num_clusters_per_query * self.niche.total_distractor_chunks()
-        )
-
     def background_outliers_per_query(self) -> int:
         return sum(int(spec.size or 0) * spec.num_clusters for spec in self.background_outliers)
-
-    def total_distractor_chunks(self) -> int:
-        return self.near_miss_distractors_per_query() + self.background_outliers_per_query()
 
 
 class GenerationCfg(BasePydanticCfgModel):
@@ -307,11 +220,7 @@ class GenerationCfg(BasePydanticCfgModel):
     excluded_clinical_axes: list[ClinicalAxis] = Field(default_factory=list)
 
     chunk_pools: ChunkPoolsCfg
-    # Optional schema-v5 global near-miss specifications.  They make total
-    # near-miss mass and topology independently controllable instead of
-    # coupling them to whichever gold facet a legacy local pool happens to
-    # target.  When absent, the archived local-pool behavior is unchanged.
-    near_miss_specs: list[DistractorSpec] | None = None
+    near_miss_specs: list[DistractorSpec]
 
     @model_validator(mode='after')
     def _validate_niche_cluster_size(self) -> GenerationCfg:
@@ -334,13 +243,14 @@ class GenerationCfg(BasePydanticCfgModel):
     def total_gold_chunks(self) -> int:
         return self.chunk_pools.gold_chunks_per_query()
 
+    def near_miss_distractors_per_query(self) -> int:
+        return sum(int(spec.size or 0) for spec in self.near_miss_specs)
+
     def total_distractor_chunks(self) -> int:
-        near_miss = (
-            sum(int(spec.size or 0) for spec in self.near_miss_specs)
-            if self.near_miss_specs is not None
-            else self.chunk_pools.near_miss_distractors_per_query()
+        return (
+            self.near_miss_distractors_per_query()
+            + self.chunk_pools.background_outliers_per_query()
         )
-        return near_miss + self.chunk_pools.background_outliers_per_query()
 
 
 # Embedding and retrieval settings.
@@ -485,9 +395,7 @@ class QueryGeometryCfg(BasePydanticCfgModel):
 
 
 class ExperimentCfg(BasePydanticCfgModel):
-    # v2--v4 remain readable for archived experiments; new suite construction
-    # uses v5.
-    dataset_schema_version: DatasetSchemaVersion = 4
+    dataset_schema_version: Literal[5]
     global_: GlobalCfg = Field(alias='global')
     generation: GenerationCfg
     embeddings: EmbeddingCfg = Field(default_factory=EmbeddingCfg)
@@ -498,30 +406,10 @@ class ExperimentCfg(BasePydanticCfgModel):
 
     model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
-    @model_validator(mode='before')
-    @classmethod
-    def _discard_archived_v2_geometry_option(cls, data: object) -> object:
-        if not isinstance(data, dict) or data.get('dataset_schema_version') != 2:
-            return data
-        retrieval = data.get('retrieval')
-        if not isinstance(retrieval, dict) or 'only_pass_geometry' not in retrieval:
-            return data
-
-        normalized = dict(data)
-        normalized_retrieval = dict(retrieval)
-        normalized_retrieval.pop('only_pass_geometry')
-        normalized['retrieval'] = normalized_retrieval
-        return normalized
-
     @model_validator(mode='after')
     def _validate_query_local_generation_scope(self) -> ExperimentCfg:
-        if self.dataset_schema_version not in {3, 4, 5}:
-            return self
         if self.retrieval.pool_scope != 'query_local':
-            raise ValueError(
-                f'dataset schema v{self.dataset_schema_version} supports only '
-                'retrieval.pool_scope=query_local'
-            )
+            raise ValueError('dataset schema v5 supports only retrieval.pool_scope=query_local')
         local_pool_size = (
             self.generation.total_gold_chunks() + self.generation.total_distractor_chunks()
         )

@@ -1,4 +1,4 @@
-"""CLI for validating and materializing declarative experiment suites."""
+"""CLI for strict v5 suite validation and materialization."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ from pathlib import Path
 from experiments.medical_dataset_gen.suites.core import (
     load_suite_spec,
     materialize_suite,
-    reconcile_suite_metadata,
-    suite_spec_root,
     validate_suite,
 )
 from experiments.medical_dataset_gen.suites.geometry import freeze_separability_strata
@@ -19,121 +17,44 @@ from experiments.medical_dataset_gen.utils.global_utils import MedicalDatasetGen
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='Validate or materialize a v5 experiment suite.')
+    parser = argparse.ArgumentParser(description='Manage frozen schema-v5 experiment suites.')
     subparsers = parser.add_subparsers(dest='command', required=True)
-    for command in ('validate', 'materialize', 'freeze-geometry', 'reconcile-metadata'):
+    for command in ('validate', 'materialize', 'freeze-geometry'):
         subparser = subparsers.add_parser(command)
-        subparser.add_argument('--suite', required=True, help='Suite ID or path to its YAML spec.')
+        subparser.add_argument('--suite', required=True, help='Suite ID or YAML spec path.')
         subparser.add_argument(
             '--results-dir', type=Path, default=MedicalDatasetGenPaths.results_dir
         )
-        subparser.add_argument(
-            '--check-artifacts',
-            action='store_true',
-            help='Also validate a materialized manifest, factor drift, and completed nested qrels.',
-        )
-        subparser.add_argument(
-            '--verify-hashes',
-            action='store_true',
-            help='With --check-artifacts, stream and verify immutable artifact hashes.',
-        )
-        if command == 'materialize':
-            replacement_mode = subparser.add_mutually_exclusive_group()
-            replacement_mode.add_argument(
-                '--replace-planned',
-                action='store_true',
-                help='Replace only a metadata-only native suite whose every cell is still planned.',
-            )
-            replacement_mode.add_argument(
-                '--refresh-planned-execution',
-                action='store_true',
-                help=(
-                    'Refresh run-profile/config snapshots only when every cell remains planned '
-                    'and the generated-dataset hashes are unchanged.'
-                ),
-            )
-            replacement_mode.add_argument(
-                '--prune-planned',
-                action='store_true',
-                help=(
-                    'Remove only obsolete metadata-only planned distributions while preserving '
-                    'unchanged generated smoke data.'
-                ),
-            )
-            replacement_mode.add_argument(
-                '--prune-removed-embeddings',
-                action='store_true',
-                help=(
-                    'For a derived suite, delete only completed and planned evaluation arms for '
-                    'embedding models removed from an otherwise identical source contract.'
-                ),
-            )
-        if command == 'reconcile-metadata':
+        if command == 'validate':
             subparser.add_argument(
-                '--dry-run',
+                '--check-artifacts',
                 action='store_true',
-                help='Validate and describe a metadata reconciliation without writing files.',
+                help='Also validate the materialized manifest, configs, and nested qrels.',
             )
-        if command == 'freeze-geometry':
-            subparser.add_argument('--replace', action='store_true')
     args = parser.parse_args(argv)
     results_dir = args.results_dir.expanduser().resolve()
-    spec_path = Path(args.suite)
-    if not spec_path.suffix:
-        spec_path = suite_spec_root() / f'{args.suite}.yaml'
-    spec = load_suite_spec(args.suite) if spec_path.is_file() else None
     if args.command == 'freeze-geometry':
         path = freeze_separability_strata(
             results_dir=results_dir,
             suite_id=str(args.suite),
-            replace=bool(args.replace),
         )
         print(f'frozen geometry strata: {path}')
         return 0
-    if spec is not None:
-        validation = validate_suite(spec)
-        print(f'validated suite={spec.suite_id} cells={len(validation.resolved_configs)}')
-        for warning in validation.warnings:
-            print(f'warning: {warning}')
-    elif args.command == 'materialize':
-        raise FileNotFoundError(
-            f'{args.suite}: no declarative suite specification at {spec_path}; '
-            'migrated suites are archival and cannot be materialized'
-        )
+    spec = load_suite_spec(args.suite)
+    validation = validate_suite(spec)
+    if spec.origin == 'native':
+        cell_count = len(validation.resolved_configs)
     else:
-        print(f'validated archived manifest suite={args.suite}')
+        assert spec.source is not None
+        cell_count = len(spec.source.distribution_ids) * 4 * len(spec.source.embedding_models)
+    print(f'validated suite={spec.suite_id} cells={cell_count}')
     if args.command == 'materialize':
-        assert spec is not None
-        manifest = materialize_suite(
-            spec,
-            results_dir=results_dir,
-            replace_planned=bool(args.replace_planned),
-            refresh_planned_execution=bool(args.refresh_planned_execution),
-            prune_planned=bool(args.prune_planned),
-            prune_removed_embeddings=bool(args.prune_removed_embeddings),
-        )
+        manifest = materialize_suite(spec, results_dir=results_dir)
         print(f'materialized {len(manifest.cells)} cells')
-    if args.command == 'reconcile-metadata':
-        assert spec is not None
-        result = reconcile_suite_metadata(
-            spec,
-            results_dir=results_dir,
-            dry_run=bool(args.dry_run),
-        )
-        action = 'would reconcile' if result.dry_run else 'reconciled'
-        print(
-            f'{action} {result.suite_id}: '
-            f'{result.previous_manifest_sha256} -> {result.manifest_sha256}'
-        )
-        if result.derived_suite_ids:
-            print(f'updated derived suites: {", ".join(result.derived_suite_ids)}')
-        if result.derived_spec_paths:
-            print(f'updated derived specs: {", ".join(str(path) for path in result.derived_spec_paths)}')
-    if args.check_artifacts or spec is None:
+    elif args.check_artifacts:
         result = validate_materialized_suite(
             results_dir=results_dir,
-            suite_id=spec.suite_id if spec is not None else str(args.suite),
-            verify_hashes=bool(args.verify_hashes),
+            suite_id=spec.suite_id,
         )
         if result.errors:
             raise ValueError('materialized suite validation failed:\n' + '\n'.join(result.errors))

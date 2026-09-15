@@ -48,8 +48,7 @@ def strict_gate_failures(
 
 
 def competitive_pool_mass(cfg: ExperimentCfg) -> int:
-    chunk_pools = cfg.generation.chunk_pools
-    return chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
+    return cfg.generation.total_gold_chunks() + cfg.generation.near_miss_distractors_per_query()
 
 
 def diagnostic_k_values(cfg: ExperimentCfg, *, stress_horizon_k: int) -> list[int]:

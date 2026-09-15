@@ -1,3 +1,5 @@
+dataset_schema_version: 5
+
 global:
     seed: 42 # Random seed used by deterministic query/fact/chunk generation.
     conditions: 22 # Full bundled ontology coverage; pair-policy gating can still suppress clinically entangled orientations.
@@ -13,55 +15,48 @@ generation:
 
     chunk_pools:
         dominant_primary:
-            size: 24
-            distractors:
-                - size: 3
-                  changes: [subgroup]
-                - size: 2
-                  changes: [condition]
-                - size: 2
-                  changes: [condition, subgroup]
-                - size: 1
-                  changes: [subgroup, axis_value_bin]
+            num_clusters: 1
+            chunks_per_cluster: 24
+            distractors: []
 
         other_primary:
-            size: 20
-            distractors:
-                - size: 2
-                  changes: [subgroup]
-                - size: 2
-                  changes: [condition]
-                - size: 2
-                  changes: [condition, subgroup]
+            num_clusters: 1
+            chunks_per_cluster: 20
+            distractors: []
 
         secondary:
-            size: 14
-            distractors:
-                - size: 2
-                  changes: [subgroup]
-                - size: 2
-                  changes: [condition]
-                - size: 2
-                  changes: [condition, subgroup]
+            num_clusters: 1
+            chunks_per_cluster: 14
+            distractors: []
 
         niche:
-            size: 4 # Gold documents in each niche facet; must stay below secondary.size.
+            num_clusters: 1
+            chunks_per_cluster: 4 # Gold documents in each niche facet; must stay below secondary support.
             num_clusters_per_query: 1 # Number (0-2) of complementary facets made deliberately sparse.
-            distractors:
-                - size: 2
-                  changes: [subgroup]
-                - size: 2
-                  changes: [condition]
-                - size: 2
-                  changes: [condition, subgroup]
+            distractors: []
 
         background_outliers:
-            - size: 8 # Chunks in each coherent non-gold clinical island.
-              num_clusters: 1
+            - num_clusters: 1
+              chunks_per_cluster: 8 # Chunks in each coherent non-gold clinical island.
+              changes: [condition, subgroup, axis]
 
         chunk_min_words: 25
         chunk_max_words: 200
         chunk_word_tolerance: 5 # Soft tolerance around the target range for concise deterministic prose.
+
+    near_miss_specs:
+        - { changes: [condition], num_clusters: 1, chunks_per_cluster: 4 }
+        - { changes: [subgroup], num_clusters: 1, chunks_per_cluster: 4 }
+        - {
+              changes: [condition, axis_value_bin],
+              num_clusters: 1,
+              chunks_per_cluster: 4,
+          }
+        - {
+              changes: [subgroup, axis_value_bin],
+              num_clusters: 1,
+              chunks_per_cluster: 4,
+          }
 
 embeddings:
     model_name: BAAI/bge-m3
