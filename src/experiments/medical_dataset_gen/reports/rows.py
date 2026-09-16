@@ -50,15 +50,11 @@ def experiment_manifest_row(record: ExperimentRecord) -> dict[str, object]:
         'Experiment': record.name,
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
-        'DistributionBase': record.distribution_base_id,
         'ShortDistribution': short_token(record.distribution_id),
         'ExperimentFamily': record.family_id,
         'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
         'ArtifactOrigin': record.origin,
-        'DatasetSchemaVersion': record.dataset_schema_version,
-        'EvaluationSchemaVersion': record.evaluation_schema_version,
-        'IncludeInCausalSummaries': record.include_in_causal_summaries,
         'IncludeInFamilySummary': record.include_in_family_summary,
         'SuiteTags': '|'.join(record.tags),
         'AnalysisBlocks': '|'.join(record.analysis_blocks),
@@ -407,75 +403,6 @@ def _selected_stats_frame(
     ), ('posthoc_selected')
 
 
-def near_optimal_lambda_rows(
-    record: ExperimentRecord,
-    *,
-    epsilon: float,
-    warnings: list[str],
-) -> list[dict[str, object]]:
-    # Sensitivity summaries must be computed from the validation grid.  The
-    # held-out report grid is reserved for the selected operating point and
-    # must never be used to tune or summarize lambda robustness.
-    grid_path = _lambda_validation_grid_stats_path(record)
-    if not grid_path.is_file():
-        warnings.append(
-            f'{record.name}: near-optimal lambda width skipped; validation grid missing'
-        )
-        return []
-    try:
-        stats = pl.read_parquet(grid_path)
-    except Exception as exc:
-        warnings.append(f'{record.name}: could not read lambda grid stats ({exc})')
-        return []
-    if stats.is_empty() or LAMBDA_SELECTION_MAXIMIZING_METRIC not in stats.columns:
-        return []
-
-    rows: list[dict[str, object]] = []
-    k_values = sorted(int(value) for value in stats['k'].drop_nulls().unique().to_list())
-    for strategy in DIVERSIFYING_STRATEGIES:
-        strategy_df = stats.filter(pl.col('strategy') == strategy)
-        for k in k_values:
-            sub = strategy_df.filter(pl.col('k') == k).drop_nulls(
-                subset=['lam', LAMBDA_SELECTION_MAXIMIZING_METRIC]
-            )
-            if sub.height <= 1:
-                continue
-            fcp_values = [
-                float(value)
-                for value in sub[LAMBDA_SELECTION_MAXIMIZING_METRIC].drop_nulls().to_list()
-            ]
-            lambdas = [float(value) for value in sub['lam'].drop_nulls().to_list()]
-            if not fcp_values or not lambdas:
-                continue
-            best_fcp = max(fcp_values)
-            worst_fcp = min(fcp_values)
-            threshold = best_fcp - epsilon
-            near = sub.filter(pl.col(LAMBDA_SELECTION_MAXIMIZING_METRIC) >= threshold)
-            near_lambdas = [float(value) for value in near['lam'].drop_nulls().to_list()]
-            full_span = max(lambdas) - min(lambdas)
-            near_span = max(near_lambdas) - min(near_lambdas) if near_lambdas else 0.0
-            out = base_experiment_row(record)
-            out.update(
-                {
-                    'DataSplit': 'validation',
-                    'strategy': strategy,
-                    'k': k,
-                    'GridStatsPath': str(grid_path),
-                    'NearOptimalEpsilon': epsilon,
-                    'BestFCP': best_fcp,
-                    'WorstFCP': worst_fcp,
-                    'FCPRange': best_fcp - worst_fcp,
-                    'NearOptimalLambdaCount': near.height,
-                    'TotalLambdaCount': sub.height,
-                    'NearOptimalLambdaFraction': near.height / sub.height,
-                    'NearOptimalLambdaSpan': near_span,
-                    'NearOptimalLambdaSpanNorm': near_span / full_span if full_span else 0.0,
-                }
-            )
-            rows.append(out)
-    return rows
-
-
 def lambda_grid_fcp_delta_rows(
     records: Sequence[ExperimentRecord],
     *,
@@ -660,13 +587,6 @@ def lambda_safety_summary_rows(
         )
         rows.append(out)
     return rows
-
-
-def _lambda_grid_stats_path(record: ExperimentRecord) -> Path:
-    report_grid_path = record.paths.table_path('evaluation_report_grid_stats')
-    if report_grid_path.is_file():
-        return report_grid_path
-    return record.paths.table_path('evaluation_stats')
 
 
 def _lambda_validation_grid_stats_path(record: ExperimentRecord) -> Path:

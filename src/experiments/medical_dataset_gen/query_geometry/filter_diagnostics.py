@@ -48,8 +48,7 @@ def strict_gate_failures(
 
 
 def competitive_pool_mass(cfg: ExperimentCfg) -> int:
-    chunk_pools = cfg.generation.chunk_pools
-    return chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
+    return cfg.generation.total_gold_chunks() + cfg.generation.near_miss_distractors_per_query()
 
 
 def diagnostic_k_values(cfg: ExperimentCfg, *, stress_horizon_k: int) -> list[int]:
@@ -304,12 +303,6 @@ def component_query_similarity_diagnostics(
     topn_sims: NDArray[np.float32],
     query_qrels: QueryIdToQrels,
 ) -> dict[str, object]:
-    """Persist realized query similarity by pool component and near-miss type.
-
-    Structural-change labels are design metadata, not a claim about embedding
-    hardness.  These diagnostics make the empirical distance visible to the
-    report without involving a retrieval outcome.
-    """
     by_type: dict[str, list[float]] = {}
     component: dict[str, list[float]] = {'gold': [], 'near_miss': [], 'background': []}
     for chunk_id, similarity in zip(topn_chunk_ids, topn_sims, strict=True):

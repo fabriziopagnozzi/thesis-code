@@ -147,13 +147,13 @@ def render_chunk_text_template_result(
 def _outer_template(
     fact: ClinicalFact,
     surface_group: ChunkSurfaceGroup,
-) -> tuple[str | None, str | None, str]:
-    family = _canonical_outer_family(fact.note_style)
+) -> tuple[str, str, str]:
+    family = fact.note_style
     templates = CHUNK_TEMPLATE_DATA.note_style_templates.templates_for_anchor(fact.condition_anchor)
-    bucket = templates.get(family)
-    if bucket is None:
-        family = next(iter(templates))
+    try:
         bucket = templates[family]
+    except KeyError as exc:
+        raise ValueError(f'unknown note-style template family: {family!r}') from exc
     choices = bucket.templates_for_group(surface_group)
     index = _stable_index(fact, surface_group, f'outer:{family}', len(choices))
     selected = choices[index]
@@ -248,8 +248,6 @@ def _treatment_duration_sentence(
     surface_group: ChunkSurfaceGroup,
 ) -> tuple[str, str, str]:
     course_id = payload.treatment_course_id
-    if course_id is None:
-        raise ValueError(f'treatment duration payload for {fact.fact_id} lacks treatment_course_id')
     bucket = CHUNK_TEMPLATE_DATA.treatment_course_templates.get(course_id)
     if bucket is None:
         raise ValueError(f'missing treatment-course template for {course_id!r}')
@@ -278,15 +276,6 @@ def _simple_interpretation_sentence(
     choices = bucket.templates_for_group(surface_group)
     index = _stable_index(fact, surface_group, 'simple_interpretation', len(choices))
     return choices[index].template
-
-
-def _canonical_outer_family(note_style: str) -> str:
-    legacy_styles = {
-        'brief_hospital_course': 'admission_course',
-        'progress_note': 'embedded_course',
-        'discharge_summary': 'cohort_first',
-    }
-    return legacy_styles.get(note_style, note_style)
 
 
 def _stable_index(
@@ -385,7 +374,7 @@ def validate_chunk_template_sources(ontology: MedicalOntology) -> None:
     _validate_simple_interpretation_coverage(ontology, errors)
     _validate_template_placeholders(errors)
     if errors:
-        raise ValueError('invalid v4 chunk template sources: ' + '; '.join(errors))
+        raise ValueError('invalid chunk template sources: ' + '; '.join(errors))
 
 
 def _validate_treatment_course_template_coverage(

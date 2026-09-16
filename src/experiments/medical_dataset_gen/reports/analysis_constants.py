@@ -18,8 +18,6 @@ type DeltaMetricLabel = Literal[
     'NearMissDistractorRate',
     'BackgroundOutlierRate',
 ]
-DELTA_METRIC_LABELS = tuple[DeltaMetricLabel, ...](get_literals(DeltaMetricLabel))
-
 # Thresholds to set for each metric to identify when methods are tied
 PRACTICAL_EFFECT_THRESHOLDS: dict[DeltaMetricLabel, float] = {
     'FCP': 0.05,
@@ -83,17 +81,6 @@ DISTRIBUTION_FAMILY_ABBREVIATIONS: dict[ExperimentFamilyId, str] = {
     'embedding_comparison': 'EMB',
     'unknown': 'UNK',
 }
-EXPERIMENT_FAMILY_COLORS: dict[ExperimentFamilyId, str] = {
-    'balanced_clean': '#287C8E',
-    'dominance': '#C44E52',
-    'sparse_niche': '#5F8F3F',
-    'near_miss_heavy': '#C47A3A',
-    'background_variant': '#6F63A6',
-    'interaction': '#444444',
-    'budget_sweep': '#8C6D31',
-    'embedding_comparison': '#4C78A8',
-    'unknown': '#808080',
-}
 HELDOUT_SELECTION_COLUMNS = frozenset(
     {
         'lambda_selection_split',
@@ -105,7 +92,6 @@ HELDOUT_SELECTION_COLUMNS = frozenset(
 REPORT_FILES = (
     'txt_report.md',
     'txt_report_highlights.md',
-    'txt_experiments_config_recap.md',
     'warnings.txt',
     'manifest.json',
     'data/experiment_manifest.csv',
@@ -113,14 +99,6 @@ REPORT_FILES = (
     'data/geometry_filter_summary.csv',
     'data/strategy_by_k.csv',
     'data/comparison_by_k.csv',
-    'data/geometry_population_strategy_by_k.csv',
-    'data/geometry_population_comparison_by_k.csv',
-    'data/global_lambda_strategy_by_k.csv',
-    'data/global_lambda_comparison_by_k.csv',
-    'data/global_lambda_metric_aggregate_summary.csv',
-    'data/lodo_lambda_strategy_by_k.csv',
-    'data/lodo_lambda_comparison_by_k.csv',
-    'data/lodo_lambda_metric_aggregate_summary.csv',
     'data/synthetic_artifact_diagnostics.csv',
     'data/experiment_family_summary.csv',
     'data/experiment_family_budget_summary.csv',
@@ -128,17 +106,11 @@ REPORT_FILES = (
     'data/metric_family_budget_summary.csv',
     'data/metric_aggregate_summary.csv',
     'data/budget_strategy_summary.csv',
-    'data/interaction_budget_strategy_summary.csv',
-    'data/interaction_metric_family_summary.csv',
-    'data/interaction_metric_family_budget_summary.csv',
-    'data/interaction_metric_aggregate_summary.csv',
     'data/low_budget_strategy_summary.csv',
-    'data/lambda_stability.csv',
     'data/lambda_grid_fcp_delta.csv',
     'data/lambda_safety_summary.csv',
     'data/lambda_curve_summary.csv',
     'data/lambda_robustness_summary.csv',
-    'data/near_optimal_lambda_width.csv',
     'data/embedding_model_summary.csv',
     'data/embedding_model_grid_coverage.csv',
     'data/embedding_model_grid_missing.csv',
@@ -147,12 +119,6 @@ REPORT_FILES = (
     'data/embedding_geometry_summary.csv',
     'data/embedding_geometry_family_summary.csv',
     'data/lambda_curve_by_embedding_model.csv',
-    'data/paired_query_effects/',
-    'data/paired_profile_effects/',
-    'data/paired_cell_effect_summary.csv',
-    'data/paired_suite_effect_summary.csv',
-    'data/paired_config_suite_effect_summary.csv',
-    'data/paired_leave_one_out_sensitivity.csv',
 )
 ANALYSIS_EXCLUDED_METRICS = frozenset(
     {
@@ -171,17 +137,6 @@ EVALUATION_METRICS = (
         if metric_name not in ANALYSIS_EXCLUDED_METRICS
     ),
 )
-METRIC_LABEL_OVERRIDES = {
-    'FacetCoveragePurity@k': 'FCP',
-    'FacetWeightedRecall@k': 'FacetWeightedRecall',
-    'AllFacetCoverageRate@k': 'AllFacetCoverageRate',
-    'alpha-nDCG@k': 'alpha_nDCG',
-}
-METRIC_LABELS = {
-    metric_name: METRIC_LABEL_OVERRIDES.get(metric_name, metric_name.removesuffix('@k'))
-    for metric_name in EVALUATION_METRICS
-    if metric_name not in {'n_queries', 'fac', 'avg_cos', 'jac'}
-}
 TABLE_HEADERS = {
     'ShortExperiment': 'ID',
     'ShortDistribution': 'Dist',
@@ -235,9 +190,6 @@ TABLE_HEADERS = {
     'MeanMMR': 'Mean MMR',
     'MeanFacLoc': 'Mean FacLoc',
     'MeanDeltaFacLocMMR': 'Mean F-M',
-    'CI95Low': 'CI95 low',
-    'CI95High': 'CI95 high',
-    'PracticalConclusion': 'Conclusion',
     'MedianDeltaFacLocMMR': 'Median F-M',
     'MeanDeltaFacLocTopK': 'Mean F-Top',
     'MeanDeltaMMRTopK': 'Mean M-Top',
@@ -256,20 +208,12 @@ TABLE_HEADERS = {
     'MMR_AllFacetCleanRate': 'MMR Clean',
     'FacLoc_AllFacetCleanRate': 'FacLoc Clean',
     'PassFilterRuns': 'Pass-filter runs',
-    'selected_lambda_norm_mean': 'lambda* norm mean',
-    'selected_lambda_norm_std': 'lambda* norm std',
-    'near_optimal_fraction_mean': 'near-opt frac',
-    'near_optimal_span_norm_mean': 'near-opt width',
     'SafeLambdaFraction': 'safe lambda frac',
     'WorstDeltaStrategyTopK_FCP': 'worst dTopK FCP',
     'MedianDeltaStrategyTopK_FCP': 'median dTopK FCP',
     'BestDeltaStrategyTopK_FCP': 'best dTopK FCP',
     'WorstLambda': 'worst lambda',
     'BestLambda': 'best lambda',
-    'GeometryPopulationLabel': 'Population',
-    'LambdaPolicy': 'Lambda policy',
-    'LambdaSelectionTrainingRecords': 'lambda train runs',
-    'LambdaSelectionTrainingQueries': 'lambda train queries',
     'ExactDuplicateChunkRate': 'Exact dup. rate',
     'WithinMinusBetweenJaccard': 'Within-between Jaccard',
 }

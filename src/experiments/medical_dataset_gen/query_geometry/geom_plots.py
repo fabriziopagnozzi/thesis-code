@@ -1402,7 +1402,9 @@ def _query_chunk_pools_text(artifact: GeometryArtifact) -> str:
         role_label = SETTINGS.gold_facet_role_labels.get(
             cast(ClusterRole, role_by_facet_id.get(facet_id)), 'Gold'
         )
-        lines.append(f'* {_title_case_role_label(role_label)}: {_facet_specification(facet)}')
+        lines.append(
+            f'* {_title_case_role_label(role_label)}: {_facet_specification(artifact, facet)}'
+        )
         _append_outlier_groups(lines, distractors_by_target.get(facet_id, []), artifact)
         lines.append('')
 
@@ -1458,9 +1460,9 @@ def _facet_payload_by_id(artifact: GeometryArtifact) -> dict[str, dict[str, Any]
     }
 
 
-def _facet_specification(facet: dict[str, Any]) -> str:
+def _facet_specification(artifact: GeometryArtifact, facet: dict[str, Any]) -> str:
     condition = str(
-        facet.get('condition_display') or facet.get('condition_id') or 'unknown condition'
+        artifact.query.condition_display or artifact.query.condition_id or 'unknown condition'
     )
     subgroup = str(facet.get('subgroup_label') or facet.get('subgroup_id') or 'unknown subgroup')
     axis = str(facet.get('axis') or 'unknown axis').replace('_', ' ')

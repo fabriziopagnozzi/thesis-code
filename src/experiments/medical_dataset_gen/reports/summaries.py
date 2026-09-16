@@ -12,7 +12,6 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     practical_effect_threshold,
 )
 from experiments.medical_dataset_gen.reports.helpers import (
-    boundary_rate,
     delta_outcome,
     family_balanced_mean,
     family_balanced_rate,
@@ -28,7 +27,6 @@ from experiments.medical_dataset_gen.reports.helpers import (
 )
 from experiments.medical_dataset_gen.reports.models import BudgetCategory
 from experiments.medical_dataset_gen.reports.report_config import (
-    AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS,
     BUDGET_CATEGORIES,
     BUDGET_CATEGORY_LABELS,
     LOW_BUDGET_K,
@@ -40,23 +38,17 @@ from experiments.medical_dataset_gen.reports.report_config import (
 
 
 def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, int, str, str], dict[str, Mapping[str, object]]] = {}
+    grouped: dict[tuple[str, int], dict[str, Mapping[str, object]]] = {}
     for row in strategy_rows:
         experiment = str(row.get('Experiment') or '')
         k = int_or_none(row.get('k'))
         strategy = row.get('strategy')
         if not experiment or k is None or strategy not in STRATEGIES:
             continue
-        geometry_population = str(row.get('GeometryPopulation') or '')
-        lambda_policy = str(row.get('LambdaPolicy') or '')
-        grouped.setdefault((experiment, k, geometry_population, lambda_policy), {})[
-            cast(str, strategy)
-        ] = row
+        grouped.setdefault((experiment, k), {})[cast(str, strategy)] = row
 
     rows: list[dict[str, object]] = []
-    for (experiment, k, _geometry_population, _lambda_policy), by_strategy in sorted(
-        grouped.items()
-    ):
+    for (experiment, k), by_strategy in sorted(grouped.items()):
         first = next(iter(by_strategy.values()))
         out = {
             'Experiment': experiment,
@@ -67,9 +59,6 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             'ExperimentFamilyLabel': first.get('ExperimentFamilyLabel'),
             'RunLabel': first.get('RunLabel'),
             'ArtifactOrigin': first.get('ArtifactOrigin'),
-            'DatasetSchemaVersion': first.get('DatasetSchemaVersion'),
-            'EvaluationSchemaVersion': first.get('EvaluationSchemaVersion'),
-            'IncludeInCausalSummaries': first.get('IncludeInCausalSummaries'),
             'IncludeInFamilySummary': first.get('IncludeInFamilySummary'),
             'SuiteTags': first.get('SuiteTags'),
             'AnalysisBlocks': first.get('AnalysisBlocks'),
@@ -90,11 +79,6 @@ def comparison_by_k_rows(strategy_rows: Sequence[Mapping[str, object]]) -> list[
             'QueryScope': first.get('QueryScope'),
             'k': k,
             'SelectionSource': first.get('SelectionSource'),
-            'LambdaPolicy': first.get('LambdaPolicy'),
-            'GeometrySourceExperiment': first.get('GeometrySourceExperiment'),
-            'GeometryPopulation': first.get('GeometryPopulation'),
-            'GeometryPopulationLabel': first.get('GeometryPopulationLabel'),
-            'PopulationPassFilterValue': first.get('PopulationPassFilterValue'),
         }
         for strategy in STRATEGIES:
             row = by_strategy.get(strategy)
@@ -383,83 +367,6 @@ def metric_family_budget_summary_rows(
     return rows
 
 
-def metric_family_wording_budget_summary_rows(
-    budget_rows: Sequence[Mapping[str, object]],
-    *,
-    metric_filter: DeltaMetricLabel | None = None,
-) -> list[dict[str, object]]:
-    """Summarize a metric by distribution family, wording profile, and budget.
-
-    This is the shared population for the cross-wording figures. It excludes
-    non-distribution families and rows without an embedding model, matching
-    the cross-wording analysis.
-    """
-    rows: list[dict[str, object]] = []
-    metric_order = {spec.metric_label: index for index, spec in enumerate(REPORT_METRIC_SPECS)}
-    budget_order = {category: index for index, category in enumerate(BUDGET_CATEGORIES)}
-
-    for spec in REPORT_METRIC_SPECS:
-        if metric_filter is not None and spec.metric_label != metric_filter:
-            continue
-        grouped: dict[
-            tuple[str, str, BudgetCategory, str], list[Mapping[str, object]]
-        ] = {}
-        for row in budget_rows:
-            config = str(row.get('WordingConfig') or '')
-            family = str(row.get('ExperimentFamilyLabel') or 'Unknown')
-            category_value = str(row.get('BudgetCategory') or '')
-            if (
-                not row.get('EmbeddingModel')
-                or not config
-                or category_value not in BUDGET_CATEGORIES
-                or family in AGGREGATE_PLOT_EXCLUDED_FAMILY_LABELS
-            ):
-                continue
-            category = cast(BudgetCategory, category_value)
-            budget_label = str(row.get('BudgetCategoryLabel') or BUDGET_CATEGORY_LABELS[category])
-            grouped.setdefault((config, family, category, budget_label), []).append(row)
-
-        for (config, family, category, budget_label), group in grouped.items():
-            summary = _metric_group_summary_row(
-                metric=spec.metric_label,
-                metric_title=spec.title_label,
-                rows=group,
-                family=family,
-                budget_category=category,
-                budget_label=budget_label,
-            )
-            # A partially materialized report can omit a metric. Do not emit
-            # placeholder cells: they would be indistinguishable from data.
-            if not summary['Rows']:
-                continue
-            first = group[0]
-            summary.update(
-                {
-                    'WordingConfig': config,
-                    'WordingConfigLabel': first.get('WordingConfigLabel'),
-                    'QueryMode': first.get('QueryMode'),
-                    'FocusMode': first.get('FocusMode'),
-                    'ChunkTextMode': first.get('ChunkTextMode'),
-                    '_MetricSort': metric_order[spec.metric_label],
-                    '_BudgetSort': budget_order[category],
-                }
-            )
-            rows.append(summary)
-
-    rows.sort(
-        key=lambda row: (
-            cast(int, row['_MetricSort']),
-            str(row.get('ExperimentFamilyLabel') or ''),
-            str(row.get('WordingConfig') or ''),
-            cast(int, row['_BudgetSort']),
-        )
-    )
-    for row in rows:
-        row.pop('_MetricSort', None)
-        row.pop('_BudgetSort', None)
-    return rows
-
-
 def _metric_group_summary_row(
     *,
     metric: DeltaMetricLabel,
@@ -617,16 +524,6 @@ def _oriented_delta(
     return delta if higher_is_better else -delta
 
 
-def low_budget_rows_from_comparisons(
-    comparison_rows: Sequence[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    return [
-        row
-        for row in budget_category_rows_from_comparisons(comparison_rows)
-        if row.get('BudgetCategory') == 'low_budget'
-    ]
-
-
 def budget_category_rows_from_comparisons(
     comparison_rows: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
@@ -688,43 +585,6 @@ def _budget_category_rule(
     if category == 'medium_budget':
         return f'k at index floor({k_count}/2) among {completeness}'
     return f'highest k among {completeness}'
-
-
-def lambda_stability_rows(
-    strategy_rows: Sequence[Mapping[str, object]],
-    near_optimal_rows: Sequence[Mapping[str, object]],
-) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for strategy in DIVERSIFYING_STRATEGIES:
-        selected = [row for row in strategy_rows if row.get('strategy') == strategy]
-        lambdas = [float_or_none(row.get('lam')) for row in selected]
-        lambda_norms = [float_or_none(row.get('lambda_norm')) for row in selected]
-        lambdas = [value for value in lambdas if value is not None]
-        lambda_norms = [value for value in lambda_norms if value is not None]
-        near_rows = [row for row in near_optimal_rows if row.get('strategy') == strategy]
-        near_fractions = [
-            value
-            for value in (float_or_none(row.get('NearOptimalLambdaFraction')) for row in near_rows)
-            if value is not None
-        ]
-        near_spans = [
-            value
-            for value in (float_or_none(row.get('NearOptimalLambdaSpanNorm')) for row in near_rows)
-            if value is not None
-        ]
-        row: dict[str, object] = {
-            'strategy': strategy,
-            'n_selected': len(lambdas),
-            'distinct_lambda_count': len(set(round(value, 6) for value in lambdas)),
-            'boundary_selection_rate': boundary_rate(lambda_norms),
-            'near_optimal_rows': len(near_rows),
-        }
-        row.update(numeric_stats(lambdas, prefix='selected_lambda'))
-        row.update(numeric_stats(lambda_norms, prefix='selected_lambda_norm'))
-        row.update(numeric_stats(near_fractions, prefix='near_optimal_fraction'))
-        row.update(numeric_stats(near_spans, prefix='near_optimal_span_norm'))
-        rows.append(row)
-    return rows
 
 
 def lambda_curve_summary_rows(
@@ -793,8 +653,7 @@ def lambda_curve_summary_rows(
             'CellMedianDeltaStrategyTopK_FCP': statistics.median(fcp_deltas),
             'CellQ25DeltaStrategyTopK_FCP': quantile(sorted(fcp_deltas), 0.25),
             'CellQ75DeltaStrategyTopK_FCP': quantile(sorted(fcp_deltas), 0.75),
-            'CellSafeLambdaFraction': sum(value >= 0.0 for value in fcp_deltas)
-            / len(fcp_deltas),
+            'CellSafeLambdaFraction': sum(value >= 0.0 for value in fcp_deltas) / len(fcp_deltas),
             'BalancedSafeLambdaFraction': balanced_safe,
             'MeanDeltaStrategyTopK_DistractorRate': balanced_distractor,
             'CellMeanDeltaStrategyTopK_DistractorRate': (
@@ -834,17 +693,27 @@ def lambda_robustness_summary_rows(
                 (
                     'embedding_model',
                     model,
-                    [row for row in strategy_rows if str(row.get('EmbeddingModel') or 'unknown') == model],
+                    [
+                        row
+                        for row in strategy_rows
+                        if str(row.get('EmbeddingModel') or 'unknown') == model
+                    ],
                     ('ExperimentFamily',),
                     'family-balanced',
                 )
             )
-        for family in sorted({str(row.get('ExperimentFamily') or 'unknown') for row in strategy_rows}):
+        for family in sorted(
+            {str(row.get('ExperimentFamily') or 'unknown') for row in strategy_rows}
+        ):
             scopes.append(
                 (
                     'experiment_family',
                     family,
-                    [row for row in strategy_rows if str(row.get('ExperimentFamily') or 'unknown') == family],
+                    [
+                        row
+                        for row in strategy_rows
+                        if str(row.get('ExperimentFamily') or 'unknown') == family
+                    ],
                     ('EmbeddingModel',),
                     'model-balanced',
                 )
@@ -885,7 +754,11 @@ def lambda_robustness_summary_rows(
                         {str(row.get('ExperimentFamily') or 'unknown') for row in scoped_rows}
                     ),
                     'BudgetCount': len(
-                        {int_or_none(row.get('k')) for row in scoped_rows if int_or_none(row.get('k')) is not None}
+                        {
+                            int_or_none(row.get('k'))
+                            for row in scoped_rows
+                            if int_or_none(row.get('k')) is not None
+                        }
                     ),
                     'LambdaGridPoints': max(
                         int_or_none(row.get('LambdaCount')) or 0 for row in scoped_rows

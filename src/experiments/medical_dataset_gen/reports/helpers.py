@@ -20,26 +20,22 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     StrategyName,
 )
 from experiments.medical_dataset_gen.reports.models import ExperimentRecord, ScalarItem
-from experiments.medical_dataset_gen.reports.report_config import (
-    PREFERRED_EMBEDDING_MODEL_ORDER,
-    embedding_model_display_label,
-)
+from experiments.medical_dataset_gen.reports.report_config import PREFERRED_EMBEDDING_MODEL_ORDER
 from experiments.medical_dataset_gen.utils.exp_naming import (
     is_compact_embedding_child_token,
 )
 
-type QueryModeToken = Literal['biased', 'unbiased', 'label_only']
+type QueryModeToken = Literal['biased', 'unbiased']
 type ChunkTextModeToken = Literal['simple', 'hardened']
 
 _CHILD_MODE_RE = re.compile(
-    r'^(?P<query_mode>biased|unbiased|label_only)_q_'
-    r'(?P<focus_mode>list|natural|label_only)_f_'
+    r'^(?P<query_mode>biased|unbiased)_q_'
+    r'(?P<focus_mode>list|natural)_f_'
     r'(?P<chunk_text_mode>simple|hardened)_c(?:_.+)?$'
 )
 _QUERY_MODE_BY_STRUCTURE: dict[str, QueryModeToken] = {
     'unbalanced': 'biased',
     'balanced': 'unbiased',
-    'label_only': 'label_only',
 }
 _CHUNK_TEXT_MODE_BY_STYLE: dict[str, ChunkTextModeToken] = {
     'ontology_explicit': 'simple',
@@ -64,15 +60,11 @@ def base_experiment_row(record: ExperimentRecord) -> dict[str, object]:
         'Experiment': record.name,
         'ShortExperiment': short_experiment_id(record.name),
         'Distribution': record.distribution_id,
-        'DistributionBase': record.distribution_base_id,
         'ShortDistribution': short_token(record.distribution_id),
         'ExperimentFamily': record.family_id,
         'ExperimentFamilyLabel': record.family_label,
         'RunLabel': record.run_label,
         'ArtifactOrigin': record.origin,
-        'DatasetSchemaVersion': record.dataset_schema_version,
-        'EvaluationSchemaVersion': record.evaluation_schema_version,
-        'IncludeInCausalSummaries': record.include_in_causal_summaries,
         'IncludeInFamilySummary': record.include_in_family_summary,
         'SuiteTags': '|'.join(record.tags),
         'AnalysisBlocks': '|'.join(record.analysis_blocks),
@@ -107,9 +99,6 @@ def wording_config_metadata(record: ExperimentRecord) -> dict[str, object]:
         or 'unknown'
     )
     focus_mode = parsed.get('FocusMode') or focus_mode or 'unknown'
-    if query_structure == 'label_only' or query_mode == 'label_only':
-        query_mode = 'label_only'
-        focus_mode = 'label_only'
     config_id = f'{query_mode}_q_{focus_mode}_f_{chunk_text_mode}_c'
     return {
         'QueryMode': query_mode,
@@ -137,18 +126,6 @@ def _parse_child_mode_tokens(run_label: str) -> dict[str, str]:
     }
 
 
-def wording_config_parts(config: str) -> tuple[str, str, str]:
-    """Parse a stable wording ID, including the singleton label-only mode."""
-    parsed = _parse_child_mode_tokens(config)
-    if not parsed:
-        return ('unknown', 'unknown', 'unknown')
-    return (
-        parsed['QueryMode'],
-        parsed['FocusMode'],
-        parsed['ChunkTextMode'],
-    )
-
-
 def _wording_config_label(
     *,
     query_mode: str,
@@ -158,8 +135,6 @@ def _wording_config_label(
     if 'unknown' in {query_mode, focus_mode, chunk_text_mode}:
         return 'unknown'
     chunk_text_mode_label = _CHUNK_TEXT_MODE_DISPLAY_LABELS.get(chunk_text_mode, chunk_text_mode)
-    if query_mode == 'label_only' and focus_mode == 'label_only':
-        return f'label-only / {chunk_text_mode_label}'
     if focus_mode == 'natural':
         return f'{query_mode} / {chunk_text_mode_label}'
     return f'{query_mode} / {focus_mode} / {chunk_text_mode_label}'
@@ -185,12 +160,6 @@ def ordered_embedding_models(models: Iterable[str]) -> list[str]:
     preferred = [model for model in PREFERRED_EMBEDDING_MODEL_ORDER if model in available]
     remaining = sorted(available.difference(preferred))
     return [*preferred, *remaining]
-
-
-def ordered_embedding_models_for_rows(rows: Sequence[Mapping[str, object]]) -> list[str]:
-    return ordered_embedding_models(
-        str(row.get('EmbeddingModel') or '') for row in rows if row.get('EmbeddingModel')
-    )
 
 
 def embedding_model_sort_key(model: str) -> tuple[int, str]:
@@ -383,13 +352,6 @@ def quantile(sorted_values: Sequence[float], q: float) -> float:
     return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
-def boundary_rate(values: Sequence[float]) -> float | None:
-    if not values:
-        return None
-    boundary_count = sum(value <= 0.02 or value >= 0.98 for value in values)
-    return boundary_count / len(values)
-
-
 def ratio(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator is None or denominator == 0.0:
         return None
@@ -485,29 +447,8 @@ def title_token(value: str) -> str:
     return ''.join(part.capitalize() for part in value.split('_') if part)
 
 
-def short_experiment_label(value: str) -> str:
-    if len(value) <= 42:
-        return value
-    if '/' in value:
-        parent, child = value.split('/', 1)
-        parent = parent[:24]
-        child = child[:17]
-        return f'{parent}/{child}'
-    return value[:39] + '...'
-
-
 def short_experiment_id(value: str) -> str:
     return '/'.join(short_token(part) for part in Path(value).parts)
-
-
-def experiment_plot_label(row: Mapping[str, object]) -> str:
-    """Return a concise, self-describing label for an experiment plot row."""
-    distribution = str(row.get('Distribution') or '')
-    if row.get('ExperimentFamily') != 'interaction':
-        return str(row.get('ShortExperiment') or row.get('Experiment') or distribution)
-    configuration = str(row.get('WordingConfigLabel') or row.get('RunLabel') or '')
-    label = interaction_distribution_label(distribution)
-    return f'{label} | {configuration}' if configuration else label
 
 
 def interaction_distribution_label(distribution: str) -> str:
@@ -541,10 +482,6 @@ def short_token(value: str) -> str:
     return value.split('_', 1)[0]
 
 
-def short_model_label(value: str) -> str:
-    return embedding_model_display_label(value)
-
-
 def sorted_rows(
     rows: Sequence[Mapping[str, object]],
     column: str,
@@ -561,27 +498,6 @@ def sorted_rows(
         )
         + without_values
     )
-
-
-def select_extreme_rows(
-    rows: Sequence[Mapping[str, object]],
-    column: str,
-    max_rows: int,
-) -> list[Mapping[str, object]]:
-    if len(rows) <= max_rows:
-        return sorted_rows(rows, column, descending=True)
-    half = max(1, max_rows // 2)
-    best = sorted_rows(rows, column, descending=True)[:half]
-    worst = sorted_rows(rows, column, descending=False)[: max_rows - half]
-    selected: list[Mapping[str, object]] = []
-    seen: set[str] = set()
-    for row in [*best, *worst]:
-        experiment = str(row.get('Experiment'))
-        if experiment in seen:
-            continue
-        seen.add(experiment)
-        selected.append(row)
-    return sorted_rows(selected, column, descending=True)
 
 
 def section_with_table(

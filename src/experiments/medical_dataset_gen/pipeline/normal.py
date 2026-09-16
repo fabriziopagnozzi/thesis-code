@@ -21,7 +21,7 @@ from experiments.medical_dataset_gen.utils.global_utils import (
 )
 from experiments.medical_dataset_gen.utils.logging_utils import colorprint
 
-from .cli import selected_stage_names, with_dataset_schema_version
+from .cli import selected_stage_names
 from .standalone import StandaloneRunSpec, run_standalone_script_sequence
 
 
@@ -38,7 +38,7 @@ def run_normal_mode(
         return
 
     # Resolve the effective configuration before constructing any artifact path.
-    cfg = with_dataset_schema_version(load_config(args.exp), args.version)
+    cfg = load_config(args.exp)
     paths = paths_for(cfg)
 
     if run_specs is not None:

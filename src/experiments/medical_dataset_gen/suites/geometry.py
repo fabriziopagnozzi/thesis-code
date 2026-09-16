@@ -8,31 +8,26 @@ from pathlib import Path
 
 import polars as pl
 
-from experiments.medical_dataset_gen.suites.core import (
-    SuiteManifest,
-    _sha256_json,
-    load_suite_manifest,
-    suite_root,
-)
-from experiments.medical_dataset_gen.suites.runtime import load_cell_config, suite_paths_for_cell
+from experiments.medical_dataset_gen.suites.io import sha256_json
+from experiments.medical_dataset_gen.suites.runtime import SuiteRuntime
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
 _METRIC = 'in_minus_cross_similarity'
 
 
-def freeze_separability_strata(*, results_dir: Path, suite_id: str, replace: bool = False) -> Path:
+def freeze_separability_strata(*, results_dir: Path, suite_id: str) -> Path:
     """Freeze validation-only tertiles for balanced/unbiased Qwen geometry.
 
     The artifact records all source hashes.  It intentionally reads geometry
     and query metadata only: neither evaluation results nor selected strategy
     rows participate in threshold selection.
     """
-    root = suite_root(results_dir, suite_id)
+    runtime = SuiteRuntime.load(results_dir=results_dir, suite_id=suite_id)
+    root = runtime.root
     path = root / 'geometry' / 'separability_strata.json'
-    manifest = load_suite_manifest(results_dir, suite_id)
-    if path.exists() and not replace:
+    if path.exists():
         return path
-    calibrations = _calibration_frames(root, manifest)
+    calibrations = _calibration_frames(runtime)
     if not calibrations:
         raise FileNotFoundError('no completed balanced/unbiased geometry artifacts for calibration')
     payload_conditions: dict[str, object] = {}
@@ -65,7 +60,7 @@ def freeze_separability_strata(*, results_dir: Path, suite_id: str, replace: boo
         },
         'document_surfaces': payload_conditions,
     }
-    frozen['sha256'] = _sha256_json(frozen)
+    frozen['sha256'] = sha256_json(frozen)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(frozen, indent=2, sort_keys=True) + '\n')
     return path
@@ -75,13 +70,14 @@ def apply_frozen_separability_strata(
     *, results_dir: Path, suite_id: str
 ) -> list[dict[str, object]]:
     """Assign test geometry to frozen strata without loading retrieval output."""
-    root = suite_root(results_dir, suite_id)
+    runtime = SuiteRuntime.load(results_dir=results_dir, suite_id=suite_id)
+    root = runtime.root
     frozen_path = root / 'geometry' / 'separability_strata.json'
     if not frozen_path.is_file():
         return []
     frozen = json.loads(frozen_path.read_text())
-    manifest = load_suite_manifest(results_dir, suite_id)
-    _validate_frozen_calibration(root=root, manifest=manifest, frozen=frozen)
+    manifest = runtime.manifest
+    _validate_frozen_calibration(runtime=runtime, frozen=frozen)
     surfaces = frozen.get('document_surfaces', {})
     if not isinstance(surfaces, dict):
         raise ValueError(f'{frozen_path}: invalid document_surfaces')
@@ -92,8 +88,8 @@ def apply_frozen_separability_strata(
         if not isinstance(limits, dict):
             continue
         try:
-            cfg = load_cell_config(root, cell)
-            paths = suite_paths_for_cell(root=root, cell=cell, cfg=cfg)
+            cfg = runtime.load_config(cell)
+            paths = runtime.paths(cell, cfg)
             geometry = read_parquet(paths, 'geometry_stats')
             queries = read_parquet(paths, 'queries').select(
                 'query_id', 'evidence_profile_id', 'split'
@@ -127,14 +123,14 @@ def apply_frozen_separability_strata(
     return rows
 
 
-def _validate_frozen_calibration(*, root: Path, manifest: SuiteManifest, frozen: object) -> None:
+def _validate_frozen_calibration(*, runtime: SuiteRuntime, frozen: object) -> None:
     """Fail closed when a geometry stratum no longer matches its calibration data."""
     if not isinstance(frozen, dict) or frozen.get('metric') != _METRIC:
         raise ValueError('invalid frozen separability-strata metric')
     expected_surfaces = frozen.get('document_surfaces')
     if not isinstance(expected_surfaces, dict):
         raise ValueError('invalid frozen separability-strata document surfaces')
-    current = _calibration_frames(root, manifest)
+    current = _calibration_frames(runtime)
     for surface, expected in expected_surfaces.items():
         if not isinstance(expected, dict) or surface not in current:
             raise ValueError(f'{surface}: frozen separability calibration source is unavailable')
@@ -151,11 +147,11 @@ def _validate_frozen_calibration(*, root: Path, manifest: SuiteManifest, frozen:
             raise ValueError(f'{surface}: frozen separability model signature is stale')
 
 
-def _calibration_frames(root: Path, manifest: SuiteManifest) -> dict[str, dict[str, object]]:
+def _calibration_frames(runtime: SuiteRuntime) -> dict[str, dict[str, object]]:
     by_surface: dict[str, list[pl.DataFrame]] = {}
     source_hashes: dict[str, list[str]] = {}
     model_signatures: dict[str, set[str]] = {}
-    for cell in manifest.cells:
+    for cell in runtime.manifest.cells:
         if cell.distribution_id != 'balanced_reference':
             continue
         if cell.run_profile_factors.get('query_structure') != 'unbiased':
@@ -163,8 +159,8 @@ def _calibration_frames(root: Path, manifest: SuiteManifest) -> dict[str, dict[s
         surface = cell.run_profile_factors.get('document_surface')
         if surface not in {'category-explicit', 'category-implicit'}:
             continue
-        cfg = load_cell_config(root, cell)
-        paths = suite_paths_for_cell(root=root, cell=cell, cfg=cfg)
+        cfg = runtime.load_config(cell)
+        paths = runtime.paths(cell, cfg)
         geometry_path, queries_path = (
             paths.table_path('geometry_stats'),
             paths.table_path('queries'),
@@ -191,7 +187,7 @@ def _calibration_frames(root: Path, manifest: SuiteManifest) -> dict[str, dict[s
             [_sha256_file(geometry_path), _sha256_file(queries_path)]
         )
         model_signatures.setdefault(surface, set()).add(
-            _sha256_json({'model': cfg.embeddings.model_name, 'config': cell.run_profile_sha256})
+            sha256_json({'model': cfg.embeddings.model_name, 'config': cell.run_profile_sha256})
         )
     result: dict[str, dict[str, object]] = {}
     for surface, frames in by_surface.items():

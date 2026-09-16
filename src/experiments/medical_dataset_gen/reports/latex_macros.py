@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import statistics
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import cast
@@ -15,33 +16,147 @@ from experiments.medical_dataset_gen.reports.helpers import (
     family_balanced_mean,
     ordered_embedding_models,
 )
-from experiments.medical_dataset_gen.reports.latex_tables import (
-    _METRIC_RESULT_TOKENS,
-    _budget_result_token,
-    _budget_rows,
-    _embedding_model_result_token,
-    _experiment_embedding_budget_key,
-    _family_counts,
-    _family_label,
-    _fixed,
-    _float,
-    _integer,
-    _label_token,
-    _median,
-    _metric_result_token,
-    _negative_family_summary,
-    _outcome_count,
-    _signed,
-    _tex_percent,
-    _values,
-    thesis_result_macros_path,
+from experiments.medical_dataset_gen.reports.report_config import (
+    LOW_BUDGET_K,
+    embedding_model_macro_token,
 )
-from experiments.medical_dataset_gen.reports.report_config import LOW_BUDGET_K
 from experiments.medical_dataset_gen.reports.wording_result_macros import (
     render_wording_result_macros,
 )
 
 type ReportRow = dict[str, object]
+
+LATEX_OUTPUT_DIRNAME = 'latex'
+THESIS_RESULT_MACROS_FILENAME = 'exp_results_macros.tex'
+
+_FAMILY_LABELS = {
+    'Balanced clean distributions': 'Balanced clean',
+    'Near-miss-heavy distributions': 'Near-miss-heavy',
+    'Dominance distributions': 'Dominance',
+    'Background variants': 'Background',
+    'Sparse-niche distributions': 'Sparse niche',
+}
+_BUDGET_RESULT_TOKENS = {
+    'all_k': 'All',
+    'low_budget': 'Low',
+    'medium_budget': 'Medium',
+    'high_budget': 'High',
+}
+_METRIC_RESULT_TOKENS = {
+    'FCP': 'Fcp',
+    'FacetCoverage': 'FacetCoverage',
+    'AllFacetCoverageRate': 'AllFacetCoverageRate',
+    'AllFacetCleanRate': 'AllFacetCleanRate',
+    'FacetWeightedRecall': 'FacetWeightedRecall',
+    'Precision': 'Precision',
+    'alpha_nDCG': 'AlphaNdcg',
+}
+
+
+def thesis_latex_dir(report_dir: Path) -> Path:
+    return report_dir / LATEX_OUTPUT_DIRNAME
+
+
+def thesis_result_macros_path(report_dir: Path) -> Path:
+    return thesis_latex_dir(report_dir) / THESIS_RESULT_MACROS_FILENAME
+
+
+def _family_label(value: object) -> str:
+    label = str(value or 'Unknown')
+    return _FAMILY_LABELS.get(label, label.removesuffix(' distributions'))
+
+
+def _budget_result_token(value: object) -> str | None:
+    return _BUDGET_RESULT_TOKENS.get(str(value or ''))
+
+
+def _metric_result_token(value: object) -> str | None:
+    return _METRIC_RESULT_TOKENS.get(str(value or ''))
+
+
+def _embedding_model_result_token(value: object) -> str | None:
+    return embedding_model_macro_token(str(value or ''))
+
+
+def _label_token(value: object) -> str:
+    alphanumeric_text = ''.join(ch if ch.isalnum() else ' ' for ch in str(value))
+    return ''.join(part for part in alphanumeric_text.title().split())
+
+
+def _experiment_embedding_budget_key(
+    row: Mapping[str, object],
+) -> tuple[str, str, int] | None:
+    k_value = _float(row.get('k'))
+    if k_value is None:
+        return None
+    return (str(row.get('Experiment') or ''), str(row.get('EmbeddingModel') or ''), int(k_value))
+
+
+def _integer(value: object) -> str:
+    return f'{int(value)}' if isinstance(value, int | float) else ''
+
+
+def _tex_percent(value: object) -> str:
+    if not isinstance(value, int | float):
+        return ''
+    return f'{value * 100:.1f}'.rstrip('0').rstrip('.') + r'\%'
+
+
+def _values(rows: Sequence[Mapping[str, object]], column: str) -> list[float]:
+    return [value for value in (_float(row.get(column)) for row in rows) if value is not None]
+
+
+def _float(value: object) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
+
+
+def _median(values: Sequence[float]) -> float | None:
+    return statistics.median(values) if values else None
+
+
+def _fixed(value: float | None, *, digits: int) -> str:
+    return f'{value:.{digits}f}' if value is not None else 'n/a'
+
+
+def _signed(value: object, *, digits: int = 4) -> str:
+    numeric = _float(value)
+    return f'{numeric:+.{digits}f}' if numeric is not None else 'n/a'
+
+
+def _outcome_count(rows: Sequence[Mapping[str, object]], outcome: str) -> int:
+    return sum(row.get('FacLocVsMMR_FCPOutcome') == outcome for row in rows)
+
+
+def _budget_rows(
+    rows: Sequence[Mapping[str, object]],
+    budget_category: str,
+) -> list[Mapping[str, object]]:
+    return [row for row in rows if row.get('BudgetCategory') == budget_category]
+
+
+def _family_counts(rows: Sequence[Mapping[str, object]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        family = _family_label(row.get('ExperimentFamilyLabel'))
+        counts[family] = counts.get(family, 0) + 1
+    return counts
+
+
+def _negative_family_summary(counts: Mapping[str, int]) -> str:
+    if not counts:
+        return 'none'
+    parts = []
+    for family, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+        family_text = family.lower().replace(' ', '-')
+        noun = 'configuration' if count == 1 else 'configurations'
+        parts.append(f'{family_text} {noun} ({count})')
+    if len(parts) == 1:
+        return parts[0]
+    return ', '.join(parts[:-1]) + f' and {parts[-1]}'
 
 
 def _mean(rows: Sequence[Mapping[str, object]], column: str) -> float | None:
@@ -204,29 +319,6 @@ def _metric_family_budget_result_macros(
                 f'{prefix}Rows': _integer(row.get('Rows')),
                 f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
                 f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK'), digits=3),
-            }
-        )
-    return macros
-
-
-def _paired_suite_result_macros(rows: Sequence[Mapping[str, object]]) -> dict[str, str]:
-    macros: dict[str, str] = {}
-    for row in rows:
-        if row.get('MetricLabel') != 'FCP':
-            continue
-        budget_token = _budget_result_token(row.get('BudgetCategory'))
-        scope = str(row.get('Scope') or '')
-        scope_token = 'Core' if scope == 'Core suite' else _label_token(_family_label(scope))
-        if budget_token is None or not scope_token:
-            continue
-        prefix = f'ResultPaired{scope_token}{budget_token}Fcp'
-        macros.update(
-            {
-                f'{prefix}Distributions': _integer(row.get('Distributions')),
-                f'{prefix}Runs': _integer(row.get('Runs')),
-                f'{prefix}MeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
-                f'{prefix}CiLow': _signed(row.get('CI95Low'), digits=3),
-                f'{prefix}CiHigh': _signed(row.get('CI95High'), digits=3),
             }
         )
     return macros
@@ -568,7 +660,7 @@ def _embedding_low_budget_result_macros(
 def _embedding_edge_case_result_macros(
     rows: Sequence[Mapping[str, object]],
 ) -> dict[str, str]:
-    """Expose the paired DOM_M03 low-budget reversal used in the thesis claims."""
+    """Expose the matched DOM_M03 low-budget reversal used in the thesis claims."""
     target_distribution = 'DOM_M03_dominance_high'
     matching_budgets = sorted(
         {
@@ -717,7 +809,6 @@ def render_thesis_result_macros(
     metric_summary_rows: Sequence[Mapping[str, object]] = (),
     metric_family_summary_rows: Sequence[Mapping[str, object]] = (),
     metric_family_budget_summary_rows: Sequence[Mapping[str, object]] = (),
-    paired_suite_rows: Sequence[Mapping[str, object]] = (),
     embedding_summary_rows: Sequence[Mapping[str, object]] = (),
     embedding_models: Sequence[str] = (),
     require_complete_wording_grid: bool = False,
@@ -736,7 +827,6 @@ def render_thesis_result_macros(
         **_metric_budget_result_macros(metric_summary_rows),
         **_metric_family_result_macros(metric_family_summary_rows),
         **_metric_family_budget_result_macros(metric_family_budget_summary_rows),
-        **_paired_suite_result_macros(paired_suite_rows),
         **_background_topology_endpoint_result_macros(comparison_rows),
         **_distribution_budget_result_macros(
             comparison_rows,
@@ -803,9 +893,6 @@ def generate_exp_results_macros(
             metric_family_summary_rows=_read_rows(data_dir / 'metric_family_summary.csv'),
             metric_family_budget_summary_rows=_read_rows(
                 data_dir / 'metric_family_budget_summary.csv'
-            ),
-            paired_suite_rows=_read_rows(
-                data_dir / 'paired_suite_effect_summary.csv', required=False
             ),
             embedding_summary_rows=_read_rows(data_dir / 'embedding_model_summary.csv'),
             embedding_metric_rows=_read_rows(

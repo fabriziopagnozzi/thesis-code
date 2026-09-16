@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from random import Random
@@ -11,14 +10,17 @@ from typing import cast
 
 import polars as pl
 
+from experiments.medical_dataset_gen.dataset_generation.artifact_serialization import (
+    query_plan_from_parquet_row,
+)
 from experiments.medical_dataset_gen.dataset_generation.chunk_rendering import (
     render_canonical_chunk,
 )
 from experiments.medical_dataset_gen.dataset_generation.facts import make_gold_fact
 from experiments.medical_dataset_gen.dataset_generation.ontology_utils import load_ontology
 from experiments.medical_dataset_gen.dataset_generation.query_templates import (
-    query_template_ids,
     render_query_template,
+    select_query_template_id,
 )
 from experiments.medical_dataset_gen.dataset_generation.schemas import (
     CHUNK_TEXT_STYLE_LIST,
@@ -29,9 +31,7 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
     ClinicalFact,
     MedicalOntology,
     QueryFocusMode,
-    QueryLogicalForm,
     QueryPlan,
-    QueryPlanFacet,
     QueryStructure,
 )
 from experiments.medical_dataset_gen.utils.global_utils import (
@@ -40,7 +40,6 @@ from experiments.medical_dataset_gen.utils.global_utils import (
     paths_for,
 )
 
-type JsonObject = dict[str, object]
 type QueryChunkMode = tuple[ChunkTextStyle, QueryFocusMode, QueryStructure]
 
 DEFAULT_PRIMARY_AXIS: ClinicalAxis = 'care_intensity'
@@ -92,6 +91,8 @@ def main() -> None:
         configured_chunk_text_style=cfg.generation.chunk_text_style,
         configured_focus_mode=cfg.generation.focus_mode,
         configured_query_structure=cfg.generation.query_structure,
+        dataset_schema_version=cfg.dataset_schema_version,
+        global_seed=cfg.global_.seed,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(rendered)
@@ -177,35 +178,7 @@ def _load_plans(path: Path) -> list[QueryPlan]:
     if not path.exists():
         raise FileNotFoundError(f'missing query plans: {path}')
     frame = pl.read_parquet(path)
-    return [_query_plan_from_row(row) for row in frame.iter_rows(named=True)]
-
-
-def _query_plan_from_row(row: Mapping[str, object]) -> QueryPlan:
-    facets = [
-        QueryPlanFacet.model_construct(_fields_set=None, **facet)
-        for facet in cast(list[JsonObject], json.loads(str(row['facets_json'])))
-    ]
-    logical_form_raw = cast(JsonObject, json.loads(str(row['logical_form_json'])))
-    logical_form = QueryLogicalForm.model_construct(
-        query_type=logical_form_raw['type'],
-        condition=logical_form_raw['condition'],
-        subgroups=logical_form_raw['subgroups'],
-        axes=logical_form_raw['axes'],
-        facets=logical_form_raw['facets'],
-        cohort_contrast_family=logical_form_raw['cohort_contrast_family'],
-        primary_axis=logical_form_raw['primary_axis'],
-        secondary_axis=logical_form_raw['secondary_axis'],
-        dominant_primary_facet_id=logical_form_raw['dominant_primary_facet_id'],
-    )
-    payload = {
-        key: value for key, value in row.items() if key not in {'facets_json', 'logical_form_json'}
-    }
-    return QueryPlan.model_construct(
-        _fields_set=None,
-        **payload,
-        facets=facets,
-        logical_form=logical_form,
-    )
+    return [query_plan_from_parquet_row(row) for row in frame.iter_rows(named=True)]
 
 
 def _select_plan(
@@ -322,7 +295,16 @@ def _render_markdown(
     configured_chunk_text_style: ChunkTextStyle,
     configured_focus_mode: QueryFocusMode,
     configured_query_structure: QueryStructure,
+    dataset_schema_version: int,
+    global_seed: int,
 ) -> str:
+    configured_template_id = select_query_template_id(
+        plan,
+        dataset_schema_version=dataset_schema_version,
+        global_seed=global_seed,
+        query_structure=configured_query_structure,
+        focus_mode=configured_focus_mode,
+    )
     lines = [
         '# Query and Chunk Mode Samples',
         '',
@@ -338,7 +320,7 @@ def _render_markdown(
         f'- subgroup A: `{plan.subgroup_a_label}` (`{plan.subgroup_a_id}`)',
         f'- subgroup B: `{plan.subgroup_b_label}` (`{plan.subgroup_b_id}`)',
         f'- axes: `{plan.primary_axis}` primary, `{plan.secondary_axis}` secondary',
-        f'- query template: `{plan.template_id}`',
+        f'- query template: `{configured_template_id}`',
         '',
         '## Facets',
         '',
@@ -353,10 +335,12 @@ def _render_markdown(
     lines.extend(['', '## Modalities', ''])
 
     for index, (chunk_text_style, focus_mode, query_structure) in enumerate(_all_modes(), start=1):
-        template_id = (
-            query_template_ids(query_structure, focus_mode)[0]
-            if query_structure == 'label_only'
-            else plan.template_id
+        template_id = select_query_template_id(
+            plan,
+            dataset_schema_version=dataset_schema_version,
+            global_seed=global_seed,
+            query_structure=query_structure,
+            focus_mode=focus_mode,
         )
         query_text = render_query_template(
             plan,
@@ -365,11 +349,7 @@ def _render_markdown(
             focus_mode=focus_mode,
             query_structure=query_structure,
         )
-        query_mode_label = (
-            '`label_only`'
-            if query_structure == 'label_only'
-            else f'`{focus_mode}` / `{query_structure}`'
-        )
+        query_mode_label = f'`{focus_mode}` / `{query_structure}`'
         lines.extend(
             [
                 f'### {index}. `{chunk_text_style}` / {query_mode_label}',

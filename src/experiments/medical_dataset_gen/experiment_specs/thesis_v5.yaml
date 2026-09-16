@@ -1,6 +1,6 @@
 # Matched native-v5 thesis suite.  Dataset distributions are defined once and
 # crossed with run profiles below; no directory name encodes a scientific
-# factor.  The migrated v4 suite remains an immutable archival record.
+# factor.
 layout_version: 5
 suite_id: thesis_v5
 origin: native
@@ -565,8 +565,7 @@ distributions:
             [
                 { op: set_near_miss_mass, mass: 48 },
                 {
-                    op: set_cluster_topology,
-                    component: near_miss,
+                    op: set_near_miss_topology,
                     num_clusters: 48,
                     chunks_per_cluster: 1,
                 },
@@ -592,8 +591,7 @@ distributions:
             [
                 { op: set_near_miss_mass, mass: 48 },
                 {
-                    op: set_cluster_topology,
-                    component: near_miss,
+                    op: set_near_miss_topology,
                     num_clusters: 12,
                     chunks_per_cluster: 4,
                 },
@@ -615,7 +613,7 @@ distributions:
                 niche_count: 0,
             }
         config: *reference_config
-        transforms: [{ op: set_background_mass, mass: 32, num_clusters: 32 }]
+        transforms: [{ op: set_background_topology, mass: 32, num_clusters: 32 }]
     background_far_16x2:
         <<: *background_far_32x1
         factors:
@@ -627,7 +625,7 @@ distributions:
                 gold_mass_vector: [24, 24, 24, 24],
                 niche_count: 0,
             }
-        transforms: [{ op: set_background_mass, mass: 32, num_clusters: 16 }]
+        transforms: [{ op: set_background_topology, mass: 32, num_clusters: 16 }]
     background_far_8x4:
         <<: *background_far_32x1
         factors:
@@ -639,7 +637,7 @@ distributions:
                 gold_mass_vector: [24, 24, 24, 24],
                 niche_count: 0,
             }
-        transforms: [{ op: set_background_mass, mass: 32, num_clusters: 8 }]
+        transforms: [{ op: set_background_topology, mass: 32, num_clusters: 8 }]
     background_far_4x8:
         <<: *background_far_32x1
         factors:
@@ -651,7 +649,7 @@ distributions:
                 gold_mass_vector: [24, 24, 24, 24],
                 niche_count: 0,
             }
-        transforms: [{ op: set_background_mass, mass: 32, num_clusters: 4 }]
+        transforms: [{ op: set_background_topology, mass: 32, num_clusters: 4 }]
 
     scale_balanced_small:
         family_id: balanced_clean
@@ -913,7 +911,7 @@ distributions:
                     masses: [16, 16, 16, 16],
                     niche_count: 0,
                 },
-                { op: set_background_mass, mass: 48, num_clusters: 4 },
+                { op: set_background_topology, mass: 48, num_clusters: 4 },
                 { op: scale_support, multiplier: 0.5 },
             ]
     scale_compact_background_medium:
@@ -943,7 +941,7 @@ distributions:
                     masses: [16, 16, 16, 16],
                     niche_count: 0,
                 },
-                { op: set_background_mass, mass: 48, num_clusters: 4 },
+                { op: set_background_topology, mass: 48, num_clusters: 4 },
             ]
     scale_compact_background_large:
         family_id: background_variant
@@ -972,7 +970,7 @@ distributions:
                     masses: [16, 16, 16, 16],
                     niche_count: 0,
                 },
-                { op: set_background_mass, mass: 48, num_clusters: 4 },
+                { op: set_background_topology, mass: 48, num_clusters: 4 },
                 { op: scale_support, multiplier: 2.0 },
             ]
 
@@ -1001,7 +999,7 @@ distributions:
                     masses: [54, 14, 14, 14],
                     niche_count: 0,
                 },
-                { op: set_background_mass, mass: 32, num_clusters: 32 },
+                { op: set_background_topology, mass: 32, num_clusters: 32 },
             ]
     interaction_dom_high_far_4x8:
         family_id: interaction
@@ -1028,7 +1026,7 @@ distributions:
                     masses: [54, 14, 14, 14],
                     niche_count: 0,
                 },
-                { op: set_background_mass, mass: 32, num_clusters: 4 },
+                { op: set_background_topology, mass: 32, num_clusters: 4 },
             ]
     interaction_sparse_severe_h24:
         family_id: interaction
@@ -1160,57 +1158,6 @@ run_profiles:
                 }
             embeddings:
                 { model_name: Qwen/Qwen3-Embedding-0.6B, batch_size: 256 }
-evaluations:
-    - evaluation_id: qwen_natural_primary
-      distribution_ids: &all_distributions
-          - balanced_reference
-          - dominance_mild
-          - dominance_high
-          - dominance_extreme
-          - sparse_one_moderate
-          - sparse_one_severe
-          - sparse_one_extreme
-          - sparse_two_moderate
-          - sparse_two_severe
-          - sparse_two_extreme
-          - near_miss_h0
-          - near_miss_h24
-          - near_miss_h48
-          - near_miss_h96
-          - dilution_far_b40
-          - dilution_far_b64
-          - dilution_far_b112
-          - near_miss_h48_two_change
-          - near_miss_h48_one_change
-          - near_miss_h48_singleton
-          - near_miss_h48_compact
-          - background_far_32x1
-          - background_far_16x2
-          - background_far_8x4
-          - background_far_4x8
-          - scale_balanced_small
-          - scale_balanced_large
-          - scale_dominance_small
-          - scale_dominance_large
-          - scale_sparse_one_small
-          - scale_sparse_one_large
-          - scale_near_miss_small
-          - scale_near_miss_medium
-          - scale_near_miss_large
-          - scale_compact_background_small
-          - scale_compact_background_medium
-          - scale_compact_background_large
-          - interaction_dom_high_far_32x1
-          - interaction_dom_high_far_4x8
-          - interaction_sparse_severe_h24
-          - interaction_sparse_severe_h96
-      run_profile_ids:
-          [
-              qwen_biased_simple,
-              qwen_biased_hardened,
-              qwen_unbiased_simple,
-              qwen_unbiased_hardened,
-          ]
 comparison_groups:
     - comparison_id: dominance_ladder
       distribution_ids:

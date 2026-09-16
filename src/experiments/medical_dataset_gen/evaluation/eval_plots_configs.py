@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import polars as pl
 
@@ -8,13 +8,8 @@ from experiments.medical_dataset_gen.evaluation.eval_plot_data import Evaluation
 from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 from experiments.medical_dataset_gen.utils.global_utils import get_literals
 
-if TYPE_CHECKING:
-    from experiments.medical_dataset_gen.utils.global_schemas import EvalPlotTheme
-
-DEFAULT_EVAL_PLOT_THEME: EvalPlotTheme = 'light'
-
 type EvalPlotCallContext = dict[
-    str, pl.DataFrame | Path | LambdaSelectionCfg | EvalPlotTheme | str | EvaluationResultLookup
+    str, pl.DataFrame | Path | LambdaSelectionCfg | str | EvaluationResultLookup
 ]
 
 type EvalPlotFileName = Literal[
@@ -72,9 +67,9 @@ if UNKNOWN_DEFAULT_ENABLED_EVAL_PLOT_NAMES:
     unknown = ', '.join(UNKNOWN_DEFAULT_ENABLED_EVAL_PLOT_NAMES)
     raise ValueError(f'Unknown default-enabled evaluation plot name(s): {unknown}')
 
-# Theme palettes shared by every Matplotlib and Plotly evaluation figure.
+# Fixed palette shared by every Matplotlib and Plotly evaluation figure.
 # Keep all non-data colors here so PNG and HTML outputs remain visually consistent.
-EVAL_PLOT_LIGHT_THEME: dict[str, str] = {
+EVAL_PLOT_COLORS: dict[str, str] = {
     'figure_facecolor': '#FFFFFF',
     'axes_facecolor': '#FFFFFF',
     'panel_highlight_facecolor': '#F4EFE2',
@@ -94,49 +89,16 @@ EVAL_PLOT_LIGHT_THEME: dict[str, str] = {
     'plotly_template': 'plotly_white',
 }
 
-EVAL_PLOT_DARK_THEME: dict[str, str] = {
-    'figure_facecolor': '#0B1020',
-    'axes_facecolor': '#111827',
-    'panel_highlight_facecolor': '#1E293B',
-    'annotation_facecolor': '#0F172A',
-    'text_color': '#E5E7EB',
-    'muted_text_color': '#A7B0C4',
-    'tick_color': '#CBD5E1',
-    'grid_color': '#334155',
-    'heatmap_grid_color': '#0B1020',
-    'spine_color': '#475569',
-    'zero_line_color': '#F8FAFC',
-    'marker_facecolor': '#111827',
-    'selection_color': '#FDE68A',
-    'heatmap_text_light': '#F8FAFC',
-    'heatmap_text_dark': '#0B1020',
-    'fallback_color': '#94A3B8',
-    'plotly_template': 'plotly_dark',
-}
-
-EVAL_PLOT_THEMES: dict[EvalPlotTheme, dict[str, str]] = {
-    'dark': EVAL_PLOT_DARK_THEME,
-    'light': EVAL_PLOT_LIGHT_THEME,
-}
-
 # Shared line colors, labels, and line styles for retrieval strategies across figures.
-EVAL_PLOT_STRATEGY_STYLES: dict[EvalPlotTheme, dict[str, dict[str, str]]] = {
-    'dark': {
-        'top_k': {'color': '#E5E7EB', 'ls': '--', 'label': 'top-k'},
-        'mmr': {'color': '#60A5FA', 'ls': '-', 'label': 'MMR'},
-        'fac_loc': {'color': '#F87171', 'ls': '-', 'label': 'FacLoc'},
-        'reranker': {'color': '#34D399', 'ls': '-.', 'label': 'Qwen3 reranker'},
-    },
-    'light': {
-        'top_k': {'color': '#333333', 'ls': '--', 'label': 'top-k'},
-        'mmr': {'color': '#1F77B4', 'ls': '-', 'label': 'MMR'},
-        'fac_loc': {'color': '#D62728', 'ls': '-', 'label': 'FacLoc'},
-        'reranker': {'color': '#2CA02C', 'ls': '-.', 'label': 'Qwen3 reranker'},
-    },
+EVAL_PLOT_STRATEGY_STYLES: dict[str, dict[str, str]] = {
+    'top_k': {'color': '#333333', 'ls': '--', 'label': 'top-k'},
+    'mmr': {'color': '#1F77B4', 'ls': '-', 'label': 'MMR'},
+    'fac_loc': {'color': '#D62728', 'ls': '-', 'label': 'FacLoc'},
+    'reranker': {'color': '#2CA02C', 'ls': '-.', 'label': 'Qwen3 reranker'},
 }
 
-# Backward-compatible default for any external code that imports STRATEGY_STYLE directly.
-STRATEGY_STYLE: dict[str, dict[str, str]] = EVAL_PLOT_STRATEGY_STYLES[DEFAULT_EVAL_PLOT_THEME]
+# Backward-compatible alias for any external code that imports STRATEGY_STYLE directly.
+STRATEGY_STYLE: dict[str, dict[str, str]] = EVAL_PLOT_STRATEGY_STYLES
 
 # Colormaps are sampled away from their darkest end in plots.py where line
 # visibility matters. Viridis remains perceptually ordered on both backgrounds.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import polars as pl
 from matplotlib.figure import Figure
@@ -11,13 +11,12 @@ from numpy.typing import NDArray
 
 from experiments.medical_dataset_gen.evaluation.eval_plot_data import EvaluationResultLookup
 from experiments.medical_dataset_gen.evaluation.eval_plots_configs import (
-    DEFAULT_EVAL_PLOT_THEME,
     DEFAULT_PLOT_GRID_LAYOUTS,
+    EVAL_PLOT_COLORS,
     EVAL_PLOT_DIVERGING_CMAP,
     EVAL_PLOT_HEATMAP_CMAP,
     EVAL_PLOT_K_COLORMAP,
     EVAL_PLOT_STRATEGY_STYLES,
-    EVAL_PLOT_THEMES,
     FOR_LAMBDA_K_CURVE_BEST_MARKER_SIZE,
     FOR_LAMBDA_K_CURVE_MARKER_SIZE,
     LAMBDA_K_CURVE_BOTTOM_MARGIN,
@@ -37,10 +36,7 @@ from experiments.medical_dataset_gen.evaluation.lambda_selection import (
 )
 from experiments.medical_dataset_gen.retrieval.metrics_schemas import METRIC_NAME_TO_FIELD
 from experiments.medical_dataset_gen.retrieval.retrieval_utils import ci_half_width
-from experiments.medical_dataset_gen.utils.global_schemas import (
-    EvalPlotTheme,
-    LambdaSelectionCfg,
-)
+from experiments.medical_dataset_gen.utils.global_schemas import LambdaSelectionCfg
 
 
 def plot_metrics_at_best_lambda_for_k(
@@ -49,14 +45,12 @@ def plot_metrics_at_best_lambda_for_k(
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
     result_lookup: EvaluationResultLookup | None = None,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Metric-vs-k lines using each strategy's representative setting.
 
     Top-k and no-lambda methods are shown directly. Lambda-tuned methods show
     only the selected lambda* path for each k, with the exact lambda annotated.
     """
-    _set_active_plot_theme(plot_theme)
     result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
 
@@ -153,11 +147,9 @@ def plot_metrics_at_best_lambda_for_k(
 def plot_metrics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
     """Main benchmark metrics as lambda changes."""
-    _set_active_plot_theme(plot_theme)
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
@@ -172,11 +164,9 @@ def plot_metrics_k_curves_for_lambda(
 def plot_diagnostics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
     """Diagnostic metrics as lambda changes."""
-    _set_active_plot_theme(plot_theme)
     _plot_lambda_sensitivity(
         stats_df,
         out_dir,
@@ -306,16 +296,14 @@ def plot_metrics_heatmap_k_lambda_grid(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
     """Static heatmaps across k x lambda for FacLoc, MMR, and FacLoc advantage."""
-    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
     from matplotlib.colors import Normalize, TwoSlopeNorm
 
-    _activate_plot_theme()
+    _activate_plot_style()
     heatmap_data = _build_strategy_lambda_heatmap_data(stats_df, results_df)
     if heatmap_data is None:
         return
@@ -435,11 +423,9 @@ def plot_metrics_heatmap_k_lambda_grid_html(
     stats_df: pl.DataFrame,
     results_df: pl.DataFrame,
     out_dir: Path,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
     """Interactive HTML explorer for strategy-vs-lambda heatmaps."""
-    _set_active_plot_theme(plot_theme)
     import numpy as np
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -539,7 +525,7 @@ def plot_metrics_heatmap_k_lambda_grid_html(
             f'Strategy comparison heatmap - {_panel_title(first_metric_title, first_metric_higher)} '
             f'(data split: {plot_data_split})'
         ),
-        template=_active_theme()['plotly_template'],
+        template=_theme_color('plotly_template'),
         paper_bgcolor=_theme_color('figure_facecolor'),
         plot_bgcolor=_theme_color('axes_facecolor'),
         font={'color': _theme_color('text_color')},
@@ -593,10 +579,8 @@ def plot_metrics_distributions(
     results_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Violin plots at the top-k best k and each strategy's representative setting."""
-    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
     import numpy as np
 
@@ -672,14 +656,12 @@ def plot_metrics_delta_vs_topk_k_curves_for_lambda(
     results_df: pl.DataFrame,
     out_dir: Path,
     result_lookup: EvaluationResultLookup | None = None,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
     """Paired delta curves relative to top-k on each strategy's native lambda grid.
 
     For lower-is-better diagnostics, negative bars are favorable.
     """
-    _set_active_plot_theme(plot_theme)
     result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
     import numpy as np
@@ -802,10 +784,8 @@ def plot_metrics_delta_vs_topk_at_best_lambda_for_k(
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
     result_lookup: EvaluationResultLookup | None = None,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Paired delta bars using each strategy's representative setting."""
-    _set_active_plot_theme(plot_theme)
     result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
     import numpy as np
@@ -896,10 +876,8 @@ def plot_profiles_metrics_by_k_at_best_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Control-only evaluation metrics using each strategy's representative setting."""
-    _set_active_plot_theme(plot_theme)
     _plot_best_lambda_metric_group(
         stats_df,
         out_dir,
@@ -916,10 +894,8 @@ def plot_profiles_diagnostics_by_k_at_best_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Control-only diagnostic metrics using each strategy's representative setting."""
-    _set_active_plot_theme(plot_theme)
     _plot_best_lambda_metric_group(
         stats_df,
         metric_names=PLOTTED_DIAGNOSTIC_METRIC_NAMES,
@@ -1119,10 +1095,8 @@ def plot_diagnostics_at_best_lambda_for_k(
     stats_df: pl.DataFrame,
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Diagnostic metrics that explain why a strategy wins or fails."""
-    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
 
     k_values = sorted(stats_df['k'].unique().to_list())
@@ -1204,10 +1178,8 @@ def plot_answer_metrics_at_best_lambda_for_k(
     out_dir: Path,
     lambda_selection: LambdaSelectionCfg,
     result_lookup: EvaluationResultLookup | None = None,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
 ) -> None:
     """Auxiliary answer-token overlap diagnostics."""
-    _set_active_plot_theme(plot_theme)
     result_lookup = result_lookup or EvaluationResultLookup(results_df)
     import matplotlib.pyplot as plt
 
@@ -1315,11 +1287,9 @@ def plot_answer_metrics_at_best_lambda_for_k(
 def plot_answer_metrics_k_curves_for_lambda(
     stats_df: pl.DataFrame,
     out_dir: Path,
-    plot_theme: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME,
     plot_data_split: str = 'current',
 ) -> None:
     """Auxiliary ROUGE metrics as lambda changes."""
-    _set_active_plot_theme(plot_theme)
     import matplotlib.pyplot as plt
 
     metric_cols = [
@@ -1434,47 +1404,20 @@ def plot_answer_metrics_k_curves_for_lambda(
 
 
 def get_style(strategy: str) -> dict[str, str]:
-    styles = EVAL_PLOT_STRATEGY_STYLES[_ACTIVE_EVAL_PLOT_THEME]
+    styles = EVAL_PLOT_STRATEGY_STYLES
     return styles.get(
         strategy,
         {'color': _theme_color('fallback_color'), 'ls': '-', 'label': strategy},
     )
 
 
-_ACTIVE_EVAL_PLOT_THEME: EvalPlotTheme = DEFAULT_EVAL_PLOT_THEME
-_ACTIVE_MATPLOTLIB_THEME: EvalPlotTheme | None = None
-
-
-def _normalize_plot_theme(plot_theme: EvalPlotTheme | str | None = None) -> EvalPlotTheme:
-    if plot_theme is None:
-        return DEFAULT_EVAL_PLOT_THEME
-    if plot_theme in EVAL_PLOT_THEMES:
-        return cast(EvalPlotTheme, plot_theme)
-    valid = ', '.join(repr(name) for name in EVAL_PLOT_THEMES)
-    raise ValueError(f'Unknown evaluation plot theme {plot_theme!r}; expected one of: {valid}')
-
-
-def _set_active_plot_theme(plot_theme: EvalPlotTheme | str | None = None) -> EvalPlotTheme:
-    global _ACTIVE_EVAL_PLOT_THEME
-    _ACTIVE_EVAL_PLOT_THEME = _normalize_plot_theme(plot_theme)
-    return _ACTIVE_EVAL_PLOT_THEME
-
-
-def _active_theme() -> dict[str, str]:
-    return EVAL_PLOT_THEMES[_ACTIVE_EVAL_PLOT_THEME]
-
-
 def _theme_color(key: str) -> str:
-    return str(_active_theme()[key])
+    return str(EVAL_PLOT_COLORS[key])
 
 
-def _activate_plot_theme() -> None:
-    """Apply the selected evaluation theme to Matplotlib defaults."""
+def _activate_plot_style() -> None:
+    """Apply the fixed evaluation plot style to Matplotlib defaults."""
     import matplotlib as mpl
-
-    global _ACTIVE_MATPLOTLIB_THEME
-    if _ACTIVE_MATPLOTLIB_THEME == _ACTIVE_EVAL_PLOT_THEME:
-        return
 
     mpl.rcParams.update(
         {
@@ -1497,7 +1440,6 @@ def _activate_plot_theme() -> None:
             'patch.edgecolor': _theme_color('spine_color'),
         }
     )
-    _ACTIVE_MATPLOTLIB_THEME = _ACTIVE_EVAL_PLOT_THEME
 
 
 def _style_figure(fig: Figure) -> None:
@@ -1650,7 +1592,7 @@ def _custom_grid_figure(
 ) -> tuple[Figure, NDArray[Any]]:
     import matplotlib.pyplot as plt
 
-    _activate_plot_theme()
+    _activate_plot_style()
     width = width_per_col * cols
     height = height_per_row * rows + footer_height
     fig, axes = plt.subplots(rows, cols, figsize=(width, height), sharex=sharex, squeeze=False)

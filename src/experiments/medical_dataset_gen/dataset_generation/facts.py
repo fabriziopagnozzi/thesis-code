@@ -1,4 +1,4 @@
-"""Expand schema-v4 plans into clinical facts (document/query metadata)."""
+"""Expand query plans into structured clinical facts."""
 
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ from typing import cast
 import polars as pl
 import pyarrow.parquet as pq
 
+from experiments.medical_dataset_gen.dataset_generation.artifact_serialization import (
+    query_plan_from_parquet_row,
+)
 from experiments.medical_dataset_gen.dataset_generation.chunk_templates import (
     available_note_styles,
     select_chunk_surface_group,
@@ -47,7 +50,6 @@ from experiments.medical_dataset_gen.dataset_generation.schemas import (
 from experiments.medical_dataset_gen.utils.deterministic_ids import stable_seed, stable_sha256
 from experiments.medical_dataset_gen.utils.global_schemas import (
     BackgroundDistractorSpec,
-    ChunkPoolsCfg,
     DistractorSpec,
     ExperimentCfg,
 )
@@ -59,9 +61,8 @@ from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 _FACTS_WRITE_BATCH_ROWS = 131_072
 NOTE_STYLE_IDS = available_note_styles()
 # A cluster-local index must not be renumbered when the support multiplier
-# changes.  Keeping a generous, fixed namespace per cluster makes v5 scale
-# pools deterministic nested sets while still allowing the six near-miss
-# subtypes to retain their independent identities.
+# changes. Keeping a generous, fixed namespace per cluster makes scale pools
+# deterministic nested sets while preserving near-miss subtype identities.
 _V5_NEAR_MISS_CLUSTER_INDEX_STRIDE = 10_000
 
 
@@ -87,7 +88,7 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
 
     try:
         for plan_row in plans.iter_rows(named=True):
-            plan = QueryPlan.model_validate(plan_row)
+            plan = query_plan_from_parquet_row(plan_row)
             rng = Random(plan.plan_seed)
             facts: list[ClinicalFact] = []
 
@@ -107,26 +108,15 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
 
             # Distractors are generated from the same plan so their metadata
             # remains query-local and auditable.
-            if cfg.generation.near_miss_specs is None:
-                facts.extend(
-                    make_distractor_facts(
-                        plan,
-                        ontology,
-                        rng,
-                        cfg.generation.chunk_pools,
-                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
-                    )
+            facts.extend(
+                make_global_near_miss_facts(
+                    plan,
+                    ontology,
+                    rng,
+                    cfg.generation.near_miss_specs,
+                    chunk_surface_policy=cfg.generation.chunk_surface_policy,
                 )
-            else:
-                facts.extend(
-                    make_global_near_miss_facts(
-                        plan,
-                        ontology,
-                        rng,
-                        cfg.generation.near_miss_specs,
-                        chunk_surface_policy=cfg.generation.chunk_surface_policy,
-                    )
-                )
+            )
             facts.extend(
                 make_background_outlier_facts(
                     plan,
@@ -148,8 +138,6 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
         if writer is not None:
             writer.close()
 
-    # The stage's durable output is the parquet table; callers do not need a
-    # second in-memory copy of the final batch.
     if total == 0:
         raise ValueError('no query plans available to generate facts')
 
@@ -210,13 +198,13 @@ def make_gold_fact(
         local_idx=local_idx,
         is_gold=True,
         distractor_type=None,
-        condition_id=facet.condition_id,
-        condition_display=facet.condition_display,
+        condition_id=plan.condition_id,
+        condition_display=plan.condition_display,
         subgroup_id=facet.subgroup_id,
         subgroup_label=facet.subgroup_label,
-        subgroup_axis=facet.subgroup_axis,
-        subgroup_field=facet.subgroup_field,
-        subgroup_value=facet.subgroup_value,
+        subgroup_axis=cohort.axis,
+        subgroup_field=cohort.field,
+        subgroup_value=cohort.value,
         subgroup_dimension_id=cohort.dimension_id,
         subgroup_level_id=cohort.level_id,
         subgroup_is_reference=cohort.is_reference,
@@ -228,31 +216,6 @@ def make_gold_fact(
     )
 
 
-def make_distractor_facts(
-    plan: QueryPlan,
-    ontology: MedicalOntology,
-    rng: Random,
-    chunk_pools: ChunkPoolsCfg,
-    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
-) -> list[ClinicalFact]:
-    """Create the configured mix of point distractors for one query-local pool."""
-    rows: list[ClinicalFact] = []
-    for facet in plan.facets:
-        local_cfg = _local_distractor_config_for_facet(chunk_pools, facet)
-
-        rows.extend(
-            make_local_distractor_facts(
-                plan,
-                facet,
-                ontology,
-                rng,
-                local_cfg,
-                chunk_surface_policy=chunk_surface_policy,
-            )
-        )
-    return rows
-
-
 def make_global_near_miss_facts(
     plan: QueryPlan,
     ontology: MedicalOntology,
@@ -260,12 +223,7 @@ def make_global_near_miss_facts(
     specs: list[DistractorSpec],
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> list[ClinicalFact]:
-    """Materialize schema-v5 near misses with independently controlled mass.
-
-    Archived distributions keep their per-facet local distractors.  New v5
-    suites instead declare global near-miss components so changing H or its
-    topology cannot silently change a gold facet's local pressure.
-    """
+    """Materialize global near misses with independently controlled mass."""
     rows: list[ClinicalFact] = []
     for spec_idx, spec in enumerate(specs):
         chunks_per_cluster = int(spec.chunks_per_cluster or 0)
@@ -275,11 +233,10 @@ def make_global_near_miss_facts(
                 % len(plan.facets)
             ]
             for local_idx in range(chunks_per_cluster):
-                # Do not use ``chunks_per_cluster`` in this identity: scale
-                # levels deliberately change it, and every existing chunk
-                # must retain the same semantic/document ID at larger levels.
+                # Scale levels change chunks_per_cluster, so it cannot be part
+                # of an existing chunk's stable identity.
                 global_idx = cluster_idx * _V5_NEAR_MISS_CLUSTER_INDEX_STRIDE + local_idx
-                fact = make_local_distractor_fact(
+                fact = make_near_miss_fact(
                     plan=plan,
                     target=target,
                     ontology=ontology,
@@ -301,46 +258,7 @@ def make_global_near_miss_facts(
     return rows
 
 
-def _local_distractor_config_for_facet(
-    chunk_pools: ChunkPoolsCfg,
-    facet: QueryPlanFacet,
-) -> list[DistractorSpec]:
-    if facet.cluster_role == 'dominant_primary_gold':
-        return chunk_pools.dominant_primary.distractors
-    if facet.cluster_role == 'primary_gold':
-        return chunk_pools.other_primary.distractors
-    if facet.cluster_role == 'niche_gold':
-        return chunk_pools.niche.distractors
-    return chunk_pools.secondary.distractors
-
-
-def make_local_distractor_facts(
-    plan: QueryPlan,
-    target: QueryPlanFacet,
-    ontology: MedicalOntology,
-    rng: Random,
-    distractor_config: list[DistractorSpec],
-    chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
-) -> list[ClinicalFact]:
-    rows: list[ClinicalFact] = []
-    for spec_idx, spec in enumerate(distractor_config):
-        for local_idx in range(cast(int, spec.size)):
-            rows.append(
-                make_local_distractor_fact(
-                    plan=plan,
-                    target=target,
-                    ontology=ontology,
-                    rng=rng,
-                    spec=spec,
-                    spec_idx=spec_idx,
-                    local_idx=local_idx,
-                    chunk_surface_policy=chunk_surface_policy,
-                )
-            )
-    return rows
-
-
-def make_local_distractor_fact(
+def make_near_miss_fact(
     *,
     plan: QueryPlan,
     target: QueryPlanFacet,
@@ -385,8 +303,8 @@ def make_local_distractor_fact(
         value_bin=value_bin,
         cluster_id=_distractor_cluster_id(plan, target, spec_idx, local_idx),
         cluster_role='hard_distractor',
-        # The target facet becomes part of the reuse scope so per-facet local
-        # distractor pools stay distinct even when their semantic shells match.
+        # The target facet remains part of the reuse scope so near misses aimed
+        # at different facets stay distinct when their semantic shells match.
         reuse_scope=f'distractor:{scope}:target_{target.facet_id}',
         chunk_surface_policy=chunk_surface_policy,
     )
@@ -401,12 +319,12 @@ def _resolve_distractor_fields(
     scope: str,
     selection_idx: int,
 ) -> tuple[ConditionKey, str, str, SubgroupOntology, ClinicalAxis, str]:
-    condition_id = target.condition_id
-    condition_display = target.condition_display
+    condition_id = plan.condition_id
+    condition_display = plan.condition_display
     if spec.changes_condition():
         condition_id, condition = _cycled_other_condition(
             ontology,
-            target.condition_id,
+            plan.condition_id,
             plan.query_id,
             target.facet_id,
             scope,
@@ -642,8 +560,6 @@ def make_base_fact(
     reuse_scope: str | None = None,
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> ClinicalFact:
-    # Payload and surface choices are deterministic functions of the fact's
-    # semantic identity; the caller-provided RNG only controls the fact ID.
     payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx)
     payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
     resolved_reuse_scope = reuse_scope or ('gold' if is_gold else f'distractor:{distractor_type}')
@@ -676,7 +592,7 @@ def make_base_fact(
     sex: PatientSex = _patient_sex(subgroup.patient_sex, surface_rng)
     phrase = surface_rng.choice(subgroup.surface_phrases)
     # A shared human-readable anchor keeps documents from the same semantic bin
-    # cohesive while their condition-specific payloads and note styles still vary.
+    # cohesive while condition-specific payloads and note styles still vary.
     axis_bin_term = ontology.clinical_axes[axis].bin_terms[value_bin][0]
     support_facet_id = facet.facet_id if is_gold and facet is not None else None
     target_facet_id = facet.facet_id if facet is not None else None
@@ -689,18 +605,6 @@ def make_base_fact(
         if condition_display.casefold() in required_payload.casefold()
         else 'outer_template'
     )
-    must_mention = [
-        condition_display,
-        ontology.clinical_axes[axis].label,
-        axis_bin_term,
-        required_payload,
-    ]
-    if subgroup_dimension_id != 'age_band':
-        must_mention.insert(1, phrase)
-
-    must_not_mention = [
-        label for label in (plan.subgroup_a_label, plan.subgroup_b_label) if label != subgroup_label
-    ]
     return ClinicalFact(
         query_id=plan.query_id,
         evidence_profile_id=plan.evidence_profile_id,
@@ -733,15 +637,12 @@ def make_base_fact(
         is_gold=is_gold,
         distractor_type=distractor_type,
         admission_id=f'adm_{plan.pool_id}_{cluster_id}_{local_idx:03d}',
-        patient_id=f'pat_{plan.evidence_profile_id}_{subgroup_id}_{local_idx // 2:03d}',
         patient_age=age,
         patient_sex=sex,
         clinical_subgroup_phrase=phrase,
         note_style=template_rng.choice(NOTE_STYLE_IDS),
         chunk_surface_group=chunk_surface_group,
         split=plan.split,
-        must_mention=must_mention,
-        must_not_mention=must_not_mention,
     )
 
 

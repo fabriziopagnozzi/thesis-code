@@ -54,28 +54,18 @@ _PLAN_COLUMNS = [
     'plan_seed',
     'split',
     'query_type',
-    'template_id',
     'condition_id',
     'condition_display',
     'subgroup_a_id',
     'subgroup_a_label',
-    'subgroup_a_axis',
-    'subgroup_a_field',
-    'subgroup_a_value',
     'subgroup_b_id',
     'subgroup_b_label',
-    'subgroup_b_axis',
-    'subgroup_b_field',
-    'subgroup_b_value',
     'cohort_contrast_family',
     'evidence_profile_id',
     'pool_id',
     'primary_axis',
     'secondary_axis',
     'dominant_primary_facet_id',
-    'n_facets',
-    'gold_chunks_total',
-    'distractor_chunks',
     'facets_json',
     'logical_form_json',
 ]
@@ -139,14 +129,11 @@ _FACT_COLUMNS = [
     'is_gold',
     'distractor_type',
     'admission_id',
-    'patient_id',
     'patient_age',
     'patient_sex',
     'clinical_subgroup_phrase',
     'note_style',
     'split',
-    'must_mention',
-    'must_not_mention',
 ]
 _CHUNK_COLUMNS = [
     'chunk_id',
@@ -1180,8 +1167,6 @@ def _render_chunk_text(
                 ('note_style', row.get('note_style')),
                 ('approx_words', row.get('approx_words')),
                 ('fact_id', row.get('fact_id')),
-                ('must_mention', row.get('must_mention')),
-                ('must_not_mention', row.get('must_not_mention')),
             ]
         )
     _kv(lines, metadata)
@@ -1239,7 +1224,6 @@ def _annotated_ranked_rows(ctx: _RenderContext, query_id: str) -> list[dict[str,
         qrel = ctx.qrels_by_query_chunk.get((query_id, chunk_id), {})
         membership = ctx.memberships_by_query_chunk.get((query_id, chunk_id), {})
         fact_id = str(qrel.get('fact_id') or membership.get('fact_id') or '')
-        fact = ctx.facts_by_fact_id.get(fact_id, {})
         chunk = ctx.chunk_by_id.get(chunk_id, {})
         row = {
             **chunk,
@@ -1253,8 +1237,6 @@ def _annotated_ranked_rows(ctx: _RenderContext, query_id: str) -> list[dict[str,
             'distractor_type': qrel.get('distractor_type') or membership.get('distractor_type'),
             'relevance_grade': qrel.get('relevance_grade'),
             'support_type': qrel.get('support_type'),
-            'must_mention': fact.get('must_mention'),
-            'must_not_mention': fact.get('must_not_mention'),
         }
         row['label_id'] = _label_id(row)
         rows.append(row)
@@ -1444,9 +1426,8 @@ def _diagnostic_top_ks(ctx: _RenderContext, pool_size: int) -> list[int]:
 
 
 def _configured_stress_horizon(cfg: ExperimentCfg) -> int:
-    chunk_pools = cfg.generation.chunk_pools
     competitive_pool_mass = (
-        chunk_pools.gold_chunks_per_query() + chunk_pools.near_miss_distractors_per_query()
+        cfg.generation.total_gold_chunks() + cfg.generation.near_miss_distractors_per_query()
     )
     return cfg.geometry_filter.stress_horizon(competitive_pool_mass=competitive_pool_mass)
 

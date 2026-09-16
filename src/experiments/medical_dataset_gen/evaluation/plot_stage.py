@@ -213,7 +213,6 @@ def _plot_context_for_name(
         'result_lookup': effective_result_lookup,
         'out_dir': out_dir,
         'lambda_selection': cfg.evaluation.lambda_selection,
-        'plot_theme': cfg.evaluation.plot_theme,
         'plot_data_split': 'validation' if uses_validation_grid else 'test',
     }
 
