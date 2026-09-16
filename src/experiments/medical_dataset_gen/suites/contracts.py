@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
 
@@ -166,32 +166,14 @@ class SuiteSpec(SuiteModel):
             raise ValueError('native suite must not declare a source contract')
         if not self.distributions or not self.run_profiles:
             raise ValueError('native suite requires distributions and run profiles')
-        for distribution_id, distribution in self.distributions.items():
+        for distribution_id in self.distributions:
             validate_identifier(distribution_id, 'distribution_id')
-            if (
-                distribution.nested_from is not None
-                and distribution.nested_from not in self.distributions
-            ):
-                raise ValueError(
-                    f'{distribution_id}: unknown nested_from {distribution.nested_from!r}'
-                )
-            seen = {distribution_id}
-            parent_id = distribution.nested_from
-            while parent_id is not None:
-                if parent_id in seen:
-                    raise ValueError(f'{distribution_id}: nested_from contains a cycle')
-                seen.add(parent_id)
-                parent_id = self.distributions[parent_id].nested_from
+        _validate_nesting(
+            {key: distribution.nested_from for key, distribution in self.distributions.items()}
+        )
         for profile_id in self.run_profiles:
             validate_identifier(profile_id, 'run_profile_id')
-        comparison_ids = [group.comparison_id for group in self.comparison_groups]
-        if len(comparison_ids) != len(set(comparison_ids)):
-            raise ValueError('native suite contains duplicate comparison IDs')
-        for group in self.comparison_groups:
-            validate_identifier(group.comparison_id, 'comparison_id')
-            unknown = sorted(set(group.distribution_ids) - set(self.distributions))
-            if unknown:
-                raise ValueError(f'{group.comparison_id}: unknown distributions {unknown}')
+        _validate_spec_comparisons(self.comparison_groups, set(self.distributions))
         return self
 
     def expanded_cells(self) -> list[ExpandedCell]:
@@ -296,56 +278,120 @@ class SuiteManifest(SuiteModel):
             raise ValueError('derived manifest requires a source contract')
         if self.origin == 'native' and self.source is not None:
             raise ValueError('only derived manifests may declare a source contract')
-        cell_ids = [cell.cell_id for cell in self.cells]
-        if len(cell_ids) != len(set(cell_ids)):
-            raise ValueError('manifest contains duplicate cell IDs')
-        raw_distribution_ids = [item.distribution_id for item in self.distributions]
-        raw_profile_ids = [item.run_profile_id for item in self.run_profiles]
-        if len(raw_distribution_ids) != len(set(raw_distribution_ids)):
-            raise ValueError('manifest contains duplicate distribution IDs')
-        if len(raw_profile_ids) != len(set(raw_profile_ids)):
-            raise ValueError('manifest contains duplicate run-profile IDs')
-        distribution_ids = set(raw_distribution_ids)
-        profile_ids = set(raw_profile_ids)
-        cells_by_id = {cell.cell_id: cell for cell in self.cells}
+        cells_by_id = _unique_index(
+            self.cells,
+            lambda cell: cell.cell_id,
+            'manifest contains duplicate cell IDs',
+        )
+        distributions_by_id = _unique_index(
+            self.distributions,
+            lambda item: item.distribution_id,
+            'manifest contains duplicate distribution IDs',
+        )
+        profiles_by_id = _unique_index(
+            self.run_profiles,
+            lambda item: item.run_profile_id,
+            'manifest contains duplicate run-profile IDs',
+        )
+        _unique_index(
+            self.comparison_groups,
+            lambda group: group.comparison_id,
+            'manifest contains duplicate comparison IDs',
+        )
+        distribution_ids = set(distributions_by_id)
         if self.source is not None and set(self.source.distribution_ids) != distribution_ids:
             raise ValueError('derived manifest distributions disagree with its source contract')
-        for cell in self.cells:
-            if cell.origin != self.origin:
-                raise ValueError(f'{cell.cell_id}: cell origin disagrees with its manifest')
-            if cell.distribution_id not in distribution_ids:
-                raise ValueError(f'{cell.cell_id}: unknown manifest distribution')
-            if cell.run_profile_id not in profile_ids:
-                raise ValueError(f'{cell.cell_id}: unknown manifest run profile')
-            if cell.cell_id != f'{cell.distribution_id}__{cell.run_profile_id}':
-                raise ValueError(f'{cell.cell_id}: cell ID disagrees with its dimensions')
-            if self.source is not None and (
-                cell.source_suite_id != self.source.suite_id
-                or cell.source_manifest_sha256 != self.source.manifest_sha256
-            ):
-                raise ValueError(f'{cell.cell_id}: source pin disagrees with its manifest')
-            seen = {cell.cell_id}
-            parent_id = cell.nested_from
-            while parent_id is not None:
-                if parent_id in seen:
-                    raise ValueError(f'{cell.cell_id}: nested_from contains a cycle')
-                seen.add(parent_id)
-                parent = cells_by_id.get(parent_id)
-                if parent is None:
-                    raise ValueError(f'{cell.cell_id}: unknown nested_from cell {parent_id!r}')
-                if parent.run_profile_id != cell.run_profile_id:
-                    raise ValueError(f'{cell.cell_id}: nested cells must share a run profile')
-                parent_id = parent.nested_from
-        comparison_ids = [group.comparison_id for group in self.comparison_groups]
-        if len(comparison_ids) != len(set(comparison_ids)):
-            raise ValueError('manifest contains duplicate comparison IDs')
-        for group in self.comparison_groups:
-            unknown = set(group.distribution_ids) - distribution_ids
-            if unknown:
-                raise ValueError(
-                    f'{group.comparison_id}: unknown manifest distributions {sorted(unknown)}'
-                )
+        _validate_manifest_cells(
+            manifest=self,
+            cells_by_id=cells_by_id,
+            distribution_ids=distribution_ids,
+            profile_ids=set(profiles_by_id),
+        )
+        _validate_nesting(
+            {key: cell.nested_from for key, cell in cells_by_id.items()},
+            missing_suffix=' cell',
+            groups={key: cell.run_profile_id for key, cell in cells_by_id.items()},
+        )
+        _validate_manifest_comparisons(self.comparison_groups, distribution_ids)
         return self
+
+
+def _unique_index[T](
+    items: Iterable[T],
+    identifier: Callable[[T], str],
+    duplicate_error: str,
+) -> dict[str, T]:
+    materialized = list(items)
+    indexed = {identifier(item): item for item in materialized}
+    if len(indexed) != len(materialized):
+        raise ValueError(duplicate_error)
+    return indexed
+
+
+def _validate_nesting(
+    parents: Mapping[str, str | None],
+    *,
+    missing_suffix: str = '',
+    groups: Mapping[str, str] | None = None,
+) -> None:
+    for item_id, parent_id in parents.items():
+        seen = {item_id}
+        while parent_id is not None:
+            if parent_id in seen:
+                raise ValueError(f'{item_id}: nested_from contains a cycle')
+            if parent_id not in parents:
+                raise ValueError(f'{item_id}: unknown nested_from{missing_suffix} {parent_id!r}')
+            if groups is not None and groups[parent_id] != groups[item_id]:
+                raise ValueError(f'{item_id}: nested cells must share a run profile')
+            seen.add(parent_id)
+            parent_id = parents[parent_id]
+
+
+def _validate_spec_comparisons(groups: list[ComparisonGroup], distribution_ids: set[str]) -> None:
+    _unique_index(
+        groups,
+        lambda group: group.comparison_id,
+        'native suite contains duplicate comparison IDs',
+    )
+    for group in groups:
+        validate_identifier(group.comparison_id, 'comparison_id')
+        unknown = sorted(set(group.distribution_ids) - distribution_ids)
+        if unknown:
+            raise ValueError(f'{group.comparison_id}: unknown distributions {unknown}')
+
+
+def _validate_manifest_cells(
+    *,
+    manifest: SuiteManifest,
+    cells_by_id: Mapping[str, SuiteManifestCell],
+    distribution_ids: set[str],
+    profile_ids: set[str],
+) -> None:
+    for cell in cells_by_id.values():
+        if cell.origin != manifest.origin:
+            raise ValueError(f'{cell.cell_id}: cell origin disagrees with its manifest')
+        if cell.distribution_id not in distribution_ids:
+            raise ValueError(f'{cell.cell_id}: unknown manifest distribution')
+        if cell.run_profile_id not in profile_ids:
+            raise ValueError(f'{cell.cell_id}: unknown manifest run profile')
+        if cell.cell_id != f'{cell.distribution_id}__{cell.run_profile_id}':
+            raise ValueError(f'{cell.cell_id}: cell ID disagrees with its dimensions')
+        if manifest.source is not None and (
+            cell.source_suite_id != manifest.source.suite_id
+            or cell.source_manifest_sha256 != manifest.source.manifest_sha256
+        ):
+            raise ValueError(f'{cell.cell_id}: source pin disagrees with its manifest')
+
+
+def _validate_manifest_comparisons(
+    groups: list[ComparisonGroup], distribution_ids: set[str]
+) -> None:
+    for group in groups:
+        unknown = set(group.distribution_ids) - distribution_ids
+        if unknown:
+            raise ValueError(
+                f'{group.comparison_id}: unknown manifest distributions {sorted(unknown)}'
+            )
 
 
 def canonical_manifest(raw: object) -> SuiteManifest:

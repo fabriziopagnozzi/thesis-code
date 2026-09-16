@@ -42,12 +42,13 @@ def validate_suite(spec: SuiteSpec) -> ValidationResult:
         ExperimentCfg.model_validate(raw)
         resolved_distributions[distribution_id] = raw
     cells = spec.expanded_cells()
+    cells_by_id = {cell.cell_id: cell for cell in cells}
     resolved_configs = {cell.cell_id: resolve_cell_config(spec, cell) for cell in cells}
     for cell_id, resolved in resolved_configs.items():
         ExperimentCfg.model_validate(resolved)
-        cell = next(candidate for candidate in cells if candidate.cell_id == cell_id)
+        cell = cells_by_id[cell_id]
         if cell.nested_from is not None:
-            parent = next(candidate for candidate in cells if candidate.cell_id == cell.nested_from)
+            parent = cells_by_id[cell.nested_from]
             if parent.run_profile_id != cell.run_profile_id:
                 raise ValueError(f'{cell_id}: nested support must keep its run profile')
     _validate_comparison_groups(spec, cells, resolved_configs)
