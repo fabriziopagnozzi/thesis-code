@@ -138,8 +138,6 @@ def run_make_facts(cfg: ExperimentCfg, paths: MedicalDatasetGenPaths) -> None:
         if writer is not None:
             writer.close()
 
-    # The stage's durable output is the parquet table; callers do not need a
-    # second in-memory copy of the final batch.
     if total == 0:
         raise ValueError('no query plans available to generate facts')
 
@@ -238,7 +236,7 @@ def make_global_near_miss_facts(
                 # Scale levels change chunks_per_cluster, so it cannot be part
                 # of an existing chunk's stable identity.
                 global_idx = cluster_idx * _V5_NEAR_MISS_CLUSTER_INDEX_STRIDE + local_idx
-                fact = make_local_distractor_fact(
+                fact = make_near_miss_fact(
                     plan=plan,
                     target=target,
                     ontology=ontology,
@@ -260,7 +258,7 @@ def make_global_near_miss_facts(
     return rows
 
 
-def make_local_distractor_fact(
+def make_near_miss_fact(
     *,
     plan: QueryPlan,
     target: QueryPlanFacet,
@@ -305,8 +303,8 @@ def make_local_distractor_fact(
         value_bin=value_bin,
         cluster_id=_distractor_cluster_id(plan, target, spec_idx, local_idx),
         cluster_role='hard_distractor',
-        # The target facet becomes part of the reuse scope so per-facet local
-        # distractor pools stay distinct even when their semantic shells match.
+        # The target facet remains part of the reuse scope so near misses aimed
+        # at different facets stay distinct when their semantic shells match.
         reuse_scope=f'distractor:{scope}:target_{target.facet_id}',
         chunk_surface_policy=chunk_surface_policy,
     )
@@ -562,8 +560,6 @@ def make_base_fact(
     reuse_scope: str | None = None,
     chunk_surface_policy: ChunkSurfacePolicy = 'split_heldout',
 ) -> ClinicalFact:
-    # Payload and surface choices are deterministic functions of the fact's
-    # semantic identity; the caller-provided RNG only controls the fact ID.
     payload = _axis_payload(ontology, condition_id, axis, value_bin, local_idx)
     payload_json = json.dumps(payload.model_dump(mode='json'), sort_keys=True)
     resolved_reuse_scope = reuse_scope or ('gold' if is_gold else f'distractor:{distractor_type}')

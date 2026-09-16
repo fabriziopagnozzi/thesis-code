@@ -16,7 +16,6 @@ from experiments.medical_dataset_gen.suites.contracts import (
     SuiteSpec,
     SuiteTransform,
 )
-from experiments.medical_dataset_gen.suites.io import sha256_json as _sha256_json
 from experiments.medical_dataset_gen.suites.manifests import (
     LogicalSuite,
     load_logical_suite,
@@ -33,12 +32,6 @@ from experiments.medical_dataset_gen.suites.resolution import (
     ValidationResult,
     resolve_cell_config,
     validate_suite,
-)
-from experiments.medical_dataset_gen.suites.resolution import (
-    dataset_hash as _dataset_hash,
-)
-from experiments.medical_dataset_gen.suites.resolution import (
-    declared_composition as _declared_composition,
 )
 
 __all__ = [
@@ -58,9 +51,6 @@ __all__ = [
     'SuiteSpec',
     'SuiteTransform',
     'ValidationResult',
-    '_dataset_hash',
-    '_declared_composition',
-    '_sha256_json',
     'load_logical_suite',
     'load_logical_suite_family',
     'load_pinned_source_manifest',

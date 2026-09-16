@@ -54,7 +54,12 @@ def load_suite_manifest(results_dir: Path, suite_id: str) -> SuiteManifest:
     path = suite_root(results_dir, suite_id) / 'suite_manifest.json'
     if not path.is_file():
         raise FileNotFoundError(f'missing suite manifest: {path}')
-    return canonical_manifest(json.loads(path.read_text()))
+    manifest = canonical_manifest(json.loads(path.read_text()))
+    if manifest.suite_id != suite_id:
+        raise ValueError(
+            f'manifest suite_id {manifest.suite_id!r} does not match directory {suite_id!r}'
+        )
+    return manifest
 
 
 def write_suite_manifest(root: Path, manifest: SuiteManifest) -> None:

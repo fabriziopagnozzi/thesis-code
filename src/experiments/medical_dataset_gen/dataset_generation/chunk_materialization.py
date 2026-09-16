@@ -112,11 +112,7 @@ def _render_chunks_deterministic_parallel(
     ontology_dump = ontology.model_dump(mode='python')
     n_batches = facts.select(pl.col('query_id').n_unique()).item()
     workers = max(1, os.cpu_count() or 1)
-    # ``ProcessPoolExecutor.map`` eagerly queues the whole iterator on Python
-    # 3.12.  With large nested-scale sources that means retaining millions of
-    # fact dictionaries and rendered rows at once.  Bound submitted batches
-    # and append parquet row groups instead, keeping the v5 terminal build
-    # proportional to one query-local pool rather than the complete suite.
+
     rendered_batches = _rendered_batches_bounded(
         cfg_dump=cfg_dump,
         ontology_dump=ontology_dump,
@@ -334,10 +330,7 @@ def _normalized_v5_batch(rows: list[dict[str, object]]) -> tuple[pl.DataFrame, p
             'chunk_reuse_key must map to exactly one text after canonical rendering; '
             f'found {len(duplicate_text_keys):,} violating key(s), examples={examples}'
         )
-    # In v5, each stable reuse key is an intentional support unit.  Two such
-    # units may render identical text for a query, yet collapsing them would
-    # alter the declared cluster mass and break exact nested scale counts.
-    # Earlier schemas preserve their historical text-level de-duplication.
+
     retained_rows = chunk_rows
     with_doc_id = retained_rows.with_columns(
         pl.concat_str([pl.lit('chunk_'), pl.col('chunk_reuse_key')]).alias('chunk_id')

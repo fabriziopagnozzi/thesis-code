@@ -175,9 +175,20 @@ class SuiteSpec(SuiteModel):
                 raise ValueError(
                     f'{distribution_id}: unknown nested_from {distribution.nested_from!r}'
                 )
+            seen = {distribution_id}
+            parent_id = distribution.nested_from
+            while parent_id is not None:
+                if parent_id in seen:
+                    raise ValueError(f'{distribution_id}: nested_from contains a cycle')
+                seen.add(parent_id)
+                parent_id = self.distributions[parent_id].nested_from
         for profile_id in self.run_profiles:
             validate_identifier(profile_id, 'run_profile_id')
+        comparison_ids = [group.comparison_id for group in self.comparison_groups]
+        if len(comparison_ids) != len(set(comparison_ids)):
+            raise ValueError('native suite contains duplicate comparison IDs')
         for group in self.comparison_groups:
+            validate_identifier(group.comparison_id, 'comparison_id')
             unknown = sorted(set(group.distribution_ids) - set(self.distributions))
             if unknown:
                 raise ValueError(f'{group.comparison_id}: unknown distributions {unknown}')
@@ -280,6 +291,7 @@ class SuiteManifest(SuiteModel):
 
     @model_validator(mode='after')
     def _validate_manifest(self) -> SuiteManifest:
+        validate_identifier(self.suite_id, 'suite_id')
         if self.origin == 'derived' and self.source is None:
             raise ValueError('derived manifest requires a source contract')
         if self.origin == 'native' and self.source is not None:
@@ -287,8 +299,17 @@ class SuiteManifest(SuiteModel):
         cell_ids = [cell.cell_id for cell in self.cells]
         if len(cell_ids) != len(set(cell_ids)):
             raise ValueError('manifest contains duplicate cell IDs')
-        distribution_ids = {item.distribution_id for item in self.distributions}
-        profile_ids = {item.run_profile_id for item in self.run_profiles}
+        raw_distribution_ids = [item.distribution_id for item in self.distributions]
+        raw_profile_ids = [item.run_profile_id for item in self.run_profiles]
+        if len(raw_distribution_ids) != len(set(raw_distribution_ids)):
+            raise ValueError('manifest contains duplicate distribution IDs')
+        if len(raw_profile_ids) != len(set(raw_profile_ids)):
+            raise ValueError('manifest contains duplicate run-profile IDs')
+        distribution_ids = set(raw_distribution_ids)
+        profile_ids = set(raw_profile_ids)
+        cells_by_id = {cell.cell_id: cell for cell in self.cells}
+        if self.source is not None and set(self.source.distribution_ids) != distribution_ids:
+            raise ValueError('derived manifest distributions disagree with its source contract')
         for cell in self.cells:
             if cell.origin != self.origin:
                 raise ValueError(f'{cell.cell_id}: cell origin disagrees with its manifest')
@@ -296,6 +317,34 @@ class SuiteManifest(SuiteModel):
                 raise ValueError(f'{cell.cell_id}: unknown manifest distribution')
             if cell.run_profile_id not in profile_ids:
                 raise ValueError(f'{cell.cell_id}: unknown manifest run profile')
+            if cell.cell_id != f'{cell.distribution_id}__{cell.run_profile_id}':
+                raise ValueError(f'{cell.cell_id}: cell ID disagrees with its dimensions')
+            if self.source is not None and (
+                cell.source_suite_id != self.source.suite_id
+                or cell.source_manifest_sha256 != self.source.manifest_sha256
+            ):
+                raise ValueError(f'{cell.cell_id}: source pin disagrees with its manifest')
+            seen = {cell.cell_id}
+            parent_id = cell.nested_from
+            while parent_id is not None:
+                if parent_id in seen:
+                    raise ValueError(f'{cell.cell_id}: nested_from contains a cycle')
+                seen.add(parent_id)
+                parent = cells_by_id.get(parent_id)
+                if parent is None:
+                    raise ValueError(f'{cell.cell_id}: unknown nested_from cell {parent_id!r}')
+                if parent.run_profile_id != cell.run_profile_id:
+                    raise ValueError(f'{cell.cell_id}: nested cells must share a run profile')
+                parent_id = parent.nested_from
+        comparison_ids = [group.comparison_id for group in self.comparison_groups]
+        if len(comparison_ids) != len(set(comparison_ids)):
+            raise ValueError('manifest contains duplicate comparison IDs')
+        for group in self.comparison_groups:
+            unknown = set(group.distribution_ids) - distribution_ids
+            if unknown:
+                raise ValueError(
+                    f'{group.comparison_id}: unknown manifest distributions {sorted(unknown)}'
+                )
         return self
 
 
@@ -319,12 +368,23 @@ def canonical_manifest(raw: object) -> SuiteManifest:
             raise ValueError('manifest evaluations compatibility view must be an array')
         cell_ids = {_raw_cell_id(cell) for cell in raw_cells}
         evaluation_ids = {_raw_cell_id(cell) for cell in raw_evaluations}
+        if len(cell_ids) != len(raw_cells):
+            raise ValueError('manifest cells array contains duplicate cell IDs')
         if cell_ids != evaluation_ids or len(raw_cells) != len(raw_evaluations):
             raise ValueError('manifest cells/evaluations contain different cell-ID sets')
-        # Validate every duplicate even though its status is intentionally ignored.
-        for cell in raw_evaluations:
-            _canonical_cell(cell)
-    data['cells'] = [_canonical_cell(cell) for cell in raw_cells]
+        canonical_cells = {
+            cell['cell_id']: cell for cell in (_canonical_cell(raw) for raw in raw_cells)
+        }
+        for raw_evaluation in raw_evaluations:
+            evaluation = _canonical_cell(raw_evaluation)
+            canonical = canonical_cells[evaluation['cell_id']]
+            if _without_status(evaluation) != _without_status(canonical):
+                raise ValueError(
+                    f'{evaluation["cell_id"]}: cells/evaluations duplicate fields disagree'
+                )
+        data['cells'] = list(canonical_cells.values())
+    else:
+        data['cells'] = [_canonical_cell(cell) for cell in raw_cells]
     data['comparison_groups'] = [
         _canonical_comparison(group)
         for group in cast(list[object], data.get('comparison_groups', []))
@@ -336,6 +396,10 @@ def _raw_cell_id(raw: object) -> str:
     if not isinstance(raw, Mapping) or not isinstance(raw.get('cell_id'), str):
         raise ValueError('manifest cell requires a string cell_id')
     return cast(str, raw['cell_id'])
+
+
+def _without_status(cell: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in cell.items() if key != 'status'}
 
 
 def _canonical_cell(raw: object) -> dict[str, Any]:

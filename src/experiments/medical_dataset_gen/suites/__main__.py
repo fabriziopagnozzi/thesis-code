@@ -50,7 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f'validated suite={spec.suite_id} cells={cell_count}')
     if args.command == 'materialize':
         manifest = materialize_suite(spec, results_dir=results_dir)
-        print(f'materialized {len(manifest.cells)} cells')
+        print(f'materialized or verified {len(manifest.cells)} cells')
     elif args.check_artifacts:
         result = validate_materialized_suite(
             results_dir=results_dir,

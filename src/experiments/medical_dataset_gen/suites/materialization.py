@@ -46,7 +46,7 @@ def materialize_suite(spec: SuiteSpec, *, results_dir: Path) -> SuiteManifest:
     if (root / 'suite_manifest.json').exists():
         existing = load_suite_manifest(results_dir, spec.suite_id)
         if spec.origin == 'native':
-            _verify_native(existing, spec, validate_suite(spec))
+            _verify_native(existing, spec, validate_suite(spec), root)
         else:
             _verify_derived(existing, spec, results_dir)
         return existing
@@ -57,8 +57,13 @@ def materialize_suite(spec: SuiteSpec, *, results_dir: Path) -> SuiteManifest:
     )
 
 
-def _verify_native(manifest: SuiteManifest, spec: SuiteSpec, validation: ValidationResult) -> None:
-    if manifest.origin != 'native':
+def _verify_native(
+    manifest: SuiteManifest,
+    spec: SuiteSpec,
+    validation: ValidationResult,
+    root: Path,
+) -> None:
+    if manifest.suite_id != spec.suite_id or manifest.origin != 'native':
         raise ValueError(f'{spec.suite_id}: existing suite is not native')
     distributions = {item.distribution_id: item for item in manifest.distributions}
     profiles = {item.run_profile_id: item for item in manifest.run_profiles}
@@ -73,30 +78,134 @@ def _verify_native(manifest: SuiteManifest, spec: SuiteSpec, validation: Validat
     if manifest.comparison_groups != spec.comparison_groups:
         raise ValueError(f'{spec.suite_id}: existing comparison groups differ from the spec')
     for distribution_id, raw in validation.resolved_distributions.items():
+        distribution = spec.distributions[distribution_id]
         item = distributions[distribution_id]
-        if item.distribution_sha256 != sha256_json(raw) or item.dataset_sha256 != dataset_hash(raw):
+        factors = {
+            **declared_composition(ExperimentCfg.model_validate(raw)),
+            **distribution.factors,
+        }
+        expected = SuiteManifestDistribution(
+            distribution_id=distribution_id,
+            family_id=distribution.family_id,
+            family_label=distribution.family_label,
+            factors=factors,
+            tags=distribution.tags,
+            analysis_blocks=distribution.analysis_blocks,
+            analysis_tier=distribution.analysis_tier,
+            include_in_family_summary=distribution.include_in_family_summary,
+            nested_from=distribution.nested_from,
+            resolved_distribution_path=str(
+                Path('distributions') / distribution_id / 'resolved_distribution.yaml'
+            ),
+            distribution_sha256=sha256_json(raw),
+            dataset_sha256=dataset_hash(raw),
+        )
+        if (
+            item.resolved_distribution_path != expected.resolved_distribution_path
+            or item.distribution_sha256 != expected.distribution_sha256
+            or item.dataset_sha256 != expected.dataset_sha256
+            or item.nested_from != expected.nested_from
+            or _resolved_yaml_hash(root, item.resolved_distribution_path)
+            != expected.distribution_sha256
+        ):
             raise ValueError(f'{distribution_id}: existing scientific configuration differs')
     for profile_id, profile in spec.run_profiles.items():
-        if profiles[profile_id].run_profile_sha256 != sha256_json(profile.config):
+        item = profiles[profile_id]
+        expected = SuiteManifestRunProfile(
+            run_profile_id=profile_id,
+            factors=profile.factors,
+            resolved_run_profile_path=str(
+                Path('run_profiles') / profile_id / 'resolved_run_profile.yaml'
+            ),
+            run_profile_sha256=sha256_json(profile.config),
+        )
+        if (
+            item.resolved_run_profile_path != expected.resolved_run_profile_path
+            or item.run_profile_sha256 != expected.run_profile_sha256
+            or _resolved_yaml_hash(root, item.resolved_run_profile_path)
+            != expected.run_profile_sha256
+        ):
             raise ValueError(f'{profile_id}: existing run-profile configuration differs')
     for cell_id, raw in validation.resolved_configs.items():
         item = cells[cell_id]
-        expected = expected_cells[cell_id]
-        if item.config_sha256 != sha256_json(raw) or item.dataset_sha256 != dataset_hash(raw):
+        expanded = expected_cells[cell_id]
+        distribution = spec.distributions[expanded.distribution_id]
+        profile = spec.run_profiles[expanded.run_profile_id]
+        factors = {
+            **declared_composition(ExperimentCfg.model_validate(raw)),
+            **distribution.factors,
+        }
+        expected = SuiteManifestCell(
+            cell_id=cell_id,
+            name=f'{spec.suite_id}/{expanded.distribution_id}/{expanded.run_profile_id}',
+            distribution_id=expanded.distribution_id,
+            run_profile_id=expanded.run_profile_id,
+            family_id=distribution.family_id,
+            family_label=distribution.family_label,
+            origin='native',
+            status=item.status,
+            include_in_family_summary=distribution.include_in_family_summary,
+            factors=factors,
+            tags=distribution.tags,
+            analysis_blocks=distribution.analysis_blocks,
+            analysis_tier=distribution.analysis_tier,
+            run_profile_factors=profile.factors,
+            data_root=str(Path('distributions') / expanded.distribution_id / 'data' / 'schema-v5'),
+            result_root=str(
+                Path('distributions')
+                / expanded.distribution_id
+                / 'runs'
+                / expanded.run_profile_id
+                / 'attempts'
+                / 'initial'
+            ),
+            resolved_config_path=str(
+                Path('distributions')
+                / expanded.distribution_id
+                / 'runs'
+                / expanded.run_profile_id
+                / 'resolved_config.yaml'
+            ),
+            config_sha256=sha256_json(raw),
+            dataset_sha256=dataset_hash(raw),
+            run_profile_sha256=sha256_json(profile.config),
+            nested_from=expanded.nested_from,
+        )
+        if (
+            item.distribution_id != expected.distribution_id
+            or item.run_profile_id != expected.run_profile_id
+            or item.origin != expected.origin
+            or item.data_root != expected.data_root
+            or item.result_root != expected.result_root
+            or item.resolved_config_path != expected.resolved_config_path
+            or item.config_sha256 != expected.config_sha256
+            or item.dataset_sha256 != expected.dataset_sha256
+            or item.run_profile_sha256 != expected.run_profile_sha256
+            or item.nested_from != expected.nested_from
+            or _resolved_yaml_hash(root, item.resolved_config_path) != expected.config_sha256
+        ):
             raise ValueError(f'{cell_id}: existing resolved configuration differs')
-        if item.nested_from != expected.nested_from:
-            raise ValueError(f'{cell_id}: existing nesting contract differs')
 
 
 def _verify_derived(manifest: SuiteManifest, spec: SuiteSpec, results_dir: Path) -> None:
-    if manifest.origin != 'derived' or manifest.source is None or spec.source is None:
+    if (
+        manifest.suite_id != spec.suite_id
+        or manifest.origin != 'derived'
+        or manifest.source is None
+        or spec.source is None
+    ):
         raise ValueError(f'{spec.suite_id}: existing suite is not derived')
     if manifest.source != spec.source:
         raise ValueError(f'{spec.suite_id}: existing pinned source contract differs from the spec')
     source_root, source_manifest = load_pinned_source_manifest(
         results_dir=results_dir, source=spec.source
     )
+    root = suite_root(results_dir, spec.suite_id)
     requested = set(spec.source.distribution_ids)
+    source_distributions = {item.distribution_id: item for item in source_manifest.distributions}
+    missing = requested - set(source_distributions)
+    if missing:
+        raise ValueError(f'{spec.suite_id}: source distributions are missing: {sorted(missing)}')
     source_cells = [cell for cell in source_manifest.cells if cell.distribution_id in requested]
     source_profile_ids = {cell.run_profile_id for cell in source_cells}
     profile_maps = {
@@ -117,13 +226,64 @@ def _verify_derived(manifest: SuiteManifest, spec: SuiteSpec, results_dir: Path)
     cells = {cell.cell_id: cell for cell in manifest.cells}
     if set(cells) != set(expected_cells):
         raise ValueError(f'{spec.suite_id}: existing derived cell surface differs from the spec')
-    if {item.distribution_id for item in manifest.distributions} != requested:
+    distributions = {item.distribution_id: item for item in manifest.distributions}
+    if set(distributions) != requested:
         raise ValueError(f'{spec.suite_id}: existing derived distributions differ from the spec')
+    for distribution_id in requested:
+        source_distribution = source_distributions[distribution_id]
+        expected = source_distribution.model_copy(
+            update={
+                'resolved_distribution_path': str(
+                    Path('distributions') / distribution_id / 'resolved_distribution.yaml'
+                )
+            }
+        )
+        item = distributions[distribution_id]
+        if item != expected or _resolved_yaml_hash(root, item.resolved_distribution_path) != (
+            expected.distribution_sha256
+        ):
+            raise ValueError(f'{distribution_id}: existing derived distribution differs')
     expected_profiles = {
         profile_id for profile_map in profile_maps.values() for profile_id in profile_map.values()
     }
-    if {item.run_profile_id for item in manifest.run_profiles} != expected_profiles:
+    profiles = {item.run_profile_id: item for item in manifest.run_profiles}
+    if set(profiles) != expected_profiles:
         raise ValueError(f'{spec.suite_id}: existing derived profiles differ from the spec')
+    source_profiles = {item.run_profile_id: item for item in source_manifest.run_profiles}
+    profile_hashes: dict[str, str] = {}
+    for model_name, profile_map in profile_maps.items():
+        for source_profile_id, profile_id in profile_map.items():
+            source_profile = source_profiles[source_profile_id]
+            raw_profile = cast(
+                dict[str, Any],
+                read_yaml_mapping(
+                    safe_relative(source_root, source_profile.resolved_run_profile_path)
+                ),
+            )
+            embeddings = raw_profile.setdefault('embeddings', {})
+            if not isinstance(embeddings, dict):
+                raise ValueError(f'{source_profile_id}: embeddings profile is not a mapping')
+            embeddings['model_name'] = model_name
+            override = spec.source.embedding_overrides.get(model_name)
+            if override is not None:
+                embeddings['batch_size'] = override.batch_size
+            profile_hash = sha256_json(raw_profile)
+            profile_hashes[profile_id] = profile_hash
+            expected = SuiteManifestRunProfile(
+                run_profile_id=profile_id,
+                factors={**source_profile.factors, 'embedding': model_name},
+                resolved_run_profile_path=str(
+                    Path('run_profiles') / profile_id / 'resolved_run_profile.yaml'
+                ),
+                run_profile_sha256=profile_hash,
+            )
+            item = profiles[profile_id]
+            if item != expected or _resolved_yaml_hash(root, item.resolved_run_profile_path) != (
+                expected.run_profile_sha256
+            ):
+                raise ValueError(f'{profile_id}: existing derived run profile differs')
+    if manifest.comparison_groups != source_manifest.comparison_groups:
+        raise ValueError(f'{spec.suite_id}: existing comparison groups differ from the source')
     for cell_id, (source_cell, model_name) in expected_cells.items():
         cell = cells[cell_id]
         profile_id = profile_maps[model_name][source_cell.run_profile_id]
@@ -144,14 +304,49 @@ def _verify_derived(manifest: SuiteManifest, spec: SuiteSpec, results_dir: Path)
             / 'attempts'
             / 'initial'
         )
-        if (
-            cell.source_cell_id != source_cell.cell_id
-            or cell.source_dataset_sha256 != source_cell.dataset_sha256
-            or cell.data_root != source_cell.data_root
-            or cell.config_sha256 != sha256_json(raw)
-            or cell.result_root != str(expected_result_root)
+        expected = SuiteManifestCell(
+            cell_id=cell_id,
+            name=f'{spec.suite_id}/{source_cell.distribution_id}/{profile_id}',
+            distribution_id=source_cell.distribution_id,
+            run_profile_id=profile_id,
+            family_id=source_cell.family_id,
+            family_label=source_cell.family_label,
+            origin='derived',
+            status=cell.status,
+            include_in_family_summary=source_cell.include_in_family_summary,
+            factors=source_cell.factors,
+            tags=source_cell.tags,
+            analysis_blocks=source_cell.analysis_blocks,
+            analysis_tier=source_cell.analysis_tier,
+            run_profile_factors={
+                **source_cell.run_profile_factors,
+                'embedding': model_name,
+            },
+            data_root=source_cell.data_root,
+            result_root=str(expected_result_root),
+            resolved_config_path=str(
+                Path('distributions')
+                / source_cell.distribution_id
+                / 'runs'
+                / profile_id
+                / 'resolved_config.yaml'
+            ),
+            config_sha256=sha256_json(raw),
+            dataset_sha256=source_cell.dataset_sha256,
+            run_profile_sha256=profile_hashes[profile_id],
+            source_suite_id=spec.source.suite_id,
+            source_cell_id=source_cell.cell_id,
+            source_manifest_sha256=spec.source.manifest_sha256,
+            source_dataset_sha256=source_cell.dataset_sha256,
+        )
+        if cell != expected or _resolved_yaml_hash(root, cell.resolved_config_path) != (
+            expected.config_sha256
         ):
             raise ValueError(f'{cell_id}: existing derived source mapping or paths differ')
+
+
+def _resolved_yaml_hash(root: Path, relative_path: str) -> str:
+    return sha256_json(read_yaml_mapping(safe_relative(root, relative_path)))
 
 
 def _materialize_native(spec: SuiteSpec, root: Path, validation: ValidationResult) -> SuiteManifest:

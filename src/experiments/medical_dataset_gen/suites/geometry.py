@@ -8,9 +8,7 @@ from pathlib import Path
 
 import polars as pl
 
-from experiments.medical_dataset_gen.suites.core import (
-    _sha256_json,
-)
+from experiments.medical_dataset_gen.suites.io import sha256_json
 from experiments.medical_dataset_gen.suites.runtime import SuiteRuntime
 from experiments.medical_dataset_gen.utils.io_utils import read_parquet
 
@@ -62,7 +60,7 @@ def freeze_separability_strata(*, results_dir: Path, suite_id: str) -> Path:
         },
         'document_surfaces': payload_conditions,
     }
-    frozen['sha256'] = _sha256_json(frozen)
+    frozen['sha256'] = sha256_json(frozen)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(frozen, indent=2, sort_keys=True) + '\n')
     return path
@@ -189,7 +187,7 @@ def _calibration_frames(runtime: SuiteRuntime) -> dict[str, dict[str, object]]:
             [_sha256_file(geometry_path), _sha256_file(queries_path)]
         )
         model_signatures.setdefault(surface, set()).add(
-            _sha256_json({'model': cfg.embeddings.model_name, 'config': cell.run_profile_sha256})
+            sha256_json({'model': cfg.embeddings.model_name, 'config': cell.run_profile_sha256})
         )
     result: dict[str, dict[str, object]] = {}
     for surface, frames in by_surface.items():
