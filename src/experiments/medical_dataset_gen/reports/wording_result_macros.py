@@ -281,6 +281,8 @@ def _grid_metadata_macros(
         'ResultWordingCellsPerConfiguration': _integer(len(core_rows) // len(configurations)),
         'ResultWordingAuxiliaryCells': _integer(len(auxiliary_rows)),
         'ResultWordingEvaluationQueriesPerCell': test_query_count,
+        'ResultWordingLabelOnlyEvaluationQueriesPerCell': test_query_count,
+        'ResultWordingStandardEvaluationQueriesPerCell': test_query_count,
         'ResultWordingFcpPracticalMargin': _fixed(practical_effect_threshold('FCP'), digits=2),
     }
 
@@ -393,6 +395,10 @@ def _metric_decomposition_macros(rows: Sequence[ReportRow]) -> dict[str, str]:
             )
             macros.update(
                 {
+                    f'{prefix}FacLocMean': _fixed(
+                        _column_mean(scope_rows, f'FacLoc_{metric}'),
+                        digits=3,
+                    ),
                     f'{prefix}MmrMean': _fixed(
                         _column_mean(scope_rows, f'MMR_{metric}'),
                         digits=3,

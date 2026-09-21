@@ -51,6 +51,26 @@ _METRIC_RESULT_TOKENS = {
     'Precision': 'Precision',
     'alpha_nDCG': 'AlphaNdcg',
 }
+_THESIS_BUDGET_METRIC_CELLS = {
+    ('dominance_extreme', 6),
+    ('dominance_extreme', 14),
+    ('near_miss_h48', 6),
+    ('near_miss_h48_compact', 6),
+    ('near_miss_h48_one_change', 6),
+    ('near_miss_h48_singleton', 6),
+    ('near_miss_h48_two_change', 6),
+    ('sparse_one_extreme', 6),
+    ('sparse_one_extreme', 14),
+}
+_THESIS_ABSOLUTE_FCP_CELLS = {
+    ('interaction_sparse_severe_h24', 6),
+    ('interaction_sparse_severe_h96', 6),
+    ('near_miss_h48', 6),
+    ('near_miss_h48_compact', 6),
+    ('near_miss_h48_one_change', 6),
+    ('near_miss_h48_singleton', 6),
+    ('near_miss_h48_two_change', 6),
+}
 
 
 def thesis_latex_dir(report_dir: Path) -> Path:
@@ -434,7 +454,9 @@ def _distribution_budget_result_macros(
         macros.update(
             {
                 f'{prefix}ModelCount': _integer(len(rows_by_model)),
-                f'{prefix}FacLocMmrFcpMeanDelta': _signed(_mean_values(fcp_deltas), digits=3),
+                f'{prefix}FacLocMmrFcpMeanDelta': _signed(
+                    _mean_values(fcp_deltas), digits=3
+                ),
                 f'{prefix}FacLocMmrFcpMinModelDelta': _signed(
                     min(fcp_deltas) if fcp_deltas else None, digits=3
                 ),
@@ -454,6 +476,64 @@ def _distribution_budget_result_macros(
                 ),
             }
         )
+        if (distribution, k_value) in _THESIS_BUDGET_METRIC_CELLS:
+            for metric, metric_token in _METRIC_RESULT_TOKENS.items():
+                deltas = _model_means(rows_by_model, f'Delta_FacLoc_MMR_{metric}')
+                if deltas:
+                    macros[f'{prefix}FacLocMmr{metric_token}MeanDelta'] = _signed(
+                        _mean_values(deltas), digits=3
+                    )
+        if (distribution, k_value) in _THESIS_ABSOLUTE_FCP_CELLS:
+            for strategy, strategy_token in (('MMR', 'Mmr'), ('FacLoc', 'FacLoc')):
+                means = _model_means(rows_by_model, f'{strategy}_FCP')
+                if means:
+                    macros[f'{prefix}{strategy_token}FcpMean'] = _fixed(
+                        _mean_values(means), digits=4
+                    )
+    return macros
+
+
+def _interaction_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose equally weighted interaction contrasts used in the thesis discussion."""
+    def interaction_float(value: object) -> float | None:
+        numeric = _float(value)
+        if numeric is not None:
+            return numeric
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return None
+
+    grouped: dict[tuple[str, int], list[Mapping[str, object]]] = {}
+    for row in rows:
+        if row.get('InteractionType') != 'difference_in_differences':
+            continue
+        comparison = str(row.get('Comparison') or '')
+        k_value = _float(row.get('k'))
+        if comparison and k_value is not None:
+            grouped.setdefault((comparison, int(k_value)), []).append(row)
+
+    macros: dict[str, str] = {}
+    for (comparison, k_value), matching_rows in grouped.items():
+        comparison_label = comparison.removeprefix('interaction_')
+        prefix = f'ResultInteraction{_label_token(comparison_label)}K{k_value}'
+        for metric, metric_token in _METRIC_RESULT_TOKENS.items():
+            values = [
+                numeric
+                for row in matching_rows
+                if (
+                    numeric := interaction_float(row.get(f'DiD_Delta_FacLoc_MMR_{metric}'))
+                )
+                is not None
+            ]
+            if values:
+                macros[f'{prefix}{metric_token}DifferenceInDifferences'] = _signed(
+                    _mean_values(values), digits=4
+                )
     return macros
 
 
@@ -777,6 +857,28 @@ def _lambda_robustness_result_macros(
     return macros
 
 
+def _lambda_stability_result_macros(
+    stability_rows: Sequence[Mapping[str, object]],
+    near_optimal_rows: Sequence[Mapping[str, object]] = (),
+) -> dict[str, str]:
+    """Expose unweighted cell summaries of lambda stability and near-optimal width."""
+    epsilons = _values(near_optimal_rows, 'NearOptimalEpsilon')
+    macros: dict[str, str] = {}
+    if epsilons:
+        macros['ResultLambdaNearOptimalEpsilon'] = _fixed(epsilons[0], digits=2)
+    for strategy, label in (('fac_loc', 'FacLoc'), ('mmr', 'Mmr')):
+        match = next((row for row in stability_rows if row.get('strategy') == strategy), None)
+        if match is None:
+            continue
+        macros[f'Result{label}NearOptimalLambdaFractionMean'] = _tex_percent(
+            _float(match.get('near_optimal_fraction_mean'))
+        )
+        macros[f'Result{label}SelectedLambdaNormStd'] = _fixed(
+            _float(match.get('selected_lambda_norm_std')), digits=4
+        )
+    return macros
+
+
 def _alpha_ndcg_result_macros(
     comparison_rows: Sequence[Mapping[str, object]],
     budget_rows: Sequence[Mapping[str, object]],
@@ -818,6 +920,9 @@ def render_thesis_result_macros(
     embedding_metric_rows: Sequence[Mapping[str, object]] = (),
     embedding_metric_range_rows: Sequence[Mapping[str, object]] = (),
     embedding_geometry_rows: Sequence[Mapping[str, object]] = (),
+    interaction_rows: Sequence[Mapping[str, object]] = (),
+    lambda_stability_rows: Sequence[Mapping[str, object]] = (),
+    near_optimal_rows: Sequence[Mapping[str, object]] = (),
 ) -> str:
     """Render scalar result macros imported by the thesis text."""
     macros = {
@@ -832,6 +937,7 @@ def render_thesis_result_macros(
             comparison_rows,
             embedding_models=embedding_models,
         ),
+        **_interaction_result_macros(interaction_rows),
         **_embedding_model_result_macros(embedding_summary_rows),
         **_embedding_metric_result_macros(embedding_metric_rows, embedding_metric_range_rows),
         **_embedding_geometry_result_macros(embedding_geometry_rows),
@@ -841,6 +947,7 @@ def render_thesis_result_macros(
         **_lambda_safety_result_macros(lambda_safety_rows),
         **_lambda_curve_result_macros(lambda_curve_rows),
         **_lambda_robustness_result_macros(lambda_robustness_rows),
+        **_lambda_stability_result_macros(lambda_stability_rows, near_optimal_rows),
         **_alpha_ndcg_result_macros(comparison_rows, budget_rows),
         **render_wording_result_macros(
             budget_rows=budget_rows,
@@ -915,6 +1022,15 @@ def generate_exp_results_macros(
             lambda_curve_rows=_read_rows(data_dir / 'lambda_curve_summary.csv', required=False),
             lambda_robustness_rows=_read_rows(
                 data_dir / 'lambda_robustness_summary.csv', required=False
+            ),
+            interaction_rows=_read_rows(
+                data_dir / 'suite_factor_interactions.csv', required=False
+            ),
+            lambda_stability_rows=_read_rows(
+                data_dir / 'lambda_stability.csv', required=False
+            ),
+            near_optimal_rows=_read_rows(
+                data_dir / 'near_optimal_lambda_width.csv', required=False
             ),
         )
     )
