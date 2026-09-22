@@ -12,6 +12,7 @@ from experiments.medical_dataset_gen.reports.analysis_constants import (
     DeltaMetricLabel,
     practical_effect_threshold,
 )
+from experiments.medical_dataset_gen.reports.analysis_scope import is_interaction_row
 from experiments.medical_dataset_gen.reports.helpers import (
     family_balanced_mean,
     ordered_embedding_models,
@@ -339,6 +340,36 @@ def _metric_family_budget_result_macros(
                 f'{prefix}Rows': _integer(row.get('Rows')),
                 f'{prefix}FacLocMmrMeanDelta': _signed(row.get('MeanDeltaFacLocMMR'), digits=3),
                 f'{prefix}FacLocTopKMeanDelta': _signed(row.get('MeanDeltaFacLocTopK'), digits=3),
+            }
+        )
+    return macros
+
+
+def _minimum_budget_family_result_macros(
+    rows: Sequence[Mapping[str, object]],
+) -> dict[str, str]:
+    """Expose k=4 family FCP means on the same non-interaction scope as budget summaries."""
+    grouped: dict[str, dict[str, list[float]]] = {}
+    for row in rows:
+        if _float(row.get('k')) != 4 or is_interaction_row(row):
+            continue
+        delta = _float(row.get('Delta_FacLoc_MMR_FCP'))
+        model = str(row.get('EmbeddingModel') or '')
+        if delta is None or not model:
+            continue
+        family = _label_token(_family_label(row.get('ExperimentFamilyLabel')))
+        grouped.setdefault(family, {}).setdefault(model, []).append(delta)
+
+    macros: dict[str, str] = {}
+    for family, model_rows in grouped.items():
+        model_means = [statistics.fmean(values) for values in model_rows.values()]
+        all_values = [value for values in model_rows.values() for value in values]
+        prefix = f'ResultFcpFamily{family}Minimum'
+        macros.update(
+            {
+                f'{prefix}FacLocMmrMeanDelta': _signed(statistics.fmean(all_values), digits=3),
+                f'{prefix}FacLocMmrMinModelDelta': _signed(min(model_means), digits=3),
+                f'{prefix}FacLocMmrMaxModelDelta': _signed(max(model_means), digits=3),
             }
         )
     return macros
@@ -932,6 +963,7 @@ def render_thesis_result_macros(
         **_metric_budget_result_macros(metric_summary_rows),
         **_metric_family_result_macros(metric_family_summary_rows),
         **_metric_family_budget_result_macros(metric_family_budget_summary_rows),
+        **_minimum_budget_family_result_macros(comparison_rows),
         **_background_topology_endpoint_result_macros(comparison_rows),
         **_distribution_budget_result_macros(
             comparison_rows,
